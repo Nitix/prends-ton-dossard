@@ -47,6 +47,10 @@ describe("isStale", () => {
     expect(isStale(apiError(404, { code: "not_found" }))).toBe(true);
   });
 
+  test("un coureur qui a eu un compte depuis : la liste montrait un coureur sans compte", () => {
+    expect(isStale(apiError(400, { code: "runner_has_account" }))).toBe(true);
+  });
+
   test("les autres refus ne disent rien de l'état de la liste", () => {
     expect(isStale(apiError(400, { code: "last_admin" }))).toBe(false);
     expect(isStale(apiError(429, {}))).toBe(false);

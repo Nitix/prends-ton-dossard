@@ -393,10 +393,16 @@ test("MembersPage — les actions offertes dépendent de l'état du coureur", as
   await expect.element(names(t.removeAdmin, "Alice")).toBeVisible();
   await expect.element(names(t.enable, "Max")).toBeVisible();
   await expect.element(names(t.disable, "Max")).not.toBeInTheDocument();
-  // Everybody can be renamed or deleted.
+  // Everybody can be renamed.
   for (const who of ["Alice", "Bob", "Max", "Sam", "Léa"]) {
     await expect.element(names(t.rename, who)).toBeVisible();
+  }
+  // A runner with an account is not deleted (its account is disabled instead).
+  for (const who of ["Sam", "Léa"]) {
     await expect.element(names(fr.common.delete, who)).toBeVisible();
+  }
+  for (const who of ["Alice", "Bob", "Max"]) {
+    await expect.element(names(fr.common.delete, who)).not.toBeInTheDocument();
   }
 });
 
@@ -530,18 +536,19 @@ test("MembersPage — un coureur qui a des participations ne se supprime pas : l
   expect(mocks.db.runners.map((r) => r.name)).toContain("Sam");
 });
 
-test("MembersPage — supprimer un coureur qui a un compte prévient que le compte sera détaché", async () => {
+test("MembersPage — le coureur a eu un compte entre-temps : le refus est dit, et la liste est redemandée", async () => {
+  mocks.runnerDelete.mockRejectedValue(coded(400, "runner_has_account"));
   const { screen } = await renderPage();
+  const before = mocks.runnersList.mock.calls.length;
 
-  await action(screen, fr.common.delete, "Bob").click();
+  await action(screen, fr.common.delete, "Sam").click();
+  const dialog = screen.getByRole("dialog", { name: t.deleteTitle });
+  await dialog.getByRole("button", { name: fr.common.delete }).click();
 
-  await expect
-    .element(
-      screen
-        .getByRole("dialog", { name: t.deleteTitle })
-        .getByText(t.deleteAccountWarning("bob@example.test")),
-    )
-    .toBeVisible();
+  await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.runner_has_account);
+  await vi.waitFor(() => {
+    expect(mocks.runnersList.mock.calls.length).toBeGreaterThan(before);
+  });
 });
 
 // --- Invitations ---

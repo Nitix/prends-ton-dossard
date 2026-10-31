@@ -18,6 +18,7 @@ export const ERROR_CODES: readonly string[] = [
   "password_mismatch",
   "last_admin",
   "runner_has_participations",
+  "runner_has_account",
   "race_type_in_use",
   "date_invalid",
   "end_before_start",

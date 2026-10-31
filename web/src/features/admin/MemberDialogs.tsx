@@ -13,7 +13,7 @@ import { UserPasskeys } from "./UserPasskeys";
 export type MemberDialog =
   | { kind: "create" }
   | { kind: "rename"; runner: RunnerRecord }
-  | { kind: "delete"; member: Member }
+  | { kind: "delete"; runner: RunnerRecord }
   | { kind: "link"; member: Member; linkKind: InvitationKind }
   | { kind: "share"; runner: RunnerRecord; linkKind: InvitationKind; link: ShareLink }
   | { kind: "revoke"; runner: RunnerRecord; invitation: InvitationRecord }
@@ -59,22 +59,16 @@ export function MemberDialogs({
       <RunnerNameDialog target={nameTarget} onClose={onClose} />
 
       <ConfirmDialog
-        target={dialog?.kind === "delete" ? dialog.member : null}
+        target={dialog?.kind === "delete" ? dialog.runner : null}
         onClose={onClose}
         title={t.admin.deleteTitle}
         confirmLabel={t.common.delete}
-        run={async ({ runner }) => {
+        run={async (runner) => {
           await actions.deleteRunner(runner.id);
           toast.show(t.admin.deleted);
         }}
       >
-        {({ runner, user }) => (
-          <>
-            <p>{t.admin.deleteWarning(runner.name)}</p>
-            {/* The server leaves the account itself alone: it is only left with no runner. */}
-            {user && <p>{t.admin.deleteAccountWarning(user.email)}</p>}
-          </>
-        )}
+        {(runner) => <p>{t.admin.deleteWarning(runner.name)}</p>}
       </ConfirmDialog>
 
       <CreateLinkDialog

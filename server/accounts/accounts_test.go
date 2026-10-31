@@ -274,12 +274,42 @@ func TestDelete_Guards(t *testing.T) {
 			After:    exists("runners", samRunner, true),
 		},
 		{
-			Name:   "a runner without participation can be deleted",
+			// Alice has an account too: the participations are what is told.
+			Name:        "a runner with an account and participations is refused for its participations",
+			As:          "admin",
+			Method:      http.MethodDelete,
+			URL:         recordURL("runners", aliceRunner),
+			Status:      http.StatusBadRequest,
+			Contains:    []string{code(apperr.CodeRunnerHasParticipations)},
+			NotContains: []string{code(apperr.CodeRunnerHasAccount)},
+			After:       exists("runners", aliceRunner, true),
+		},
+		{
+			Name:     "a runner with an account but no participation cannot be deleted",
+			As:       "admin",
+			Method:   http.MethodDelete,
+			URL:      recordURL("runners", adminRunner),
+			Status:   http.StatusBadRequest,
+			Contains: []string{code(apperr.CodeRunnerHasAccount)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				t.Helper()
+				exists("runners", adminRunner, true)(t, app, fx)
+				exists("users", admin, true)(t, app, fx)
+			},
+		},
+		{
+			Name:   "a runner without account and without participation can be deleted",
 			As:     "admin",
 			Method: http.MethodDelete,
-			URL:    recordURL("runners", adminRunner),
+			URL:    recordURL("runners", samRunner),
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				t.Helper()
+				if err := app.Delete(stored(t, app, "participations", fx.P3.Id)); err != nil {
+					t.Fatalf("deleting the participation of Sam: %v", err)
+				}
+			},
 			Status: http.StatusNoContent,
-			After:  exists("runners", adminRunner, false),
+			After:  exists("runners", samRunner, false),
 		},
 		{
 			Name:     "a race type used by a race cannot be deleted",
@@ -328,6 +358,13 @@ func TestGuards_RefuseWritesOutsideTheAPI(t *testing.T) {
 		fx := testutil.Seed(t, app)
 		if got := codeOf(t, app.Delete(fx.AliceRunner)); got != apperr.CodeRunnerHasParticipations {
 			t.Errorf("code = %q, want %q", got, apperr.CodeRunnerHasParticipations)
+		}
+	})
+	t.Run("deleting a runner with an account", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		if got := codeOf(t, app.Delete(fx.AdminRunner)); got != apperr.CodeRunnerHasAccount {
+			t.Errorf("code = %q, want %q", got, apperr.CodeRunnerHasAccount)
 		}
 	})
 	t.Run("deleting a race type in use", func(t *testing.T) {

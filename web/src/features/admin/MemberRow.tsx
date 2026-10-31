@@ -145,12 +145,15 @@ export function MemberRow({
             />
           </>
         )}
-        <Action
-          runner={runner}
-          label={t.common.delete}
-          danger
-          onClick={() => onOpen({ kind: "delete", member })}
-        />
+        {/* A runner with an account is not deleted (the server refuses): its account is disabled instead. */}
+        {!user && (
+          <Action
+            runner={runner}
+            label={t.common.delete}
+            danger
+            onClick={() => onOpen({ kind: "delete", runner })}
+          />
+        )}
       </div>
     </li>
   );

@@ -268,8 +268,6 @@ export const fr = {
     renamed: "Coureur renommé.",
     deleteTitle: "Supprimer le coureur ?",
     deleteWarning: (name: string) => `« ${name} » sera supprimé.`,
-    deleteAccountWarning: (email: string) =>
-      `Son compte (${email}) ne sera plus rattaché à aucun coureur.`,
     deleted: "Coureur supprimé.",
     // Making a link: an invitation (with a role) or a reset.
     inviteTitle: (name: string) => `Inviter ${name}`,
@@ -357,6 +355,8 @@ export const fr = {
     last_admin: "Il doit toujours rester au moins un admin.",
     runner_has_participations:
       "Impossible de supprimer ce coureur : il a encore des participations.",
+    runner_has_account:
+      "Impossible de supprimer ce coureur : il a un compte. Désactive le compte à la place.",
     race_type_in_use: "Impossible de supprimer ce type : des épreuves l'utilisent encore.",
     date_invalid: "Cette date n'est pas valide.",
     end_before_start: "La date de fin est avant la date de début.",

@@ -4,8 +4,12 @@ import { errorCode } from "../../i18n/errors";
 import type { Messages } from "../../i18n/fr";
 import { describeError } from "../profile/forms";
 
-/** The codes that tell the admin that the list on screen is not what the server holds any more. */
-const STALE_CODES = new Set(["invitation_kind_mismatch", "not_found"]);
+/**
+ * The codes that tell the admin that the list on screen is not what the server
+ * holds any more: a runner that has got an account since (it is no longer
+ * invited, nor deleted), a record that is gone.
+ */
+const STALE_CODES = new Set(["invitation_kind_mismatch", "not_found", "runner_has_account"]);
 
 /** Whether the server refused because the page shows something that has changed: a runner who got an account, a link that was used... */
 export function isStale(err: unknown): boolean {

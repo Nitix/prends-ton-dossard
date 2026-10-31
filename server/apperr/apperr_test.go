@@ -72,7 +72,7 @@ func TestCodes_FrontEndContract(t *testing.T) {
 		"invitation_invalid", "invitation_kind_mismatch", "last_admin",
 		"merge_formats_different_events", "merge_same_record", "not_found",
 		"passkey_failed", "passkey_session_expired", "password_mismatch", "password_too_short",
-		"race_type_in_use", "runner_has_participations", "wrong_password",
+		"race_type_in_use", "runner_has_account", "runner_has_participations", "wrong_password",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("codes in codes.go:\n got %v\nwant %v", got, want)

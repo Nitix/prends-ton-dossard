@@ -42,6 +42,15 @@ func Register(app core.App) {
 	app.OnRecordDelete("runners").BindFunc(func(e *core.RecordEvent) error {
 		return refuseWhenReferenced(e, "participations", "runner", apperr.CodeRunnerHasParticipations)
 	})
+	// The participations are looked at first. A runner with an account is never
+	// deleted: the account would be left with no runner to show it under, and
+	// nobody could sign in as it any more. It is disabled instead.
+	app.OnRecordDelete("runners").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("user") != "" {
+			return apperr.New(http.StatusBadRequest, apperr.CodeRunnerHasAccount)
+		}
+		return e.Next()
+	})
 	app.OnRecordDelete("race_types").BindFunc(func(e *core.RecordEvent) error {
 		return refuseWhenReferenced(e, "formats", "race_type", apperr.CodeRaceTypeInUse)
 	})

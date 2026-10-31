@@ -231,8 +231,6 @@ export const en = {
     renamed: "Runner renamed.",
     deleteTitle: "Delete the runner?",
     deleteWarning: (name: string) => `“${name}” will be deleted.`,
-    deleteAccountWarning: (email: string) =>
-      `Their account (${email}) will no longer be attached to any runner.`,
     deleted: "Runner deleted.",
     inviteTitle: (name: string) => `Invite ${name}`,
     regenerateTitle: (name: string) => `New invitation for ${name}`,
@@ -307,6 +305,8 @@ export const en = {
     password_mismatch: "The two passwords don't match.",
     last_admin: "There must always be at least one admin left.",
     runner_has_participations: "This runner can't be deleted: they still have participations.",
+    runner_has_account:
+      "This runner can't be deleted: they have an account. Disable the account instead.",
     race_type_in_use: "This type can't be deleted: some races still use it.",
     date_invalid: "This date is not valid.",
     end_before_start: "The end date is before the start date.",

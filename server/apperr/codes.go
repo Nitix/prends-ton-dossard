@@ -14,6 +14,7 @@ const (
 	CodePasswordMismatch            = "password_mismatch"
 	CodeLastAdmin                   = "last_admin"
 	CodeRunnerHasParticipations     = "runner_has_participations"
+	CodeRunnerHasAccount            = "runner_has_account"
 	CodeRaceTypeInUse               = "race_type_in_use"
 	CodeDateInvalid                 = "date_invalid"
 	CodeEndBeforeStart              = "end_before_start"
