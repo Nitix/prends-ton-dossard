@@ -31,6 +31,14 @@ export const fr = {
     email: "Email",
     password: "Mot de passe",
     badCredentials: "Email ou mot de passe incorrect.",
+    // The invitation page: a new account (welcome) or a new password (reset).
+    welcome: (name: string) => `Bienvenue ${name}`,
+    resetTitle: (name: string) => `Nouveau mot de passe pour ${name}`,
+    passwordHint: "10 caractères minimum.",
+    passwordConfirm: "Confirme le mot de passe",
+    createAccount: "Créer mon compte",
+    changePassword: "Changer le mot de passe",
+    saving: "Enregistrement…",
   },
   // The labels of the participation statuses.
   status: {

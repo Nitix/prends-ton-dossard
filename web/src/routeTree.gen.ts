@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as ConnexionRouteImport } from './routes/connexion'
+import { Route as InvitationRouteImport } from './routes/invitation'
 import { Route as ListeRouteImport } from './routes/liste'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as AdminMembresRouteImport } from './routes/admin/membres'
@@ -30,6 +31,11 @@ const AgendaRoute = AgendaRouteImport.update({
 const ConnexionRoute = ConnexionRouteImport.update({
   id: '/connexion',
   path: '/connexion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvitationRoute = InvitationRouteImport.update({
+  id: '/invitation',
+  path: '/invitation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ListeRoute = ListeRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
   '/connexion': typeof ConnexionRoute
+  '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
   '/profil': typeof ProfilRoute
   '/admin/membres': typeof AdminMembresRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
   '/connexion': typeof ConnexionRoute
+  '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
   '/profil': typeof ProfilRoute
   '/admin/membres': typeof AdminMembresRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
   '/connexion': typeof ConnexionRoute
+  '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
   '/profil': typeof ProfilRoute
   '/admin/membres': typeof AdminMembresRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agenda'
     | '/connexion'
+    | '/invitation'
     | '/liste'
     | '/profil'
     | '/admin/membres'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agenda'
     | '/connexion'
+    | '/invitation'
     | '/liste'
     | '/profil'
     | '/admin/membres'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agenda'
     | '/connexion'
+    | '/invitation'
     | '/liste'
     | '/profil'
     | '/admin/membres'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgendaRoute: typeof AgendaRoute
   ConnexionRoute: typeof ConnexionRoute
+  InvitationRoute: typeof InvitationRoute
   ListeRoute: typeof ListeRoute
   ProfilRoute: typeof ProfilRoute
   AdminMembresRoute: typeof AdminMembresRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/connexion'
       fullPath: '/connexion'
       preLoaderRoute: typeof ConnexionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invitation': {
+      id: '/invitation'
+      path: '/invitation'
+      fullPath: '/invitation'
+      preLoaderRoute: typeof InvitationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/liste': {
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgendaRoute: AgendaRoute,
   ConnexionRoute: ConnexionRoute,
+  InvitationRoute: InvitationRoute,
   ListeRoute: ListeRoute,
   ProfilRoute: ProfilRoute,
   AdminMembresRoute: AdminMembresRoute,

@@ -31,6 +31,13 @@ export const en = {
     email: "Email",
     password: "Password",
     badCredentials: "Wrong email or password.",
+    welcome: (name: string) => `Welcome ${name}`,
+    resetTitle: (name: string) => `New password for ${name}`,
+    passwordHint: "At least 10 characters.",
+    passwordConfirm: "Confirm the password",
+    createAccount: "Create my account",
+    changePassword: "Change password",
+    saving: "Saving…",
   },
   status: {
     interested: "Interested",
