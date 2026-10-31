@@ -51,7 +51,9 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright(),
+            // A click or a fill on a missing element fails after 2 s, not at
+            // the 15 s test timeout. Below 2 s, passing tests failed at times.
+            provider: playwright({ actionTimeout: 2000 }),
             instances: [{ browser: "chromium" }],
           },
         },
