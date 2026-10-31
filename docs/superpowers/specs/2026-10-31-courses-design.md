@@ -41,7 +41,7 @@ Le site est réussi si :
 | Décision | Choix | Raison |
 |---|---|---|
 | Hébergement | Machine perso à la maison, déjà exposée via un domaine, en HTTPS derrière Caddy | Supabase gratuit met le projet en pause après ~7 jours sans activité, ce qui ne colle pas avec un usage irrégulier. |
-| Backend | PocketBase **utilisé comme bibliothèque Go** (programme sur mesure) | Base, comptes, règles d'accès et tableau de bord fournis. PocketBase ne gère pas les passkeys (vérifié sur la doc v0.41), donc on les ajoute en Go avec une bibliothèque éprouvée plutôt qu'en écrivant de la cryptographie à la main. |
+| Backend | PocketBase v0.41.1 (module `ganigeorgiev.com/pocketbase/pocketbase`, le projet a quitté GitHub) **utilisé comme bibliothèque Go** (programme sur mesure) | Base, comptes, règles d'accès et tableau de bord fournis. PocketBase ne gère pas les passkeys (vérifié sur la doc v0.41), donc on les ajoute en Go avec une bibliothèque éprouvée plutôt qu'en écrivant de la cryptographie à la main. |
 | Front | SPA React servie par le même programme Go | Un seul service à déployer. |
 | Emails | Aucun en v1 | Une IP de box est souvent bloquée comme spam. Les liens d'invitation et de réinitialisation se partagent à la main (WhatsApp, SMS). |
 | Dates | Dates civiles `YYYY-MM-DD` stockées en texte, manipulées avec `Temporal.PlainDate` | Une date de course n'a pas de fuseau horaire. Le format ISO se trie et se filtre directement en texte. |
