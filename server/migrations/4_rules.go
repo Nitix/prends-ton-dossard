@@ -18,6 +18,11 @@ const (
 	ruleSignedIn = `@request.auth.id != ""`
 )
 
+// A rule that compares a relation to the caller ("user = @request.auth.id")
+// must be preceded by ruleSignedIn: for an anonymous request
+// @request.auth.id is empty, and PocketBase then matches every record whose
+// relation is empty too (a runner without account, an event without creator).
+
 // collectionRules are the API rules of one collection. An empty string is a
 // null rule: only superusers get through. PocketBase's "anyone" rule, an empty
 // rule that is not null, is never used by the application.
@@ -33,6 +38,8 @@ type collectionRules struct {
 // rules of the collections they own (invitations, passkeys).
 var accessRules = map[string]collectionRules{
 	"users": {
+		// An account always has an id, so "id = @request.auth.id" cannot match
+		// for an anonymous request.
 		list: `id = @request.auth.id || ` + ruleAdmin,
 		view: `id = @request.auth.id || ` + ruleAdmin,
 		// Accounts are created by accepting an invitation, never directly.
@@ -46,15 +53,18 @@ var accessRules = map[string]collectionRules{
 		// Without it an admin does not see the email of another account, which
 		// PocketBase hides unless its owner made it public. It is checked on top
 		// of the update rule, which still refuses an admin the email and the
-		// password of another account.
-		manage: ruleAdmin,
+		// password of another account. It excludes the admin's own account:
+		// manage access skips the old password check, which an admin changing
+		// their own password must still go through.
+		manage: ruleAdmin + ` && id != @request.auth.id`,
 	},
 	"runners": {
 		list:   ruleSignedIn,
 		view:   ruleSignedIn,
 		create: ruleAdmin,
 		// The link to an account is never edited through the API.
-		update: `@request.body.user:isset = false && (` + ruleAdmin + ` || user = @request.auth.id)`,
+		update: `@request.body.user:isset = false && (` + ruleAdmin +
+			` || (` + ruleSignedIn + ` && user = @request.auth.id))`,
 		delete: ruleAdmin,
 	},
 	"race_types": {
@@ -69,7 +79,7 @@ var accessRules = map[string]collectionRules{
 		view:   ruleSignedIn,
 		create: ruleSignedIn,
 		update: ruleSignedIn,
-		delete: `created_by.user = @request.auth.id || ` + ruleAdmin,
+		delete: ruleSignedIn + ` && (created_by.user = @request.auth.id || ` + ruleAdmin + `)`,
 	},
 	"formats": {
 		list:   ruleSignedIn,
@@ -77,7 +87,7 @@ var accessRules = map[string]collectionRules{
 		create: ruleSignedIn,
 		// A format stays in its event.
 		update: ruleSignedIn + ` && @request.body.event:isset = false`,
-		delete: `event.created_by.user = @request.auth.id || ` + ruleAdmin,
+		delete: ruleSignedIn + ` && (event.created_by.user = @request.auth.id || ` + ruleAdmin + `)`,
 	},
 	"invitations": {
 		list: ruleAdmin,
@@ -85,13 +95,14 @@ var accessRules = map[string]collectionRules{
 		// Created and used by the routes of the application only.
 	},
 	"passkeys": {
-		list: `user = @request.auth.id || ` + ruleAdmin,
-		view: `user = @request.auth.id || ` + ruleAdmin,
+		list: ruleSignedIn + ` && (user = @request.auth.id || ` + ruleAdmin + `)`,
+		view: ruleSignedIn + ` && (user = @request.auth.id || ` + ruleAdmin + `)`,
 		// Registered by the routes of the application only; a member renames
 		// their own passkeys, nothing else.
-		update: `user = @request.auth.id && @request.body.user:isset = false && @request.body.credential:isset = false` +
-			` && @request.body.credential_id:isset = false && @request.body.last_used_at:isset = false`,
-		delete: `user = @request.auth.id || ` + ruleAdmin,
+		update: ruleSignedIn + ` && user = @request.auth.id && @request.body.user:isset = false` +
+			` && @request.body.credential:isset = false && @request.body.credential_id:isset = false` +
+			` && @request.body.last_used_at:isset = false`,
+		delete: ruleSignedIn + ` && (user = @request.auth.id || ` + ruleAdmin + `)`,
 	},
 }
 

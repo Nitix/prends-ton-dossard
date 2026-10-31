@@ -11,12 +11,32 @@ import (
 
 func refreshURL(testutil.Fixture) string { return "/api/collections/users/auth-refresh" }
 
-// RunRows is exercised on the two things the harness itself must get right:
-// who the request is sent as, and what runs after it.
+// RunRows is exercised on the things the harness itself must get right: what
+// runs before the request, who the request is sent as, and what runs after it.
 func TestRunRows(t *testing.T) {
-	afterRan := false
+	beforeRan, afterRan := false, false
 
 	testutil.RunRows(t, []testutil.Row{
+		{
+			// Alice does not make her email public in the fixture.
+			Name:   "before changes the database before the request",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    refreshURL,
+			Status: http.StatusOK,
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				beforeRan = true
+				user, err := app.FindRecordById("users", fx.Alice.Id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				user.SetEmailVisibility(true)
+				if err := app.Save(user); err != nil {
+					t.Fatal(err)
+				}
+			},
+			Contains: []string{`"emailVisibility":true`},
+		},
 		{
 			Name:   "anon is not signed in",
 			As:     "anon",
@@ -77,6 +97,9 @@ func TestRunRows(t *testing.T) {
 		},
 	})
 
+	if !beforeRan {
+		t.Error("Row.Before was never called")
+	}
 	if !afterRan {
 		t.Error("Row.After was never called")
 	}

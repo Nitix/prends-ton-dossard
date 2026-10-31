@@ -13,6 +13,9 @@ import (
 // Row is one API test case, run by RunRows.
 type Row struct {
 	Name string
+	// Before runs once the fixture is seeded and before the request, to put
+	// the database in a state that Seed does not create.
+	Before func(t testing.TB, app *tests.TestApp, fx Fixture)
 	// As is who calls: "anon" (no Authorization header, also the default),
 	// "admin", "alice" or "bob" (the token of that fixture account).
 	As     string
@@ -40,6 +43,9 @@ func RunRows(t *testing.T, rows []Row) {
 		t.Run(row.Name, func(t *testing.T) {
 			app := NewApp(t)
 			fx := Seed(t, app)
+			if row.Before != nil {
+				row.Before(t, app, fx)
+			}
 
 			headers := map[string]string{}
 			if user := userFor(t, row.As, fx); user != nil {

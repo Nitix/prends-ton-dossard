@@ -40,6 +40,21 @@ func exists(app core.App, collection, id string) bool {
 	return err == nil
 }
 
+// setFields updates the given fields of an existing record, bypassing the rules.
+func setFields(t testing.TB, app core.App, collection, id string, values map[string]any) {
+	t.Helper()
+	record, err := app.FindRecordById(collection, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range values {
+		record.Set(k, v)
+	}
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // The status codes below are the ones PocketBase answers when a rule refuses a
 // request: an empty page for a list, 404 for a view, update or delete (so that
 // a record's existence is not revealed), 400 for a create, and 403 when the
@@ -127,6 +142,43 @@ func TestRules(t *testing.T) {
 			},
 		},
 		{
+			// An admin has no oldPassword requirement for the accounts of others
+			// (and cannot change them anyway), but must have one for their own.
+			Name:   "admin cannot change their own password without the old one",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", func(fx testutil.Fixture) *core.Record { return fx.Admin }),
+			Body:   body(`{"password":"x-123456789","passwordConfirm":"x-123456789"}`),
+			Status: http.StatusBadRequest,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				user, err := app.FindRecordById("users", fx.Admin.Id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !user.ValidatePassword(testutil.Password) {
+					t.Error("the password of the admin must be unchanged")
+				}
+			},
+		},
+		{
+			Name:   "admin changes their own password with the old one",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", func(fx testutil.Fixture) *core.Record { return fx.Admin }),
+			Body: body(`{"oldPassword":"password-123","password":"x-123456789",` +
+				`"passwordConfirm":"x-123456789"}`),
+			Status: http.StatusOK,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				user, err := app.FindRecordById("users", fx.Admin.Id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !user.ValidatePassword("x-123456789") {
+					t.Error("the password of the admin must have changed")
+				}
+			},
+		},
+		{
 			Name:   "nobody signs up through the API",
 			As:     "anon",
 			Method: http.MethodPost,
@@ -208,6 +260,33 @@ func TestRules(t *testing.T) {
 			URL:    recordOf("runners", samRunner),
 			Status: http.StatusNotFound,
 		},
+		{
+			// Sam has no account: for an anonymous request, "user is the
+			// caller" must not match an empty user.
+			Name:   "anon cannot rename a runner without account",
+			As:     "anon",
+			Method: http.MethodPatch,
+			URL:    recordOf("runners", samRunner),
+			Body:   body(`{"name":"Hacked"}`),
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				runner, err := app.FindRecordById("runners", fx.SamRunner.Id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := runner.GetString("name"); got != "Sam" {
+					t.Errorf("Sam's runner is named %q, want it unchanged", got)
+				}
+			},
+		},
+		{
+			Name:   "alice cannot rename a runner without account",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    recordOf("runners", samRunner),
+			Body:   body(`{"name":"Hacked"}`),
+			Status: http.StatusNotFound,
+		},
 
 		// race_types
 		{
@@ -282,6 +361,51 @@ func TestRules(t *testing.T) {
 			},
 		},
 		{
+			Name:   "anon cannot delete an event without creator",
+			As:     "anon",
+			Method: http.MethodDelete,
+			URL:    recordOf("events", func(fx testutil.Fixture) *core.Record { return fx.Event }),
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "events", fx.Event.Id, map[string]any{"created_by": ""})
+			},
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if !exists(app, "events", fx.Event.Id) {
+					t.Error("the event must survive")
+				}
+			},
+		},
+		{
+			Name:   "anon cannot delete an event created by a runner without account",
+			As:     "anon",
+			Method: http.MethodDelete,
+			URL:    recordOf("events", func(fx testutil.Fixture) *core.Record { return fx.Event }),
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "events", fx.Event.Id, map[string]any{"created_by": fx.SamRunner.Id})
+			},
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if !exists(app, "events", fx.Event.Id) {
+					t.Error("the event must survive")
+				}
+			},
+		},
+		{
+			Name:   "alice cannot delete an event created by a runner without account",
+			As:     "alice",
+			Method: http.MethodDelete,
+			URL:    recordOf("events", func(fx testutil.Fixture) *core.Record { return fx.Event }),
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "events", fx.Event.Id, map[string]any{"created_by": fx.SamRunner.Id})
+			},
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if !exists(app, "events", fx.Event.Id) {
+					t.Error("the event must survive")
+				}
+			},
+		},
+		{
 			Name:   "admin deletes the event of bob",
 			As:     "admin",
 			Method: http.MethodDelete,
@@ -331,6 +455,21 @@ func TestRules(t *testing.T) {
 			Method: http.MethodDelete,
 			URL:    recordOf("formats", func(fx testutil.Fixture) *core.Record { return fx.F42 }),
 			Status: http.StatusNotFound,
+		},
+		{
+			Name:   "anon cannot delete a format of an event without creator",
+			As:     "anon",
+			Method: http.MethodDelete,
+			URL:    recordOf("formats", func(fx testutil.Fixture) *core.Record { return fx.F42 }),
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "events", fx.Event.Id, map[string]any{"created_by": ""})
+			},
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if !exists(app, "formats", fx.F42.Id) {
+					t.Error("the format must survive")
+				}
+			},
 		},
 		{
 			Name:   "alice deletes a format of her event",
@@ -542,4 +681,132 @@ func TestRules_DownThenUp(t *testing.T) {
 			}
 		}
 	}
+}
+
+const (
+	alicePasskeyID = "passkeyalice001"
+	bobPasskeyID   = "passkeybob00001"
+)
+
+// seedPasskeys gives Alice and Bob one passkey each, with a known id.
+func seedPasskeys(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+	t.Helper()
+	for id, user := range map[string]*core.Record{alicePasskeyID: fx.Alice, bobPasskeyID: fx.Bob} {
+		mustSave(t, app, "passkeys", map[string]any{
+			"id":            id,
+			"user":          user.Id,
+			"name":          "Phone",
+			"credential_id": "credential-" + id,
+			"credential":    map[string]any{"id": id},
+		})
+	}
+}
+
+func TestRules_Passkeys(t *testing.T) {
+	passkey := func(id string) func(testutil.Fixture) string { return records("passkeys", id) }
+
+	testutil.RunRows(t, []testutil.Row{
+		{
+			Name:   "anon lists no passkey",
+			As:     "anon",
+			Method: http.MethodGet,
+			URL:    records("passkeys"),
+			Before: seedPasskeys,
+			Status: http.StatusOK,
+			Contains: []string{
+				`"totalItems":0`,
+			},
+		},
+		{
+			Name:        "alice lists her own passkey only, without its credential",
+			As:          "alice",
+			Method:      http.MethodGet,
+			URL:         records("passkeys"),
+			Before:      seedPasskeys,
+			Status:      http.StatusOK,
+			Contains:    []string{`"totalItems":1`, alicePasskeyID},
+			NotContains: []string{bobPasskeyID, `"credential"`},
+		},
+		{
+			Name:     "admin lists every passkey",
+			As:       "admin",
+			Method:   http.MethodGet,
+			URL:      records("passkeys"),
+			Before:   seedPasskeys,
+			Status:   http.StatusOK,
+			Contains: []string{`"totalItems":2`},
+		},
+		{
+			Name:   "alice cannot view the passkey of bob",
+			As:     "alice",
+			Method: http.MethodGet,
+			URL:    passkey(bobPasskeyID),
+			Before: seedPasskeys,
+			Status: http.StatusNotFound,
+		},
+		{
+			Name:   "alice renames her passkey",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    passkey(alicePasskeyID),
+			Before: seedPasskeys,
+			Body:   body(`{"name":"Laptop"}`),
+			Status: http.StatusOK,
+		},
+		{
+			Name:   "alice cannot rename the passkey of bob",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    passkey(bobPasskeyID),
+			Before: seedPasskeys,
+			Body:   body(`{"name":"Laptop"}`),
+			Status: http.StatusNotFound,
+		},
+		{
+			Name:   "alice cannot change the credential id of her passkey",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    passkey(alicePasskeyID),
+			Before: seedPasskeys,
+			Body:   body(`{"credential_id":"other"}`),
+			Status: http.StatusNotFound,
+		},
+		{
+			Name:   "anon cannot delete a passkey",
+			As:     "anon",
+			Method: http.MethodDelete,
+			URL:    passkey(alicePasskeyID),
+			Before: seedPasskeys,
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if !exists(app, "passkeys", alicePasskeyID) {
+					t.Error("the passkey must survive")
+				}
+			},
+		},
+		{
+			Name:   "alice cannot delete the passkey of bob",
+			As:     "alice",
+			Method: http.MethodDelete,
+			URL:    passkey(bobPasskeyID),
+			Before: seedPasskeys,
+			Status: http.StatusNotFound,
+		},
+		{
+			Name:   "alice deletes her passkey",
+			As:     "alice",
+			Method: http.MethodDelete,
+			URL:    passkey(alicePasskeyID),
+			Before: seedPasskeys,
+			Status: http.StatusNoContent,
+		},
+		{
+			Name:   "admin deletes the passkey of bob",
+			As:     "admin",
+			Method: http.MethodDelete,
+			URL:    passkey(bobPasskeyID),
+			Before: seedPasskeys,
+			Status: http.StatusNoContent,
+		},
+	})
 }
