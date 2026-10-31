@@ -11,6 +11,7 @@ import (
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/router"
 
+	"courses/server/accounts"
 	"courses/server/apperr"
 	"courses/server/config"
 )
@@ -25,21 +26,12 @@ import (
 // would keep a working token in clear text for days.
 func Register(app core.App, cfg config.Config) {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		e.Router.POST("/api/app/invitations", createRoute(cfg)).Bind(apis.RequireAuth("users")).BindFunc(requireAdmin)
-		e.Router.DELETE("/api/app/invitations/{id}", revokeRoute).Bind(apis.RequireAuth("users")).BindFunc(requireAdmin)
+		e.Router.POST("/api/app/invitations", createRoute(cfg)).Bind(apis.RequireAuth("users")).BindFunc(accounts.RequireAdmin)
+		e.Router.DELETE("/api/app/invitations/{id}", revokeRoute).Bind(apis.RequireAuth("users")).BindFunc(accounts.RequireAdmin)
 		e.Router.POST("/api/app/invitations/lookup", lookupRoute)
 		e.Router.POST("/api/app/invitations/accept", acceptRoute)
 		return e.Next()
 	})
-}
-
-// requireAdmin refuses the callers that are not admins. It comes after
-// RequireAuth, so e.Auth is an account.
-func requireAdmin(e *core.RequestEvent) error {
-	if e.Auth.GetString("role") != "admin" {
-		return apperr.New(http.StatusForbidden, apperr.CodeForbidden)
-	}
-	return e.Next()
 }
 
 // fail returns err as the response: the errors that carry a code or a field are
