@@ -1,0 +1,59 @@
+name: CI
+
+# The end-to-end tests (Playwright, three browsers) are planned for v5: this
+# workflow runs the checks and the unit and component tests only.
+on: push
+
+permissions:
+  contents: read
+
+# A new push to a branch cancels the run of the same branch that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # Lists the files that need formatting, then fails if there are any.
+      - name: gofmt
+        run: test -z "$(gofmt -l server | tee /dev/stderr)"
+      - name: go vet
+        run: go vet ./...
+      # server/webdist/dist/.gitkeep is committed: it lets the program, which
+      # embeds the front end, compile without building the front end first.
+      - name: go test
+        run: go test ./...
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The version of pnpm comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install the dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm --dir web typecheck
+      - name: Lint
+        run: pnpm --dir web lint
+      - name: Format check
+        run: pnpm --dir web fmt:check
+      # The browser tests of Vitest run in a headless Chromium.
+      - name: Install Chromium
+        run: pnpm --dir web exec playwright install --with-deps chromium
+      - name: Test
+        run: pnpm --dir web test
+      - name: Build
+        run: pnpm --dir web build
