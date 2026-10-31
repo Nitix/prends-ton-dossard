@@ -24,6 +24,28 @@ func registerEmailRoute(app core.App) {
 	})
 }
 
+// ValidEmail reports whether email can be the email of an account. The format
+// rule is the one of the email field, which does not check an empty value: an
+// account needs one.
+func ValidEmail(email string) bool {
+	return email != "" && is.EmailFormat.Validate(email) == nil
+}
+
+// EmailTaken reports whether an account other than the one of exceptID (none
+// when empty) already has email. The sign-in looks the email up as it is
+// written: two accounts that only differ by their letters would be confusing,
+// so the comparison ignores them.
+func EmailTaken(app core.App, email, exceptID string) (bool, error) {
+	conditions := []dbx.Expression{
+		dbx.NewExp("LOWER([[email]]) = {:email}", dbx.Params{"email": strings.ToLower(email)}),
+	}
+	if exceptID != "" {
+		conditions = append(conditions, dbx.Not(dbx.HashExp{"id": exceptID}))
+	}
+	n, err := app.CountRecords("users", conditions...)
+	return n > 0, err
+}
+
 func changeEmail(e *core.RequestEvent) error {
 	var body struct {
 		Email    string `json:"email"`
@@ -38,23 +60,16 @@ func changeEmail(e *core.RequestEvent) error {
 		return apperr.New(http.StatusBadRequest, apperr.CodeWrongPassword)
 	}
 
-	// The format rule is the one of the email field, which does not check an
-	// empty value.
-	if body.Email == "" || is.EmailFormat.Validate(body.Email) != nil {
+	if !ValidEmail(body.Email) {
 		return apperr.New(http.StatusBadRequest, apperr.CodeEmailInvalid)
 	}
 
-	// The sign-in looks the email up as it is written: two accounts that only
-	// differ by their letters would be confusing, so the comparison ignores them.
 	// The caller's own account does not count, which lets them change the case.
-	taken, err := e.App.CountRecords("users",
-		dbx.NewExp("LOWER([[email]]) = {:email}", dbx.Params{"email": strings.ToLower(body.Email)}),
-		dbx.Not(dbx.HashExp{"id": account.Id}),
-	)
+	taken, err := EmailTaken(e.App, body.Email, account.Id)
 	if err != nil {
 		return e.InternalServerError("", err)
 	}
-	if taken > 0 {
+	if taken {
 		return apperr.New(http.StatusBadRequest, apperr.CodeEmailTaken)
 	}
 

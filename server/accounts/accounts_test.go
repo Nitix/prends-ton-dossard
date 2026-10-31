@@ -1,11 +1,8 @@
 package accounts_test
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
-	"strings"
 	"testing"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
@@ -106,53 +103,6 @@ func emailIs(who func(testutil.Fixture) *core.Record, want string) func(testing.
 func bobBecomesAdmin(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 	t.Helper()
 	edit(t, app, fx.Bob.Id, map[string]any{"role": "admin"})
-}
-
-// sequence runs requests one after the other on one application, so that each
-// one sees what the previous ones did.
-type sequence struct {
-	t   *testing.T
-	app *tests.TestApp
-}
-
-// step sends a request, as the account that token belongs to (none when empty),
-// checks the status and the texts the response contains, and returns the response
-// body.
-func (s sequence) step(name, method, url, token, body string, status int, contains ...string) string {
-	s.t.Helper()
-	var response string
-	scenario := tests.ApiScenario{
-		Name:                  name,
-		Method:                method,
-		URL:                   url,
-		Body:                  strings.NewReader(body),
-		Headers:               map[string]string{"Authorization": token},
-		ExpectedStatus:        status,
-		ExpectedContent:       contains,
-		TestAppFactory:        func(testing.TB) *tests.TestApp { return s.app },
-		DisableTestAppCleanup: true,
-		AfterTestFunc: func(t testing.TB, _ *tests.TestApp, res *http.Response) {
-			data, err := io.ReadAll(res.Body)
-			if err != nil {
-				t.Fatalf("reading the response: %v", err)
-			}
-			response = string(data)
-		},
-	}
-	scenario.Test(s.t)
-	return response
-}
-
-// tokenIn returns the token of an auth response.
-func tokenIn(t testing.TB, response string) string {
-	t.Helper()
-	var auth struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal([]byte(response), &auth); err != nil || auth.Token == "" {
-		t.Fatalf("no token in the response %q (%v)", response, err)
-	}
-	return auth.Token
 }
 
 func TestUsers_LastAdmin(t *testing.T) {
@@ -265,11 +215,11 @@ func TestUsers_DisableInvalidatesSessions(t *testing.T) {
 	bobToken := testutil.Token(t, fx.Bob)
 	adminToken := testutil.Token(t, fx.Admin)
 
-	seq := sequence{t, app}
+	seq := testutil.NewSequence(t, app)
 	refresh := "/api/collections/users/auth-refresh"
-	seq.step("the token of an enabled account refreshes", http.MethodPost, refresh, bobToken, "", http.StatusOK, `"token"`)
-	seq.step("the admin disables the account", http.MethodPatch, "/api/collections/users/records/"+fx.Bob.Id, adminToken, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
-	seq.step("the token issued before no longer refreshes", http.MethodPost, refresh, bobToken, "", http.StatusUnauthorized, `"status":401`)
+	seq.Step("the token of an enabled account refreshes", http.MethodPost, refresh, bobToken, "", http.StatusOK, `"token"`)
+	seq.Step("the admin disables the account", http.MethodPatch, "/api/collections/users/records/"+fx.Bob.Id, adminToken, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
+	seq.Step("the token issued before no longer refreshes", http.MethodPost, refresh, bobToken, "", http.StatusUnauthorized, `"status":401`)
 
 	if stored(t, app, "users", fx.Bob.Id).TokenKey() == fx.Bob.TokenKey() {
 		t.Error("the token key of the disabled account was not renewed")
@@ -519,15 +469,15 @@ func TestMeEmail_ReplacesTheSession(t *testing.T) {
 			app := testutil.NewApp(t)
 			fx := testutil.Seed(t, app)
 			oldToken := testutil.Token(t, fx.Alice)
-			seq := sequence{t, app}
+			seq := testutil.NewSequence(t, app)
 
-			response := seq.step("change the email", http.MethodPost, "/api/app/me/email", oldToken,
+			response := seq.Step("change the email", http.MethodPost, "/api/app/me/email", oldToken,
 				`{"email":"`+tc.email+`","password":"`+testutil.Password+`"}`,
 				http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
 			refresh := "/api/collections/users/auth-refresh"
-			seq.step("the token issued before is refused", http.MethodPost, refresh, oldToken, "", http.StatusUnauthorized, `"status":401`)
-			newToken := tokenIn(t, response)
-			seq.step("the token of the response is accepted", http.MethodPost, refresh, newToken, "", http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
+			seq.Step("the token issued before is refused", http.MethodPost, refresh, oldToken, "", http.StatusUnauthorized, `"status":401`)
+			newToken := testutil.TokenIn(t, response)
+			seq.Step("the token of the response is accepted", http.MethodPost, refresh, newToken, "", http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
 		})
 	}
 }
@@ -535,14 +485,14 @@ func TestMeEmail_ReplacesTheSession(t *testing.T) {
 func TestMeEmail_SignInWithTheNewEmail(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
-	seq := sequence{t, app}
+	seq := testutil.NewSequence(t, app)
 
 	login := "/api/collections/users/auth-with-password"
 	credentials := func(email string) string {
 		return `{"identity":"` + email + `","password":"` + testutil.Password + `"}`
 	}
-	seq.step("change the email", http.MethodPost, "/api/app/me/email", testutil.Token(t, fx.Alice),
+	seq.Step("change the email", http.MethodPost, "/api/app/me/email", testutil.Token(t, fx.Alice),
 		`{"email":"new@example.test","password":"`+testutil.Password+`"}`, http.StatusOK, `"email":"new@example.test"`)
-	seq.step("sign in with the new email", http.MethodPost, login, "", credentials("new@example.test"), http.StatusOK, `"token"`)
-	seq.step("the old email no longer signs in", http.MethodPost, login, "", credentials("alice@example.test"), http.StatusBadRequest, `"status":400`)
+	seq.Step("sign in with the new email", http.MethodPost, login, "", credentials("new@example.test"), http.StatusOK, `"token"`)
+	seq.Step("the old email no longer signs in", http.MethodPost, login, "", credentials("alice@example.test"), http.StatusBadRequest, `"status":400`)
 }
