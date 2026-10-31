@@ -89,7 +89,7 @@ Données de départ : Route, Trail, Ultra-trail, Cross.
 | `end_date` | texte `YYYY-MM-DD` | facultatif, ≥ `start_date` |
 | `registration_url` | URL | facultatif (les inscriptions ne sont pas toujours ouvertes) |
 | `notes` | texte multiligne | facultatif |
-| `created_by` | relation → `users` | fixé par le serveur |
+| `created_by` | relation → `runners` | fixé par le serveur (le coureur de l'utilisateur connecté). On pointe vers `runners` et non vers `users` parce que les comptes ne sont pas lisibles par les autres membres, alors qu'on a besoin d'afficher le nom. |
 
 ### `formats` (épreuves)
 
@@ -111,7 +111,7 @@ Données de départ : Route, Trail, Ultra-trail, Cross.
 | `runner` | relation → `runners` | obligatoire, ne change plus après la création |
 | `format` | relation → `formats` | obligatoire, suppression en cascade ; modifiable seulement vers une épreuve du même événement |
 | `status` | choix `interested` \| `registered` \| `finished` \| `dnf` \| `dns` | obligatoire, `interested` par défaut |
-| `added_by` | relation → `users` | fixé par le serveur à la création, ne change plus |
+| `added_by` | relation → `runners` | fixé par le serveur à la création (le coureur de l'utilisateur connecté), ne change plus |
 | `confirmed` | booléen | calculé par le serveur (voir § 6.2) |
 
 Index unique sur (`runner`, `format`).
@@ -228,7 +228,10 @@ Hors invitation et réinitialisation, seuls les utilisateurs connectés peuvent 
 
 ### 6.2 Règles appliquées par le serveur
 
-- **`created_by` et `added_by`** sont fixés à `@request.auth.id` par un hook à la création. Toute valeur envoyée par le client est ignorée.
+- **`created_by` et `added_by`** sont fixés par un hook à la création : ils reçoivent le coureur rattaché à `@request.auth.id`. Toute valeur envoyée par le client est ignorée.
+- **Désactiver un compte** renouvelle sa clé de jeton : ses sessions ouvertes cessent immédiatement de fonctionner.
+- **Dernier admin** : on ne peut pas retirer le rôle admin du dernier admin actif, ni le désactiver (`last_admin`).
+- **Dates d'un événement** : on ne peut pas les modifier si une épreuve a une date propre qui sortirait de la nouvelle plage (`format_date_out_of_range`).
 - **`confirmed`** :
   - à la création, il vaut `true` si `runner.user = @request.auth.id`, sinon `false` ;
   - quand le coureur concerné modifie sa propre participation (statut, épreuve, ou confirmation explicite), il passe à `true` ;
@@ -307,7 +310,7 @@ Le site est d'abord pensé pour le mobile et existe en français et en anglais (
   - la locale de formatage, qui est l'étiquette complète du navigateur (`fr-FR`, `en-GB`, `en-US`…) pour que l'ordre des dates et le premier jour de la semaine respectent ses habitudes.
 - **Textes** : un dictionnaire `fr.ts` sert de référence, et `en.ts` est typé avec `satisfies Messages`. Une clé manquante ou en trop fait donc échouer la compilation. Les textes avec des variables sont des fonctions (`addedBy: (name) => …`).
 - **Page** : `<html lang>` est mis à jour selon la langue choisie.
-- **Erreurs serveur** : les routes sur mesure renvoient des codes d'erreur (`invitation_expired`, `email_taken`…), jamais de texte. C'est le front qui les traduit.
+- **Erreurs serveur** : les routes sur mesure renvoient des codes d'erreur (`invitation_invalid`, `email_taken`…), jamais de texte. C'est le front qui les traduit.
 
 **Formatage** : uniquement avec `Intl`, dans la locale de formatage :
 
