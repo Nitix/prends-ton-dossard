@@ -2,8 +2,8 @@ import { ClientResponseError } from "pocketbase";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { toEventView, type EventView } from "./api";
-import { buildBatch, saveEvent, SaveEventError, type EventDraft } from "./saveEvent";
-import { eventRecord, trailType } from "./testFixture";
+import { buildBatch, saveEvent, SaveEventError, type BatchOp, type EventDraft } from "./saveEvent";
+import { eventRecord, f15, f42, trailType } from "./testFixture";
 
 type Rec = Record<string, unknown>;
 type Call = { action: string; collection: string; id?: string; body?: Rec };
@@ -181,14 +181,16 @@ describe("buildBatch, creation", () => {
 });
 
 describe("buildBatch, modification", () => {
-  test("changes the event and its formats by their id, and never sends the event of a format", () => {
+  test("changes the formats that stay, then the event, by their id, and never sends the event of a format", () => {
     const { ops, eventId } = buildBatch(editDraft(), existing(), ME);
 
     expect(eventId).toBe("event");
-    expect(summary(ops)).toEqual(["update events", "update formats", "update formats"]);
-    expect(ops.map((op) => op.id)).toEqual(["event", "f42", "f15"]);
-    for (const op of ops.slice(1)) expect(op.body).not.toHaveProperty("event");
-    expect(ops[0]?.body).not.toHaveProperty("created_by");
+    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(ops.map((op) => op.id)).toEqual(["f42", "f15", "event"]);
+    for (const op of ops.slice(0, 2)) expect(op.body).not.toHaveProperty("event");
+    expect(ops[2]?.body).not.toHaveProperty("created_by");
+    // The dates are those of the draft: they all are days the event has.
+    expect(ops[0]?.body).toMatchObject({ date: "2026-06-14" });
   });
 
   test("a format that was taken off the form is deleted", () => {
@@ -242,29 +244,194 @@ describe("buildBatch, modification", () => {
     expect(summary(ops)).toEqual(["delete formats", "update formats", "update events"]);
   });
 
-  test("shrinking the dates: the formats that move inside the new ones go before the event", () => {
-    const draft = editDraft({ end_date: undefined });
-    draft.formats = draft.formats.map((format) => ({ ...format, date: undefined }));
+  test("the new formats are created after the event, whose dates they have to fit", () => {
+    const draft = editDraft({ end_date: "2026-06-15" });
+    draft.formats.push({ race_type: trailType.id, duration_min: 360, date: "2026-06-15" });
 
     const { ops } = buildBatch(draft, existing(), ME);
 
-    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "create formats",
+    ]);
   });
 
-  test("extending the dates: a format that moves to the new day goes after the event", () => {
+  test("a format that moves to a day the event gains: its date waits for the event", () => {
     const draft = editDraft({ end_date: "2026-06-15" });
     const [first] = draft.formats;
     if (first) first.date = "2026-06-15";
 
     const { ops } = buildBatch(draft, existing(), ME);
 
-    expect(summary(ops)).toEqual(["update events", "update formats", "update formats"]);
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    expect(ops[0]).toMatchObject({ id: "f42", body: { date: "", distance_km: 42 } });
+    // The late request sends nothing but the date, and never the event.
+    expect(ops[3]).toEqual({
+      action: "update",
+      collection: "formats",
+      id: "f42",
+      body: { date: "2026-06-15" },
+    });
+  });
+});
+
+// The server checks the date of a format against the event as it is stored,
+// and the dates of an event against the formats as they are stored, each
+// time a request runs (server/events/hooks.go). This runs the requests of a
+// batch against those two checks, in their order.
+
+type Stored = { start: string; end: string; formats: Map<string, string> };
+
+const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
+
+const isWithin = (day: string, start: string, end: string) =>
+  day >= start && (end === "" || day <= end);
+
+function runOnServer(ops: BatchOp[], view: EventView): Stored {
+  const stored: Stored = {
+    start: view.event.start_date,
+    end: view.event.end_date ?? "",
+    formats: new Map(view.formats.map(({ format }) => [format.id, format.date ?? ""])),
+  };
+  ops.forEach((op, index) => {
+    if (op.collection === "events") {
+      const start = textOf(op.body?.start_date);
+      const end = textOf(op.body?.end_date);
+      for (const [id, day] of stored.formats) {
+        if (day !== "" && !isWithin(day, start, end)) {
+          throw new Error(`request ${index}: the date ${day} of ${id} is out of the event`);
+        }
+      }
+      stored.start = start;
+      stored.end = end;
+    } else if (op.collection === "formats") {
+      if (op.action === "delete") {
+        stored.formats.delete(op.id);
+        return;
+      }
+      const day = typeof op.body?.date === "string" ? op.body.date : stored.formats.get(op.id);
+      if (day !== undefined && day !== "" && !isWithin(day, stored.start, stored.end)) {
+        throw new Error(`request ${index}: the date ${day} of ${op.id} is out of the event`);
+      }
+      stored.formats.set(op.id, day ?? "");
+    }
+  });
+  return stored;
+}
+
+/** The event of the fixture with F15 dated on the first day too: 13-14 June, F15 on the 13th, F42 on the 14th. */
+const datedExisting = () =>
+  toEventView({
+    ...eventRecord,
+    expand: { formats_via_event: [f42, { ...f15, date: "2026-06-13" }] },
   });
 
-  test("with the same dates, the event goes first", () => {
-    const { ops } = buildBatch(editDraft({ name: "Trail des Crêtes 2026" }), existing(), ME);
+/** A draft of `editDraft`'s event with the dates of the event and of each format (F42, F15) given. */
+function movedDraft(start: string, end: string | undefined, dates: [string?, string?]): EventDraft {
+  const draft = editDraft({ start_date: start, end_date: end });
+  draft.formats = draft.formats.map((format, index) => ({ ...format, date: dates[index] }));
+  return draft;
+}
 
-    expect(ops[0]?.collection).toBe("events");
+describe("buildBatch, the dates of the event and of its formats move together", () => {
+  test("postponing a two-day event with its day-2 format moved along: 13-14 to 20-21, F42 to the 21st", () => {
+    const draft = movedDraft("2026-06-20", "2026-06-21", ["2026-06-21", undefined]);
+
+    const { ops } = buildBatch(draft, existing(), ME);
+
+    // The format waits (no date), the event moves, then the format gets its day.
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    expect(ops.map((op) => op.id)).toEqual(["f42", "f15", "event", "f42"]);
+    expect(ops[0]?.body).toMatchObject({ date: "" });
+    expect(ops[3]?.body).toEqual({ date: "2026-06-21" });
+    for (const op of ops.filter(({ collection }) => collection === "formats")) {
+      expect(op.body).not.toHaveProperty("event");
+    }
+    const stored = runOnServer(ops, existing());
+    expect(stored).toMatchObject({ start: "2026-06-20", end: "2026-06-21" });
+    expect(stored.formats.get("f42")).toBe("2026-06-21");
+  });
+
+  test("an overlapping shift: F15 dated on the old first day goes undated, F42 moves to the new day", () => {
+    // 13-14 June becomes 14-15 June: F15 (the 13th) is cleared, F42 (the 14th) moves to the 15th.
+    const draft = movedDraft("2026-06-14", "2026-06-15", ["2026-06-15", undefined]);
+
+    const { ops } = buildBatch(draft, datedExisting(), ME);
+
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    const stored = runOnServer(ops, datedExisting());
+    expect(stored).toMatchObject({ start: "2026-06-14", end: "2026-06-15" });
+    expect(stored.formats.get("f42")).toBe("2026-06-15");
+    expect(stored.formats.get("f15")).toBe("");
+  });
+
+  test("the model of the server does refuse the order that puts the event first", () => {
+    const draft = movedDraft("2026-06-20", "2026-06-21", ["2026-06-21", undefined]);
+    const { ops } = buildBatch(draft, existing(), ME);
+    const [, , event] = ops;
+    if (!event) throw new Error("no event request");
+
+    expect(() => runOnServer([event, ...ops.filter((op) => op !== event)], existing())).toThrow(
+      /out of the event/,
+    );
+  });
+
+  // Every final state that is valid is saved by the same batch.
+  test.each([
+    ["the same dates", "2026-06-13", "2026-06-14", ["2026-06-14", undefined]],
+    ["shrinking to one day, dates cleared", "2026-06-13", undefined, [undefined, undefined]],
+    ["extending, F42 moved to the new day", "2026-06-13", "2026-06-15", ["2026-06-15", undefined]],
+    [
+      "a disjoint shift, formats dated on both days",
+      "2026-06-20",
+      "2026-06-21",
+      ["2026-06-21", "2026-06-20"],
+    ],
+    ["a disjoint shift, dates cleared", "2026-06-20", "2026-06-21", [undefined, undefined]],
+    [
+      "an overlapping shift, F15 on the shared day",
+      "2026-06-14",
+      "2026-06-15",
+      ["2026-06-15", "2026-06-14"],
+    ],
+    ["an earlier event", "2026-05-01", "2026-05-02", ["2026-05-02", "2026-05-01"]],
+    ["an open-ended event, F42 on a later day", "2026-06-13", undefined, ["2026-06-30", undefined]],
+  ] as const)("%s", (_name, start, end, dates) => {
+    const draft = movedDraft(start, end, [dates[0], dates[1]]);
+
+    const { ops } = buildBatch(draft, existing(), ME);
+
+    const stored = runOnServer(ops, existing());
+    expect(stored).toMatchObject({ start, end: end ?? "" });
+    expect(stored.formats.get("f42")).toBe(dates[0] ?? "");
+    expect(stored.formats.get("f15")).toBe(dates[1] ?? "");
+  });
+
+  test("a removed format that was dated outside the new dates does not hold the event back", () => {
+    const draft = movedDraft("2026-06-20", "2026-06-21", [undefined, undefined]);
+    draft.formats = draft.formats.filter((format) => format.id !== "f42");
+
+    const { ops } = buildBatch(draft, existing(), ME);
+
+    expect(summary(ops)).toEqual(["delete formats", "update formats", "update events"]);
+    expect(runOnServer(ops, existing()).formats.has("f42")).toBe(false);
   });
 });
 
@@ -322,6 +489,9 @@ describe("saveEvent", () => {
     expect(mocks.send).not.toHaveBeenCalled();
   });
 });
+
+/** A field error of the server, whose text is never shown. */
+const field = (code: string) => ({ code, message: "server text" });
 
 /** What PocketBase answers when the request number `index` of a batch fails. */
 function refused(index: number, status: number, data: Rec = {}) {
@@ -388,6 +558,20 @@ describe("saveEvent, a refused batch", () => {
 
     expect(error.target).toEqual({ kind: "removal" });
     expect(error.code).toBe("not_found");
+  });
+
+  test("a date the server refuses in the last request belongs to the row of its format", async () => {
+    // 13-14 June becomes 20 June, F42 (the first format of the draft) is put on the 21st: out of the event.
+    const draft = movedDraft("2026-06-20", undefined, ["2026-06-21", undefined]);
+    // The requests: F42 (undated), F15, the event, then the date of F42.
+    const error = await failure(
+      refused(3, 400, { date: field("format_date_out_of_range") }),
+      draft,
+      existing(),
+    );
+
+    expect(error.target).toEqual({ kind: "format", index: 0 });
+    expect(error.fields).toEqual({ date: "format_date_out_of_range" });
   });
 
   test("the participation is told apart, since it has no field of the form", async () => {

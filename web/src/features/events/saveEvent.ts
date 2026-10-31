@@ -83,22 +83,29 @@ function isInRangeOf(event: EventView["event"], day: string | undefined): boolea
 }
 
 /**
- * The requests that save `draft`.
+ * The requests that save `draft`, in the order the server needs.
  *
  * - Creation: the event, then its formats in the order of the form, then the
  *   participation of the member (`myRunnerId`) when `draft.join` is set.
- * - Modification (`existing` is the event as it was loaded): the formats taken
- *   off the form are deleted, the event and the formats that stay are
- *   updated, and the new ones are created. A format is never sent with its
- *   `event`: the server refuses to move one.
+ * - Modification (`existing` is the event as it was loaded), always in four
+ *   phases:
+ *   1. the formats taken off the form are deleted;
+ *   2. the formats that stay are updated, each with its own date when that day
+ *      is in the dates the event has now (the stored ones), and with no date
+ *      otherwise (an empty date is always valid);
+ *   3. the event is updated;
+ *   4. the formats whose date is a day the event gains get that date (an
+ *      update that sends nothing else), and the new formats are created.
  *
- * The server checks the dates of a format against the event, and the dates of
- * an event against its formats, as they are when each request runs. So when
- * the dates of the event change, the order matters: the formats go first if
- * all of them fit the dates the event has now (so that the event can shrink
- * around them), and the event goes first otherwise (so that they can move to
- * the days it gains). The formats that are deleted always go first: a format
- * on its way out must not hold the event back.
+ * The server checks the date of a format against the event, and the dates of
+ * an event against its formats, as they are when each request runs. Phase 2
+ * only keeps dates the stored event accepts, and phase 3 only meets stored
+ * dates that are either the final ones or empty, so the event can shrink,
+ * extend, or move to other days, with its formats moving along, in one batch:
+ * whatever the final state, if it is valid, no request fails on the way. A
+ * format is never sent with its `event` once it exists: the server refuses to
+ * move one. A request of phase 2 and the one of phase 4 for the same format
+ * have its id, which is how an error is told to be about its row.
  *
  * `formatIds` is the id of each format of `draft.formats`, in order.
  */
@@ -116,18 +123,30 @@ export function buildBatch(
     id: eventId,
     body: eventBody(draft),
   };
-  const formatOps = draft.formats.map((format): BatchOp => {
+
+  const formatIds: string[] = [];
+  const keptOps: BatchOp[] = [];
+  const lateOps: BatchOp[] = [];
+  for (const format of draft.formats) {
     const id = format.id ?? newId();
-    return existingIds.has(id)
-      ? { action: "update", collection: "formats", id, body: formatBody(format) }
-      : {
-          action: "create",
-          collection: "formats",
-          id,
-          body: { event: eventId, ...formatBody(format) },
-        };
-  });
-  const formatIds = formatOps.map((op) => op.id);
+    formatIds.push(id);
+    if (existing && existingIds.has(id)) {
+      // A day that the event does not have yet waits for the event.
+      const waits = !isInRangeOf(existing.event, format.date);
+      const kept = waits ? { ...format, date: undefined } : format;
+      keptOps.push({ action: "update", collection: "formats", id, body: formatBody(kept) });
+      if (waits) {
+        lateOps.push({ action: "update", collection: "formats", id, body: { date: format.date } });
+      }
+    } else {
+      lateOps.push({
+        action: "create",
+        collection: "formats",
+        id,
+        body: { event: eventId, ...formatBody(format) },
+      });
+    }
+  }
 
   const deleteOps = (existing?.formats ?? [])
     .filter(({ format }) => !formatIds.includes(format.id))
@@ -148,18 +167,7 @@ export function buildBatch(
     });
   }
 
-  const datesChanged =
-    existing !== undefined &&
-    (draft.start_date !== existing.event.start_date ||
-      (draft.end_date ?? "") !== (existing.event.end_date ?? ""));
-  const formatsFirst =
-    existing !== undefined &&
-    datesChanged &&
-    draft.formats.every((format) => isInRangeOf(existing.event, format.date));
-
-  const ops = formatsFirst
-    ? [...deleteOps, ...formatOps, eventOp, ...joinOps]
-    : [...deleteOps, eventOp, ...formatOps, ...joinOps];
+  const ops = [...deleteOps, ...keptOps, eventOp, ...lateOps, ...joinOps];
   return { ops, eventId, formatIds };
 }
 

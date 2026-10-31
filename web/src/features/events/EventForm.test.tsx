@@ -784,12 +784,13 @@ test("EventForm — enregistre la modification par id, sans l'événement dans l
     expect(router.state.location.pathname).toBe("/evenements/event");
   });
   expect(mocks.send).toHaveBeenCalledOnce();
-  expect(summary()).toEqual(["update events", "update formats", "update formats"]);
-  expect(mocks.calls.map(({ id }) => id)).toEqual(["event", "f15", "f42"]);
-  expect(mocks.calls[0]?.body).toMatchObject({ name: "Trail des Crêtes 2026", location: "Annecy" });
-  expect(mocks.calls[0]?.body).not.toHaveProperty("created_by");
-  for (const call of mocks.calls.slice(1)) expect(call.body).not.toHaveProperty("event");
-  expect(mocks.calls[2]?.body).toMatchObject({
+  // The formats that stay are updated first, then the event.
+  expect(summary()).toEqual(["update formats", "update formats", "update events"]);
+  expect(mocks.calls.map(({ id }) => id)).toEqual(["f15", "f42", "event"]);
+  expect(mocks.calls[2]?.body).toMatchObject({ name: "Trail des Crêtes 2026", location: "Annecy" });
+  expect(mocks.calls[2]?.body).not.toHaveProperty("created_by");
+  for (const call of mocks.calls.slice(0, 2)) expect(call.body).not.toHaveProperty("event");
+  expect(mocks.calls[1]?.body).toMatchObject({
     distance_km: 42,
     time_limit_min: 600,
     elevation_gain_m: 2400,
@@ -905,8 +906,8 @@ test("EventForm — tant que le coureur de l'utilisateur se charge, les épreuve
 });
 
 test("EventForm — l'erreur d'une épreuve existante est dans son groupe, et la modification garde les valeurs", async () => {
-  // F15 and F42 are updated after the event: the request 1 is F15.
-  mocks.send.mockRejectedValue(refused(1, 404));
+  // F15 and F42 are updated before the event: the request 0 is F15.
+  mocks.send.mockRejectedValue(refused(0, 404));
   const { screen } = await renderEdit();
   await name(screen).fill("Trail des Crêtes 2026");
 
@@ -918,7 +919,7 @@ test("EventForm — l'erreur d'une épreuve existante est dans son groupe, et la
 });
 
 test("EventForm — réduire les dates : l'erreur du serveur s'affiche sous la date de début", async () => {
-  // The formats go first, since they fit the dates the event has now: the event is the last request.
+  // The formats that stay (F15, F42) go first: the event is the third request.
   mocks.send.mockRejectedValue(refused(2, 400, { start_date: field("format_date_out_of_range") }));
   const { screen } = await renderEdit();
   await endDate(screen).fill("2026-06-13");
@@ -929,6 +930,62 @@ test("EventForm — réduire les dates : l'erreur du serveur s'affiche sous la d
   expect(startDate(screen).element().getAttribute("aria-describedby")).toContain(
     screen.getByText(fr.errors.format_date_out_of_range).element().id,
   );
+});
+
+test("EventForm — reporter l'événement et déplacer l'épreuve du jour 2 : un seul lot, la date de l'épreuve après l'événement", async () => {
+  const { screen, router } = await renderEdit();
+  // 13-14 June becomes 20-21 June, and F42 (the 14th) goes to the 21st.
+  await startDate(screen).fill("2026-06-20");
+  await endDate(screen).fill("2026-06-21");
+  await formatDate(format(screen, 2)).fill("2026-06-21");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.send).toHaveBeenCalledOnce();
+  // F42 waits with no date, the event moves, then F42 gets its day.
+  expect(summary()).toEqual([
+    "update formats",
+    "update formats",
+    "update events",
+    "update formats",
+  ]);
+  expect(mocks.calls.map(({ id }) => id)).toEqual(["f15", "f42", "event", "f42"]);
+  expect(mocks.calls[1]?.body).toMatchObject({ distance_km: 42, date: "" });
+  expect(mocks.calls[2]?.body).toMatchObject({
+    start_date: "2026-06-20",
+    end_date: "2026-06-21",
+  });
+  expect(mocks.calls[3]?.body).toEqual({ date: "2026-06-21" });
+  for (const call of mocks.calls.filter(({ collection }) => collection === "formats")) {
+    expect(call.body).not.toHaveProperty("event");
+  }
+});
+
+test("EventForm — la date d'une épreuve refusée à la fin du lot s'affiche sous la date de cette épreuve", async () => {
+  // The requests: F15, F42 (undated), the event, then the date of F42.
+  mocks.send.mockRejectedValue(refused(3, 400, { date: field("format_date_out_of_range") }));
+  const { screen } = await renderEdit();
+  await startDate(screen).fill("2026-06-20");
+  await endDate(screen).fill("2026-06-21");
+  await formatDate(format(screen, 2)).fill("2026-06-30");
+
+  await save(screen).click();
+
+  const message = format(screen, 2).getByText(fr.errors.format_date_out_of_range);
+  await expect.element(message).toBeVisible();
+  expect(formatDate(format(screen, 2)).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  await expect
+    .element(format(screen, 1).getByText(fr.errors.format_date_out_of_range))
+    .not.toBeInTheDocument();
+  // The event's fields have no error, and everything typed is still there.
+  expect(startDate(screen).element().getAttribute("aria-invalid")).toBe("false");
+  await expect.element(startDate(screen)).toHaveValue("2026-06-20");
+  await expect.element(formatDate(format(screen, 2))).toHaveValue("2026-06-30");
 });
 
 test("EventForm — les doublons de la modification laissent de côté l'événement lui-même", async () => {
