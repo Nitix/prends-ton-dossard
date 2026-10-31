@@ -102,6 +102,37 @@ export const fr = {
     addedBy: (name: string) => `Ajouté par ${name}`,
     // An event of several days: both days are already formatted.
     dateRange: (from: string, to: string) => `du ${from} au ${to}`,
+    // The page of an event (see features/events/EventPage.tsx).
+    register: "S'inscrire sur le site officiel",
+    nobody: "Personne pour l'instant.",
+    // Under a participant on the page of an event: who added them, and that they have not agreed yet.
+    addedByUnconfirmed: (name: string) => `ajouté par ${name} · non confirmé`,
+    deleteTitle: "Supprimer l'événement ?",
+    deleteWarning: (name: string) =>
+      `« ${name} » sera supprimé, avec ses épreuves et leurs participations.`,
+    // Followed by the names of the participants, already joined: "Alice, Bob et Sam".
+    deleteParticipants: "Participants concernés :",
+    deleted: "Événement supprimé.",
+  },
+  // What a member does with the participations of an event (see features/participations).
+  participation: {
+    // The button of the page, and the title of its dialog.
+    join: "J'y vais",
+    joinTitle: "J'y vais",
+    alreadyIn: "Tu es déjà sur cet événement : tu peux changer d'épreuve ou de statut.",
+    addSomeone: "Ajouter quelqu'un",
+    addSomeoneTitle: "Ajouter quelqu'un",
+    addSubmit: "Ajouter",
+    runner: "Coureur",
+    chooseRunner: "Choisis un coureur",
+    format: "Épreuve",
+    status: "Statut",
+    everyoneThere: "Tout le monde est déjà sur cette épreuve.",
+    alreadyThere: "Cette personne est déjà sur cette épreuve.",
+    // The accessible name of the menu button of a participant.
+    actionsFor: (name: string) => `Actions pour ${name}`,
+    removeTitle: "Retirer de l'épreuve ?",
+    removeWarning: (name: string, format: string) => `${name} ne sera plus sur « ${format} ».`,
   },
   // The measures of a format, next to its name (see features/events/formatName.ts).
   format: {

@@ -1,4 +1,11 @@
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 
 import { effectiveDate, eventRange } from "../../lib/dates";
 import { pb } from "../../lib/pb";
@@ -231,5 +238,41 @@ export function useRaceTypes(): UseQueryResult<RaceTypeRecord[]> {
       return raceTypes.toSorted((a, b) => a.label.localeCompare(b.label));
     },
     staleTime: LOOKUP_STALE_MS,
+  });
+}
+
+/**
+ * Makes everything that shows an event ask for it again, after a change of the
+ * event, of its formats or of its participations: the lists (`["events"]`),
+ * the page of the event, and the participations the user has to confirm
+ * (`["pending"]`). It resolves once the queries that are on screen have their
+ * new data.
+ */
+export async function invalidateEvents(queryClient: QueryClient, eventId: string): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["events"] }),
+    queryClient.invalidateQueries({ queryKey: ["event", eventId] }),
+    queryClient.invalidateQueries({ queryKey: ["pending"] }),
+  ]);
+}
+
+/**
+ * Deletes an event; the server deletes its formats and their participations
+ * with it. Only the lists are out of date afterwards: the page of the event
+ * is not asked for again (it would answer "not found"), whoever calls this
+ * leaves it and then `removeQueries` it.
+ */
+export function useDeleteEvent(eventId: string): UseMutationResult<void, Error, void> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await pb.collection("events").delete(eventId);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["pending"] }),
+      ]);
+    },
   });
 }

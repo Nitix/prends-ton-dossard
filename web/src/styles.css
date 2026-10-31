@@ -11,3 +11,26 @@
     @apply bg-neutral-50 text-neutral-900;
   }
 }
+
+@layer components {
+  /* The menu of a participation, a native popover (see ParticipationMenu). The
+     reset of Tailwind takes away the `margin: auto` that centres a popover:
+     put back, so that a browser with no anchor positioning shows it centred
+     rather than in a corner of the screen. */
+  .menu-popover {
+    margin: auto;
+    min-width: 12rem;
+  }
+
+  /* Where it can, the menu opens under its button (its anchor is the button
+     that invokes it), the right edges aligned, and above it when there is no
+     room below. */
+  @supports (position-area: bottom) {
+    .menu-popover {
+      inset: auto;
+      margin: 0.25rem 0;
+      position-area: bottom span-left;
+      position-try-fallbacks: flip-block;
+    }
+  }
+}
