@@ -335,6 +335,82 @@ export const fr = {
     passkeysEmpty: "Aucune clé d'accès.",
     passkeyRemoveWarning: (key: string, name: string) =>
       `${name} ne pourra plus se connecter avec la clé « ${key} ».`,
+    // The menu of the admin pages, whose links are named after the pages (`membersTitle`, `typesTitle`, `duplicatesTitle`).
+    adminNav: "Administration",
+    // The race types page.
+    typesTitle: "Types de course",
+    addType: "Ajouter un type",
+    typesEmpty: "Aucun type de course pour l'instant.",
+    typeLabel: "Nom du type",
+    typeLabelHint:
+      "Par exemple « Trail » ou « Route ». Deux types ne peuvent pas avoir le même nom, majuscules ou non.",
+    typeExists: "Un type porte déjà ce nom.",
+    createTypeTitle: "Nouveau type",
+    typeCreated: "Type ajouté.",
+    renameTypeTitle: "Renommer le type",
+    typeRenamed: "Type renommé.",
+    deleteTypeTitle: "Supprimer le type ?",
+    deleteTypeWarning: (label: string) =>
+      `« ${label} » sera supprimé. Un type que des épreuves utilisent encore ne peut pas l'être.`,
+    typeDeleted: "Type supprimé.",
+    // The accessible name of an action of a row: its text, then what the row is.
+    forItem: (action: string, name: string) => `${action} · ${name}`,
+    // The duplicates page: merging two events, or two formats of one event.
+    duplicatesTitle: "Doublons",
+    duplicatesIntro:
+      "Deux membres ont ajouté le même événement, ou la même épreuve ? Fusionne-les : tout est regroupé sur celui que tu gardes.",
+    mergeMode: "Que veux-tu fusionner ?",
+    modeEvents: "Deux événements",
+    modeFormats: "Deux épreuves",
+    firstEvent: "Premier événement",
+    secondEvent: "Second événement",
+    // The event whose two formats are merged.
+    theEvent: "Événement",
+    searchEvent: "Rechercher un événement",
+    searchEventHint: "Tape une partie de son nom.",
+    noEventFound: "Aucun événement trouvé.",
+    changeChoice: "Changer",
+    firstFormat: "Première épreuve",
+    secondFormat: "Seconde épreuve",
+    chooseFormat: "Choisis une épreuve",
+    needTwoFormats: "Cet événement n'a pas deux épreuves à fusionner.",
+    keep: { events: "Événement à garder", formats: "Épreuve à garder" },
+    keepHint: {
+      events:
+        "Les épreuves de l'autre événement passent sur celui-ci, puis l'autre événement est supprimé.",
+      formats:
+        "Les participations de l'autre épreuve passent sur celle-ci, puis l'autre épreuve est supprimée.",
+    },
+    preview: "Aperçu",
+    previewTitle: "Ce que la fusion ferait",
+    mergeNothing: {
+      events: "Rien à déplacer : l'autre événement est simplement supprimé.",
+      formats: "Rien à déplacer : l'autre épreuve est simplement supprimée.",
+    },
+    // What a merge does, a line per kind of change. The number comes first: "2 épreuves déplacées".
+    mergeCount: {
+      movedFormats: { one: "épreuve déplacée", other: "épreuves déplacées" },
+      movedParticipations: { one: "participation déplacée", other: "participations déplacées" },
+      droppedParticipations: {
+        one: "participation en double supprimée",
+        other: "participations en double supprimées",
+      },
+      clearedFormatDates: {
+        one: "date d'épreuve effacée (hors des dates de l'événement)",
+        other: "dates d'épreuve effacées (hors des dates de l'événement)",
+      },
+    },
+    merge: "Fusionner",
+    mergeConfirmTitle: {
+      events: "Fusionner ces événements ?",
+      formats: "Fusionner ces épreuves ?",
+    },
+    // The two sides of the merge, each already described on one line.
+    keptLine: (description: string) => `Gardé : ${description}`,
+    removedLine: (description: string) => `Supprimé : ${description}`,
+    mergeIrreversible: "La fusion est définitive.",
+    mergeConfirm: "Fusionner définitivement",
+    merged: "Fusion terminée.",
     // What the codes of the server do not say well enough here.
     rateLimited: "Trop de demandes. Attends une minute, puis réessaie.",
     kindMismatch:

@@ -17,7 +17,9 @@ import { Route as InvitationRouteImport } from './routes/invitation'
 import { Route as ListeRouteImport } from './routes/liste'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminDoublonsRouteImport } from './routes/admin/doublons'
 import { Route as AdminMembresRouteImport } from './routes/admin/membres'
+import { Route as AdminTypesRouteImport } from './routes/admin/types'
 import { Route as EvenementsNouveauRouteImport } from './routes/evenements/nouveau'
 import { Route as EvenementsIdIndexRouteImport } from './routes/evenements/$id/index'
 import { Route as EvenementsIdModifierRouteImport } from './routes/evenements/$id/modifier'
@@ -62,9 +64,19 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminDoublonsRoute = AdminDoublonsRouteImport.update({
+  id: '/doublons',
+  path: '/doublons',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminMembresRoute = AdminMembresRouteImport.update({
   id: '/membres',
   path: '/membres',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminTypesRoute = AdminTypesRouteImport.update({
+  id: '/types',
+  path: '/types',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const EvenementsNouveauRoute = EvenementsNouveauRouteImport.update({
@@ -91,7 +103,9 @@ export interface FileRoutesByFullPath {
   '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
   '/profil': typeof ProfilRoute
+  '/admin/doublons': typeof AdminDoublonsRoute
   '/admin/membres': typeof AdminMembresRoute
+  '/admin/types': typeof AdminTypesRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
   '/admin/': typeof AdminIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
@@ -104,7 +118,9 @@ export interface FileRoutesByTo {
   '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
   '/profil': typeof ProfilRoute
+  '/admin/doublons': typeof AdminDoublonsRoute
   '/admin/membres': typeof AdminMembresRoute
+  '/admin/types': typeof AdminTypesRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
   '/admin': typeof AdminIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
@@ -119,7 +135,9 @@ export interface FileRoutesById {
   '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
   '/profil': typeof ProfilRoute
+  '/admin/doublons': typeof AdminDoublonsRoute
   '/admin/membres': typeof AdminMembresRoute
+  '/admin/types': typeof AdminTypesRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
   '/admin/': typeof AdminIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
@@ -135,7 +153,9 @@ export interface FileRouteTypes {
     | '/invitation'
     | '/liste'
     | '/profil'
+    | '/admin/doublons'
     | '/admin/membres'
+    | '/admin/types'
     | '/evenements/nouveau'
     | '/admin/'
     | '/evenements/$id/modifier'
@@ -148,7 +168,9 @@ export interface FileRouteTypes {
     | '/invitation'
     | '/liste'
     | '/profil'
+    | '/admin/doublons'
     | '/admin/membres'
+    | '/admin/types'
     | '/evenements/nouveau'
     | '/admin'
     | '/evenements/$id/modifier'
@@ -162,7 +184,9 @@ export interface FileRouteTypes {
     | '/invitation'
     | '/liste'
     | '/profil'
+    | '/admin/doublons'
     | '/admin/membres'
+    | '/admin/types'
     | '/evenements/nouveau'
     | '/admin/'
     | '/evenements/$id/modifier'
@@ -240,11 +264,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/doublons': {
+      id: '/admin/doublons'
+      path: '/doublons'
+      fullPath: '/admin/doublons'
+      preLoaderRoute: typeof AdminDoublonsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/membres': {
       id: '/admin/membres'
       path: '/membres'
       fullPath: '/admin/membres'
       preLoaderRoute: typeof AdminMembresRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/types': {
+      id: '/admin/types'
+      path: '/types'
+      fullPath: '/admin/types'
+      preLoaderRoute: typeof AdminTypesRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/evenements/nouveau': {
@@ -272,12 +310,16 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteRouteChildren {
+  AdminDoublonsRoute: typeof AdminDoublonsRoute
   AdminMembresRoute: typeof AdminMembresRoute
+  AdminTypesRoute: typeof AdminTypesRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminDoublonsRoute: AdminDoublonsRoute,
   AdminMembresRoute: AdminMembresRoute,
+  AdminTypesRoute: AdminTypesRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

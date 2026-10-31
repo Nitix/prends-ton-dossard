@@ -108,3 +108,58 @@ test("admin/route — un admin arrive sur la page des membres", async () => {
     .toBeVisible();
   expect(router.state.location.pathname).toBe("/admin/membres");
 });
+
+test("admin/route — le menu de l'admin mène aux trois pages et marque la page courante", async () => {
+  session.record = asUser("admin");
+  const { router, screen } = await openAdmin("/admin/membres");
+
+  const nav = screen.getByRole("navigation", { name: fr.admin.adminNav, exact: true });
+  const link = (name: string) => nav.getByRole("link", { name, exact: true });
+  await expect.element(link(fr.admin.membersTitle)).toHaveAttribute("href", "/admin/membres");
+  await expect.element(link(fr.admin.typesTitle)).toHaveAttribute("href", "/admin/types");
+  await expect.element(link(fr.admin.duplicatesTitle)).toHaveAttribute("href", "/admin/doublons");
+  await expect.element(link(fr.admin.membersTitle)).toHaveAttribute("aria-current", "page");
+  await expect.element(link(fr.admin.typesTitle)).not.toHaveAttribute("aria-current");
+
+  await link(fr.admin.typesTitle).click();
+  await expect
+    .element(screen.getByRole("heading", { level: 1, name: fr.admin.typesTitle }))
+    .toBeVisible();
+  expect(router.state.location.pathname).toBe("/admin/types");
+  await expect.element(link(fr.admin.typesTitle)).toHaveAttribute("aria-current", "page");
+  await expect.element(link(fr.admin.membersTitle)).not.toHaveAttribute("aria-current");
+
+  await link(fr.admin.duplicatesTitle).click();
+  await expect
+    .element(screen.getByRole("heading", { level: 1, name: fr.admin.duplicatesTitle }))
+    .toBeVisible();
+  expect(router.state.location.pathname).toBe("/admin/doublons");
+  await expect.element(link(fr.admin.duplicatesTitle)).toHaveAttribute("aria-current", "page");
+});
+
+test("admin/route — les liens du menu de l'admin font au moins 44 px", async () => {
+  session.record = asUser("admin");
+  const { screen } = await openAdmin("/admin/membres");
+
+  const nav = screen.getByRole("navigation", { name: fr.admin.adminNav, exact: true });
+  await expect.element(nav).toBeVisible();
+  for (const name of [fr.admin.membersTitle, fr.admin.typesTitle, fr.admin.duplicatesTitle]) {
+    const { width, height } = nav
+      .getByRole("link", { name, exact: true })
+      .element()
+      .getBoundingClientRect();
+    expect(height, `${name} height`).toBeGreaterThanOrEqual(44);
+    expect(width, `${name} width`).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("admin/route — un membre n'arrive sur aucune des pages des types et des doublons", async () => {
+  for (const path of ["/admin/types", "/admin/doublons"]) {
+    session.record = asUser("member");
+    const { router, screen } = await openAdmin(path);
+    await vi.waitFor(() => {
+      expect(router.state.location.pathname).toBe("/");
+    });
+    await screen.unmount();
+  }
+});

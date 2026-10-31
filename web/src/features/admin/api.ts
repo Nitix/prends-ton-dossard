@@ -1,9 +1,23 @@
-import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  skipToken,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 
 import { pb } from "../../lib/pb";
-import type { InvitationKind, InvitationRecord, PasskeyRecord, Role } from "../../lib/types";
+import type {
+  EventRecord,
+  InvitationKind,
+  InvitationRecord,
+  PasskeyRecord,
+  Role,
+} from "../../lib/types";
+import { invalidateEvents } from "../events/api";
 import { isStale } from "./errors";
 import { toMembers, type ExpandedRunner, type Member } from "./memberState";
+import type { MergeResult } from "./mergePreview";
 
 /** The list of the members page. */
 export const MEMBERS_KEY = ["admin", "members"] as const;
@@ -147,4 +161,130 @@ export function useMemberActions() {
       await queryClient.invalidateQueries({ queryKey: ["passkeys", userId] });
     },
   };
+}
+
+/**
+ * What the admin changes in the race types. The forms of the events choose
+ * from this list, so it is asked for again after each change; a rename also
+ * changes what the events show of their formats, and resolves once the
+ * screens on display have what the server holds. A refusal is thrown as the
+ * SDK gives it (see `adminError`): a name that is taken (`validation_not_unique`
+ * on `label`), a type that a format uses (`race_type_in_use`).
+ */
+export function useRaceTypeActions() {
+  const queryClient = useQueryClient();
+
+  const refreshTypes = () => queryClient.invalidateQueries({ queryKey: ["race_types"] });
+
+  return {
+    createType: async (label: string): Promise<void> => {
+      await pb.collection("race_types").create({ label });
+      await refreshTypes();
+    },
+
+    renameType: async (id: string, label: string): Promise<void> => {
+      await pb.collection("race_types").update(id, { label });
+      await Promise.all([
+        refreshTypes(),
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["event"] }),
+      ]);
+    },
+
+    /** The server refuses while a format uses the type. Whatever the refusal, the list may be out of date: it is read again. */
+    deleteType: async (id: string): Promise<void> => {
+      try {
+        await pb.collection("race_types").delete(id);
+      } catch (err) {
+        void refreshTypes();
+        throw err;
+      }
+      await refreshTypes();
+    },
+  };
+}
+
+/** What is merged: two events, or two formats of one event. */
+export type MergeKind = "events" | "formats";
+
+/** The record that stays, and the one that is merged into it, and deleted. */
+export type MergeIds = { keepId: string; mergeId: string };
+
+function mergeRequest(kind: MergeKind, ids: MergeIds, dryRun: boolean): Promise<MergeResult> {
+  return pb.send<MergeResult>(`/api/app/admin/merge-${kind}`, {
+    method: "POST",
+    body: { keepId: ids.keepId, mergeId: ids.mergeId, dryRun },
+  });
+}
+
+/**
+ * The merges of the duplicates (admin only). `preview` asks the server what
+ * a merge would do and writes nothing; `merge` does it. A refusal is thrown
+ * as the SDK gives it (see `adminError`), and when it says that one of the two
+ * is gone the screens that show events are asked to read them again.
+ */
+export function useMergeActions() {
+  const queryClient = useQueryClient();
+
+  async function guarded<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (err) {
+      if (isStale(err)) {
+        void queryClient.invalidateQueries({ queryKey: ["events"] });
+        void queryClient.invalidateQueries({ queryKey: ["event"] });
+      }
+      throw err;
+    }
+  }
+
+  return {
+    preview: (kind: MergeKind, ids: MergeIds): Promise<MergeResult> =>
+      guarded(() => mergeRequest(kind, ids, true)),
+
+    /**
+     * Merges for good. `eventId` is the event that holds the result: the kept
+     * one for a merge of events, the one of the two formats for a merge of
+     * formats. The merged event is gone, so its page is forgotten rather than
+     * asked for again (the server would answer "not found").
+     */
+    merge: (kind: MergeKind, ids: MergeIds, eventId: string): Promise<MergeResult> =>
+      guarded(async () => {
+        const result = await mergeRequest(kind, ids, false);
+        if (kind === "events") queryClient.removeQueries({ queryKey: ["event", ids.mergeId] });
+        await invalidateEvents(queryClient, eventId);
+        return result;
+      }),
+  };
+}
+
+/** What the search asks of an event: enough to tell it from another (see `eventLabel`). */
+export type FoundEvent = Pick<EventRecord, "id" | "name" | "location" | "start_date" | "end_date">;
+
+/** The events a search for a name may offer: a few are enough, the admin types more of the name to narrow them. */
+const MAX_FOUND = 8;
+
+/**
+ * The events whose name has `term`, the latest first, past or to come. The
+ * term is bound as a parameter, never written into the filter. There is no
+ * search while the term is empty. The key is under `["events"]`, so the
+ * results are read again with the lists of events.
+ */
+export function useEventSearch(term: string): UseQueryResult<FoundEvent[]> {
+  return useQuery({
+    queryKey: ["events", "search", term],
+    // The list stays while the next one loads, instead of blinking at each pause.
+    placeholderData: keepPreviousData,
+    queryFn:
+      term === ""
+        ? skipToken
+        : async () => {
+            const found = await pb.collection("events").getList<FoundEvent>(1, MAX_FOUND, {
+              filter: pb.filter("name ~ {:q}", { q: term }),
+              sort: "-start_date",
+              fields: "id,name,location,start_date,end_date",
+            });
+            return found.items;
+          },
+  });
 }

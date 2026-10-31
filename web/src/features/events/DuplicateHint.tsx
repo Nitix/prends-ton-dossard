@@ -3,10 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
-import { eventRange, parseDate } from "../../lib/dates";
+import { parseDate } from "../../lib/dates";
 import { pb } from "../../lib/pb";
 import type { EventRecord } from "../../lib/types";
 import { duplicateFilter } from "./duplicates";
+import { eventLabel } from "./eventLabel";
 
 /** How long the user has to stop typing before the search starts. */
 const TYPING_PAUSE_MS = 400;
@@ -83,24 +84,18 @@ export function DuplicateHint({
         <div className="flex flex-col gap-1 rounded-lg border border-amber-300 bg-amber-50 p-3">
           <p className="text-sm font-medium">{t.form.duplicateQuestion}</p>
           <ul className="flex flex-col">
-            {events.map((event) => {
-              const { start, end } = eventRange(event);
-              const when = start.equals(end)
-                ? f.dateLong(start)
-                : t.event.dateRange(f.dateLong(start), f.dateLong(end));
-              return (
-                <li key={event.id}>
-                  <Link
-                    to="/evenements/$id"
-                    params={{ id: event.id }}
-                    target="_blank"
-                    className="inline-flex min-h-11 items-center underline"
-                  >
-                    {`${event.name} · ${when} · ${event.location}`}
-                  </Link>
-                </li>
-              );
-            })}
+            {events.map((event) => (
+              <li key={event.id}>
+                <Link
+                  to="/evenements/$id"
+                  params={{ id: event.id }}
+                  target="_blank"
+                  className="inline-flex min-h-11 items-center underline"
+                >
+                  {eventLabel(event, f, t)}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       )}
