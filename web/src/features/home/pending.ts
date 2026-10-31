@@ -25,6 +25,9 @@ export type PendingView = ParticipationView & {
   date: Temporal.PlainDate;
 };
 
+/** The key of the query: the changes of a participation refresh it (see `invalidateEvents`). */
+export const PENDING_KEY = ["pending"] as const;
+
 /** The `expand` that gives `toPendingViews` everything it needs. */
 export const PENDING_EXPAND = "format.event,format.race_type,added_by,runner";
 
@@ -83,7 +86,7 @@ export function usePending(): UseQueryResult<PendingView[]> {
   const userId = user?.id ?? "";
 
   return useQuery({
-    queryKey: ["pending"],
+    queryKey: PENDING_KEY,
     queryFn: async () =>
       toPendingViews(
         await pb.collection("participations").getFullList<ExpandedPending>({

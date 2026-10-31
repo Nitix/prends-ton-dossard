@@ -10,7 +10,7 @@ import { invalidateEvents } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
 import { useDeleteParticipation, useUpdateParticipation } from "../participations/api";
 import { participationError } from "../participations/errors";
-import { usePending, type PendingView } from "./pending";
+import { PENDING_KEY, usePending, type PendingView } from "./pending";
 
 const SEPARATOR = " · ";
 
@@ -99,6 +99,12 @@ export function PendingConfirmations({
  * asked for again, so that the row goes away if it has to, and the buttons
  * stay off until they have answered. Taking a participation back that is
  * already gone is not a failure: it is what was asked for.
+ *
+ * Where the focus goes after a failure, so that it never falls to the page's
+ * <body>: if the lists no longer have the row, the block is told, as for a
+ * success (the button went with the row); if the row is still there, the button
+ * that was pressed gets its focus back (the browser dropped it when the button
+ * was disabled), unless the user has moved to something else meanwhile.
  */
 function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () => void }) {
   const { t, f } = useI18n();
@@ -109,6 +115,16 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
   const remove = useDeleteParticipation(event.id);
   const [refreshing, setRefreshing] = useState(false);
   const busy = update.isPending || remove.isPending || refreshing;
+
+  // The button that was pressed, until the buttons are back. A disabled button
+  // cannot have the focus: the browser moves it to the body.
+  const pressed = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (busy) return;
+    const button = pressed.current;
+    pressed.current = null;
+    if (button?.isConnected && document.activeElement === document.body) button.focus();
+  }, [busy]);
   const formatName = formatDisplayName(format, raceType.label, f, t);
 
   // After a failure, what the screen shows may be what is wrong. Resolves once
@@ -122,6 +138,13 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
     }
   }
 
+  /** After a failure: the lists are fresh, and the focus goes where it stays if the row is gone. */
+  async function refreshAfterFailure() {
+    await refresh();
+    const rows = queryClient.getQueryData<PendingView[]>(PENDING_KEY);
+    if (!rows?.some((row) => row.participation.id === participation.id)) onDealtWith();
+  }
+
   // The mutations last until the lists have their new data, so this row may be
   // gone when they settle: only the toast and the block are called then.
   async function confirm() {
@@ -129,7 +152,7 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
       await update.mutateAsync({ id: participation.id, patch: { confirmed: true } });
     } catch (err) {
       toast.show(isNotFound(err) ? t.errors.not_found : participationError(t, err));
-      await refresh();
+      await refreshAfterFailure();
       return;
     }
     toast.show(t.home.confirmed);
@@ -142,7 +165,7 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
     } catch (err) {
       if (!isNotFound(err)) {
         toast.show(participationError(t, err));
-        await refresh();
+        await refreshAfterFailure();
         return;
       }
       // Already gone: the same end as a removal that went through.
@@ -176,7 +199,10 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
           type="button"
           disabled={busy}
           aria-label={t.home.confirmFor(event.name)}
-          onClick={() => void confirm()}
+          onClick={(click) => {
+            pressed.current = click.currentTarget;
+            void confirm();
+          }}
           className={PRIMARY}
         >
           {t.common.confirm}
@@ -185,7 +211,10 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
           type="button"
           disabled={busy}
           aria-label={t.home.removeFor(event.name)}
-          onClick={() => void refuse()}
+          onClick={(click) => {
+            pressed.current = click.currentTarget;
+            void refuse();
+          }}
           className={`${SECONDARY} disabled:opacity-60`}
         >
           {t.common.remove}

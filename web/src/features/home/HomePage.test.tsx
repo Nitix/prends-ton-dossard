@@ -421,7 +421,7 @@ test("PendingConfirmations — Retirer (404) avec d'autres lignes: le focus va s
   await expect.element(removeButton(screen, "10 km de Lyon")).toBeEnabled();
 });
 
-test("PendingConfirmations — Confirmer une participation supprimée (404) dit « Introuvable », et la ligne part après le rafraîchissement", async () => {
+test("PendingConfirmations — Confirmer une participation supprimée (404) dit « Introuvable », la ligne part après le rafraîchissement, et le focus va au titre de la page", async () => {
   let rows: Rec[] = [pendingP2];
   mocks.pending.mockImplementation(() => Promise.resolve(rows));
   mocks.update.mockImplementation(() => {
@@ -438,6 +438,107 @@ test("PendingConfirmations — Confirmer une participation supprimée (404) dit 
   expect(mocks.pending).toHaveBeenCalledTimes(2);
   // Nothing is announced as confirmed.
   await expect.element(screen.getByText(fr.home.confirmed)).not.toBeInTheDocument();
+  // The button that had the focus went with the row: the focus must not fall to the body.
+  await expect.element(screen.getByRole("heading", { level: 1, name: fr.nav.home })).toHaveFocus();
+});
+
+test("PendingConfirmations — Confirmer (404) avec d'autres lignes: le focus va sur le titre du bloc", async () => {
+  let rows: Rec[] = [pendingP2, pendingLyon];
+  mocks.pending.mockImplementation(() => Promise.resolve(rows));
+  mocks.update.mockImplementation((id) => {
+    rows = rows.filter((row) => row.id !== id);
+    return Promise.reject(notFound());
+  });
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await confirmButton(screen).click();
+
+  await expect
+    .element(pendingBlock(screen).getByRole("heading", { level: 2, name: fr.home.pendingTitle }))
+    .toHaveFocus();
+  await expect.element(confirmButton(screen)).not.toBeInTheDocument();
+});
+
+test("PendingConfirmations — une autre erreur de Confirmer qui laisse la ligne partir au rafraîchissement rend aussi le focus", async () => {
+  // The server answered with a failure, but the participation has changed in the meantime.
+  let rows: Rec[] = [pendingP2];
+  mocks.pending.mockImplementation(() => Promise.resolve(rows));
+  mocks.update.mockImplementation(() => {
+    rows = [];
+    return Promise.reject(new Error("network"));
+  });
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await confirmButton(screen).click();
+
+  await expect.element(screen.getByText(fr.errors.generic)).toBeVisible();
+  await expect.element(screen.getByText(fr.home.pendingTitle)).not.toBeInTheDocument();
+  await expect.element(screen.getByRole("heading", { level: 1, name: fr.nav.home })).toHaveFocus();
+});
+
+test("PendingConfirmations — une autre erreur de Retirer qui laisse la ligne partir au rafraîchissement rend aussi le focus", async () => {
+  let rows: Rec[] = [pendingP2, pendingLyon];
+  mocks.pending.mockImplementation(() => Promise.resolve(rows));
+  mocks.remove.mockImplementation((id) => {
+    rows = rows.filter((row) => row.id !== id);
+    return Promise.reject(new Error("network"));
+  });
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await removeButton(screen).click();
+
+  await expect.element(screen.getByText(fr.errors.generic)).toBeVisible();
+  await expect.element(removeButton(screen)).not.toBeInTheDocument();
+  await expect
+    .element(pendingBlock(screen).getByRole("heading", { level: 2, name: fr.home.pendingTitle }))
+    .toHaveFocus();
+});
+
+test("PendingConfirmations — après un échec qui laisse la ligne, le bouton pressé reprend le focus que sa désactivation lui avait pris", async () => {
+  mocks.pending.mockResolvedValue([pendingP2]);
+  // A real request takes longer than a frame: the browser drops the focus of a
+  // button that is disabled (to the body) once it has had the time to.
+  mocks.update.mockImplementation(
+    () => new Promise((_, reject) => setTimeout(() => reject(new Error("network")), 150)),
+  );
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await confirmButton(screen).click();
+
+  await expect.element(screen.getByText(fr.errors.generic)).toBeVisible();
+  await expect.element(confirmButton(screen)).toBeEnabled();
+  await expect.element(confirmButton(screen)).toHaveFocus();
+});
+
+test("PendingConfirmations — le focus n'est pas repris au bouton si l'utilisateur est allé ailleurs", async () => {
+  let answers = 0;
+  const refreshed = Promise.withResolvers<void>();
+  mocks.pending.mockImplementation(async () => {
+    answers += 1;
+    // The refresh that follows the failure waits for the test.
+    if (answers > 1) await refreshed.promise;
+    return [pendingP2];
+  });
+  mocks.update.mockRejectedValue(new Error("network"));
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await confirmButton(screen).click();
+  await vi.waitFor(() => {
+    expect(mocks.pending).toHaveBeenCalledTimes(2);
+  });
+  // While the lists load, the user moves to the link of the event.
+  const link = pendingBlock(screen).getByRole("link", { name: "Trail des Crêtes" });
+  const element = link.element();
+  if (element instanceof HTMLElement) element.focus();
+  refreshed.resolve();
+
+  await expect.element(confirmButton(screen)).toBeEnabled();
+  await expect.element(link).toHaveFocus();
 });
 
 test("PendingConfirmations — pendant le rafraîchissement qui suit un échec, les boutons restent désactivés", async () => {
