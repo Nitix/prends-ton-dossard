@@ -1,0 +1,22 @@
+# Kept out of the build context. The image builds the front end itself, and the
+# dependencies of the host (Windows, macOS) must never reach it.
+
+# Version control and tooling
+.git
+.github
+.claude
+.superpowers
+docs
+
+# Dependencies and build output
+**/node_modules
+server/webdist/dist/*
+!server/webdist/dist/.gitkeep
+web/.tanstack
+web/.vitest
+test-results
+playwright-report
+
+# Local data and secrets
+pb_data
+.env

@@ -1,0 +1,5 @@
+# Replace the domain with the one of APP_URL. Caddy gets and renews the HTTPS
+# certificate by itself.
+courses.example.fr {
+	reverse_proxy 127.0.0.1:8090
+}
