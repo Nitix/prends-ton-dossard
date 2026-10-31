@@ -1,0 +1,9 @@
+{
+  "name": "courses",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@12.16.1"
+}

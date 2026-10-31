@@ -13,6 +13,7 @@ import (
 	"courses/server/config"
 	_ "courses/server/migrations"
 	"courses/server/setup"
+	"courses/server/webdist"
 )
 
 func main() {
@@ -29,6 +30,10 @@ func main() {
 	if err := setup.Register(app, cfg); err != nil {
 		log.Fatal(err)
 	}
+
+	// Not in setup.Register, which the tests of the other packages share: they
+	// exercise the API, and must not need the compiled front end.
+	webdist.Register(app, webdist.Dist())
 
 	app.RootCmd.AddCommand(
 		cmd.NewBootstrapAdminCommand(app, cfg),

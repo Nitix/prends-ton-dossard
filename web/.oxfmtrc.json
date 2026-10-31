@@ -1,0 +1,6 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortImports": {},
+  "sortTailwindcss": { "stylesheet": "./src/styles.css" },
+  "ignorePatterns": ["src/routeTree.gen.ts"]
+}
