@@ -11,6 +11,7 @@ import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
 
+import { AppShell } from "../../components/AppShell";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -102,7 +103,15 @@ const TODAY = "2026-06-10";
 
 async function renderAgenda(url = "/agenda?mois=2026-06", languages = ["fr"], today = TODAY) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const root = createRootRoute({ component: Outlet });
+  // The page is drawn inside the app shell, as in the app: its `<main>` has
+  // gutters, which is what the width of a day depends on.
+  const root = createRootRoute({
+    component: () => (
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    ),
+  });
   const agenda = createRoute({
     getParentRoute: () => root,
     path: "/agenda",
@@ -578,6 +587,7 @@ test("AgendaPage — à partir de md, les noms des courses sont dans les cases, 
     await expect.element(screen.getByText(fr.agenda.selectDay)).not.toBeInTheDocument();
     // The columns are still named, and the number of the day is a date.
     expect(headers(screen)).toHaveLength(7);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
   });
 });
 
@@ -741,27 +751,31 @@ test("AgendaPage — en anglais, un jour sans événement le dit, et le jour à 
   await expect.element(screen.getByText(en.agenda.dayEmpty)).toBeVisible();
 });
 
-test("AgendaPage — zones tactiles d'au moins 44 px", async () => {
-  await inViewport(390, 844, async () => {
-    const { screen } = await renderAgenda("/agenda?mois=2026-06&jour=2026-06-14");
-    await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+test("AgendaPage — zones tactiles d'au moins 44 px, sans défilement horizontal, de 320 à 390 px", async () => {
+  for (const width of [320, 390]) {
+    await inViewport(width, 844, async () => {
+      const { screen } = await renderAgenda("/agenda?mois=2026-06&jour=2026-06-14");
+      await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
 
-    const targets = [
-      ...dayButtons(screen),
-      screen.getByRole("link", { name: fr.agenda.previous }).element(),
-      screen.getByRole("link", { name: fr.agenda.next }).element(),
-      screen.getByRole("link", { name: "Trail des Crêtes" }).element(),
-      screen.getByLabelText(fr.filters.person).element(),
-      screen.getByLabelText(fr.filters.type).element(),
-    ];
-    // Thirty-five days, two arrows, the link of the list and the two selects.
-    expect(targets).toHaveLength(35 + 5);
-    for (const target of targets) {
-      const { width, height } = target.getBoundingClientRect();
-      expect(width).toBeGreaterThanOrEqual(44);
-      expect(height).toBeGreaterThanOrEqual(44);
-    }
-  });
+      const targets = [
+        ...dayButtons(screen),
+        screen.getByRole("link", { name: fr.agenda.previous }).element(),
+        screen.getByRole("link", { name: fr.agenda.next }).element(),
+        screen.getByRole("link", { name: "Trail des Crêtes" }).element(),
+        screen.getByLabelText(fr.filters.person).element(),
+        screen.getByLabelText(fr.filters.type).element(),
+      ];
+      // Thirty-five days, two arrows, the link of the list and the two selects.
+      expect(targets).toHaveLength(35 + 5);
+      for (const target of targets) {
+        const { width: w, height: h } = target.getBoundingClientRect();
+        expect(w, `width at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(h, `height at ${width} px`).toBeGreaterThanOrEqual(44);
+      }
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+      await screen.unmount();
+    });
+  }
 });
 
 test("AgendaPage — la grille a des en-têtes de colonne et le mois pour nom", async () => {

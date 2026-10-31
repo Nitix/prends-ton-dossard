@@ -40,44 +40,50 @@ export function MonthGrid({
 }) {
   const { f } = useI18n();
 
+  // On a phone the grid runs from one edge of the screen to the other: seven
+  // days of at least 44 px do not fit between the gutters of the page (`px-4`
+  // of the app shell's `<main>`) on a 320 px screen. From `md` it is back
+  // between them.
   return (
-    <table
-      aria-labelledby={labelledBy}
-      aria-busy={busy}
-      className="w-full table-fixed border-collapse"
-    >
-      <thead>
-        <tr>
-          {/* Every week has the same weekdays: the names come from the first one. */}
-          {(weeks[0] ?? []).map((day) => (
-            <th
-              key={day.dayOfWeek}
-              scope="col"
-              className="py-1 text-xs font-medium text-neutral-600"
-            >
-              {f.weekday(day, "short")}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {weeks.map((week) => (
-          <tr key={week[0]?.toString()}>
-            {week.map((day) => (
-              <DayCell
-                key={day.toString()}
-                day={day}
-                inMonth={day.toPlainYearMonth().equals(month)}
-                isToday={day.equals(today)}
-                isSelected={selected === day.toString()}
-                views={byDay.get(day.toString()) ?? []}
-                onSelect={onSelect}
-              />
+    <div className="-mx-4 md:mx-0">
+      <table
+        aria-labelledby={labelledBy}
+        aria-busy={busy}
+        className="w-full table-fixed border-collapse"
+      >
+        <thead>
+          <tr>
+            {/* Every week has the same weekdays: the names come from the first one. */}
+            {(weeks[0] ?? []).map((day) => (
+              <th
+                key={day.dayOfWeek}
+                scope="col"
+                className="py-1 text-xs font-medium text-neutral-600"
+              >
+                {f.weekday(day, "short")}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {weeks.map((week) => (
+            <tr key={week[0]?.toString()}>
+              {week.map((day) => (
+                <DayCell
+                  key={day.toString()}
+                  day={day}
+                  inMonth={day.toPlainYearMonth().equals(month)}
+                  isToday={day.equals(today)}
+                  isSelected={selected === day.toString()}
+                  views={byDay.get(day.toString()) ?? []}
+                  onSelect={onSelect}
+                />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
