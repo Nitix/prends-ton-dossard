@@ -45,6 +45,22 @@ describe("event and format texts", () => {
   });
 });
 
+describe("home texts", () => {
+  test("French", () => {
+    expect(fr.home.addedYou("Alice", "Trail 42 km")).toBe(
+      "Alice a ajouté ta participation à « Trail 42 km »",
+    );
+    expect(fr.home.confirmFor("Trail des Crêtes")).toBe("Confirmer pour Trail des Crêtes");
+    expect(fr.home.removeFor("Trail des Crêtes")).toBe("Retirer de Trail des Crêtes");
+  });
+
+  test("English", () => {
+    expect(en.home.addedYou("Alice", "Trail 42 km")).toBe("Alice added you to “Trail 42 km”");
+    expect(en.home.confirmFor("Trail des Crêtes")).toBe("Confirm for Trail des Crêtes");
+    expect(en.home.removeFor("Trail des Crêtes")).toBe("Remove from Trail des Crêtes");
+  });
+});
+
 describe("agenda texts", () => {
   test("French", () => {
     expect(fr.agenda.previous).toBe("Mois précédent");

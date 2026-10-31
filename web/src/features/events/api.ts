@@ -97,7 +97,8 @@ type ExpandedEvent = EventRecord & {
   expand?: { formats_via_event?: ExpandedFormat[] };
 };
 
-function toParticipationView(record: ExpandedParticipation): ParticipationView {
+/** A participation with its `runner` and `added_by` expanded: the runner has to be there. */
+export function toParticipationView(record: ExpandedParticipation): ParticipationView {
   const runner = record.expand?.runner;
   if (!runner) throw new Error(`participation ${record.id}: its runner is missing from the answer`);
   return { participation: record, runner, addedBy: record.expand?.added_by };

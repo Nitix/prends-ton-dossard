@@ -185,6 +185,21 @@ export const en = {
     empty: "No events to show.",
     emptyHint: "Change the filters, or create an event with the + button.",
   },
+  home: {
+    pendingTitle: "To confirm",
+    addedYou: (name: string, format: string) => `${name} added you to “${format}”`,
+    confirmFor: (event: string) => `Confirm for ${event}`,
+    removeFor: (event: string) => `Remove from ${event}`,
+    confirmed: "Participation confirmed.",
+    removed: "Participation removed.",
+    upcomingTitle: "Upcoming races",
+    upcomingEmpty: "No upcoming races. Open an event and tap “I'm in”.",
+    groupTitle: "Coming up in the group",
+    groupEmpty: "Nobody has joined an upcoming event yet.",
+    passkeyTitle: "Add a passkey",
+    passkeyLink: "Add it in my profile",
+    passkeyDismiss: "Hide",
+  },
   errors: {
     generic: "Something went wrong. Try again in a moment.",
     invitation_invalid:

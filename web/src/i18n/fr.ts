@@ -213,6 +213,26 @@ export const fr = {
     empty: "Aucun événement à afficher.",
     emptyHint: "Change les filtres, ou crée un événement avec le bouton +.",
   },
+  // The home page (see features/home).
+  home: {
+    // The participations that others added for the user, who has not agreed yet.
+    pendingTitle: "À confirmer",
+    // The format is already named: "Trail 42 km".
+    addedYou: (name: string, format: string) => `${name} a ajouté ta participation à « ${format} »`,
+    // The accessible names of the two buttons of a row: the visible text is « Confirmer » and « Retirer ».
+    confirmFor: (event: string) => `Confirmer pour ${event}`,
+    removeFor: (event: string) => `Retirer de ${event}`,
+    confirmed: "Participation confirmée.",
+    removed: "Participation retirée.",
+    upcomingTitle: "Mes prochaines courses",
+    upcomingEmpty: "Aucune course à venir. Ouvre un événement et touche « J'y vais ».",
+    groupTitle: "Bientôt dans le groupe",
+    groupEmpty: "Personne n'est encore inscrit à un événement à venir.",
+    // The banner that suggests a passkey (the text under it is `passkeys.intro`).
+    passkeyTitle: "Ajoute une clé d'accès",
+    passkeyLink: "Ajouter dans mon profil",
+    passkeyDismiss: "Masquer",
+  },
   // One message per error code (see ./errors.ts), plus the generic one. The
   // keys are the codes themselves.
   errors: {
