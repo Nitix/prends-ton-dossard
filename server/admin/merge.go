@@ -1,0 +1,224 @@
+// Package admin holds what only the admins do: merging the duplicates that
+// the members create when they each add the same event or the same format.
+package admin
+
+import (
+	"database/sql"
+	"errors"
+	"net/http"
+
+	"ganigeorgiev.com/pocketbase/dbx"
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
+
+	"courses/server/apperr"
+	"courses/server/events"
+)
+
+// MergeResult is what a merge did, or would do for a dry run.
+type MergeResult struct {
+	// MovedFormats is the number of formats that went to the kept event.
+	MovedFormats int `json:"movedFormats"`
+	// MovedParticipations is the number of participations that went to the kept
+	// format, or that are carried by the formats that went to the kept event.
+	MovedParticipations int `json:"movedParticipations"`
+	// DroppedParticipations is the number of participations that were deleted
+	// because their runner was already on the kept format.
+	DroppedParticipations int `json:"droppedParticipations"`
+	// ClearedFormatDates is the number of formats that lost their date, which
+	// was outside the range of the kept event.
+	ClearedFormatDates int `json:"clearedFormatDates"`
+}
+
+// MergeEvents moves the formats of the event mergeID to the event keepID, then
+// deletes the event mergeID. A moved format whose date is outside the range of
+// the kept event loses its date, since a format stays inside its event.
+//
+// With dryRun it only computes the result: nothing is written. Otherwise
+// everything is written in one transaction, so a failure leaves the database as
+// it was.
+func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult, error) {
+	if keepID == mergeID {
+		return MergeResult{}, apperr.New(http.StatusBadRequest, apperr.CodeMergeSameRecord)
+	}
+
+	var result MergeResult
+	err := app.RunInTransaction(func(tx core.App) error {
+		keep, err := find(tx, "events", keepID)
+		if err != nil {
+			return err
+		}
+		merged, err := find(tx, "events", mergeID)
+		if err != nil {
+			return err
+		}
+		formats, err := tx.FindAllRecords("formats", dbx.HashExp{"event": merged.Id})
+		if err != nil {
+			return err
+		}
+
+		start, end := keep.GetString("start_date"), keep.GetString("end_date")
+		for _, format := range formats {
+			carried, err := tx.CountRecords("participations", dbx.HashExp{"format": format.Id})
+			if err != nil {
+				return err
+			}
+			result.MovedFormats++
+			result.MovedParticipations += int(carried)
+
+			format.Set("event", keep.Id)
+			// The date is cleared before the save: the validation of a format
+			// refuses a date outside the range of its event.
+			if day := format.GetString("date"); day != "" && !events.InRange(day, start, end) {
+				format.Set("date", "")
+				result.ClearedFormatDates++
+			}
+			if dryRun {
+				continue
+			}
+			if err := tx.Save(format); err != nil {
+				return err
+			}
+		}
+		if dryRun {
+			return nil
+		}
+		// Nothing is left to cascade to: every format has moved.
+		return tx.Delete(merged)
+	})
+	if err != nil {
+		// What the counters hold is not what happened: the transaction is undone.
+		return MergeResult{}, err
+	}
+	return result, nil
+}
+
+// MergeFormats moves the participations of the format mergeID to the format
+// keepID, then deletes the format mergeID. Both formats must be of the same
+// event.
+//
+// A runner who is on both formats keeps one participation, the one that winner
+// picks, and the other is deleted: it counts as dropped. When it is the
+// participation of mergeID that wins, it moves to keepID and counts as moved,
+// and the one that was on keepID is the one dropped. A participation keeps its
+// own values (status, confirmed, added_by) whichever way it goes.
+//
+// With dryRun it only computes the result: nothing is written. Otherwise
+// everything is written in one transaction, so a failure leaves the database as
+// it was.
+func MergeFormats(app core.App, keepID, mergeID string, dryRun bool) (MergeResult, error) {
+	if keepID == mergeID {
+		return MergeResult{}, apperr.New(http.StatusBadRequest, apperr.CodeMergeSameRecord)
+	}
+
+	var result MergeResult
+	err := app.RunInTransaction(func(tx core.App) error {
+		keep, err := find(tx, "formats", keepID)
+		if err != nil {
+			return err
+		}
+		merged, err := find(tx, "formats", mergeID)
+		if err != nil {
+			return err
+		}
+		if keep.GetString("event") != merged.GetString("event") {
+			return apperr.New(http.StatusBadRequest, apperr.CodeMergeFormatsDifferentEvents)
+		}
+
+		kept, err := tx.FindAllRecords("participations", dbx.HashExp{"format": keep.Id})
+		if err != nil {
+			return err
+		}
+		keptByRunner := make(map[string]*core.Record, len(kept))
+		for _, p := range kept {
+			keptByRunner[p.GetString("runner")] = p
+		}
+		moving, err := tx.FindAllRecords("participations", dbx.HashExp{"format": merged.Id})
+		if err != nil {
+			return err
+		}
+
+		for _, p := range moving {
+			// A runner is at most once on a format, so a participation drops at
+			// most one other.
+			duplicate := keptByRunner[p.GetString("runner")]
+			if duplicate != nil {
+				result.DroppedParticipations++
+				if winner(duplicate, p) != p {
+					// The kept one stays, this one goes.
+					if !dryRun {
+						if err := tx.Delete(p); err != nil {
+							return err
+						}
+					}
+					continue
+				}
+				// The unique index on (runner, format) allows one of them on the
+				// kept format: the loser has to go before the winner arrives.
+				if !dryRun {
+					if err := tx.Delete(duplicate); err != nil {
+						return err
+					}
+				}
+			}
+
+			result.MovedParticipations++
+			if dryRun {
+				continue
+			}
+			p.Set("format", keep.Id)
+			if err := tx.Save(p); err != nil {
+				return err
+			}
+		}
+		if dryRun {
+			return nil
+		}
+		// Nothing is left to cascade to: every participation has moved or gone.
+		return tx.Delete(merged)
+	})
+	if err != nil {
+		// What the counters hold is not what happened: the transaction is undone.
+		return MergeResult{}, err
+	}
+	return result, nil
+}
+
+// statusRank orders the statuses of a participation by how far the runner got:
+// a status that is not here is the lowest.
+var statusRank = map[string]int{
+	"interested": 0,
+	"registered": 1,
+	"finished":   2,
+	"dnf":        2,
+	"dns":        2,
+}
+
+// winner returns the participation of a runner that is kept when the runner is
+// on both formats of a merge. A confirmed participation wins, since the runner
+// said it is true. Otherwise the one that is the furthest along wins, and keep
+// wins a tie.
+func winner(keep, other *core.Record) *core.Record {
+	if keepConfirmed, otherConfirmed := keep.GetBool("confirmed"), other.GetBool("confirmed"); keepConfirmed != otherConfirmed {
+		if otherConfirmed {
+			return other
+		}
+		return keep
+	}
+	if statusRank[other.GetString("status")] > statusRank[keep.GetString("status")] {
+		return other
+	}
+	return keep
+}
+
+// find returns the record of the collection that has that id, or the not found
+// error of the API.
+func find(app core.App, collection, id string) (*core.Record, error) {
+	record, err := app.FindRecordById(collection, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperr.New(http.StatusNotFound, apperr.CodeNotFound)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return record, nil
+}

@@ -93,10 +93,10 @@ func parseDay(s string) (time.Time, bool) {
 	return day, err == nil
 }
 
-// inRange reports whether day is in the range of an event: from its start
+// InRange reports whether day is in the range of an event: from its start
 // date, up to its end date or without end when it has none. The days are
 // valid, and YYYY-MM-DD texts sort like the days they stand for.
-func inRange(day, start, end string) bool {
+func InRange(day, start, end string) bool {
 	return day >= start && (end == "" || day <= end)
 }
 
@@ -127,7 +127,7 @@ func validateEvent(app core.App, event *core.Record) error {
 		return err
 	}
 	for _, format := range formats {
-		if day := format.GetString("date"); day != "" && !inRange(day, start, end) {
+		if day := format.GetString("date"); day != "" && !InRange(day, start, end) {
 			return apperr.Field("start_date", apperr.CodeFormatDateOutOfRange)
 		}
 	}
@@ -147,7 +147,7 @@ func validateFormat(app core.App, format *core.Record) error {
 		if err != nil {
 			return err
 		}
-		if !inRange(day, event.GetString("start_date"), event.GetString("end_date")) {
+		if !InRange(day, event.GetString("start_date"), event.GetString("end_date")) {
 			return apperr.Field("date", apperr.CodeFormatDateOutOfRange)
 		}
 	}
