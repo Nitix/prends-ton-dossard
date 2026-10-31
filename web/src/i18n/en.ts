@@ -23,6 +23,14 @@ export const en = {
     profile: "Profile",
     admin: "Admin",
     createEvent: "Create an event",
+    main: "Main navigation",
+  },
+  auth: {
+    signIn: "Sign in",
+    signingIn: "Signing in…",
+    email: "Email",
+    password: "Password",
+    badCredentials: "Wrong email or password.",
   },
   status: {
     interested: "Interested",

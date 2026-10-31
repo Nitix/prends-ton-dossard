@@ -22,6 +22,15 @@ export const fr = {
     profile: "Profil",
     admin: "Admin",
     createEvent: "Créer un événement",
+    // The accessible name of the tab bar.
+    main: "Navigation principale",
+  },
+  auth: {
+    signIn: "Se connecter",
+    signingIn: "Connexion…",
+    email: "Email",
+    password: "Mot de passe",
+    badCredentials: "Email ou mot de passe incorrect.",
   },
   // The labels of the participation statuses.
   status: {

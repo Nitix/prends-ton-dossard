@@ -3,5 +3,6 @@ node_modules/
 server/webdist/dist/*
 !server/webdist/dist/.gitkeep
 test-results/
+web/.vitest/
 playwright-report/
 .env

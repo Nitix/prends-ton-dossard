@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+@layer base {
+  /* The app has a single, light theme. Saying so keeps browsers from darkening
+     it on their own, and every page gets the same background and text colour. */
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900;
+  }
+}
