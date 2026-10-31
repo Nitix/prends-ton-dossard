@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
+	"strings"
 )
 
 // DefaultAppURL is the origin used when APP_URL is not set (Vite dev server).
@@ -13,7 +15,8 @@ const DefaultAppURL = "http://localhost:5173"
 type Config struct {
 	// AppURL is the public URL of the application. It always equals Origin.
 	AppURL string
-	// Origin is the WebAuthn origin: scheme://host[:port], without trailing slash.
+	// Origin is the WebAuthn origin: scheme://host[:port], without trailing
+	// slash, in lowercase and without the default port of the scheme.
 	Origin string
 	// RPID is the WebAuthn relying party ID: the hostname of the origin.
 	RPID string
@@ -44,10 +47,29 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("invalid APP_URL %q: must be a bare origin", raw)
 	}
 
-	origin := u.Scheme + "://" + u.Host
+	// WebAuthn compares the origin and the RP ID that the browser reports with
+	// these as strings, so they take the browser's form: a lowercase host and
+	// no default port. url.Parse already lowercases the scheme. An IP address
+	// is kept as it is, although WebAuthn refuses one as an RP ID.
+	host := strings.ToLower(u.Hostname())
+	port := u.Port()
+	if port == defaultPorts[u.Scheme] {
+		port = ""
+	}
+	hostPort := host
+	if port != "" {
+		hostPort = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		hostPort = "[" + host + "]" // IPv6
+	}
+
+	origin := u.Scheme + "://" + hostPort
 	return Config{
 		AppURL: origin,
 		Origin: origin,
-		RPID:   u.Hostname(),
+		RPID:   host,
 	}, nil
 }
+
+// defaultPorts is the port that each scheme implies, which an origin omits.
+var defaultPorts = map[string]string{"http": "80", "https": "443"}

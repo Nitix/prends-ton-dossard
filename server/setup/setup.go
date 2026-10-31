@@ -7,6 +7,7 @@ import (
 	"courses/server/events"
 	"courses/server/invitations"
 	"courses/server/participations"
+	"courses/server/passkeys"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
@@ -18,5 +19,8 @@ func Register(app core.App, cfg config.Config) error {
 	events.Register(app)
 	participations.Register(app)
 	invitations.Register(app, cfg)
+	if err := passkeys.Register(app, cfg); err != nil {
+		return err
+	}
 	return nil
 }
