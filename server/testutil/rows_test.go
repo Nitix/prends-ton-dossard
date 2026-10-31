@@ -57,17 +57,18 @@ func TestRunRows(t *testing.T) {
 			Contains: []string{`"email":"admin@example.test"`, `"role":"admin"`},
 		},
 		{
-			// The rules are still null: only superusers can write.
-			Name:   "a member cannot create a runner yet",
+			// Invitations are created by the routes of the application: the
+			// create rule is null, so only superusers can write.
+			Name:   "a member cannot create an invitation",
 			As:     "alice",
 			Method: http.MethodPost,
-			URL:    func(testutil.Fixture) string { return "/api/collections/runners/records" },
-			Body:   func(testutil.Fixture) string { return `{"name":"Zed"}` },
+			URL:    func(testutil.Fixture) string { return "/api/collections/invitations/records" },
+			Body:   func(fx testutil.Fixture) string { return `{"kind":"invite","runner":"` + fx.SamRunner.Id + `"}` },
 			Status: http.StatusForbidden,
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				afterRan = true
-				if _, err := app.FindFirstRecordByData("runners", "name", "Zed"); err == nil {
-					t.Error("the runner Zed must not exist")
+				if n, err := app.CountRecords("invitations"); err != nil || n != 0 {
+					t.Errorf("no invitation must exist, got %d (err %v)", n, err)
 				}
 				if _, err := app.FindRecordById("runners", fx.SamRunner.Id); err != nil {
 					t.Errorf("After must see the seeded data: %v", err)

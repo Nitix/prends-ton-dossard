@@ -166,9 +166,9 @@ func TestMigrations_Users(t *testing.T) {
 	if users.AuthAlert.Enabled {
 		t.Error("auth alerts send emails and must be disabled")
 	}
-	if users.ListRule != nil || users.ViewRule != nil || users.CreateRule != nil ||
-		users.UpdateRule != nil || users.DeleteRule != nil {
-		t.Error("users rules must stay null until the access rules are defined")
+	// The other rules are covered by TestRules.
+	if users.CreateRule != nil || users.DeleteRule != nil {
+		t.Error("nobody creates or deletes an account through the API: those rules must be null")
 	}
 }
 
@@ -196,20 +196,18 @@ func TestMigrations_UserEmailUnique(t *testing.T) {
 	}
 }
 
-func TestMigrations_RulesAreSuperuserOnly(t *testing.T) {
+// The rules of "participations" are added with the code that keeps its
+// invariants, in a later migration.
+func TestMigrations_ParticipationRulesAreSuperuserOnly(t *testing.T) {
 	app := testutil.NewApp(t)
 
-	for _, name := range []string{
-		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys",
-	} {
-		c, err := app.FindCollectionByNameOrId(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if c.ListRule != nil || c.ViewRule != nil || c.CreateRule != nil ||
-			c.UpdateRule != nil || c.DeleteRule != nil {
-			t.Errorf("%s: every rule must be null for now", name)
-		}
+	c, err := app.FindCollectionByNameOrId("participations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.ListRule != nil || c.ViewRule != nil || c.CreateRule != nil ||
+		c.UpdateRule != nil || c.DeleteRule != nil {
+		t.Error("participations: every rule must be null for now")
 	}
 }
 
@@ -457,12 +455,14 @@ func TestMigrations_DownThenUp(t *testing.T) {
 	app := testutil.NewApp(t)
 	runner := core.NewMigrationsRunner(app, core.AppMigrations)
 
-	reverted, err := runner.Down(3)
+	// Every migration of the application, however many there are by now.
+	total := len(core.AppMigrations.Items())
+	reverted, err := runner.Down(total)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reverted) != 3 {
-		t.Fatalf("reverted %v, want our 3 migrations", reverted)
+	if len(reverted) != total {
+		t.Fatalf("reverted %v, want all %d migrations", reverted, total)
 	}
 
 	for _, name := range []string{
