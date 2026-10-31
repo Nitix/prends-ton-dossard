@@ -81,3 +81,35 @@ test("Dialog — peut être rouverte", async () => {
 
   await expect.element(screen.getByRole("dialog", { name: "Retirer la course" })).toBeVisible();
 });
+
+function nested(innerOpen: boolean, onOuterClose: () => void, onInnerClose: () => void) {
+  return (
+    <I18nProvider languages={["fr"]}>
+      <Dialog open onClose={onOuterClose} title="Dehors">
+        <Dialog open={innerOpen} onClose={onInnerClose} title="Dedans">
+          <p>Contenu</p>
+        </Dialog>
+      </Dialog>
+    </I18nProvider>
+  );
+}
+
+test("Dialog — fermer la fenêtre qu'elle contient n'appelle pas son propre onClose", async () => {
+  const onOuterClose = vi.fn<() => void>();
+  const onInnerClose = vi.fn<() => void>();
+  const screen = await render(nested(false, onOuterClose, onInnerClose));
+  await expect.element(screen.getByRole("dialog", { name: "Dehors" })).toBeVisible();
+  // The outer dialog is open first, as a dialog that asks for a confirmation is.
+  await screen.rerender(nested(true, onOuterClose, onInnerClose));
+  await expect.element(screen.getByRole("dialog", { name: "Dedans" })).toBeVisible();
+
+  // The topmost dialog is the one Esc closes.
+  await userEvent.keyboard("{Escape}");
+
+  await vi.waitFor(() => {
+    expect(onInnerClose).toHaveBeenCalledTimes(1);
+  });
+  // The event of the inner dialog goes up the React tree, past the outer one.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(onOuterClose).not.toHaveBeenCalled();
+});

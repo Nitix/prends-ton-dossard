@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Provisional } from "../../components/Provisional";
+import { MembersPage } from "../../features/admin/MembersPage";
 
 export const Route = createFileRoute("/admin/membres")({
-  component: Provisional,
+  component: MembersPage,
 });

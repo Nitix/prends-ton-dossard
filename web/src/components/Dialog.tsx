@@ -38,9 +38,11 @@ export function Dialog({
       ref={ref}
       aria-labelledby={titleId}
       // The native "close" event also follows a close made by the parent: only
-      // a close the user asked for (open is still true) is reported.
-      onClose={() => {
-        if (open) onClose();
+      // a close the user asked for (open is still true) is reported. React
+      // makes the event of a dialog inside this one go up through this one
+      // too, though the browser does not: it is not a close of this dialog.
+      onClose={(event) => {
+        if (event.target === event.currentTarget && open) onClose();
       }}
       // Tailwind's reset zeroes the margin that centres a dialog.
       className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-xl bg-white p-0 text-neutral-900 shadow-xl backdrop:bg-black/50"

@@ -78,3 +78,31 @@ describe("agenda texts", () => {
     expect(en.agenda.day("Sun 14 Jun", 3)).toBe("Sun 14 Jun, 3 events");
   });
 });
+
+describe("admin texts", () => {
+  test("French", () => {
+    expect(fr.admin.membersTitle).toBe("Membres");
+    expect(fr.admin.stateInvited("sam. 7 nov. 2026")).toBe(
+      "Invitation en attente · expire le sam. 7 nov. 2026",
+    );
+    expect(fr.admin.forRunner("Renommer", "Alice")).toBe("Renommer · Alice");
+    expect(fr.admin.shareTitle.invite("Alice")).toBe("Lien d'invitation pour Alice");
+    expect(fr.admin.shareTitle.reset("Alice")).toBe("Lien de réinitialisation pour Alice");
+    expect(fr.admin.expires("sam. 7 nov. 2026")).toBe("Valable jusqu'au sam. 7 nov. 2026.");
+    expect(fr.admin.share).toBe("Partager");
+    expect(fr.admin.copy).toBe("Copier");
+  });
+
+  test("English", () => {
+    expect(en.admin.membersTitle).toBe("Members");
+    expect(en.admin.stateInvited("Sat 7 Nov 2026")).toBe(
+      "Invitation pending · expires on Sat 7 Nov 2026",
+    );
+    expect(en.admin.forRunner("Rename", "Alice")).toBe("Rename · Alice");
+    expect(en.admin.shareTitle.invite("Alice")).toBe("Invitation link for Alice");
+    expect(en.admin.shareTitle.reset("Alice")).toBe("Reset link for Alice");
+    expect(en.admin.expires("Sat 7 Nov 2026")).toBe("Valid until Sat 7 Nov 2026.");
+    expect(en.admin.share).toBe("Share");
+    expect(en.admin.copy).toBe("Copy");
+  });
+});

@@ -233,6 +233,115 @@ export const fr = {
     passkeyLink: "Ajouter dans mon profil",
     passkeyDismiss: "Masquer",
   },
+  // The admin pages (see features/admin).
+  admin: {
+    membersTitle: "Membres",
+    addRunner: "Ajouter un coureur",
+    empty: "Aucun coureur pour l'instant.",
+    // The state of a runner, in the list. An account adds its role after a dot: « Actif · Admin ».
+    stateNoAccount: "Sans compte",
+    stateInvited: (date: string) => `Invitation en attente · expire le ${date}`,
+    stateActive: "Actif",
+    stateDisabled: "Désactivé",
+    resetPending: (date: string) => `Lien de réinitialisation en attente · expire le ${date}`,
+    roles: { member: "Membre", admin: "Admin" },
+    // The accessible name of an action of a row: its text, then the runner it is about.
+    forRunner: (action: string, name: string) => `${action} · ${name}`,
+    rename: "Renommer",
+    invite: "Inviter",
+    regenerate: "Régénérer l'invitation",
+    revokeInvite: "Révoquer l'invitation",
+    revokeReset: "Révoquer le lien",
+    resetLink: "Lien de réinitialisation",
+    makeAdmin: "Passer admin",
+    removeAdmin: "Retirer admin",
+    disable: "Désactiver",
+    enable: "Réactiver",
+    passkeys: "Clés d'accès",
+    // Creating, renaming and deleting a runner.
+    runnerName: "Nom du coureur",
+    runnerNameHint: "Le nom que le groupe voit à côté des courses.",
+    createTitle: "Nouveau coureur",
+    createSubmit: "Ajouter",
+    created: "Coureur ajouté.",
+    renameTitle: "Renommer le coureur",
+    renamed: "Coureur renommé.",
+    deleteTitle: "Supprimer le coureur ?",
+    deleteWarning: (name: string) => `« ${name} » sera supprimé.`,
+    deleteAccountWarning: (email: string) =>
+      `Son compte (${email}) ne sera plus rattaché à aucun coureur.`,
+    deleted: "Coureur supprimé.",
+    // Making a link: an invitation (with a role) or a reset.
+    inviteTitle: (name: string) => `Inviter ${name}`,
+    regenerateTitle: (name: string) => `Nouvelle invitation pour ${name}`,
+    inviteIntro: "La personne choisira son email et son mot de passe en ouvrant le lien.",
+    resetTitle: (name: string) => `Réinitialiser le mot de passe de ${name}`,
+    resetIntro:
+      "Le lien permet de choisir un nouveau mot de passe. Les sessions ouvertes du compte sont fermées dès qu'il est utilisé.",
+    regenerateWarning: "L'ancien lien ne fonctionnera plus.",
+    role: "Rôle donné à la création du compte",
+    createLink: "Créer le lien",
+    creating: "Création…",
+    // The dialog that shows the link, once made.
+    shareTitle: {
+      invite: (name: string) => `Lien d'invitation pour ${name}`,
+      reset: (name: string) => `Lien de réinitialisation pour ${name}`,
+    },
+    shareIntro: {
+      invite: (name: string) => `Envoie ce lien à ${name} : il lui permet de créer son compte.`,
+      reset: (name: string) =>
+        `Envoie ce lien à ${name} : il lui permet de choisir un nouveau mot de passe.`,
+    },
+    // The date is already formatted.
+    expires: (date: string) => `Valable jusqu'au ${date}.`,
+    shareOnce:
+      "Ce lien ne sera plus affiché une fois cette fenêtre fermée : copie-le ou partage-le maintenant.",
+    link: "Lien",
+    share: "Partager",
+    copy: "Copier",
+    copied: "Lien copié.",
+    copyFailed: "Copie impossible. Sélectionne le lien et copie-le à la main.",
+    shareFailed: "Le partage a échoué. Copie le lien à la place.",
+    // The title of what the share sheet of the phone sends (the subject of an email, for instance).
+    shareSubject: {
+      invite: "Invitation sur Courses",
+      reset: "Nouveau mot de passe sur Courses",
+    },
+    // Revoking a link that is waiting to be used.
+    revoke: {
+      invite: {
+        title: "Révoquer l'invitation ?",
+        warning: (name: string) => `Le lien d'invitation de ${name} ne fonctionnera plus.`,
+        done: "Invitation révoquée.",
+      },
+      reset: {
+        title: "Révoquer le lien ?",
+        warning: (name: string) => `Le lien de réinitialisation de ${name} ne fonctionnera plus.`,
+        done: "Lien révoqué.",
+      },
+    },
+    revokeConfirm: "Révoquer",
+    // Roles and deactivation.
+    demoteTitle: "Retirer le rôle admin ?",
+    demoteWarning: (name: string) => `${name} ne pourra plus gérer les membres.`,
+    roleChanged: "Rôle modifié.",
+    disableTitle: "Désactiver le compte ?",
+    disableWarning: (name: string) =>
+      `${name} ne pourra plus se connecter, et ses sessions ouvertes sont fermées tout de suite. Tu pourras réactiver le compte.`,
+    disabledDone: "Compte désactivé.",
+    enabledDone: "Compte réactivé.",
+    // The passkeys of an account.
+    passkeysTitle: (name: string) => `Clés d'accès de ${name}`,
+    passkeysIntro: (name: string) =>
+      `Ces clés permettent à ${name} de se connecter sans mot de passe.`,
+    passkeysEmpty: "Aucune clé d'accès.",
+    passkeyRemoveWarning: (key: string, name: string) =>
+      `${name} ne pourra plus se connecter avec la clé « ${key} ».`,
+    // What the codes of the server do not say well enough here.
+    rateLimited: "Trop de demandes. Attends une minute, puis réessaie.",
+    kindMismatch:
+      "Le compte de ce coureur a changé entre-temps. La liste vient d'être mise à jour : réessaie.",
+  },
   // One message per error code (see ./errors.ts), plus the generic one. The
   // keys are the codes themselves.
   errors: {

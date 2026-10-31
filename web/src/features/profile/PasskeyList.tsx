@@ -124,7 +124,7 @@ export function PasskeyList({ userId }: { userId: string }) {
 }
 
 /** The day of a PocketBase date-time (UTC, `YYYY-MM-DD HH:MM:SS.sssZ`), in Paris, as the locale writes it. */
-function day(formatLocale: string, dateTime: string): string {
+export function day(formatLocale: string, dateTime: string): string {
   return new Date(dateTime.replace(" ", "T")).toLocaleDateString(formatLocale, {
     dateStyle: "medium",
     timeZone: PARIS,

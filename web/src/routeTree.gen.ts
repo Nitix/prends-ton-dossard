@@ -10,11 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as ConnexionRouteImport } from './routes/connexion'
 import { Route as InvitationRouteImport } from './routes/invitation'
 import { Route as ListeRouteImport } from './routes/liste'
 import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminMembresRouteImport } from './routes/admin/membres'
 import { Route as EvenementsNouveauRouteImport } from './routes/evenements/nouveau'
 import { Route as EvenementsIdIndexRouteImport } from './routes/evenements/$id/index'
@@ -23,6 +25,11 @@ import { Route as EvenementsIdModifierRouteImport } from './routes/evenements/$i
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRouteRoute = AdminRouteRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgendaRoute = AgendaRouteImport.update({
@@ -50,10 +57,15 @@ const ProfilRoute = ProfilRouteImport.update({
   path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminMembresRoute = AdminMembresRouteImport.update({
-  id: '/admin/membres',
-  path: '/admin/membres',
-  getParentRoute: () => rootRouteImport,
+  id: '/membres',
+  path: '/membres',
+  getParentRoute: () => AdminRouteRoute,
 } as any)
 const EvenementsNouveauRoute = EvenementsNouveauRouteImport.update({
   id: '/evenements/nouveau',
@@ -73,6 +85,7 @@ const EvenementsIdModifierRoute = EvenementsIdModifierRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
   '/agenda': typeof AgendaRoute
   '/connexion': typeof ConnexionRoute
   '/invitation': typeof InvitationRoute
@@ -80,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/profil': typeof ProfilRoute
   '/admin/membres': typeof AdminMembresRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
+  '/admin/': typeof AdminIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
   '/evenements/$id/': typeof EvenementsIdIndexRoute
 }
@@ -92,12 +106,14 @@ export interface FileRoutesByTo {
   '/profil': typeof ProfilRoute
   '/admin/membres': typeof AdminMembresRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
+  '/admin': typeof AdminIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
   '/evenements/$id': typeof EvenementsIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
   '/agenda': typeof AgendaRoute
   '/connexion': typeof ConnexionRoute
   '/invitation': typeof InvitationRoute
@@ -105,6 +121,7 @@ export interface FileRoutesById {
   '/profil': typeof ProfilRoute
   '/admin/membres': typeof AdminMembresRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
+  '/admin/': typeof AdminIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
   '/evenements/$id/': typeof EvenementsIdIndexRoute
 }
@@ -112,6 +129,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/agenda'
     | '/connexion'
     | '/invitation'
@@ -119,6 +137,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/admin/membres'
     | '/evenements/nouveau'
+    | '/admin/'
     | '/evenements/$id/modifier'
     | '/evenements/$id/'
   fileRoutesByTo: FileRoutesByTo
@@ -131,11 +150,13 @@ export interface FileRouteTypes {
     | '/profil'
     | '/admin/membres'
     | '/evenements/nouveau'
+    | '/admin'
     | '/evenements/$id/modifier'
     | '/evenements/$id'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/agenda'
     | '/connexion'
     | '/invitation'
@@ -143,18 +164,19 @@ export interface FileRouteTypes {
     | '/profil'
     | '/admin/membres'
     | '/evenements/nouveau'
+    | '/admin/'
     | '/evenements/$id/modifier'
     | '/evenements/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRouteRoute: typeof AdminRouteRouteWithChildren
   AgendaRoute: typeof AgendaRoute
   ConnexionRoute: typeof ConnexionRoute
   InvitationRoute: typeof InvitationRoute
   ListeRoute: typeof ListeRoute
   ProfilRoute: typeof ProfilRoute
-  AdminMembresRoute: typeof AdminMembresRoute
   EvenementsNouveauRoute: typeof EvenementsNouveauRoute
   EvenementsIdModifierRoute: typeof EvenementsIdModifierRoute
   EvenementsIdIndexRoute: typeof EvenementsIdIndexRoute
@@ -167,6 +189,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agenda': {
@@ -204,12 +233,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/membres': {
       id: '/admin/membres'
-      path: '/admin/membres'
+      path: '/membres'
       fullPath: '/admin/membres'
       preLoaderRoute: typeof AdminMembresRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRouteRoute
     }
     '/evenements/nouveau': {
       id: '/evenements/nouveau'
@@ -235,14 +271,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteRouteChildren {
+  AdminMembresRoute: typeof AdminMembresRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminMembresRoute: AdminMembresRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
+  AdminRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRouteRoute: AdminRouteRouteWithChildren,
   AgendaRoute: AgendaRoute,
   ConnexionRoute: ConnexionRoute,
   InvitationRoute: InvitationRoute,
   ListeRoute: ListeRoute,
   ProfilRoute: ProfilRoute,
-  AdminMembresRoute: AdminMembresRoute,
   EvenementsNouveauRoute: EvenementsNouveauRoute,
   EvenementsIdModifierRoute: EvenementsIdModifierRoute,
   EvenementsIdIndexRoute: EvenementsIdIndexRoute,

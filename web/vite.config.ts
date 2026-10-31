@@ -8,7 +8,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [
     // File-based routes. It generates src/routeTree.gen.ts, so it comes first.
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    // The tests of a route sit next to it: they are not routes.
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+      routeFileIgnorePattern: "\\.test\\.tsx?$",
+    }),
     react(),
     // React Compiler, as documented by @vitejs/plugin-react.
     babel({ presets: [reactCompilerPreset()] }),

@@ -78,6 +78,15 @@ function isUser(record: AuthRecord): record is UserRecord {
   return record?.collectionName === "users";
 }
 
+/**
+ * Whether the signed-in user is an admin, read from the auth store: for the
+ * guards of the routes, which are not components and cannot use `useSession`.
+ */
+export function isAdminSession(): boolean {
+  const record = pb.authStore.record;
+  return isUser(record) && record.role === "admin";
+}
+
 /** How long the runner of the user is kept: it only changes when an admin renames it. */
 const RUNNER_STALE_MS = 5 * 60_000;
 

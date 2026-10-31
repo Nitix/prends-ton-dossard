@@ -1,10 +1,11 @@
 import { ClientResponseError } from "pocketbase";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { isPublicPath, restoreSession, safeRedirect } from "./session";
+import { isAdminSession, isPublicPath, restoreSession, safeRedirect } from "./session";
 
 const mocks = vi.hoisted(() => ({
   isValid: true,
+  record: null as { collectionName: string; role: string } | null,
   authRefresh: vi.fn<() => Promise<unknown>>(),
   clear: vi.fn<() => void>(),
 }));
@@ -15,6 +16,9 @@ vi.mock("../../lib/pb", () => ({
       get isValid() {
         return mocks.isValid;
       },
+      get record() {
+        return mocks.record;
+      },
       clear: mocks.clear,
     },
     collection: () => ({ authRefresh: mocks.authRefresh }),
@@ -23,6 +27,7 @@ vi.mock("../../lib/pb", () => ({
 
 beforeEach(() => {
   mocks.isValid = true;
+  mocks.record = null;
   mocks.authRefresh.mockReset();
   mocks.clear.mockReset();
 });
@@ -80,6 +85,30 @@ describe("restoreSession", () => {
       expect(mocks.clear).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("isAdminSession", () => {
+  test("is true for a signed-in admin", () => {
+    mocks.record = { collectionName: "users", role: "admin" };
+
+    expect(isAdminSession()).toBe(true);
+  });
+
+  test("is false for a member", () => {
+    mocks.record = { collectionName: "users", role: "member" };
+
+    expect(isAdminSession()).toBe(false);
+  });
+
+  test("is false when nobody is signed in", () => {
+    expect(isAdminSession()).toBe(false);
+  });
+
+  test("is false for a record that is not of a user, whatever its role", () => {
+    mocks.record = { collectionName: "_superusers", role: "admin" };
+
+    expect(isAdminSession()).toBe(false);
+  });
 });
 
 describe("isPublicPath", () => {
