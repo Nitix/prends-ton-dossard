@@ -1,0 +1,64 @@
+import type { Messages } from "./fr";
+
+// The English dictionary. `satisfies Messages` makes a missing or extra key
+// fail the type check.
+export const en = {
+  common: {
+    appName: "Courses",
+    loading: "Loading…",
+    save: "Save",
+    cancel: "Cancel",
+    close: "Close",
+    confirm: "Confirm",
+    remove: "Remove",
+    delete: "Delete",
+    edit: "Edit",
+    retry: "Try again",
+    offline: "Offline",
+  },
+  nav: {
+    home: "Home",
+    list: "List",
+    calendar: "Calendar",
+    profile: "Profile",
+    admin: "Admin",
+    createEvent: "Create an event",
+  },
+  status: {
+    interested: "Interested",
+    registered: "Registered",
+    finished: "Finished",
+    dnf: "DNF",
+    dns: "DNS",
+  },
+  errors: {
+    generic: "Something went wrong. Try again in a moment.",
+    invitation_invalid:
+      "This link has expired or has already been used. Ask the admin for a new one.",
+    invitation_kind_mismatch: "This link can't be used for this. Ask the admin for a new one.",
+    email_taken: "This email is already in use.",
+    email_invalid: "This email is not valid.",
+    wrong_password: "Wrong password.",
+    password_too_short: "The password is too short (10 characters minimum).",
+    password_mismatch: "The two passwords don't match.",
+    last_admin: "There must always be at least one admin left.",
+    runner_has_participations: "This runner can't be deleted: they still have participations.",
+    race_type_in_use: "This type can't be deleted: some races still use it.",
+    date_invalid: "This date is not valid.",
+    end_before_start: "The end date is before the start date.",
+    format_date_out_of_range: "The race date must fall within the dates of the event.",
+    format_other_event: "This race belongs to another event.",
+    format_measure_required: "Enter at least a distance, a duration or a time limit.",
+    merge_same_record: "Pick two different items.",
+    merge_formats_different_events: "These two races are not in the same event.",
+    not_found: "Not found: it may have been deleted.",
+    forbidden: "You are not allowed to do that.",
+    passkey_failed: "The passkey could not be verified.",
+    passkey_session_expired: "The request has expired. Start over.",
+    account_disabled: "This account is disabled. Contact the admin.",
+    // PocketBase's own validation codes.
+    validation_required: "This field is required.",
+    validation_not_unique: "This value is already in use.",
+    validation_invalid_email: "This email is not valid.",
+  },
+} satisfies Messages;
