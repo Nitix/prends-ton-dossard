@@ -1,9 +1,11 @@
 package migrations_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
+	validation "ganigeorgiev.com/pocketbase/ozzo-validation/v4"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 
 	"courses/server/testutil"
@@ -302,8 +304,11 @@ func TestMigrations_FormatMeasures(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
 
+	// format returns the values of a valid format, with extra on top. The
+	// valid base has a measure, so that a case that is refused for something
+	// else is not refused for the lack of one.
 	format := func(extra map[string]any) map[string]any {
-		values := map[string]any{"event": fx.Event2.Id, "race_type": fx.Road.Id}
+		values := map[string]any{"event": fx.Event2.Id, "race_type": fx.Road.Id, "distance_km": 10}
 		for k, v := range extra {
 			values[k] = v
 		}
@@ -312,24 +317,48 @@ func TestMigrations_FormatMeasures(t *testing.T) {
 
 	// Every measure is optional at the schema level: that one of them is set
 	// (format_measure_required) is a business rule enforced by a hook, which
-	// events.Register attaches and which has its own tests.
-	mustSave(t, app, "formats", format(map[string]any{"distance_km": 10}))
-	mustSave(t, app, "formats", format(map[string]any{"duration_min": 360}))
+	// events.Register attaches and which has its own tests. A zero is how
+	// PocketBase stores a number that is not set.
+	mustSave(t, app, "formats", format(nil))
+	mustSave(t, app, "formats", format(map[string]any{"distance_km": 0, "duration_min": 360}))
+	mustSave(t, app, "formats", format(map[string]any{"distance_km": 0, "time_limit_min": 2880}))
 	mustSave(t, app, "formats", format(map[string]any{"time_limit_min": 2880, "distance_km": 6.706}))
 
-	for name, extra := range map[string]map[string]any{
-		"decimal duration":    {"duration_min": 1.5},
-		"negative duration":   {"duration_min": -1},
-		"decimal time limit":  {"time_limit_min": 10.5},
-		"negative time limit": {"time_limit_min": -1},
-		"negative distance":   {"distance_km": -1},
-		"decimal elevation":   {"elevation_gain_m": 10.5},
-		"negative elevation":  {"elevation_gain_m": -1},
-		"unknown event":       {"event": "missing"},
-		"missing race type":   {"race_type": ""},
+	// Each case is refused for its own reason: the error is on that field
+	// alone, and only the first case is refused for the missing measure.
+	for _, c := range []struct {
+		name  string
+		extra map[string]any
+		field string
+		code  string // the code expected on the field, when it is not a schema one
+	}{
+		{"no measure", map[string]any{"distance_km": 0}, "distance_km", "format_measure_required"},
+		{"decimal duration", map[string]any{"duration_min": 1.5}, "duration_min", ""},
+		{"negative duration", map[string]any{"duration_min": -1}, "duration_min", ""},
+		{"decimal time limit", map[string]any{"time_limit_min": 10.5}, "time_limit_min", ""},
+		{"negative time limit", map[string]any{"time_limit_min": -1}, "time_limit_min", ""},
+		{"negative distance", map[string]any{"distance_km": -1}, "distance_km", ""},
+		{"decimal elevation", map[string]any{"elevation_gain_m": 10.5}, "elevation_gain_m", ""},
+		{"negative elevation", map[string]any{"elevation_gain_m": -1}, "elevation_gain_m", ""},
+		{"unknown event", map[string]any{"event": "missing"}, "event", ""},
+		{"missing race type", map[string]any{"race_type": ""}, "race_type", ""},
 	} {
-		if _, err := trySave(app, "formats", format(extra)); err == nil {
-			t.Errorf("%s: saving the format must fail", name)
+		_, err := trySave(app, "formats", format(c.extra))
+		var errs validation.Errors
+		if !errors.As(err, &errs) {
+			t.Errorf("%s: want validation errors, got %v", c.name, err)
+			continue
+		}
+		if len(errs) != 1 || errs[c.field] == nil {
+			t.Errorf("%s: want an error on %s alone, got %v", c.name, c.field, errs)
+			continue
+		}
+		code := errs[c.field].(validation.Error).Code()
+		if c.code != "" && code != c.code {
+			t.Errorf("%s: code = %q, want %q", c.name, code, c.code)
+		}
+		if c.code == "" && code == "format_measure_required" {
+			t.Errorf("%s: refused for the missing measure, not for the schema", c.name)
 		}
 	}
 }
