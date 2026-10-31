@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
@@ -56,30 +56,42 @@ function ShareForm({
   const { t, f } = useI18n();
   const toast = useToast();
   const inputId = useId();
+  // What the last press of a button came to. The toast says it too, but a modal
+  // dialog makes the rest of the page (the toast) inert, and a screen reader
+  // does not read it out: the line below the buttons is inside the dialog.
+  const [message, setMessage] = useState<string | null>(null);
+
+  function report(text: string) {
+    setMessage(text);
+    toast.show(text);
+  }
 
   // Most computers have no share sheet, and a browser that has one may still
   // refuse to share this: the button is only there when it would work.
   const canShare = typeof navigator.canShare === "function" && navigator.canShare({ url });
 
   async function share() {
+    // Cleared first, so that the same message said twice is read out twice.
+    setMessage(null);
     try {
       await navigator.share({ url, title: t.admin.shareSubject[kind] });
     } catch (err) {
       // Closing the share sheet without choosing anything is not a failure.
       if (err instanceof DOMException && err.name === "AbortError") return;
-      toast.show(t.admin.shareFailed);
+      report(t.admin.shareFailed);
     }
   }
 
   async function copy() {
+    setMessage(null);
     try {
       // The clipboard is only there on a page served over HTTPS (or localhost).
       await navigator.clipboard.writeText(url);
     } catch {
-      toast.show(t.admin.copyFailed);
+      report(t.admin.copyFailed);
       return;
     }
-    toast.show(t.admin.copied);
+    report(t.admin.copied);
   }
 
   return (
@@ -116,6 +128,8 @@ function ShareForm({
           {t.admin.copy}
         </button>
       </div>
+      {/* An <output> is a live region (role status). Always there, empty at first: a live region only reads out what is put into it. */}
+      <output className="block min-h-5 text-sm font-medium">{message}</output>
     </div>
   );
 }

@@ -76,6 +76,20 @@ type Screen = Awaited<ReturnType<typeof renderDialog>>;
 const shareButton = (screen: Screen) => screen.getByRole("button", { name: fr.admin.share });
 const copyButton = (screen: Screen) => screen.getByRole("button", { name: fr.admin.copy });
 
+/**
+ * The line that says what a button came to, inside the dialog. A modal dialog
+ * makes the rest of the page inert, so a screen reader does not read the toast
+ * out: this line is where the message is heard.
+ */
+const status = (screen: Screen) => screen.getByRole("dialog").getByRole("status");
+
+/** What the toasts say: they are in the page, outside the dialog. */
+const toastText = (screen: Screen) =>
+  [...screen.container.querySelectorAll("output")]
+    .filter((output) => output.closest("dialog") === null)
+    .map((output) => output.textContent)
+    .join("");
+
 test("ShareLinkDialog — sans navigator.share, pas de bouton Partager ; Copier appelle clipboard.writeText avec l'URL", async () => {
   const writeText = withClipboard();
   const screen = await renderDialog();
@@ -84,7 +98,18 @@ test("ShareLinkDialog — sans navigator.share, pas de bouton Partager ; Copier 
   await copyButton(screen).click();
 
   expect(writeText).toHaveBeenCalledExactlyOnceWith(URL_OF_LINK);
-  await expect.element(screen.getByText(fr.admin.copied)).toBeVisible();
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copied);
+  await vi.waitFor(() => {
+    expect(toastText(screen)).toBe(fr.admin.copied);
+  });
+});
+
+test("ShareLinkDialog — la ligne d'état est dans la fenêtre dès l'ouverture, vide : une zone vivante ne lit que ce qu'on y met", async () => {
+  withClipboard();
+  const screen = await renderDialog();
+
+  await expect.element(status(screen)).toBeInTheDocument();
+  expect(status(screen).element().textContent).toBe("");
 });
 
 test("ShareLinkDialog — le lien est dans un champ en lecture seule", async () => {
@@ -178,8 +203,9 @@ test("ShareLinkDialog — fermer la feuille de partage (AbortError) ne dit rien"
   await vi.waitFor(() => {
     expect(share).toHaveBeenCalledOnce();
   });
-  // The toasts are in the live region: nothing shows up in it.
-  expect(screen.container.querySelector("output")?.textContent ?? "").toBe("");
+  // Nothing is said: not in the toasts, not in the line of the dialog.
+  expect(toastText(screen)).toBe("");
+  expect(status(screen).element().textContent).toBe("");
   await expect.element(shareButton(screen)).toBeEnabled();
 });
 
@@ -193,7 +219,30 @@ test("ShareLinkDialog — un autre échec du partage est dit", async () => {
 
   await shareButton(screen).click();
 
-  await expect.element(screen.getByText(fr.admin.shareFailed)).toBeVisible();
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.shareFailed);
+  await vi.waitFor(() => {
+    expect(toastText(screen)).toBe(fr.admin.shareFailed);
+  });
+});
+
+test("ShareLinkDialog — un partage refusé après un partage annulé est dit, et l'annulation suivante efface le message", async () => {
+  withClipboard();
+  const share = vi
+    .fn<(data: ShareData) => Promise<void>>()
+    .mockRejectedValueOnce(new DOMException("No", "NotAllowedError"))
+    .mockRejectedValueOnce(new DOMException("Share canceled", "AbortError"));
+  withShare(share);
+  const screen = await renderDialog();
+
+  await shareButton(screen).click();
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.shareFailed);
+  await shareButton(screen).click();
+
+  // The old message does not stay on screen as if it were the answer to this press.
+  await vi.waitFor(() => {
+    expect(share).toHaveBeenCalledTimes(2);
+    expect(status(screen).element().textContent).toBe("");
+  });
 });
 
 test("ShareLinkDialog — une copie refusée est dite, et le lien reste à copier à la main", async () => {
@@ -205,7 +254,10 @@ test("ShareLinkDialog — une copie refusée est dite, et le lien reste à copie
 
   await copyButton(screen).click();
 
-  await expect.element(screen.getByText(fr.admin.copyFailed)).toBeVisible();
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copyFailed);
+  await vi.waitFor(() => {
+    expect(toastText(screen)).toBe(fr.admin.copyFailed);
+  });
   expect(screen.container.textContent).not.toContain(fr.admin.copied);
   await expect
     .element(screen.getByLabelText(fr.admin.link, { exact: true }))
@@ -220,7 +272,23 @@ test("ShareLinkDialog — sans API de presse-papiers, la copie échoue propremen
 
   await copyButton(screen).click();
 
-  await expect.element(screen.getByText(fr.admin.copyFailed)).toBeVisible();
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copyFailed);
+});
+
+test("ShareLinkDialog — une copie réussie après un échec remplace le message d'échec", async () => {
+  const writeText = vi
+    .fn<(text: string) => Promise<void>>()
+    .mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"))
+    .mockResolvedValueOnce();
+  withClipboard(writeText);
+  const screen = await renderDialog();
+
+  await copyButton(screen).click();
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copyFailed);
+  await copyButton(screen).click();
+
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copied);
+  expect(status(screen).element().textContent).not.toContain(fr.admin.copyFailed);
 });
 
 test("ShareLinkDialog — les boutons font au moins 44 px", async () => {
