@@ -181,7 +181,7 @@ Libellés (FR / EN) : Intéressé / Interested, Inscrit / Registered, Terminé /
 
 ### 5.2 Parcours d'invitation
 
-1. L'admin crée un coureur (son nom), puis clique sur **Inviter**. Le serveur génère un jeton aléatoire de 32 octets (base64url) et ne stocke que son SHA-256. Il renvoie l'URL `APP_URL/invitation/<jeton>`.
+1. L'admin crée un coureur (son nom), puis clique sur **Inviter**. Le serveur génère un jeton aléatoire de 32 octets (base64url) et ne stocke que son SHA-256. Il renvoie l'URL `APP_URL/invitation#<jeton>`. Le jeton est dans le fragment (après `#`) : le navigateur ne l'envoie jamais au serveur, donc il n'apparaît dans aucun journal. L'API reçoit le jeton dans le corps des requêtes, jamais dans l'URL.
 2. L'admin la partage avec le bouton **Partager** (Web Share API) ou **Copier**.
 3. La personne ouvre le lien. La page affiche « Bienvenue <nom> » et demande un email et un mot de passe (deux fois).
 4. Le serveur vérifie le jeton (existe, pas expiré, pas utilisé) puis, **dans une seule transaction** :
@@ -206,8 +206,8 @@ Elle refuse de s'exécuter si un admin existe déjà, sauf avec `--force`.
 | Méthode et chemin | Accès | Rôle |
 |---|---|---|
 | `POST /api/app/invitations` | admin | `{runnerId, kind, role?}` → `{url, expiresAt}` |
-| `GET /api/app/invitations/{token}` | public | `{runnerName, kind}`, ou 404 si invalide ou expiré |
-| `POST /api/app/invitations/{token}/accept` | public | `{email, password, passwordConfirm}` (invite) ou `{password, passwordConfirm}` (reset) → session |
+| `POST /api/app/invitations/lookup` | public | `{token}` → `{runnerName, kind}`, ou 404 si invalide ou expiré |
+| `POST /api/app/invitations/accept` | public | `{token, email, password, passwordConfirm}` (invite) ou `{token, password, passwordConfirm}` (reset) → session |
 | `DELETE /api/app/invitations/{id}` | admin | révoque une invitation en attente |
 | `POST /api/app/me/email` | connecté | `{email, password}` → change l'email après vérification du mot de passe. PocketBase passe normalement par une confirmation par email, que la v1 n'envoie pas. |
 | `POST /api/app/passkeys/register/begin` | connecté | options de création WebAuthn |
@@ -272,7 +272,7 @@ Le site est d'abord pensé pour le mobile et existe en français et en anglais (
 | Route | Écran |
 |---|---|
 | `/connexion` | Email + mot de passe, bouton passkey, suggestion automatique de passkey |
-| `/invitation/:token` | Acceptation d'une invitation ou réinitialisation |
+| `/invitation` (jeton dans le fragment `#<jeton>`) | Acceptation d'une invitation ou réinitialisation |
 | `/` | Accueil |
 | `/liste` | Liste |
 | `/agenda` | Agenda |
