@@ -39,6 +39,51 @@ export const fr = {
     createAccount: "Créer mon compte",
     changePassword: "Changer le mot de passe",
     saving: "Enregistrement…",
+    passkeyLogin: "Se connecter avec une clé d'accès",
+    passkeyWaiting: "Vérification de la clé d'accès…",
+  },
+  // The profile page: the name, the email and the password of the account,
+  // then the passkeys (see `passkeys`).
+  profile: {
+    nameTitle: "Nom affiché",
+    name: "Nom",
+    nameHint: "C'est le nom que le groupe voit à côté de tes courses.",
+    nameSaved: "Nom enregistré.",
+    emailTitle: "Email",
+    currentEmail: (email: string) => `Email actuel : ${email}`,
+    newEmail: "Nouvel email",
+    changeEmail: "Changer l'email",
+    emailSaved: "Email modifié.",
+    // Asked again for each change: it proves that the owner is at the keyboard.
+    currentPassword: "Mot de passe actuel",
+    passwordTitle: "Mot de passe",
+    newPassword: "Nouveau mot de passe",
+    passwordSaved: "Mot de passe modifié.",
+    passwordSignInAgain: "Mot de passe modifié. Reconnecte-toi.",
+    logout: "Se déconnecter",
+  },
+  passkeys: {
+    title: "Mes clés d'accès",
+    intro:
+      "Une clé d'accès te connecte sans mot de passe, avec ton empreinte, ton visage ou le code de ton appareil.",
+    empty: "Tu n'as pas encore de clé d'accès.",
+    add: "Ajouter une clé d'accès",
+    addTitle: "Nouvelle clé d'accès",
+    addSubmit: "Créer la clé",
+    name: "Nom de la clé",
+    nameHint: "Pour la reconnaître : « iPhone » ou « PC du boulot », par exemple.",
+    alreadyRegistered: "Cet appareil a déjà une clé d'accès pour ton compte.",
+    added: "Clé d'accès ajoutée.",
+    rename: "Renommer",
+    renameTitle: "Renommer la clé",
+    renamed: "Clé renommée.",
+    removeTitle: "Supprimer la clé ?",
+    removeWarning: (name: string) =>
+      `La clé « ${name} » ne pourra plus te connecter. Tu pourras en ajouter une autre.`,
+    removed: "Clé supprimée.",
+    created: (date: string) => `Créée le ${date}`,
+    lastUsed: (date: string) => `Utilisée le ${date}`,
+    neverUsed: "Jamais utilisée",
   },
   // The labels of the participation statuses.
   status: {
@@ -81,6 +126,9 @@ export const fr = {
     validation_required: "Ce champ est obligatoire.",
     validation_not_unique: "Cette valeur est déjà utilisée.",
     validation_invalid_email: "Cet email n'est pas valide.",
+    validation_invalid_old_password: "Le mot de passe actuel est incorrect.",
+    validation_min_text_constraint: "Cette valeur est trop courte.",
+    validation_values_mismatch: "Les deux valeurs sont différentes.",
   },
 };
 

@@ -19,6 +19,9 @@ const POCKETBASE_CODES = [
   "validation_required",
   "validation_not_unique",
   "validation_invalid_email",
+  "validation_invalid_old_password",
+  "validation_min_text_constraint",
+  "validation_values_mismatch",
 ];
 
 /** What the SDK throws for an API answer with this body. */

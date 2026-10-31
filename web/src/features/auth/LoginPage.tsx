@@ -1,10 +1,12 @@
 import { useRouter } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
-import { useActionState, useId } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 
+import { errorCode, translateError } from "../../i18n/errors";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
+import { conditionalLoginAvailable, loginWithPasskey, passkeysSupported } from "./passkeys";
 import { safeRedirect } from "./session";
 
 type LoginError = "bad_credentials" | "account_disabled" | "generic";
@@ -37,11 +39,40 @@ function text(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * Signs in with a passkey (see `loginWithPasskey`) and tells the page what
+ * came of it: `onSignedIn` when it worked, `onFailed` with the message of
+ * what went wrong. A prompt turned down or an aborted request is neither.
+ */
+async function signInWithPasskey(
+  t: Messages,
+  opts: { signal?: AbortSignal; conditional?: boolean },
+  onSignedIn: () => void,
+  onFailed: (message: string) => void,
+): Promise<boolean> {
+  try {
+    if (await loginWithPasskey(opts)) {
+      onSignedIn();
+      return true;
+    }
+  } catch (err) {
+    onFailed(translateError(t, errorCode(err)));
+  }
+  return false;
+}
+
 /** The email and password form. `redirect` is where to go once signed in. */
 export function LoginPage({ redirect }: { redirect?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const errorId = useId();
+  const supported = passkeysSupported();
+
+  // Why the last sign-in with a passkey failed, as a message.
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyPending, setPasskeyPending] = useState(false);
+  // The request that waits for a passkey to be picked in the autofill.
+  const autofill = useRef<AbortController | null>(null);
 
   // React empties an uncontrolled form once its action is over, so the email
   // that was typed comes back through the state (and `defaultValue`). The
@@ -49,6 +80,7 @@ export function LoginPage({ redirect }: { redirect?: string }) {
   const [state, submit, pending] = useActionState(
     async (_previous: LoginState, form: FormData): Promise<LoginState> => {
       const email = text(form, "email").trim();
+      setPasskeyError(null);
       try {
         await pb.collection("users").authWithPassword(email, text(form, "password"));
       } catch (err) {
@@ -60,7 +92,40 @@ export function LoginPage({ redirect }: { redirect?: string }) {
     { email: "", error: null },
   );
 
-  const message = errorMessage(t, state.error);
+  // The browser can offer the passkeys in the autofill of the email field:
+  // the request waits for one to be picked, and is given up when the page
+  // goes away or the button asks for a prompt instead.
+  useEffect(() => {
+    const controller = new AbortController();
+    autofill.current = controller;
+    void (async () => {
+      // False too when the browser has no passkeys at all.
+      if (!(await conditionalLoginAvailable()) || controller.signal.aborted) return;
+      await signInWithPasskey(
+        t,
+        { signal: controller.signal, conditional: true },
+        () => router.history.push(safeRedirect(redirect)),
+        setPasskeyError,
+      );
+    })();
+    return () => controller.abort();
+  }, [t, router, redirect]);
+
+  async function signInWithButton() {
+    // Only one request at a time: the autofill gives way to the prompt.
+    autofill.current?.abort();
+    setPasskeyError(null);
+    setPasskeyPending(true);
+    await signInWithPasskey(
+      t,
+      {},
+      () => router.history.push(safeRedirect(redirect)),
+      setPasskeyError,
+    );
+    setPasskeyPending(false);
+  }
+
+  const message = passkeyError ?? errorMessage(t, state.error);
   const field = "min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base font-normal";
 
   return (
@@ -72,7 +137,10 @@ export function LoginPage({ redirect }: { redirect?: string }) {
           name="email"
           type="email"
           inputMode="email"
-          autoComplete="username"
+          // `webauthn` lets the browser offer the passkeys in this field. It is
+          // a token of the HTML specification that the lint rule does not know yet.
+          // oxlint-disable-next-line jsx-a11y/autocomplete-valid
+          autoComplete="username webauthn"
           required
           defaultValue={state.email}
           aria-invalid={message !== null}
@@ -104,6 +172,16 @@ export function LoginPage({ redirect }: { redirect?: string }) {
       >
         {pending ? t.auth.signingIn : t.auth.signIn}
       </button>
+      {supported && (
+        <button
+          type="button"
+          disabled={passkeyPending}
+          onClick={() => void signInWithButton()}
+          className="min-h-11 rounded-lg border border-neutral-900 bg-white px-4 font-medium text-neutral-900 disabled:opacity-60"
+        >
+          {passkeyPending ? t.auth.passkeyWaiting : t.auth.passkeyLogin}
+        </button>
+      )}
     </form>
   );
 }

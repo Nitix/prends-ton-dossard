@@ -34,6 +34,9 @@ export const ERROR_CODES: readonly string[] = [
   "validation_required",
   "validation_not_unique",
   "validation_invalid_email",
+  "validation_invalid_old_password",
+  "validation_min_text_constraint",
+  "validation_values_mismatch",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
