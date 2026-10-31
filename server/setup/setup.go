@@ -3,6 +3,7 @@ package setup
 
 import (
 	"courses/server/config"
+	"courses/server/events"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
@@ -10,5 +11,6 @@ import (
 // Register attaches the application hooks and routes to app.
 // It is the single wiring entry point shared by main and the tests.
 func Register(app core.App, cfg config.Config) error {
+	events.Register(app)
 	return nil
 }

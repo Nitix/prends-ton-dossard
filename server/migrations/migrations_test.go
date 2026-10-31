@@ -310,9 +310,10 @@ func TestMigrations_FormatMeasures(t *testing.T) {
 		return values
 	}
 
-	// Every measure is optional at the schema level: format_measure_required
-	// is a business rule enforced by a hook.
-	mustSave(t, app, "formats", format(nil))
+	// Every measure is optional at the schema level: that one of them is set
+	// (format_measure_required) is a business rule enforced by a hook, which
+	// events.Register attaches and which has its own tests.
+	mustSave(t, app, "formats", format(map[string]any{"distance_km": 10}))
 	mustSave(t, app, "formats", format(map[string]any{"duration_min": 360}))
 	mustSave(t, app, "formats", format(map[string]any{"time_limit_min": 2880, "distance_km": 6.706}))
 
