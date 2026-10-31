@@ -4,7 +4,7 @@ package setup
 import (
 	"courses/server/config"
 
-	"github.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
 
 // Register attaches the application hooks and routes to app.

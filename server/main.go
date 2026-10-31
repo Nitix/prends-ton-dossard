@@ -7,7 +7,7 @@ import (
 
 	_ "time/tzdata"
 
-	"github.com/pocketbase/pocketbase"
+	"ganigeorgiev.com/pocketbase/pocketbase"
 
 	"courses/server/config"
 	_ "courses/server/migrations"
