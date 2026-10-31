@@ -23,6 +23,7 @@ import {
   event2Record,
   eventRecord,
   f42,
+  p1,
   samRunner,
   trailType,
 } from "./testFixture";
@@ -571,6 +572,59 @@ test("EventPage — après J'y vais, la page recharge l'événement et montre la
   });
   expect(mocks.getOne).toHaveBeenCalledTimes(2);
   await expect.element(dialog).not.toBeInTheDocument();
+});
+
+// --- Where the focus goes ---
+
+const focused = () => document.activeElement;
+
+async function openRemovalDialog(screen: Screen, runner: string) {
+  await menuOf(screen, runner).click();
+  await screen.getByRole("button", { name: fr.common.remove }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.removeTitle });
+  await expect.element(dialog).toBeVisible();
+  return dialog;
+}
+
+test("EventPage — annuler un retrait rend le focus au bouton du menu de la ligne", async () => {
+  const { screen } = await renderPage();
+  await loaded(screen);
+  const dialog = await openRemovalDialog(screen, "Bob");
+
+  await dialog.getByRole("button", { name: fr.common.cancel }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(menuOf(screen, "Bob").element());
+  });
+});
+
+test("EventPage — après un retrait réussi, la ligne disparaît et le focus va au titre de l'épreuve", async () => {
+  const { screen } = await renderPage();
+  await loaded(screen);
+  // Once Bob is removed, the server no longer has his participation.
+  mocks.remove.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue({
+      ...eventRecord,
+      expand: {
+        formats_via_event: [
+          { ...f42, expand: { ...f42.expand, participations_via_format: [p1] } },
+          eventRecord.expand.formats_via_event[1],
+        ],
+      },
+    });
+    return Promise.resolve(true);
+  });
+  const dialog = await openRemovalDialog(screen, "Bob");
+
+  await dialog.getByRole("button", { name: fr.common.remove }).click();
+
+  await expect.element(menuOf(screen, "Bob")).not.toBeInTheDocument();
+  await expect.element(dialog).not.toBeInTheDocument();
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 42/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
 });
 
 // --- Loading and failures ---

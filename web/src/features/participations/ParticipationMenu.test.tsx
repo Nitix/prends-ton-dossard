@@ -48,6 +48,7 @@ async function renderMenu(
   const { participation = bobParticipation, runner = bobRunner, canConfirm = false } = options;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+  const onRemoved = vi.fn<() => void>();
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
@@ -60,13 +61,14 @@ async function renderMenu(
               runner={runner}
               formatLabel="Trail 42 km"
               canConfirm={canConfirm}
+              onRemoved={onRemoved}
             />
           </div>
         </ToastProvider>
       </I18nProvider>
     </QueryClientProvider>,
   );
-  return { screen, invalidate };
+  return { screen, invalidate, onRemoved };
 }
 
 type Screen = Awaited<ReturnType<typeof renderMenu>>["screen"];
@@ -284,4 +286,79 @@ test("ParticipationMenu — un changement de statut refusé s'affiche en message
   await screen.getByRole("button", { name: fr.status.dnf }).click();
 
   await expect.element(screen.getByText(fr.errors.forbidden)).toBeVisible();
+});
+
+// --- Where the focus goes ---
+//
+// The removal dialog is opened from an item of the popover, which closes at the
+// same time: the dialog must not give the focus back to that hidden item.
+
+const focused = () => document.activeElement;
+
+async function openRemovalDialog(screen: Screen) {
+  await open(screen);
+  await screen.getByRole("button", { name: fr.common.remove }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.removeTitle });
+  await expect.element(dialog).toBeVisible();
+  return dialog;
+}
+
+test("ParticipationMenu — Annuler dans la fenêtre de retrait rend le focus au bouton du menu", async () => {
+  const { screen } = await renderMenu();
+  const dialog = await openRemovalDialog(screen);
+
+  await dialog.getByRole("button", { name: fr.common.cancel }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(trigger(screen).element());
+  });
+});
+
+test("ParticipationMenu — Échap dans la fenêtre de retrait rend le focus au bouton du menu", async () => {
+  const { screen } = await renderMenu();
+  const dialog = await openRemovalDialog(screen);
+
+  await userEvent.keyboard("{Escape}");
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(trigger(screen).element());
+  });
+});
+
+test("ParticipationMenu — le bouton Fermer de la fenêtre de retrait rend aussi le focus au bouton du menu", async () => {
+  const { screen } = await renderMenu();
+  const dialog = await openRemovalDialog(screen);
+
+  await dialog.getByRole("button", { name: fr.common.close }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(trigger(screen).element());
+  });
+});
+
+test("ParticipationMenu — un retrait réussi le dit à la page (qui a la charge du focus : la ligne va disparaître)", async () => {
+  const { screen, onRemoved } = await renderMenu();
+  const dialog = await openRemovalDialog(screen);
+  expect(onRemoved).not.toHaveBeenCalled();
+
+  await dialog.getByRole("button", { name: fr.common.remove }).click();
+
+  await vi.waitFor(() => {
+    expect(onRemoved).toHaveBeenCalledOnce();
+  });
+});
+
+test("ParticipationMenu — après un changement de statut, le focus est sur le bouton du menu", async () => {
+  const { screen } = await renderMenu();
+  await open(screen);
+
+  await screen.getByRole("button", { name: fr.status.finished }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledOnce();
+  });
+  expect(focused()).toBe(trigger(screen).element());
 });

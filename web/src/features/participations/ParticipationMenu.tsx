@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { DANGER, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
@@ -19,6 +19,13 @@ const ITEM =
  *
  * Who may do what is the page's call: it only shows this to those who may
  * edit the participation, and passes `canConfirm` for the runner it is about.
+ *
+ * Where the focus goes (a keyboard or screen reader user must not restart from
+ * the top of the page): a status change or a confirmation gives it back to the
+ * button of the menu (the browser does, when the popover closes); so does a
+ * removal that is cancelled; and a removal that goes through calls
+ * `onRemoved`, since this menu goes away with its row: the page puts the focus
+ * somewhere that stays.
  */
 export function ParticipationMenu({
   eventId,
@@ -26,6 +33,7 @@ export function ParticipationMenu({
   runner,
   formatLabel,
   canConfirm,
+  onRemoved,
 }: {
   /** The event of the participation: its page is refreshed after each change. */
   eventId: string;
@@ -34,12 +42,35 @@ export function ParticipationMenu({
   /** The name of the format, for the dialog that asks to confirm the removal. */
   formatLabel: string;
   canConfirm: boolean;
+  /** The participation has just been removed: this menu is about to go away. */
+  onRemoved: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
   const menuId = useId();
   const update = useUpdateParticipation(eventId);
   const [removing, setRemoving] = useState(false);
+
+  // The removal dialog opens from an item of the popover, which closes at the
+  // same time. The native dialog would take that item, now hidden, as the place
+  // to give the focus back to, and the focus would fall to the page's <body>.
+  // So the button of the menu gets it, once the dialog is closed (the effect
+  // of the dialog, a child of this component, closes it before this one runs).
+  const trigger = useRef<HTMLButtonElement>(null);
+  const dismissed = useRef(false);
+  useEffect(() => {
+    if (removing || !dismissed.current) return;
+    dismissed.current = false;
+    trigger.current?.focus();
+  }, [removing]);
+  const dismiss = () => {
+    dismissed.current = true;
+    setRemoving(false);
+  };
+  const removed = () => {
+    setRemoving(false);
+    onRemoved();
+  };
 
   async function change(patch: { status?: Status; confirmed?: true }) {
     try {
@@ -52,6 +83,7 @@ export function ParticipationMenu({
   return (
     <>
       <button
+        ref={trigger}
         type="button"
         popoverTarget={menuId}
         aria-label={t.participation.actionsFor(runner.name)}
@@ -119,21 +151,14 @@ export function ParticipationMenu({
           </li>
         </ul>
       </div>
-      <Dialog
-        open={removing}
-        onClose={() => {
-          setRemoving(false);
-        }}
-        title={t.participation.removeTitle}
-      >
+      <Dialog open={removing} onClose={dismiss} title={t.participation.removeTitle}>
         <RemoveForm
           eventId={eventId}
           participation={participation}
           runner={runner}
           formatLabel={formatLabel}
-          onClose={() => {
-            setRemoving(false);
-          }}
+          onClose={dismiss}
+          onRemoved={removed}
         />
       </Dialog>
     </>
@@ -146,12 +171,14 @@ function RemoveForm({
   runner,
   formatLabel,
   onClose,
+  onRemoved,
 }: {
   eventId: string;
   participation: ParticipationRecord;
   runner: RunnerRecord;
   formatLabel: string;
   onClose: () => void;
+  onRemoved: () => void;
 }) {
   const { t } = useI18n();
   const remove = useDeleteParticipation(eventId);
@@ -162,7 +189,7 @@ function RemoveForm({
     setMessage(null);
     try {
       await remove.mutateAsync(participation.id);
-      onClose();
+      onRemoved();
     } catch (err) {
       setMessage(participationError(t, err));
     }

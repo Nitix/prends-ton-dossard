@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -181,12 +181,22 @@ function FormatSection({
   const headingId = useId();
   const { format, raceType, date, participations } = formatView;
 
+  // A participant that has just been removed takes the focus away with their
+  // row, menu button included. The focus goes to the title of the format, which
+  // stays and tells the user where they are. The title is not in the tab order:
+  // it only receives the focus from this effect.
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [removals, setRemovals] = useState(0);
+  useEffect(() => {
+    if (removals > 0) heading.current?.focus();
+  }, [removals]);
+
   return (
     <section
       aria-labelledby={headingId}
       className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3"
     >
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="text-lg font-semibold">
         {formatMeasures(format, raceType.label, f, t).join(SEPARATOR)}
       </h2>
       {showDate && <p className="text-sm text-neutral-600">{f.date(date)}</p>}
@@ -201,6 +211,9 @@ function FormatSection({
               participationView={participationView}
               formatLabel={formatDisplayName(format, raceType.label, f, t)}
               me={me}
+              onRemoved={() => {
+                setRemovals((count) => count + 1);
+              }}
             />
           ))}
         </ul>
@@ -219,11 +232,13 @@ function ParticipantRow({
   participationView,
   formatLabel,
   me,
+  onRemoved,
 }: {
   eventId: string;
   participationView: ParticipationView;
   formatLabel: string;
   me: Me | null;
+  onRemoved: () => void;
 }) {
   const { t } = useI18n();
   const { participation, runner, addedBy } = participationView;
@@ -251,6 +266,7 @@ function ParticipantRow({
           runner={runner}
           formatLabel={formatLabel}
           canConfirm={canConfirm(runner, me)}
+          onRemoved={onRemoved}
         />
       )}
     </li>
