@@ -199,17 +199,58 @@ func TestMigrations_UserEmailUnique(t *testing.T) {
 }
 
 // The rules of "participations" are added with the code that keeps its
-// invariants, in a later migration.
-func TestMigrations_ParticipationRulesAreSuperuserOnly(t *testing.T) {
+// invariants, by the migration 5_participation_rules.go: rolling it back
+// leaves them superuser-only, and applying it again restores them. The
+// migration is run on its own so that the test does not depend on the ones
+// added after it. What the rules allow is tested with the hooks, in the
+// participations package.
+func TestMigrations_ParticipationRulesDownThenUp(t *testing.T) {
 	app := testutil.NewApp(t)
 
-	c, err := app.FindCollectionByNameOrId("participations")
-	if err != nil {
+	var migration *core.Migration
+	for _, m := range core.AppMigrations.Items() {
+		if m.File == "5_participation_rules.go" {
+			migration = m
+		}
+	}
+	if migration == nil {
+		t.Fatal("the migration 5_participation_rules.go is not registered")
+	}
+
+	// rules returns the rules of the collection in the order list, view,
+	// create, update, delete.
+	rules := func() []*string {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("participations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule}
+	}
+	before := rules()
+	for i, r := range before {
+		if r == nil {
+			t.Errorf("participations: rule %d is null, want one", i)
+		}
+	}
+
+	if err := migration.Down(app); err != nil {
 		t.Fatal(err)
 	}
-	if c.ListRule != nil || c.ViewRule != nil || c.CreateRule != nil ||
-		c.UpdateRule != nil || c.DeleteRule != nil {
-		t.Error("participations: every rule must be null for now")
+	for i, r := range rules() {
+		if r != nil {
+			t.Errorf("participations: rule %d is %q after the rollback, want null", i, *r)
+		}
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	for i, got := range rules() {
+		want := before[i]
+		if (got == nil) != (want == nil) || (got != nil && *got != *want) {
+			t.Errorf("participations: rule %d differs after applying the migration again", i)
+		}
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"courses/server/accounts"
 	"courses/server/config"
 	"courses/server/events"
+	"courses/server/participations"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
@@ -14,5 +15,6 @@ import (
 func Register(app core.App, cfg config.Config) error {
 	accounts.Register(app)
 	events.Register(app)
+	participations.Register(app)
 	return nil
 }

@@ -34,8 +34,9 @@ type collectionRules struct {
 
 // The front hides the actions a rule refuses, but only these rules are the
 // enforcement. The rules of "participations" come with the code that
-// maintains its invariants, and the routes of the application bypass the
-// rules of the collections they own (invitations, passkeys).
+// maintains its invariants (5_participation_rules.go), and the routes of the
+// application bypass the rules of the collections they own (invitations,
+// passkeys).
 var accessRules = map[string]collectionRules{
 	"users": {
 		// An account always has an id, so "id = @request.auth.id" cannot match
