@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Provisional } from "../../components/Provisional";
+import { EventForm } from "../../features/events/EventForm";
 
 export const Route = createFileRoute("/evenements/nouveau")({
-  component: Provisional,
+  component: EventForm,
 });

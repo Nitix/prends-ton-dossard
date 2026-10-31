@@ -141,6 +141,50 @@ export const fr = {
     // The elevation gain, the height already formatted: "2 400 m D+".
     elevation: (height: string) => `${height} D+`,
   },
+  // The form that creates or edits an event and its formats (see features/events/EventForm.tsx).
+  form: {
+    createTitle: "Créer un événement",
+    editTitle: "Modifier l'événement",
+    name: "Nom de l'événement",
+    location: "Lieu",
+    locationHint: "Une ville ou un lieu.",
+    startDate: "Date de début",
+    endDate: "Date de fin",
+    endDateHint: "Seulement si l'événement dure plusieurs jours.",
+    registrationUrl: "Lien pour s'inscrire",
+    registrationUrlHint: "Facultatif : l'adresse de la page d'inscription.",
+    notes: "Notes",
+    formatsTitle: "Épreuves",
+    // The title of the group of fields of a format, from 1.
+    formatTitle: (n: number) => `Épreuve ${n}`,
+    formatName: "Nom de l'épreuve",
+    formatNameHint:
+      "Facultatif : sinon il est fait du type et de la distance, « Trail 42 km » par exemple.",
+    raceType: "Type de course",
+    chooseRaceType: "Choisis un type",
+    measuresHint: "Au moins une de ces trois mesures est obligatoire.",
+    distance: "Distance (km)",
+    duration: "Durée (course au temps)",
+    timeLimit: "Temps max",
+    // The two parts of a duration: spoken, and written next to the field.
+    hours: "heures",
+    minutes: "minutes",
+    hoursUnit: "h",
+    minutesUnit: "min",
+    elevation: "Dénivelé positif (m)",
+    formatDate: "Date de l'épreuve",
+    formatDateHint: "Seulement si ce n'est pas le premier jour.",
+    addFormat: "Ajouter une épreuve",
+    // Next to « Retirer » on a format that already has runners: the server deletes their participations with it.
+    formatHasParticipants: (n: number) =>
+      n === 1
+        ? "1 personne est sur cette épreuve : la retirer supprime aussi sa participation."
+        : `${n} personnes sont sur cette épreuve : la retirer supprime aussi leurs participations.`,
+    join: "Je participe",
+    // Above the events that may be the one being typed.
+    duplicateQuestion: "Cet événement existe peut-être déjà :",
+    saved: "Événement enregistré.",
+  },
   // The filters of the list and of the calendar.
   filters: {
     title: "Filtres",

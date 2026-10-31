@@ -1,0 +1,60 @@
+import { useId, type ReactNode } from "react";
+
+/** The look of a text input, a select and a text area: at least 44 px tall, which is a tap target. */
+export const INPUT = "min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base";
+
+/** What the control of a field gets, to be linked to its label, its hint and its error. */
+export type FieldControl = {
+  id: string;
+  "aria-describedby": string | undefined;
+  "aria-invalid": boolean;
+};
+
+/**
+ * A label, a control, and under it a hint and an error. The control is given
+ * as a function, since each kind of control (an input, a select, a text area)
+ * is its own element: it spreads what it receives on itself, which links it to
+ * the label (`id`), to the hint and to the error (`aria-describedby`). The
+ * error is announced when it appears.
+ */
+export function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error: string | null;
+  children: (control: FieldControl) => ReactNode;
+}) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+  const describedBy = [hint === undefined ? null : hintId, error === null ? null : errorId]
+    .filter((described) => described !== null)
+    .join(" ");
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      {children({
+        id,
+        "aria-describedby": describedBy === "" ? undefined : describedBy,
+        "aria-invalid": error !== null,
+      })}
+      {hint !== undefined && (
+        <p id={hintId} className="text-sm text-neutral-600">
+          {hint}
+        </p>
+      )}
+      {error !== null && (
+        <p id={errorId} role="alert" className="text-sm font-medium text-red-700">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
