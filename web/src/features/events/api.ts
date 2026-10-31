@@ -1,0 +1,235 @@
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+
+import { effectiveDate, eventRange } from "../../lib/dates";
+import { pb } from "../../lib/pb";
+import type {
+  EventRecord,
+  FormatRecord,
+  ParticipationRecord,
+  RaceTypeRecord,
+  RunnerRecord,
+} from "../../lib/types";
+
+export type { ListSearch } from "./search";
+
+// Events, with everything the screens show of them, in a single request: the
+// formats (back-relation of `formats.event`), their race type, and their
+// participations with the runner and who added them.
+
+export type ParticipationView = {
+  participation: ParticipationRecord;
+  runner: RunnerRecord;
+  /** Absent when the runner who added the participation is not there any more. */
+  addedBy?: RunnerRecord;
+};
+
+export type FormatView = {
+  format: FormatRecord;
+  raceType: RaceTypeRecord;
+  /** The day of the format: its own date, or the start of its event. */
+  date: Temporal.PlainDate;
+  participations: ParticipationView[];
+};
+
+export type EventView = {
+  event: EventRecord;
+  /** In the order of their days, then of their distances. */
+  formats: FormatView[];
+  start: Temporal.PlainDate;
+  /** The last day: the same as `start` when the event has no end date. */
+  end: Temporal.PlainDate;
+};
+
+/** The events to ask for: those that are to come or over, or those that have a day in a range. */
+export type EventsQuery =
+  | { period: "a-venir" | "passees"; today: Temporal.PlainDate }
+  | { from: Temporal.PlainDate; to: Temporal.PlainDate };
+
+/** The `expand` that gives `toEventViews` everything it needs. */
+export const EVENT_EXPAND =
+  "formats_via_event.race_type,formats_via_event.participations_via_format.runner,formats_via_event.participations_via_format.added_by";
+
+/**
+ * The filter and the sort to give the server for a query. The dates are bound
+ * as parameters, never written into the filter.
+ *
+ * - `a-venir`: the event is not over, that is it starts today or later, or it
+ *   ends today or later;
+ * - `passees`: the opposite, with no end date counting as the start date;
+ * - a range: it starts before the range ends, and it ends after the range
+ *   starts (a single day has no end date, hence the start date alternative).
+ */
+export function eventsFilter(q: EventsQuery): { filter: string; sort: string } {
+  if ("period" in q) {
+    const params = { t: q.today.toString() };
+    return q.period === "a-venir"
+      ? { filter: pb.filter("start_date >= {:t} || end_date >= {:t}", params), sort: "start_date" }
+      : {
+          filter: pb.filter('start_date < {:t} && (end_date = "" || end_date < {:t})', params),
+          sort: "-start_date",
+        };
+  }
+  return {
+    filter: pb.filter("start_date <= {:to} && (end_date >= {:from} || start_date >= {:from})", {
+      from: q.from.toString(),
+      to: q.to.toString(),
+    }),
+    sort: "start_date",
+  };
+}
+
+// What the server sends for EVENT_EXPAND. An expand that is empty is left
+// out of the record, hence all the `?`.
+type ExpandedParticipation = ParticipationRecord & {
+  expand?: { runner?: RunnerRecord; added_by?: RunnerRecord };
+};
+type ExpandedFormat = FormatRecord & {
+  expand?: { race_type?: RaceTypeRecord; participations_via_format?: ExpandedParticipation[] };
+};
+type ExpandedEvent = EventRecord & {
+  expand?: { formats_via_event?: ExpandedFormat[] };
+};
+
+function toParticipationView(record: ExpandedParticipation): ParticipationView {
+  const runner = record.expand?.runner;
+  if (!runner) throw new Error(`participation ${record.id}: its runner is missing from the answer`);
+  return { participation: record, runner, addedBy: record.expand?.added_by };
+}
+
+function toFormatView(record: ExpandedFormat, event: EventRecord): FormatView {
+  const raceType = record.expand?.race_type;
+  if (!raceType) throw new Error(`format ${record.id}: its race_type is missing from the answer`);
+  return {
+    format: record,
+    raceType,
+    date: effectiveDate(record, event),
+    participations: (record.expand?.participations_via_format ?? [])
+      .map(toParticipationView)
+      .toSorted((a, b) => a.runner.name.localeCompare(b.runner.name)),
+  };
+}
+
+/** Earlier days first, then shorter distances; a timed race has no distance and comes last. */
+function compareFormats(a: FormatView, b: FormatView): number {
+  const byDate = Temporal.PlainDate.compare(a.date, b.date);
+  if (byDate !== 0) return byDate;
+  const distanceA = a.format.distance_km || Infinity;
+  const distanceB = b.format.distance_km || Infinity;
+  if (distanceA !== distanceB) return distanceA < distanceB ? -1 : 1;
+  return a.format.id.localeCompare(b.format.id);
+}
+
+function isEvent(record: unknown): record is ExpandedEvent {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "id" in record &&
+    typeof record.id === "string" &&
+    "start_date" in record &&
+    typeof record.start_date === "string"
+  );
+}
+
+/**
+ * One event of the answer to a request made with `EVENT_EXPAND`. The shape
+ * is the server's contract: a record without something that has to be there
+ * (the race type of a format, the runner of a participation) throws.
+ */
+export function toEventView(event: unknown): EventView {
+  if (!isEvent(event)) throw new TypeError("not an event record");
+  return {
+    event,
+    formats: (event.expand?.formats_via_event ?? [])
+      .map((format) => toFormatView(format, event))
+      .toSorted(compareFormats),
+    ...eventRange(event),
+  };
+}
+
+/** The events of the answer, in the order the server gave them. */
+export function toEventViews(records: unknown[]): EventView[] {
+  return records.map(toEventView);
+}
+
+/**
+ * The events that start first come first (`desc`: last), and on the same day
+ * they go by name. The input is left alone.
+ */
+export function sortEvents(views: EventView[], direction: "asc" | "desc"): EventView[] {
+  const sign = direction === "asc" ? 1 : -1;
+  return views.toSorted(
+    (a, b) =>
+      sign * Temporal.PlainDate.compare(a.start, b.start) ||
+      a.event.name.localeCompare(b.event.name) ||
+      a.event.id.localeCompare(b.event.id),
+  );
+}
+
+/**
+ * Keeps the events the criteria let through; an empty criterion lets
+ * everything through.
+ * - `personne`: a runner id; the event has a participation of this runner;
+ * - `type`: a race type id; the event has a format of this type.
+ *
+ * `moi` is not understood here: whoever reads it from the URL resolves it to
+ * the runner first (see `useFilterCriteria`).
+ */
+export function applyFilters(
+  views: EventView[],
+  criteria: { personne?: string; type?: string },
+): EventView[] {
+  const { personne, type } = criteria;
+  return views.filter(
+    ({ formats }) =>
+      (!personne ||
+        formats.some(({ participations }) =>
+          participations.some(({ runner }) => runner.id === personne),
+        )) &&
+      (!type || formats.some(({ raceType }) => raceType.id === type)),
+  );
+}
+
+export function useEvents(q: EventsQuery): UseQueryResult<EventView[]> {
+  return useQuery({
+    queryKey: ["events", q],
+    queryFn: async () =>
+      toEventViews(
+        await pb.collection("events").getFullList({ ...eventsFilter(q), expand: EVENT_EXPAND }),
+      ),
+  });
+}
+
+export function useEvent(id: string): UseQueryResult<EventView> {
+  return useQuery({
+    queryKey: ["event", id],
+    queryFn: async () =>
+      toEventView(await pb.collection("events").getOne(id, { expand: EVENT_EXPAND })),
+  });
+}
+
+// The two lists that the filters and the forms choose from. Everybody may read
+// them, and they hardly ever change, so they are fetched once in a while.
+
+const LOOKUP_STALE_MS = 5 * 60_000;
+
+export function useRunners(): UseQueryResult<RunnerRecord[]> {
+  return useQuery({
+    queryKey: ["runners"],
+    queryFn: async () => {
+      const runners = await pb.collection("runners").getFullList<RunnerRecord>();
+      return runners.toSorted((a, b) => a.name.localeCompare(b.name));
+    },
+    staleTime: LOOKUP_STALE_MS,
+  });
+}
+
+export function useRaceTypes(): UseQueryResult<RaceTypeRecord[]> {
+  return useQuery({
+    queryKey: ["race_types"],
+    queryFn: async () => {
+      const raceTypes = await pb.collection("race_types").getFullList<RaceTypeRecord>();
+      return raceTypes.toSorted((a, b) => a.label.localeCompare(b.label));
+    },
+    staleTime: LOOKUP_STALE_MS,
+  });
+}

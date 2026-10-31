@@ -93,6 +93,39 @@ export const fr = {
     dnf: "Abandon",
     dns: "Non partant",
   },
+  // The event cards and the chips of the participants.
+  event: {
+    // The accessible name of the list of the chips of a format.
+    participants: "Participants",
+    // Read out, and not only drawn in dashes, for a participation that the runner has not confirmed.
+    unconfirmed: "non confirmé",
+    addedBy: (name: string) => `Ajouté par ${name}`,
+    // An event of several days: both days are already formatted.
+    dateRange: (from: string, to: string) => `du ${from} au ${to}`,
+  },
+  // The measures of a format, next to its name (see features/events/formatName.ts).
+  format: {
+    // The cut-off time, the duration already formatted: "max 10h".
+    max: (duration: string) => `max ${duration}`,
+    // The elevation gain, the height already formatted: "2 400 m D+".
+    elevation: (height: string) => `${height} D+`,
+  },
+  // The filters of the list and of the calendar.
+  filters: {
+    title: "Filtres",
+    person: "Personne",
+    everyone: "Tout le monde",
+    me: "Moi",
+    type: "Type de course",
+    allTypes: "Tous les types",
+    period: "Période",
+    upcoming: "À venir",
+    past: "Passées",
+  },
+  list: {
+    empty: "Aucun événement à afficher.",
+    emptyHint: "Change les filtres, ou crée un événement avec le bouton +.",
+  },
   // One message per error code (see ./errors.ts), plus the generic one. The
   // keys are the codes themselves.
   errors: {

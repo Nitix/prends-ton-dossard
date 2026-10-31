@@ -1,7 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Provisional } from "../components/Provisional";
+import { ListPage } from "../features/events/ListPage";
+import { validateListSearch } from "../features/events/search";
 
 export const Route = createFileRoute("/liste")({
-  component: Provisional,
+  // The filters (`personne`, `type`, `periode`) are in the URL.
+  validateSearch: validateListSearch,
+  component: Liste,
 });
+
+function Liste() {
+  return <ListPage search={Route.useSearch()} />;
+}

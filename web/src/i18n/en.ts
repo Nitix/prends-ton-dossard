@@ -88,6 +88,31 @@ export const en = {
     dnf: "DNF",
     dns: "DNS",
   },
+  event: {
+    participants: "Participants",
+    unconfirmed: "not confirmed",
+    addedBy: (name: string) => `Added by ${name}`,
+    dateRange: (from: string, to: string) => `${from} to ${to}`,
+  },
+  format: {
+    max: (duration: string) => `max ${duration}`,
+    elevation: (height: string) => `${height} gain`,
+  },
+  filters: {
+    title: "Filters",
+    person: "Person",
+    everyone: "Everyone",
+    me: "Me",
+    type: "Race type",
+    allTypes: "All types",
+    period: "Period",
+    upcoming: "Upcoming",
+    past: "Past",
+  },
+  list: {
+    empty: "No events to show.",
+    emptyHint: "Change the filters, or create an event with the + button.",
+  },
   errors: {
     generic: "Something went wrong. Try again in a moment.",
     invitation_invalid:
