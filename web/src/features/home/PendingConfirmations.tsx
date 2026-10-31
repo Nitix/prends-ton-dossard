@@ -1,15 +1,23 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { ClientResponseError } from "pocketbase";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
+import { invalidateEvents } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
 import { useDeleteParticipation, useUpdateParticipation } from "../participations/api";
 import { participationError } from "../participations/errors";
 import { usePending, type PendingView } from "./pending";
 
 const SEPARATOR = " · ";
+
+/** The record is not there any more: somebody else deleted it (its event, its format, the participation itself). */
+function isNotFound(err: unknown): boolean {
+  return err instanceof ClientResponseError && err.status === 404;
+}
 
 /**
  * « À confirmer »: the participations that somebody else added for the user,
@@ -85,15 +93,34 @@ export function PendingConfirmations({
  * confirmed, and said in words by the title of the block and the sentence.
  * Both buttons are off while a request of the row is on its way, so that a
  * second tap cannot send it twice.
+ *
+ * A request that fails may fail because the screen is out of date (the
+ * participation has been deleted, or changed, by somebody else): the lists are
+ * asked for again, so that the row goes away if it has to, and the buttons
+ * stay off until they have answered. Taking a participation back that is
+ * already gone is not a failure: it is what was asked for.
  */
 function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () => void }) {
   const { t, f } = useI18n();
   const toast = useToast();
   const { participation, addedBy, event, format, raceType, date } = view;
+  const queryClient = useQueryClient();
   const update = useUpdateParticipation(event.id);
   const remove = useDeleteParticipation(event.id);
-  const busy = update.isPending || remove.isPending;
+  const [refreshing, setRefreshing] = useState(false);
+  const busy = update.isPending || remove.isPending || refreshing;
   const formatName = formatDisplayName(format, raceType.label, f, t);
+
+  // After a failure, what the screen shows may be what is wrong. Resolves once
+  // the lists have their new data, as a mutation that succeeds does.
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      await invalidateEvents(queryClient, event.id);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // The mutations last until the lists have their new data, so this row may be
   // gone when they settle: only the toast and the block are called then.
@@ -101,7 +128,8 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
     try {
       await update.mutateAsync({ id: participation.id, patch: { confirmed: true } });
     } catch (err) {
-      toast.show(participationError(t, err));
+      toast.show(isNotFound(err) ? t.errors.not_found : participationError(t, err));
+      await refresh();
       return;
     }
     toast.show(t.home.confirmed);
@@ -112,8 +140,13 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
     try {
       await remove.mutateAsync(participation.id);
     } catch (err) {
-      toast.show(participationError(t, err));
-      return;
+      if (!isNotFound(err)) {
+        toast.show(participationError(t, err));
+        await refresh();
+        return;
+      }
+      // Already gone: the same end as a removal that went through.
+      await refresh();
     }
     toast.show(t.home.removed);
     onDealtWith();

@@ -7,6 +7,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { ClientResponseError } from "pocketbase";
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
@@ -351,11 +352,12 @@ test("PendingConfirmations — la requête d'une ligne ne bloque pas les autres 
   await expect.element(removeButton(screen, "10 km de Lyon")).toBeEnabled();
 });
 
-test("PendingConfirmations — un échec se dit dans un message et rend les boutons", async () => {
+test("PendingConfirmations — un échec se dit dans un message, redemande la liste et rend les boutons", async () => {
   mocks.pending.mockResolvedValue([pendingP2]);
   mocks.remove.mockRejectedValue(new Error("network"));
   const { screen } = await renderHome();
   await expect.element(pendingBlock(screen)).toBeVisible();
+  const eventsBefore = mocks.events.mock.calls.length;
 
   await removeButton(screen).click();
 
@@ -364,6 +366,99 @@ test("PendingConfirmations — un échec se dit dans un message et rend les bout
   await expect.element(confirmButton(screen)).toBeEnabled();
   // The row is still there, and nothing has been announced as done.
   await expect.element(screen.getByText(fr.home.removed)).not.toBeInTheDocument();
+  // What the screen shows may be what is wrong: the lists are asked for again.
+  expect(mocks.pending).toHaveBeenCalledTimes(2);
+  expect(mocks.events.mock.calls.length).toBeGreaterThan(eventsBefore);
+});
+
+/** What PocketBase answers for a record that is not there any more. */
+function notFound() {
+  return new ClientResponseError({
+    status: 404,
+    response: { status: 404, message: "The requested resource wasn't found.", data: {} },
+  });
+}
+
+test("PendingConfirmations — Retirer une participation déjà supprimée (404) compte comme réussi: la ligne part et le focus est rendu", async () => {
+  let rows: Rec[] = [pendingP2];
+  mocks.pending.mockImplementation(() => Promise.resolve(rows));
+  // Alice took it back while Bob had the page open.
+  mocks.remove.mockImplementation(() => {
+    rows = [];
+    return Promise.reject(notFound());
+  });
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await removeButton(screen).click();
+
+  // The row is gone from the server already, which is what was asked for.
+  await expect.element(screen.getByText(fr.home.removed)).toBeVisible();
+  await expect.element(screen.getByText(fr.home.pendingTitle)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.errors.not_found)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.errors.generic)).not.toBeInTheDocument();
+  expect(mocks.pending).toHaveBeenCalledTimes(2);
+  expect(mocks.remove).toHaveBeenCalledOnce();
+  await expect.element(screen.getByRole("heading", { level: 1, name: fr.nav.home })).toHaveFocus();
+});
+
+test("PendingConfirmations — Retirer (404) avec d'autres lignes: le focus va sur le titre du bloc", async () => {
+  let rows: Rec[] = [pendingP2, pendingLyon];
+  mocks.pending.mockImplementation(() => Promise.resolve(rows));
+  mocks.remove.mockImplementation((id) => {
+    rows = rows.filter((row) => row.id !== id);
+    return Promise.reject(notFound());
+  });
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await removeButton(screen).click();
+
+  await expect
+    .element(pendingBlock(screen).getByRole("heading", { level: 2, name: fr.home.pendingTitle }))
+    .toHaveFocus();
+  await expect.element(removeButton(screen)).not.toBeInTheDocument();
+  await expect.element(removeButton(screen, "10 km de Lyon")).toBeEnabled();
+});
+
+test("PendingConfirmations — Confirmer une participation supprimée (404) dit « Introuvable », et la ligne part après le rafraîchissement", async () => {
+  let rows: Rec[] = [pendingP2];
+  mocks.pending.mockImplementation(() => Promise.resolve(rows));
+  mocks.update.mockImplementation(() => {
+    rows = [];
+    return Promise.reject(notFound());
+  });
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await confirmButton(screen).click();
+
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  await expect.element(screen.getByText(fr.home.pendingTitle)).not.toBeInTheDocument();
+  expect(mocks.pending).toHaveBeenCalledTimes(2);
+  // Nothing is announced as confirmed.
+  await expect.element(screen.getByText(fr.home.confirmed)).not.toBeInTheDocument();
+});
+
+test("PendingConfirmations — pendant le rafraîchissement qui suit un échec, les boutons restent désactivés", async () => {
+  let answers = 0;
+  mocks.pending.mockImplementation(() => {
+    answers += 1;
+    // The first answer is the first load; the second one, after the failure, never comes.
+    return answers === 1 ? Promise.resolve([pendingP2]) : new Promise(() => {});
+  });
+  mocks.update.mockRejectedValue(new Error("network"));
+  const { screen } = await renderHome();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+
+  await confirmButton(screen).click();
+
+  await expect.element(screen.getByText(fr.errors.generic)).toBeVisible();
+  await vi.waitFor(() => {
+    expect(mocks.pending).toHaveBeenCalledTimes(2);
+  });
+  await expect.element(confirmButton(screen)).toBeDisabled();
+  await expect.element(removeButton(screen)).toBeDisabled();
 });
 
 test("PendingConfirmations — après Retirer, le focus va sur le titre « À confirmer », qui reste", async () => {
