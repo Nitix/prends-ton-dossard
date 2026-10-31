@@ -68,5 +68,9 @@ func changeEmail(e *core.RequestEvent) error {
 		return e.InternalServerError("", err)
 	}
 
-	return e.JSON(http.StatusOK, map[string]string{"email": account.Email()})
+	// PocketBase renews the token key of an account whose email changes, so the
+	// token that made this request is now refused. The response is therefore an
+	// auth response, with a new token for the caller to keep. The method is empty:
+	// this continues the session, it is not a sign-in (no MFA, no login alert).
+	return apis.RecordAuthResponse(e, account, "", nil)
 }

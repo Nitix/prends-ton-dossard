@@ -1,7 +1,9 @@
 package accounts_test
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -26,8 +28,8 @@ func recordURL(collection string, of func(testutil.Fixture) *core.Record) func(t
 	}
 }
 
-// json returns a request body.
-func json(s string) func(testutil.Fixture) string {
+// payload returns a request body.
+func payload(s string) func(testutil.Fixture) string {
 	return func(testutil.Fixture) string { return s }
 }
 
@@ -106,6 +108,53 @@ func bobBecomesAdmin(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 	edit(t, app, fx.Bob.Id, map[string]any{"role": "admin"})
 }
 
+// sequence runs requests one after the other on one application, so that each
+// one sees what the previous ones did.
+type sequence struct {
+	t   *testing.T
+	app *tests.TestApp
+}
+
+// step sends a request, as the account that token belongs to (none when empty),
+// checks the status and the texts the response contains, and returns the response
+// body.
+func (s sequence) step(name, method, url, token, body string, status int, contains ...string) string {
+	s.t.Helper()
+	var response string
+	scenario := tests.ApiScenario{
+		Name:                  name,
+		Method:                method,
+		URL:                   url,
+		Body:                  strings.NewReader(body),
+		Headers:               map[string]string{"Authorization": token},
+		ExpectedStatus:        status,
+		ExpectedContent:       contains,
+		TestAppFactory:        func(testing.TB) *tests.TestApp { return s.app },
+		DisableTestAppCleanup: true,
+		AfterTestFunc: func(t testing.TB, _ *tests.TestApp, res *http.Response) {
+			data, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("reading the response: %v", err)
+			}
+			response = string(data)
+		},
+	}
+	scenario.Test(s.t)
+	return response
+}
+
+// tokenIn returns the token of an auth response.
+func tokenIn(t testing.TB, response string) string {
+	t.Helper()
+	var auth struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal([]byte(response), &auth); err != nil || auth.Token == "" {
+		t.Fatalf("no token in the response %q (%v)", response, err)
+	}
+	return auth.Token
+}
+
 func TestUsers_LastAdmin(t *testing.T) {
 	testutil.RunRows(t, []testutil.Row{
 		{
@@ -113,7 +162,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", admin),
-			Body:     json(`{"role":"member"}`),
+			Body:     payload(`{"role":"member"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeLastAdmin)},
 			After:    accountIs(admin, "admin", false),
@@ -123,7 +172,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", admin),
-			Body:     json(`{"disabled":true}`),
+			Body:     payload(`{"disabled":true}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeLastAdmin)},
 			After:    accountIs(admin, "admin", false),
@@ -134,7 +183,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", admin),
-			Body:     json(`{"role":"member"}`),
+			Body:     payload(`{"role":"member"}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"role":"member"`},
 			After:    accountIs(admin, "member", false),
@@ -145,7 +194,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", admin),
-			Body:     json(`{"disabled":true}`),
+			Body:     payload(`{"disabled":true}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"disabled":true`},
 			After:    accountIs(admin, "admin", true),
@@ -158,7 +207,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", admin),
-			Body:     json(`{"role":"member"}`),
+			Body:     payload(`{"role":"member"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeLastAdmin)},
 			After:    accountIs(admin, "admin", false),
@@ -169,7 +218,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", bob),
-			Body:     json(`{"role":"member"}`),
+			Body:     payload(`{"role":"member"}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"role":"member"`},
 			After:    accountIs(bob, "member", false),
@@ -180,7 +229,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", bob),
-			Body:     json(`{"disabled":true}`),
+			Body:     payload(`{"disabled":true}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"disabled":true`},
 			After:    accountIs(bob, "admin", true),
@@ -190,7 +239,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", admin),
-			Body:     json(`{"role":"admin","disabled":false}`),
+			Body:     payload(`{"role":"admin","disabled":false}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"role":"admin"`},
 			After:    accountIs(admin, "admin", false),
@@ -200,7 +249,7 @@ func TestUsers_LastAdmin(t *testing.T) {
 			As:       "admin",
 			Method:   http.MethodPatch,
 			URL:      recordURL("users", bob),
-			Body:     json(`{"disabled":true}`),
+			Body:     payload(`{"disabled":true}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"disabled":true`},
 			After:    accountIs(bob, "member", true),
@@ -216,26 +265,11 @@ func TestUsers_DisableInvalidatesSessions(t *testing.T) {
 	bobToken := testutil.Token(t, fx.Bob)
 	adminToken := testutil.Token(t, fx.Admin)
 
-	step := func(name, method, url, token, body string, status int, contains string) {
-		t.Helper()
-		scenario := tests.ApiScenario{
-			Name:                  name,
-			Method:                method,
-			URL:                   url,
-			Body:                  strings.NewReader(body),
-			Headers:               map[string]string{"Authorization": token},
-			ExpectedStatus:        status,
-			ExpectedContent:       []string{contains},
-			TestAppFactory:        func(testing.TB) *tests.TestApp { return app },
-			DisableTestAppCleanup: true,
-		}
-		scenario.Test(t)
-	}
-
+	seq := sequence{t, app}
 	refresh := "/api/collections/users/auth-refresh"
-	step("the token of an enabled account refreshes", http.MethodPost, refresh, bobToken, "", http.StatusOK, `"token"`)
-	step("the admin disables the account", http.MethodPatch, "/api/collections/users/records/"+fx.Bob.Id, adminToken, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
-	step("the token issued before no longer refreshes", http.MethodPost, refresh, bobToken, "", http.StatusUnauthorized, `"status":401`)
+	seq.step("the token of an enabled account refreshes", http.MethodPost, refresh, bobToken, "", http.StatusOK, `"token"`)
+	seq.step("the admin disables the account", http.MethodPatch, "/api/collections/users/records/"+fx.Bob.Id, adminToken, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
+	seq.step("the token issued before no longer refreshes", http.MethodPost, refresh, bobToken, "", http.StatusUnauthorized, `"status":401`)
 
 	if stored(t, app, "users", fx.Bob.Id).TokenKey() == fx.Bob.TokenKey() {
 		t.Error("the token key of the disabled account was not renewed")
@@ -254,7 +288,7 @@ func TestUsers_DisabledCannotSignIn(t *testing.T) {
 			},
 			Method:      http.MethodPost,
 			URL:         path("/api/collections/users/auth-with-password"),
-			Body:        json(`{"identity":"bob@example.test","password":"` + testutil.Password + `"}`),
+			Body:        payload(`{"identity":"bob@example.test","password":"` + testutil.Password + `"}`),
 			Status:      http.StatusForbidden,
 			NotContains: []string{`"token"`},
 		},
@@ -262,7 +296,7 @@ func TestUsers_DisabledCannotSignIn(t *testing.T) {
 			Name:     "an enabled account signs in",
 			Method:   http.MethodPost,
 			URL:      path("/api/collections/users/auth-with-password"),
-			Body:     json(`{"identity":"bob@example.test","password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"identity":"bob@example.test","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusOK,
 			Contains: []string{`"token"`},
 		},
@@ -362,7 +396,7 @@ func TestMeEmail(t *testing.T) {
 			Name:   "anonymous",
 			Method: http.MethodPost,
 			URL:    path(url),
-			Body:   json(`{"email":"new@example.test","password":"` + testutil.Password + `"}`),
+			Body:   payload(`{"email":"new@example.test","password":"` + testutil.Password + `"}`),
 			Status: http.StatusUnauthorized,
 		},
 		{
@@ -370,7 +404,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"new@example.test","password":"wrong-pass-1"}`),
+			Body:     payload(`{"email":"new@example.test","password":"wrong-pass-1"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeWrongPassword)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -380,7 +414,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"new@example.test"}`),
+			Body:     payload(`{"email":"new@example.test"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeWrongPassword)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -390,7 +424,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"pas-un-email","password":"wrong-pass-1"}`),
+			Body:     payload(`{"email":"pas-un-email","password":"wrong-pass-1"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeWrongPassword)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -400,7 +434,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"bob@example.test","password":"wrong-pass-1"}`),
+			Body:     payload(`{"email":"bob@example.test","password":"wrong-pass-1"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeWrongPassword)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -410,7 +444,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"pas-un-email","password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"email":"pas-un-email","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailInvalid)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -420,7 +454,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"password":"` + testutil.Password + `"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailInvalid)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -430,7 +464,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"bob@example.test","password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"email":"bob@example.test","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailTaken)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -440,7 +474,7 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"BOB@example.test","password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"email":"BOB@example.test","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailTaken)},
 			After:    emailIs(alice, "alice@example.test"),
@@ -450,9 +484,9 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"new@example.test","password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"email":"new@example.test","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusOK,
-			Contains: []string{`"email":"new@example.test"`},
+			Contains: []string{`"token"`, `"email":"new@example.test"`},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				emailIs(alice, "new@example.test")(t, app, fx)
 				if _, err := app.FindAuthRecordByEmail("users", "alice@example.test"); err == nil {
@@ -465,40 +499,50 @@ func TestMeEmail(t *testing.T) {
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
-			Body:     json(`{"email":"Alice@example.test","password":"` + testutil.Password + `"}`),
+			Body:     payload(`{"email":"Alice@example.test","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusOK,
-			Contains: []string{`"email":"Alice@example.test"`},
+			Contains: []string{`"token"`, `"email":"Alice@example.test"`},
 			After:    emailIs(alice, "Alice@example.test"),
 		},
 	})
 }
 
+// PocketBase renews the token key of an account whose email changes, which ends
+// the session that asked for the change: the response carries the one that
+// replaces it.
+func TestMeEmail_ReplacesTheSession(t *testing.T) {
+	for _, tc := range []struct{ name, email string }{
+		{"a new email", "new@example.test"},
+		{"the same email in other letters", "Alice@example.test"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := testutil.NewApp(t)
+			fx := testutil.Seed(t, app)
+			oldToken := testutil.Token(t, fx.Alice)
+			seq := sequence{t, app}
+
+			response := seq.step("change the email", http.MethodPost, "/api/app/me/email", oldToken,
+				`{"email":"`+tc.email+`","password":"`+testutil.Password+`"}`,
+				http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
+			refresh := "/api/collections/users/auth-refresh"
+			seq.step("the token issued before is refused", http.MethodPost, refresh, oldToken, "", http.StatusUnauthorized, `"status":401`)
+			newToken := tokenIn(t, response)
+			seq.step("the token of the response is accepted", http.MethodPost, refresh, newToken, "", http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
+		})
+	}
+}
+
 func TestMeEmail_SignInWithTheNewEmail(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
-
-	step := func(name, url, token, body string, status int, contains string) {
-		t.Helper()
-		scenario := tests.ApiScenario{
-			Name:                  name,
-			Method:                http.MethodPost,
-			URL:                   url,
-			Body:                  strings.NewReader(body),
-			Headers:               map[string]string{"Authorization": token},
-			ExpectedStatus:        status,
-			ExpectedContent:       []string{contains},
-			TestAppFactory:        func(testing.TB) *tests.TestApp { return app },
-			DisableTestAppCleanup: true,
-		}
-		scenario.Test(t)
-	}
+	seq := sequence{t, app}
 
 	login := "/api/collections/users/auth-with-password"
 	credentials := func(email string) string {
 		return `{"identity":"` + email + `","password":"` + testutil.Password + `"}`
 	}
-	step("change the email", "/api/app/me/email", testutil.Token(t, fx.Alice),
+	seq.step("change the email", http.MethodPost, "/api/app/me/email", testutil.Token(t, fx.Alice),
 		`{"email":"new@example.test","password":"`+testutil.Password+`"}`, http.StatusOK, `"email":"new@example.test"`)
-	step("sign in with the new email", login, "", credentials("new@example.test"), http.StatusOK, `"token"`)
-	step("the old email no longer signs in", login, "", credentials("alice@example.test"), http.StatusBadRequest, `"status":400`)
+	seq.step("sign in with the new email", http.MethodPost, login, "", credentials("new@example.test"), http.StatusOK, `"token"`)
+	seq.step("the old email no longer signs in", http.MethodPost, login, "", credentials("alice@example.test"), http.StatusBadRequest, `"status":400`)
 }
