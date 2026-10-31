@@ -16,14 +16,19 @@ import (
 )
 
 // Register adds the routes of the invitations to app: creating and revoking
-// one is for the admins, showing and accepting one is public (the token is the
-// secret, and the rate limit rule of the settings slows down the guesses).
+// one is for the admins, looking one up and accepting one is public (the token
+// is the secret, and the rate limit rule of the settings, which covers every
+// path under /api/app/invitations/, slows down the guesses).
+//
+// The token is in the body of the two public routes, never in their path or
+// query: PocketBase writes the URL of every request to its request log, which
+// would keep a working token in clear text for days.
 func Register(app core.App, cfg config.Config) {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		e.Router.POST("/api/app/invitations", createRoute(cfg)).Bind(apis.RequireAuth("users")).BindFunc(requireAdmin)
 		e.Router.DELETE("/api/app/invitations/{id}", revokeRoute).Bind(apis.RequireAuth("users")).BindFunc(requireAdmin)
-		e.Router.GET("/api/app/invitations/{token}", showRoute)
-		e.Router.POST("/api/app/invitations/{token}/accept", acceptRoute)
+		e.Router.POST("/api/app/invitations/lookup", lookupRoute)
+		e.Router.POST("/api/app/invitations/accept", acceptRoute)
 		return e.Next()
 	})
 }
@@ -95,8 +100,14 @@ func revokeRoute(e *core.RequestEvent) error {
 	return e.NoContent(http.StatusNoContent)
 }
 
-func showRoute(e *core.RequestEvent) error {
-	inv, runner, err := Find(e.App, e.Request.PathValue("token"))
+func lookupRoute(e *core.RequestEvent) error {
+	var body struct {
+		Token string `json:"token"`
+	}
+	// A body that cannot be read leaves the token empty, which no invitation has.
+	_ = e.BindBody(&body)
+
+	inv, runner, err := Find(e.App, body.Token)
 	if err != nil {
 		return fail(e, err)
 	}
@@ -108,15 +119,16 @@ func showRoute(e *core.RequestEvent) error {
 
 func acceptRoute(e *core.RequestEvent) error {
 	var body struct {
+		Token           string `json:"token"`
 		Email           string `json:"email"`
 		Password        string `json:"password"`
 		PasswordConfirm string `json:"passwordConfirm"`
 	}
 	// A body that cannot be read leaves what is missing empty, which the checks
-	// of Accept refuse.
+	// of Accept refuse (first of all the token, which no invitation has empty).
 	_ = e.BindBody(&body)
 
-	user, err := Accept(e.App, e.Request.PathValue("token"), AcceptInput{
+	user, err := Accept(e.App, body.Token, AcceptInput{
 		Email:           body.Email,
 		Password:        body.Password,
 		PasswordConfirm: body.PasswordConfirm,

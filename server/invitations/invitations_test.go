@@ -1,8 +1,10 @@
 package invitations_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -10,6 +12,7 @@ import (
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/logger"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/router"
 
 	"courses/server/apperr"
@@ -36,6 +39,10 @@ func path(url string) func(testutil.Fixture) string {
 	return func(testutil.Fixture) string { return url }
 }
 
+func payload(s string) func(testutil.Fixture) string {
+	return func(testutil.Fixture) string { return s }
+}
+
 // code is how the API reports a refused request: data.code.
 func code(c string) string { return `"code":"` + c + `"` }
 
@@ -47,33 +54,48 @@ func createBody(runner func(testutil.Fixture) *core.Record, fields string) func(
 	}
 }
 
-// acceptBody returns the body of an accept request. An empty email is left out,
-// as the page does for a reset.
-func acceptBody(email, password, confirm string) func(testutil.Fixture) string {
-	return func(testutil.Fixture) string {
-		data, err := json.Marshal(struct {
-			Email           string `json:"email,omitempty"`
-			Password        string `json:"password"`
-			PasswordConfirm string `json:"passwordConfirm"`
-		}{email, password, confirm})
-		if err != nil {
-			panic(err)
-		}
-		return string(data)
+// The token travels in the body, never in the URL: the URL of a request is
+// written to the request log.
+const (
+	lookupURL = baseURL + "/lookup"
+	acceptURL = baseURL + "/accept"
+)
+
+// lookupJSON returns the body of a lookup request.
+func lookupJSON(token string) string {
+	data, err := json.Marshal(map[string]string{"token": token})
+	if err != nil {
+		panic(err)
 	}
+	return string(data)
+}
+
+// acceptJSON returns the body of an accept request. An empty email is left out,
+// as the page does for a reset.
+func acceptJSON(token, email, password, confirm string) string {
+	data, err := json.Marshal(struct {
+		Token           string `json:"token"`
+		Email           string `json:"email,omitempty"`
+		Password        string `json:"password"`
+		PasswordConfirm string `json:"passwordConfirm"`
+	}{token, email, password, confirm})
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+func tokenBody(token string) func(testutil.Fixture) string {
+	return func(testutil.Fixture) string { return lookupJSON(token) }
+}
+
+func acceptBody(token, email, password, confirm string) func(testutil.Fixture) string {
+	return func(testutil.Fixture) string { return acceptJSON(token, email, password, confirm) }
 }
 
 func samRunner(fx testutil.Fixture) *core.Record   { return fx.SamRunner }
 func aliceRunner(fx testutil.Fixture) *core.Record { return fx.AliceRunner }
 func bobRunner(fx testutil.Fixture) *core.Record   { return fx.BobRunner }
-
-func accept(token string) func(testutil.Fixture) string {
-	return path(baseURL + "/" + token + "/accept")
-}
-
-func show(token string) func(testutil.Fixture) string {
-	return path(baseURL + "/" + token)
-}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -288,7 +310,7 @@ func TestInvitations_Create(t *testing.T) {
 			URL:      path(baseURL),
 			Body:     createBody(samRunner, `"kind":"invite"`),
 			Status:   http.StatusOK,
-			Contains: []string{`"url":"http://localhost:5173/invitation/`, `"expiresAt"`},
+			Contains: []string{`"url":"http://localhost:5173/invitation#`, `"expiresAt"`},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				records := allInvitations(t, app)
 				if len(records) != 1 {
@@ -341,7 +363,7 @@ func TestInvitations_Create(t *testing.T) {
 			URL:      path(baseURL),
 			Body:     createBody(bobRunner, `"kind":"reset","role":"admin"`),
 			Status:   http.StatusOK,
-			Contains: []string{`"url":"http://localhost:5173/invitation/`},
+			Contains: []string{`"url":"http://localhost:5173/invitation#`},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				records := allInvitations(t, app)
 				if len(records) != 1 {
@@ -550,34 +572,69 @@ func TestInvitations_Show(t *testing.T) {
 	testutil.RunRows(t, []testutil.Row{
 		{
 			Name: "a valid invitation tells who it is for", Before: inviteSam(),
-			Method: http.MethodGet, URL: show(samToken),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody(samToken),
 			Status:      http.StatusOK,
 			Contains:    []string{`"runnerName":"Sam"`, `"kind":"invite"`},
 			NotContains: []string{"token_hash", samToken},
 		},
 		{
+			Name: "no token is invalid", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(lookupURL), Body: payload(`{}`),
+			Status:      http.StatusNotFound,
+			Contains:    []string{code(apperr.CodeInvitationInvalid)},
+			NotContains: []string{"Sam"},
+		},
+		{
+			Name: "an empty token is invalid", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(lookupURL), Body: payload(`{"token":""}`),
+			Status:      http.StatusNotFound,
+			Contains:    []string{code(apperr.CodeInvitationInvalid)},
+			NotContains: []string{"Sam"},
+		},
+		{
+			Name: "a request without body is invalid", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(lookupURL),
+			Status:      http.StatusNotFound,
+			Contains:    []string{code(apperr.CodeInvitationInvalid)},
+			NotContains: []string{"Sam"},
+		},
+		{
+			Name: "the token is not read from the query", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(lookupURL + "?token=" + samToken), Body: payload(`{}`),
+			Status:      http.StatusNotFound,
+			Contains:    []string{code(apperr.CodeInvitationInvalid)},
+			NotContains: []string{"Sam"},
+		},
+		{
+			// The token must never be in a path: the request log keeps it.
+			Name: "there is no route with the token in the path", Before: inviteSam(),
+			Method: http.MethodGet, URL: path(baseURL + "/" + samToken),
+			Status:      http.StatusNotFound,
+			NotContains: []string{"Sam"},
+		},
+		{
 			Name: "a valid reset tells who it is for", Before: resetBob(),
-			Method: http.MethodGet, URL: show(bobToken),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody(bobToken),
 			Status:   http.StatusOK,
 			Contains: []string{`"runnerName":"Bob"`, `"kind":"reset"`},
 		},
 		{
 			Name: "an unknown token is invalid", Before: inviteSam(),
-			Method: http.MethodGet, URL: show("unknown-token"),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody("unknown-token"),
 			Status:      http.StatusNotFound,
 			Contains:    []string{code(apperr.CodeInvitationInvalid)},
 			NotContains: []string{"Sam"},
 		},
 		{
 			Name: "an expired invitation is invalid", Before: inviteSam(expired()),
-			Method: http.MethodGet, URL: show(samToken),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody(samToken),
 			Status:      http.StatusNotFound,
 			Contains:    []string{code(apperr.CodeInvitationInvalid)},
 			NotContains: []string{"Sam"},
 		},
 		{
 			Name: "a used invitation is invalid", Before: inviteSam(used()),
-			Method: http.MethodGet, URL: show(samToken),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody(samToken),
 			Status:      http.StatusNotFound,
 			Contains:    []string{code(apperr.CodeInvitationInvalid)},
 			NotContains: []string{"Sam"},
@@ -587,7 +644,7 @@ func TestInvitations_Show(t *testing.T) {
 			Before: before(inviteSam(), func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				linkSamToANewAccount(t, app, fx)
 			}),
-			Method: http.MethodGet, URL: show(samToken),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody(samToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 		},
@@ -600,7 +657,7 @@ func TestInvitations_Show(t *testing.T) {
 					t.Fatal(err)
 				}
 			}),
-			Method: http.MethodGet, URL: show(bobToken),
+			Method: http.MethodPost, URL: path(lookupURL), Body: tokenBody(bobToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 		},
@@ -634,12 +691,14 @@ func linkSamToANewAccount(t testing.TB, app core.App, fx testutil.Fixture) {
 
 func TestInvitations_Accept(t *testing.T) {
 	const email = "sam@example.test"
-	signUp := acceptBody(email, testutil.Password, testutil.Password)
+	signUp := func(token string) func(testutil.Fixture) string {
+		return acceptBody(token, email, testutil.Password, testutil.Password)
+	}
 
 	testutil.RunRows(t, []testutil.Row{
 		{
 			Name: "a valid invitation creates the account and signs it in", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(samToken),
 			Status:   http.StatusOK,
 			Contains: []string{`"token"`, `"email":"` + email + `"`, `"role":"member"`},
 			// What PocketBase keeps secret in an account stays so in the response.
@@ -674,7 +733,7 @@ func TestInvitations_Accept(t *testing.T) {
 		},
 		{
 			Name: "the account gets the role of the invitation", Before: inviteSam(withRole("admin")),
-			Method: http.MethodPost, URL: accept(samToken), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(samToken),
 			Status:   http.StatusOK,
 			Contains: []string{`"token"`, `"role":"admin"`},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -688,22 +747,53 @@ func TestInvitations_Accept(t *testing.T) {
 			},
 		},
 		{
+			Name: "no token is invalid", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     payload(`{"email":"sam@example.test","password":"` + testutil.Password + `","passwordConfirm":"` + testutil.Password + `"}`),
+			Status:   http.StatusNotFound,
+			Contains: []string{code(apperr.CodeInvitationInvalid)},
+			After:    refused(samToken),
+		},
+		{
+			Name: "an empty token is invalid", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(""),
+			Status:   http.StatusNotFound,
+			Contains: []string{code(apperr.CodeInvitationInvalid)},
+			After:    refused(samToken),
+		},
+		{
+			Name: "the token is not read from the query", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(acceptURL + "?token=" + samToken),
+			Body:     payload(`{"email":"sam@example.test","password":"` + testutil.Password + `","passwordConfirm":"` + testutil.Password + `"}`),
+			Status:   http.StatusNotFound,
+			Contains: []string{code(apperr.CodeInvitationInvalid)},
+			After:    refused(samToken),
+		},
+		{
+			// The token must never be in a path: the request log keeps it.
+			Name: "there is no route with the token in the path", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(baseURL + "/" + samToken + "/accept"), Body: signUp(samToken),
+			Status:      http.StatusNotFound,
+			NotContains: []string{`"token"`},
+			After:       refused(samToken),
+		},
+		{
 			Name: "an unknown token is invalid", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept("unknown-token"), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp("unknown-token"),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "an expired invitation is invalid", Before: inviteSam(expired()),
-			Method: http.MethodPost, URL: accept(samToken), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(samToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "a used invitation is invalid", Before: inviteSam(used()),
-			Method: http.MethodPost, URL: accept(samToken), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(samToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 			After:    noAccountCreated,
@@ -713,7 +803,7 @@ func TestInvitations_Accept(t *testing.T) {
 			Before: before(inviteSam(), func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				linkSamToANewAccount(t, app, fx)
 			}),
-			Method: http.MethodPost, URL: accept(samToken), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(samToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -725,40 +815,40 @@ func TestInvitations_Accept(t *testing.T) {
 		},
 		{
 			Name: "an email that another account has is refused", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody("alice@example.test", testutil.Password, testutil.Password),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "alice@example.test", testutil.Password, testutil.Password),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailTaken)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "the emails are compared without their letter case", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody("ALICE@Example.test", testutil.Password, testutil.Password),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "ALICE@Example.test", testutil.Password, testutil.Password),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailTaken)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "a text that is not an email is refused", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody("not-an-email", testutil.Password, testutil.Password),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "not-an-email", testutil.Password, testutil.Password),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailInvalid)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "no email is refused", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody("", testutil.Password, testutil.Password),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "", testutil.Password, testutil.Password),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodeEmailInvalid)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "a password of 9 characters is too short", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody(email, "123456789", "123456789"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, email, "123456789", "123456789"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordTooShort)},
 			After:    refused(samToken),
@@ -766,23 +856,23 @@ func TestInvitations_Accept(t *testing.T) {
 		{
 			// 9 characters, 18 bytes.
 			Name: "the length of the password counts characters, not bytes", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody(email, "ééééééééé", "ééééééééé"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, email, "ééééééééé", "ééééééééé"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordTooShort)},
 			After:    refused(samToken),
 		},
 		{
 			Name: "a password of 10 characters is long enough", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody(email, "1234567890", "1234567890"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, email, "1234567890", "1234567890"),
 			Status:   http.StatusOK,
 			Contains: []string{`"token"`},
 		},
 		{
 			Name: "a confirmation that differs is refused", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody(email, testutil.Password, testutil.Password+"x"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, email, testutil.Password, testutil.Password+"x"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordMismatch)},
 			After:    refused(samToken),
@@ -792,22 +882,22 @@ func TestInvitations_Accept(t *testing.T) {
 		// the confirmation, the format of the email, then the email taken.
 		{
 			Name: "the invitation is checked before the password", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept("unknown-token"),
-			Body:     acceptBody("not-an-email", "short", "other"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody("unknown-token", "not-an-email", "short", "other"),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 		},
 		{
 			Name: "the length of the password is checked before the confirmation", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody("not-an-email", "short", "other"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "not-an-email", "short", "other"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordTooShort)},
 		},
 		{
 			Name: "the confirmation is checked before the email", Before: inviteSam(),
-			Method: http.MethodPost, URL: accept(samToken),
-			Body:     acceptBody("not-an-email", testutil.Password, "other-password"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "not-an-email", testutil.Password, "other-password"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordMismatch)},
 		},
@@ -817,7 +907,7 @@ func TestInvitations_Accept(t *testing.T) {
 		{
 			Name:   "the account and the link are rolled back when the invitation cannot be saved",
 			Before: before(inviteSam(), failingUpdates),
-			Method: http.MethodPost, URL: accept(samToken), Body: signUp,
+			Method: http.MethodPost, URL: path(acceptURL), Body: signUp(samToken),
 			Status: http.StatusInternalServerError,
 			After:  refused(samToken),
 		},
@@ -829,12 +919,14 @@ func TestInvitations_Accept(t *testing.T) {
 
 func TestInvitations_AcceptReset(t *testing.T) {
 	const newPassword = "new-password-1"
-	reset := acceptBody("", newPassword, newPassword)
+	reset := func(token string) func(testutil.Fixture) string {
+		return acceptBody(token, "", newPassword, newPassword)
+	}
 
 	testutil.RunRows(t, []testutil.Row{
 		{
 			Name: "a reset changes the password and signs in", Before: resetBob(),
-			Method: http.MethodPost, URL: accept(bobToken), Body: reset,
+			Method: http.MethodPost, URL: path(acceptURL), Body: reset(bobToken),
 			Status:   http.StatusOK,
 			Contains: []string{`"token"`, `"email":"bob@example.test"`},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -861,8 +953,8 @@ func TestInvitations_AcceptReset(t *testing.T) {
 		},
 		{
 			Name: "a reset never changes the email", Before: resetBob(),
-			Method: http.MethodPost, URL: accept(bobToken),
-			Body:   acceptBody("other@example.test", newPassword, newPassword),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:   acceptBody(bobToken, "other@example.test", newPassword, newPassword),
 			Status: http.StatusOK,
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				if got := stored(t, app, "users", fx.Bob.Id).Email(); got != "bob@example.test" {
@@ -872,30 +964,30 @@ func TestInvitations_AcceptReset(t *testing.T) {
 		},
 		{
 			Name: "a reset needs a long enough password", Before: resetBob(),
-			Method: http.MethodPost, URL: accept(bobToken),
-			Body:     acceptBody("", "123456789", "123456789"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(bobToken, "", "123456789", "123456789"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordTooShort)},
 			After:    refused(bobToken),
 		},
 		{
 			Name: "a reset needs a confirmation that matches", Before: resetBob(),
-			Method: http.MethodPost, URL: accept(bobToken),
-			Body:     acceptBody("", newPassword, newPassword+"x"),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(bobToken, "", newPassword, newPassword+"x"),
 			Status:   http.StatusBadRequest,
 			Contains: []string{code(apperr.CodePasswordMismatch)},
 			After:    refused(bobToken),
 		},
 		{
 			Name: "an expired reset is invalid", Before: resetBob(expired()),
-			Method: http.MethodPost, URL: accept(bobToken), Body: reset,
+			Method: http.MethodPost, URL: path(acceptURL), Body: reset(bobToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 			After:    refused(bobToken),
 		},
 		{
 			Name: "a used reset is invalid", Before: resetBob(used()),
-			Method: http.MethodPost, URL: accept(bobToken), Body: reset,
+			Method: http.MethodPost, URL: path(acceptURL), Body: reset(bobToken),
 			Status:   http.StatusNotFound,
 			Contains: []string{code(apperr.CodeInvitationInvalid)},
 			After:    bobUntouched,
@@ -911,7 +1003,7 @@ func TestInvitations_AcceptReset(t *testing.T) {
 					t.Fatal(err)
 				}
 			}),
-			Method: http.MethodPost, URL: accept(bobToken), Body: reset,
+			Method: http.MethodPost, URL: path(acceptURL), Body: reset(bobToken),
 			Status:   http.StatusForbidden,
 			Contains: []string{code(apperr.CodeAccountDisabled)},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -925,7 +1017,7 @@ func TestInvitations_AcceptReset(t *testing.T) {
 		{
 			Name:   "the password is rolled back when the invitation cannot be saved",
 			Before: before(resetBob(), failingUpdates),
-			Method: http.MethodPost, URL: accept(bobToken), Body: reset,
+			Method: http.MethodPost, URL: path(acceptURL), Body: reset(bobToken),
 			Status: http.StatusInternalServerError,
 			After:  refused(bobToken),
 		},
@@ -935,7 +1027,11 @@ func TestInvitations_AcceptReset(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Requests that depend on one another
 
-// urlIn returns the URL of a create response, and the token at its end.
+// linkPrefix is what the link of an invitation starts with: the token is in the
+// fragment, which a browser never sends to the server.
+const linkPrefix = "http://localhost:5173/invitation#"
+
+// urlIn returns the link of a create response, and the token at its end.
 func urlIn(t testing.TB, response string) (url, token string) {
 	t.Helper()
 	var created struct {
@@ -945,11 +1041,10 @@ func urlIn(t testing.TB, response string) (url, token string) {
 	if err := json.Unmarshal([]byte(response), &created); err != nil || created.URL == "" {
 		t.Fatalf("no url in the response %q (%v)", response, err)
 	}
-	const prefix = "http://localhost:5173/invitation/"
-	if !strings.HasPrefix(created.URL, prefix) {
-		t.Fatalf("url = %q, want it to start with %q", created.URL, prefix)
+	if !strings.HasPrefix(created.URL, linkPrefix) {
+		t.Fatalf("url = %q, want it to start with %q", created.URL, linkPrefix)
 	}
-	return created.URL, strings.TrimPrefix(created.URL, prefix)
+	return created.URL, strings.TrimPrefix(created.URL, linkPrefix)
 }
 
 func TestInvitations_CreateReturnsAWorkingLink(t *testing.T) {
@@ -986,7 +1081,7 @@ func TestInvitations_CreateReturnsAWorkingLink(t *testing.T) {
 		t.Errorf("expiresAt = %s, want about %s", expiresAt, want)
 	}
 
-	seq.Step("the link shows the runner", http.MethodGet, baseURL+"/"+token, "", "", http.StatusOK, `"runnerName":"Sam"`)
+	seq.Step("the link shows the runner", http.MethodPost, lookupURL, "", lookupJSON(token), http.StatusOK, `"runnerName":"Sam"`)
 }
 
 // Creating the same invitation again replaces the first one, which stops
@@ -1007,8 +1102,8 @@ func TestInvitations_CreateTwice(t *testing.T) {
 	if got := len(allInvitations(t, app)); got != 1 {
 		t.Errorf("%d invitations, want 1 pending for Sam", got)
 	}
-	seq.Step("the first link no longer works", http.MethodGet, baseURL+"/"+first, "", "", http.StatusNotFound, code(apperr.CodeInvitationInvalid))
-	seq.Step("the second link works", http.MethodGet, baseURL+"/"+second, "", "", http.StatusOK, `"runnerName":"Sam"`)
+	seq.Step("the first link no longer works", http.MethodPost, lookupURL, "", lookupJSON(first), http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+	seq.Step("the second link works", http.MethodPost, lookupURL, "", lookupJSON(second), http.StatusOK, `"runnerName":"Sam"`)
 }
 
 func TestInvitations_RevokeStopsTheLink(t *testing.T) {
@@ -1021,11 +1116,11 @@ func TestInvitations_RevokeStopsTheLink(t *testing.T) {
 		`{"runnerId":"`+fx.SamRunner.Id+`","kind":"invite"}`, http.StatusOK, `"url"`))
 	id := invitationOf(t, app, token).Id
 
-	seq.Step("the link works", http.MethodGet, baseURL+"/"+token, "", "", http.StatusOK, `"runnerName":"Sam"`)
+	seq.Step("the link works", http.MethodPost, lookupURL, "", lookupJSON(token), http.StatusOK, `"runnerName":"Sam"`)
 	seq.Step("revoke", http.MethodDelete, baseURL+"/"+id, adminToken, "", http.StatusNoContent)
-	seq.Step("the link no longer works", http.MethodGet, baseURL+"/"+token, "", "", http.StatusNotFound, code(apperr.CodeInvitationInvalid))
-	seq.Step("it cannot be accepted either", http.MethodPost, baseURL+"/"+token+"/accept", "",
-		`{"email":"sam@example.test","password":"`+testutil.Password+`","passwordConfirm":"`+testutil.Password+`"}`,
+	seq.Step("the link no longer works", http.MethodPost, lookupURL, "", lookupJSON(token), http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+	seq.Step("it cannot be accepted either", http.MethodPost, acceptURL, "",
+		acceptJSON(token, "sam@example.test", testutil.Password, testutil.Password),
 		http.StatusNotFound, code(apperr.CodeInvitationInvalid))
 	seq.Step("revoking it again finds nothing", http.MethodDelete, baseURL+"/"+id, adminToken, "", http.StatusNotFound, code(apperr.CodeNotFound))
 	noAccountCreated(t, app, fx)
@@ -1036,13 +1131,12 @@ func TestInvitations_AcceptTwice(t *testing.T) {
 	fx := testutil.Seed(t, app)
 	inviteSam()(t, app, fx)
 	seq := testutil.NewSequence(t, app)
-	url := baseURL + "/" + samToken + "/accept"
-	body := `{"email":"sam@example.test","password":"` + testutil.Password + `","passwordConfirm":"` + testutil.Password + `"}`
 
-	seq.Step("first accept", http.MethodPost, url, "", body, http.StatusOK, `"token"`)
+	seq.Step("first accept", http.MethodPost, acceptURL, "",
+		acceptJSON(samToken, "sam@example.test", testutil.Password, testutil.Password), http.StatusOK, `"token"`)
 	// Another email, so that the refusal can only be about the token.
-	seq.Step("second accept", http.MethodPost, url, "",
-		`{"email":"other@example.test","password":"`+testutil.Password+`","passwordConfirm":"`+testutil.Password+`"}`,
+	seq.Step("second accept", http.MethodPost, acceptURL, "",
+		acceptJSON(samToken, "other@example.test", testutil.Password, testutil.Password),
 		http.StatusNotFound, code(apperr.CodeInvitationInvalid))
 
 	if got := countUsers(t, app); got != 4 {
@@ -1060,16 +1154,15 @@ func TestInvitations_AcceptEmailTakenThenRetry(t *testing.T) {
 	fx := testutil.Seed(t, app)
 	inviteSam()(t, app, fx)
 	seq := testutil.NewSequence(t, app)
-	url := baseURL + "/" + samToken + "/accept"
 	body := func(email string) string {
-		return `{"email":"` + email + `","password":"` + testutil.Password + `","passwordConfirm":"` + testutil.Password + `"}`
+		return acceptJSON(samToken, email, testutil.Password, testutil.Password)
 	}
 
-	seq.Step("an email that is taken", http.MethodPost, url, "", body("alice@example.test"), http.StatusBadRequest, code(apperr.CodeEmailTaken))
+	seq.Step("an email that is taken", http.MethodPost, acceptURL, "", body("alice@example.test"), http.StatusBadRequest, code(apperr.CodeEmailTaken))
 	noAccountCreated(t, app, fx)
 	stillPending(samToken)(t, app, fx)
 
-	seq.Step("another email", http.MethodPost, url, "", body("sam@example.test"), http.StatusOK, `"token"`)
+	seq.Step("another email", http.MethodPost, acceptURL, "", body("sam@example.test"), http.StatusOK, `"token"`)
 	if got := countUsers(t, app); got != 4 {
 		t.Errorf("%d accounts, want 4", got)
 	}
@@ -1085,8 +1178,8 @@ func TestInvitations_AcceptThenSignIn(t *testing.T) {
 	inviteSam()(t, app, fx)
 	seq := testutil.NewSequence(t, app)
 
-	response := seq.Step("accept", http.MethodPost, baseURL+"/"+samToken+"/accept", "",
-		`{"email":"sam@example.test","password":"sam-password-1","passwordConfirm":"sam-password-1"}`,
+	response := seq.Step("accept", http.MethodPost, acceptURL, "",
+		acceptJSON(samToken, "sam@example.test", "sam-password-1", "sam-password-1"),
 		http.StatusOK, `"token"`)
 	seq.Step("the session of the response refreshes", http.MethodPost, "/api/collections/users/auth-refresh",
 		testutil.TokenIn(t, response), "", http.StatusOK, `"email":"sam@example.test"`)
@@ -1109,22 +1202,122 @@ func TestInvitations_ResetFlow(t *testing.T) {
 	seq.Step("Bob's session works", http.MethodPost, refresh, oldToken, "", http.StatusOK, `"token"`)
 	_, token := urlIn(t, seq.Step("the admin creates a reset", http.MethodPost, baseURL, testutil.Token(t, fx.Admin),
 		`{"runnerId":"`+fx.BobRunner.Id+`","kind":"reset"}`, http.StatusOK, `"url"`))
-	seq.Step("the link tells it is a reset", http.MethodGet, baseURL+"/"+token, "", "", http.StatusOK, `"runnerName":"Bob"`, `"kind":"reset"`)
+	seq.Step("the link tells it is a reset", http.MethodPost, lookupURL, "", lookupJSON(token), http.StatusOK, `"runnerName":"Bob"`, `"kind":"reset"`)
 
-	response := seq.Step("Bob chooses a password", http.MethodPost, baseURL+"/"+token+"/accept", "",
-		`{"password":"new-password-1","passwordConfirm":"new-password-1"}`, http.StatusOK, `"token"`, `"email":"bob@example.test"`)
+	response := seq.Step("Bob chooses a password", http.MethodPost, acceptURL, "",
+		acceptJSON(token, "", "new-password-1", "new-password-1"), http.StatusOK, `"token"`, `"email":"bob@example.test"`)
 
 	seq.Step("the session of before is refused", http.MethodPost, refresh, oldToken, "", http.StatusUnauthorized, `"status":401`)
 	seq.Step("the session of the response works", http.MethodPost, refresh, testutil.TokenIn(t, response), "", http.StatusOK, `"token"`)
 	seq.Step("the new password signs in", http.MethodPost, login, "", credentials("new-password-1"), http.StatusOK, `"token"`)
 	seq.Step("the old password does not", http.MethodPost, login, "", credentials(testutil.Password), http.StatusBadRequest, `"status":400`)
-	seq.Step("the link is used up", http.MethodGet, baseURL+"/"+token, "", "", http.StatusNotFound, code(apperr.CodeInvitationInvalid))
-	seq.Step("it cannot be used twice", http.MethodPost, baseURL+"/"+token+"/accept", "",
-		`{"password":"third-password-1","passwordConfirm":"third-password-1"}`, http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+	seq.Step("the link is used up", http.MethodPost, lookupURL, "", lookupJSON(token), http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+	seq.Step("it cannot be used twice", http.MethodPost, acceptURL, "",
+		acceptJSON(token, "", "third-password-1", "third-password-1"), http.StatusNotFound, code(apperr.CodeInvitationInvalid))
 	// Two sign-ins fill what the rate limit allows for a few seconds: look at the
 	// database for the password.
 	if bob := stored(t, app, "users", fx.Bob.Id); !bob.ValidatePassword("new-password-1") {
 		t.Error("the second use of the link changed the password")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The token is a secret
+
+// requestLogs returns what the request log of app holds once it has at least
+// want entries (or after a few seconds). The logger writes in the background, a
+// few seconds after the request: this writes what it holds at once.
+func requestLogs(t testing.TB, app *tests.TestApp, want int) []*core.Log {
+	t.Helper()
+	handler, ok := app.Logger().Handler().(*logger.BatchHandler)
+	if !ok {
+		t.Fatalf("the logger is a %T, want PocketBase's batch handler", app.Logger().Handler())
+	}
+	blocking := context.WithValue(context.Background(), logger.BlockKey, true)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if err := handler.WriteAll(blocking); err != nil {
+			t.Fatal(err)
+		}
+		var logs []*core.Log
+		if err := app.LogQuery().All(&logs); err != nil {
+			t.Fatal(err)
+		}
+		if len(logs) >= want || time.Now().After(deadline) {
+			return logs
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// PocketBase logs the URL of every request, successful or not, for several
+// days. The token must not be in any URL, or the database would hold a working
+// link in clear text, which is what storing only its hash is meant to avoid.
+func TestInvitations_TokenIsNotLogged(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	// The test application turns the request log off. Turning it on makes the
+	// requests below logged as they are in production.
+	app.Settings().Logs.MaxDays = 5
+	seq := testutil.NewSequence(t, app)
+
+	const unknown = "unknown-token-to-look-for-in-the-logs"
+	_, token := urlIn(t, seq.Step("create", http.MethodPost, baseURL, testutil.Token(t, fx.Admin),
+		`{"runnerId":"`+fx.SamRunner.Id+`","kind":"invite"}`, http.StatusOK, `"url"`))
+	seq.Step("lookup", http.MethodPost, lookupURL, "", lookupJSON(token), http.StatusOK, `"runnerName":"Sam"`)
+	seq.Step("lookup of an unknown token", http.MethodPost, lookupURL, "", lookupJSON(unknown), http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+	seq.Step("accept of an unknown token", http.MethodPost, acceptURL, "",
+		acceptJSON(unknown, "sam@example.test", testutil.Password, testutil.Password), http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+	seq.Step("accept", http.MethodPost, acceptURL, "",
+		acceptJSON(token, "sam@example.test", testutil.Password, testutil.Password), http.StatusOK, `"token"`)
+
+	const requests = 5
+	logs := requestLogs(t, app, requests)
+
+	// Without this, the checks below would pass on an empty log.
+	if len(logs) < requests {
+		t.Fatalf("%d entries in the request log, want one for each of the %d requests", len(logs), requests)
+	}
+	logged := map[string]bool{}
+	for _, entry := range logs {
+		data, err := json.Marshal(entry.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := entry.Message + " " + string(data)
+		logged[entry.Message] = true
+		for _, secret := range []string{token, unknown, invitations.Hash(token)} {
+			if strings.Contains(text, secret) {
+				t.Errorf("the request log holds %q in the entry %s", secret, text)
+			}
+		}
+	}
+	for _, message := range []string{"POST " + lookupURL, "POST " + acceptURL} {
+		if !logged[message] {
+			t.Errorf("no entry %q in the request log, which holds %v", message, logged)
+		}
+	}
+}
+
+// The rate limit rule of the settings (10 requests a minute, label
+// /api/app/invitations/) is what slows down the guesses of a token: it has to
+// cover the two routes that read one.
+func TestInvitations_TokenRoutesAreRateLimited(t *testing.T) {
+	for _, route := range []struct{ name, url, body string }{
+		{"lookup", lookupURL, lookupJSON("unknown-token")},
+		{"accept", acceptURL, acceptJSON("unknown-token", "sam@example.test", testutil.Password, testutil.Password)},
+	} {
+		t.Run(route.name, func(t *testing.T) {
+			app := testutil.NewApp(t)
+			testutil.Seed(t, app)
+			seq := testutil.NewSequence(t, app)
+
+			for i := 1; i <= 10; i++ {
+				seq.Step(fmt.Sprintf("request %d", i), http.MethodPost, route.url, "", route.body, http.StatusNotFound, code(apperr.CodeInvitationInvalid))
+			}
+			seq.Step("request 11", http.MethodPost, route.url, "", route.body, http.StatusTooManyRequests, `"status":429`)
+		})
 	}
 }
 

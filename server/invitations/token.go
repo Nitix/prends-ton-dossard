@@ -2,7 +2,9 @@
 // invitation) or choose a new password (a reset).
 //
 // A link carries a random token. Only the SHA-256 of the token is stored, so a
-// leak of the database gives no working link.
+// leak of the database gives no working link. For the same reason the token is
+// never in a URL that the server sees (see URL and the routes): PocketBase keeps
+// the URL of every request in its request log.
 package invitations
 
 import (
@@ -32,6 +34,11 @@ func Hash(token string) string {
 }
 
 // URL returns the link to share for token, on the site at appURL.
+//
+// The token is in the fragment, not in the path: a browser never sends the
+// fragment to the server, so the token is in no request log, not even the one of
+// the request that loads the page. The page reads it and sends it in the body
+// of the requests that need it.
 func URL(appURL, token string) string {
-	return appURL + "/invitation/" + token
+	return appURL + "/invitation#" + token
 }

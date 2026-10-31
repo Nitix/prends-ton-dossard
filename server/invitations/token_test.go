@@ -66,7 +66,7 @@ func TestHash(t *testing.T) {
 
 func TestURL(t *testing.T) {
 	got := invitations.URL("https://courses.example.fr", "abc_-123")
-	if want := "https://courses.example.fr/invitation/abc_-123"; got != want {
+	if want := "https://courses.example.fr/invitation#abc_-123"; got != want {
 		t.Errorf("URL = %q, want %q", got, want)
 	}
 }
