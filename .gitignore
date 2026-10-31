@@ -4,5 +4,6 @@ server/webdist/dist/*
 !server/webdist/dist/.gitkeep
 test-results/
 web/.vitest/
+web/.tanstack/
 playwright-report/
 .env

@@ -41,6 +41,8 @@ export default defineConfig({
         test: {
           name: "browser",
           include: ["src/**/*.test.tsx"],
+          // Makes any real WebAuthn call fail: it would open a dialog of the OS.
+          setupFiles: ["./src/test/blockWebAuthn.ts"],
           browser: {
             enabled: true,
             headless: true,
