@@ -77,7 +77,7 @@ Huit tables PocketBase, définies par des migrations Go versionnées. Toutes ont
 |---|---|---|
 | `label` | texte | obligatoire, unique |
 
-Données de départ : Route, Trail, Ultra-trail, Cross.
+Données de départ : Route, Trail, Ultra-trail, Cross, Backyard, Hyrox.
 
 ### `events` (événements)
 
@@ -98,11 +98,29 @@ Données de départ : Route, Trail, Ultra-trail, Cross.
 | `event` | relation → `events` | obligatoire, suppression en cascade |
 | `name` | texte | facultatif ; sinon l'affichage est généré (« Trail 42 km ») |
 | `race_type` | relation → `race_types` | obligatoire, sans cascade (un type utilisé ne peut pas être supprimé) |
-| `distance_km` | nombre | obligatoire, > 0, décimales permises (42,195) |
+| `distance_km` | nombre | facultatif, > 0, décimales permises (42,195) |
+| `duration_min` | nombre entier | facultatif, > 0 ; durée en minutes d'une course au temps (6 h = 360, 24 h = 1440) |
+| `time_limit_min` | nombre entier | facultatif, > 0 ; temps max (barrière horaire) en minutes (46 h 30 = 2790, backyard 48 h = 2880) |
 | `elevation_gain_m` | nombre entier | facultatif, ≥ 0 |
 | `date` | texte `YYYY-MM-DD` | facultatif ; si renseigné : ≥ `event.start_date`, et ≤ `event.end_date` s'il existe |
 
 **Date effective d'une épreuve** : `format.date ?? event.start_date`. C'est elle que les vues et les filtres utilisent.
+
+**Mesure d'une épreuve** : au moins un des trois champs `distance_km`, `duration_min` ou `time_limit_min` doit être renseigné, sinon l'erreur est `format_measure_required`. Exemples :
+
+| Épreuve | `distance_km` | `duration_min` | `time_limit_min` |
+|---|---|---|---|
+| Trail 42 km | 42 | — | 600 (barrière de 10 h) |
+| Les 6 heures de… | — | 360 | — |
+| Backyard | 6,706 (boucle), ou rien | — | 2880, ou vide si sans limite |
+| Hyrox | 8 | — | — |
+
+**Nom généré** (quand `name` est vide), dans cet ordre de priorité :
+1. le type et la distance (« Trail 42 km ») ;
+2. sinon, le type et la durée (« Route 6h ») ;
+3. sinon, le type et le temps max (« Backyard max 48h »).
+
+Les durées s'affichent avec `Intl.DurationFormat` (style `narrow`).
 
 ### `participations`
 
@@ -271,7 +289,7 @@ Le site est d'abord pensé pour le mobile et existe en français et en anglais (
   - bandeau « Ajoute une clé d'accès » tant que l'utilisateur n'a aucune passkey (masquable).
 - **Liste** :
   - événements dont au moins une épreuve est à venir, triés par date effective et regroupés par mois ;
-  - carte : date, nom, lieu, épreuves (type, distance, D+), pastilles des participants avec leurs initiales (en pointillés si non confirmé) ;
+  - carte : date, nom, lieu, épreuves (type, distance ou durée, D+, temps max), pastilles des participants avec leurs initiales (en pointillés si non confirmé) ;
   - filtres dans l'URL :
     - `personne` (moi, un coureur, tout le monde) : garde les événements où ce coureur a une participation ;
     - `type` : garde les événements qui ont au moins une épreuve de ce type ;
@@ -288,7 +306,7 @@ Le site est d'abord pensé pour le mobile et existe en français et en anglais (
   - chaque épreuve avec ses participants, leur statut et « ajouté par X · non confirmé » quand c'est le cas ;
   - actions : **J'y vais** (choix de l'épreuve et du statut), **Ajouter quelqu'un** (choix du coureur, de l'épreuve et du statut), **Modifier**, **Supprimer** (confirmation qui liste les participants concernés).
 - **Créer ou modifier** :
-  - un seul formulaire pour l'événement et ses épreuves (au moins une) ;
+  - un seul formulaire pour l'événement et ses épreuves (au moins une). Pour chaque épreuve : type, distance, durée et temps max (ces deux-là saisis en heures et minutes), D+ et date. Au moins une des trois mesures est obligatoire ;
   - dès que le nom et la date sont remplis, des doublons possibles sont proposés : événements à ±30 jours dont le nom contient l'un des mots de 4 lettres ou plus du nom saisi ;
   - à la création, la case **Je participe** est cochée par défaut, avec le choix de l'épreuve.
 - **Profil** :
@@ -318,6 +336,7 @@ Le site est d'abord pensé pour le mobile et existe en français et en anglais (
 - `RelativeTimeFormat` pour les décomptes (« dans 45 jours » / « in 45 days ») ;
 - `NumberFormat` avec unités pour les distances et le dénivelé (« 42,2 km », « 2 400 m ») ;
 - `ListFormat` pour les noms (« Alice, Paul et Julie » / « Alice, Paul and Julie ») ;
+- `DurationFormat` (style `narrow`) pour les durées et les temps max (« 46h 30min » / « 46h 30m ») ;
 - `PluralRules` pour les accords.
 
 **Accessibilité** :
@@ -430,7 +449,8 @@ Le programme Go sert le front compilé, avec un retour vers `index.html` pour qu
   - changement d'email : refusé avec un mauvais mot de passe ou un email déjà pris ;
   - fusions : aperçu sans effet, déplacement, résolution des doublons de coureurs, transaction annulée en cas d'erreur ;
   - `bootstrap-admin` : premier lancement, refus si un admin existe ;
-  - validation des dates (`end_date` ≥ `start_date`, date d'épreuve dans la plage de l'événement).
+  - validation des dates (`end_date` ≥ `start_date`, date d'épreuve dans la plage de l'événement) ;
+  - une épreuve sans distance, sans durée et sans temps max est refusée (`format_measure_required`). Une backyard avec seulement un temps max est acceptée.
 - **Front (Vitest)** :
   - date effective d'une épreuve ;
   - regroupement par mois ;
@@ -438,7 +458,8 @@ Le programme Go sert le front compilé, avec un retour vers `index.html` pour qu
   - séparation entre à venir et passé par rapport à « aujourd'hui » (injectable) ;
   - formats Intl ;
   - détection des doublons ;
-  - nom d'épreuve généré ;
+  - nom d'épreuve généré (distance, puis durée, puis temps max) ;
+  - durées (`Intl.DurationFormat`) et conversion entre heures/minutes et minutes ;
   - détection de la langue (`["en-GB", "fr"]` → `en` et `en-GB` ; `["de-DE"]` → `fr` ; `["fr-CA", "en"]` → `fr` et `fr-CA`) ;
   - premier jour de la semaine selon la locale ;
   - traduction de chaque code d'erreur serveur dans les deux langues ;
