@@ -9,6 +9,7 @@ import (
 
 	"ganigeorgiev.com/pocketbase/pocketbase"
 
+	"courses/server/cmd"
 	"courses/server/config"
 	_ "courses/server/migrations"
 	"courses/server/setup"
@@ -28,6 +29,11 @@ func main() {
 	if err := setup.Register(app, cfg); err != nil {
 		log.Fatal(err)
 	}
+
+	app.RootCmd.AddCommand(
+		cmd.NewBootstrapAdminCommand(app, cfg),
+		cmd.NewSeedCommand(app),
+	)
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
