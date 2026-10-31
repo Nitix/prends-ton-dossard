@@ -122,6 +122,18 @@ export const fr = {
     upcoming: "À venir",
     past: "Passées",
   },
+  // The calendar (see features/agenda).
+  agenda: {
+    // The two arrows next to the month.
+    previous: "Mois précédent",
+    next: "Mois suivant",
+    // The name of the button of a day: its date, already formatted, and its events.
+    day: (date: string, count: number) =>
+      `${date}, ${count === 0 ? "aucun événement" : count === 1 ? "1 événement" : `${count} événements`}`,
+    // Under the grid, on a phone: nothing chosen yet, or nothing on the day chosen.
+    selectDay: "Touche un jour pour voir ses événements.",
+    dayEmpty: "Aucun événement ce jour-là.",
+  },
   list: {
     empty: "Aucun événement à afficher.",
     emptyHint: "Change les filtres, ou crée un événement avec le bouton +.",

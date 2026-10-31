@@ -109,6 +109,14 @@ export const en = {
     upcoming: "Upcoming",
     past: "Past",
   },
+  agenda: {
+    previous: "Previous month",
+    next: "Next month",
+    day: (date: string, count: number) =>
+      `${date}, ${count === 0 ? "no events" : count === 1 ? "1 event" : `${count} events`}`,
+    selectDay: "Tap a day to see its events.",
+    dayEmpty: "No events on this day.",
+  },
   list: {
     empty: "No events to show.",
     emptyHint: "Change the filters, or create an event with the + button.",

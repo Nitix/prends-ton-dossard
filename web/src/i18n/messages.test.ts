@@ -44,3 +44,21 @@ describe("event and format texts", () => {
     expect(en.format.elevation("2,400 m")).toBe("2,400 m gain");
   });
 });
+
+describe("agenda texts", () => {
+  test("French", () => {
+    expect(fr.agenda.previous).toBe("Mois précédent");
+    expect(fr.agenda.next).toBe("Mois suivant");
+    expect(fr.agenda.day("dim. 14 juin", 0)).toBe("dim. 14 juin, aucun événement");
+    expect(fr.agenda.day("dim. 14 juin", 1)).toBe("dim. 14 juin, 1 événement");
+    expect(fr.agenda.day("dim. 14 juin", 3)).toBe("dim. 14 juin, 3 événements");
+  });
+
+  test("English", () => {
+    expect(en.agenda.previous).toBe("Previous month");
+    expect(en.agenda.next).toBe("Next month");
+    expect(en.agenda.day("Sun 14 Jun", 0)).toBe("Sun 14 Jun, no events");
+    expect(en.agenda.day("Sun 14 Jun", 1)).toBe("Sun 14 Jun, 1 event");
+    expect(en.agenda.day("Sun 14 Jun", 3)).toBe("Sun 14 Jun, 3 events");
+  });
+});

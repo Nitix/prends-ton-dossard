@@ -1,0 +1,148 @@
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useId } from "react";
+
+import { useI18n } from "../../i18n/I18nProvider";
+import { monthGrid } from "../../lib/dates";
+import { useToday } from "../../lib/useToday";
+import { applyFilters, sortEvents, useEvents } from "../events/api";
+import { Filters, useFilterCriteria } from "../events/Filters";
+import { DayList } from "./DayList";
+import { eventsByDay } from "./eventsByDay";
+import { MonthGrid } from "./MonthGrid";
+import type { AgendaSearch } from "./search";
+
+/**
+ * The events, a month at a time, in a grid: the month and the day chosen are
+ * in the URL (`mois`, `jour`), next to the filters of the list. The app shell
+ * around it owns the page's `<main>`.
+ *
+ * The grid is always there, so that changing the month or the filters does
+ * not make the page jump: it fills in when the events arrive.
+ */
+export function AgendaPage({ search }: { search: AgendaSearch }) {
+  const { t, f } = useI18n();
+  const today = useToday();
+  const navigate = useNavigate();
+  const headingId = useId();
+  const { criteria, ready } = useFilterCriteria(search);
+
+  // Anything that is not a month was dropped from the search (see
+  // `validateAgendaSearch`): the month is the current one then.
+  const month = search.mois ? Temporal.PlainYearMonth.from(search.mois) : today.toPlainYearMonth();
+  const weeks = monthGrid(month, f.firstDayOfWeek());
+  const days = weeks.flat();
+  // The grid reaches into the neighbouring months: so do the events asked for.
+  const events = useEvents({ from: firstOf(days), to: lastOf(days) });
+
+  // Nothing is shown of events that are not there yet, nor of those that the
+  // filters cannot be applied to yet (`moi` would show everybody's for an instant).
+  const data = events.isError ? undefined : events.data;
+  const loaded = data !== undefined && ready;
+  const views = loaded ? sortEvents(applyFilters(data, criteria), "asc") : [];
+  const byDay = eventsByDay(views, days);
+  // A day outside the grid cannot be chosen.
+  const selected = search.jour !== undefined && byDay.has(search.jour) ? search.jour : undefined;
+
+  // The day chosen is a view of the page, not a place of its own: no history
+  // entry. Touching it again lets it go.
+  const select = (day: Temporal.PlainDate) => {
+    const key = day.toString();
+    void navigate({
+      to: ".",
+      replace: true,
+      search: (previous) => ({ ...previous, jour: search.jour === key ? undefined : key }),
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-semibold">{t.nav.calendar}</h1>
+      <Filters search={search} withPeriod={false} />
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <MonthLink target={month.subtract({ months: 1 })} label={t.agenda.previous} glyph="‹" />
+          <h2 id={headingId} aria-live="polite" className="text-lg font-semibold">
+            {f.monthTitle(month)}
+          </h2>
+          <MonthLink target={month.add({ months: 1 })} label={t.agenda.next} glyph="›" />
+        </div>
+        <MonthGrid
+          weeks={weeks}
+          month={month}
+          byDay={byDay}
+          today={today}
+          selected={selected}
+          labelledBy={headingId}
+          busy={!events.isError && !loaded}
+          onSelect={select}
+        />
+      </section>
+      {events.isError ? (
+        <div className="flex flex-col gap-3">
+          <p role="alert" className="text-sm font-medium text-red-700">
+            {t.errors.generic}
+          </p>
+          <button
+            type="button"
+            onClick={() => void events.refetch()}
+            disabled={events.isFetching}
+            className="min-h-11 self-start rounded-lg border border-neutral-300 bg-white px-4 font-medium disabled:opacity-60"
+          >
+            {t.common.retry}
+          </button>
+        </div>
+      ) : !loaded ? (
+        <output>{t.common.loading}</output>
+      ) : views.length === 0 ? (
+        <div className="flex flex-col gap-1">
+          <p className="font-medium">{t.list.empty}</p>
+          <p className="text-sm text-neutral-600">{t.list.emptyHint}</p>
+        </div>
+      ) : (
+        <DayList
+          day={selected === undefined ? undefined : Temporal.PlainDate.from(selected)}
+          views={byDay.get(selected ?? "") ?? []}
+        />
+      )}
+    </div>
+  );
+}
+
+/** A grid always has weeks, and a week has days. */
+function firstOf(days: Temporal.PlainDate[]): Temporal.PlainDate {
+  const day = days[0];
+  if (!day) throw new RangeError("the grid of a month has no days");
+  return day;
+}
+
+function lastOf(days: Temporal.PlainDate[]): Temporal.PlainDate {
+  const day = days.at(-1);
+  if (!day) throw new RangeError("the grid of a month has no days");
+  return day;
+}
+
+/**
+ * An arrow to the month before or after: a link, so that it has an address and
+ * the back button comes back to the month. The day chosen belongs to its month,
+ * so it goes with it; the filters stay.
+ */
+function MonthLink({
+  target,
+  label,
+  glyph,
+}: {
+  target: Temporal.PlainYearMonth;
+  label: string;
+  glyph: string;
+}) {
+  return (
+    <Link
+      to="."
+      search={(previous) => ({ ...previous, mois: target.toString(), jour: undefined })}
+      aria-label={label}
+      className="flex size-11 items-center justify-center rounded-lg border border-neutral-300 bg-white text-2xl leading-none"
+    >
+      <span aria-hidden="true">{glyph}</span>
+    </Link>
+  );
+}

@@ -9,6 +9,8 @@ export type Formatters = {
   date(d: Temporal.PlainDate): string;
   /** Like `date`, with the year. */
   dateLong(d: Temporal.PlainDate): string;
+  /** The weekday of a date, alone: "lun." ("short"), "lundi" ("long"), "L" ("narrow"). */
+  weekday(d: Temporal.PlainDate, style: "narrow" | "short" | "long"): string;
   /** Month and year: "juin 2026". */
   monthTitle(m: Temporal.PlainYearMonth): string;
   /** A number of days from today, in words when there are some: "dans 45 jours", "aujourd’hui". */
@@ -56,6 +58,7 @@ export function createFormatters(locale: string): Formatters {
   return {
     date: (d) => d.toLocaleString(locale, dayOptions),
     dateLong: (d) => d.toLocaleString(locale, { ...dayOptions, year: "numeric" }),
+    weekday: (d, style) => d.toLocaleString(locale, { weekday: style }),
     // A year and month in the ISO calendar cannot be formatted with the
     // calendar of the locale ("Mismatched calendars"), a date can.
     monthTitle: (m) =>

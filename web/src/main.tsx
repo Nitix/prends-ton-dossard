@@ -14,7 +14,9 @@ import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 
 const queryClient = new QueryClient();
-const router = createRouter({ routeTree });
+// Moving between pages is a view transition (a cross-fade) where the browser
+// has them; the others change page at once.
+const router = createRouter({ routeTree, defaultViewTransition: true });
 
 declare module "@tanstack/react-router" {
   interface Register {

@@ -128,3 +128,20 @@ describe("firstDayOfWeek", () => {
     });
   });
 });
+
+describe("weekday", () => {
+  // 2026-06-15 is a Monday.
+  test.each([
+    { locale: "fr-FR", style: "short", expected: "lun." },
+    { locale: "fr-FR", style: "long", expected: "lundi" },
+    { locale: "en-GB", style: "short", expected: "Mon" },
+    { locale: "en-GB", style: "long", expected: "Monday" },
+    { locale: "en-US", style: "short", expected: "Mon" },
+  ] as const)("$locale, $style: $expected", ({ locale, style, expected }) => {
+    expect(createFormatters(locale).weekday(date("2026-06-15"), style)).toBe(expected);
+  });
+
+  test("follows the day it is given", () => {
+    expect(createFormatters("fr-FR").weekday(date("2026-06-21"), "short")).toBe("dim.");
+  });
+});
