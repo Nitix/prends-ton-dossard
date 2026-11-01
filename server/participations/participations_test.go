@@ -1586,6 +1586,52 @@ func TestParticipations_Results(t *testing.T) {
 			Contains: []string{fieldError("finish_time_s", "validation_only_int_constraint")},
 			After:    result("registered", 0, 0, 0, ""),
 		},
+		// The result is cleared before the system validation: what the status
+		// does not keep is not held against the write.
+		{
+			Name:   "a note of 201 characters on a status that has no note is cleared, not refused",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"registered","result_note":"` + strings.Repeat("a", 201) + `"}`),
+			Status: http.StatusOK,
+			After:  result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:   "a time with a decimal on a retirement is cleared, not refused",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"dnf","finish_time_s":12.5}`),
+			Status: http.StatusOK,
+			After:  result("dnf", 0, 0, 0, ""),
+		},
+
+		// every way of writing goes through the same hook
+		{
+			// The batch route runs the same handlers, so the same hooks.
+			Name:   "a batch clears the result that a retirement does not keep",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    func(testutil.Fixture) string { return "/api/batch" },
+			Body: body(`{"requests":[{"method":"PATCH","url":"/api/collections/participations/records/%s",`+
+				`"body":{"status":"dnf","finish_time_s":15130,"rank":12,"rank_of":340,"result_note":"abandon"}}]}`, p1),
+			Status:   http.StatusOK,
+			Contains: []string{`"status":200`},
+			After:    result("dnf", 0, 0, 0, "abandon"),
+		},
+		{
+			Name:   "a batch clears the stored result when the status moves away from finished",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    func(testutil.Fixture) string { return "/api/batch" },
+			Before: withResult(p1),
+			Body: body(`{"requests":[{"method":"PATCH","url":"/api/collections/participations/records/%s",`+
+				`"body":{"status":"registered"}}]}`, p1),
+			Status:   http.StatusOK,
+			Contains: []string{`"status":200`},
+			After:    result("registered", 0, 0, 0, ""),
+		},
 
 		// who may enter one
 		{
@@ -1628,5 +1674,50 @@ func TestParticipations_Results(t *testing.T) {
 				return map[string]any{"status": "finished", "finish_time_s": 7500, "confirmed": true}
 			}),
 		},
+	})
+}
+
+// The result rules are model hooks: they also hold for the writes that do not
+// come from the API, such as the code of the application or a merge.
+func TestParticipations_ResultsOutsideTheAPI(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+
+	t.Run("a finished record with a full result moved to registered loses all of it", func(t *testing.T) {
+		r := stored(t, app, fx.P1.Id)
+		r.Set("status", "finished")
+		r.Set("finish_time_s", 15130)
+		r.Set("rank", 12)
+		r.Set("rank_of", 340)
+		r.Set("result_note", "3e V1H")
+		if err := app.Save(r); err != nil {
+			t.Fatal(err)
+		}
+		assertStored(t, stored(t, app, fx.P1.Id), map[string]any{
+			"status": "finished", "finish_time_s": 15130, "rank": 12, "rank_of": 340, "result_note": "3e V1H",
+		})
+
+		r = stored(t, app, fx.P1.Id)
+		r.Set("status", "registered")
+		if err := app.Save(r); err != nil {
+			t.Fatal(err)
+		}
+		assertStored(t, stored(t, app, fx.P1.Id), map[string]any{
+			"status": "registered", "finish_time_s": 0, "rank": 0, "rank_of": 0, "result_note": "",
+		})
+	})
+
+	t.Run("a rank above the number of finishers is refused", func(t *testing.T) {
+		r := stored(t, app, fx.P1.Id)
+		r.Set("status", "finished")
+		r.Set("rank", 341)
+		r.Set("rank_of", 340)
+		var errs validation.Errors
+		if err := app.Save(r); !errors.As(err, &errs) {
+			t.Fatalf("want validation errors, got %v", err)
+		}
+		if fieldErr, ok := errs["rank"].(validation.Error); !ok || fieldErr.Code() != apperr.CodeRankAboveTotal {
+			t.Errorf("errors = %v, want rank: %s", errs, apperr.CodeRankAboveTotal)
+		}
 	})
 }

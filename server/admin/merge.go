@@ -373,8 +373,12 @@ var statusRank = map[string]int{
 // winner returns the participation of a runner that is kept when the runner
 // is on both formats of a merge of formats, or in both events with no format
 // in a merge of events. A confirmed participation wins, since the runner
-// said it is true. Otherwise the one that is the furthest along wins, and keep
-// wins a tie.
+// said it is true. Otherwise the one that is the furthest along wins. When
+// both are still level, the one that has a result wins, since the runner
+// entered it after the race and it would be lost with the other one: finished,
+// dnf and dns are as far along as each other, so a tie of statuses is common
+// once results are entered. keep wins what is left: a tie, whether both or
+// neither have a result.
 func winner(keep, other *core.Record) *core.Record {
 	if keepConfirmed, otherConfirmed := keep.GetBool("confirmed"), other.GetBool("confirmed"); keepConfirmed != otherConfirmed {
 		if otherConfirmed {
@@ -382,10 +386,23 @@ func winner(keep, other *core.Record) *core.Record {
 		}
 		return keep
 	}
-	if statusRank[other.GetString("status")] > statusRank[keep.GetString("status")] {
+	if keepRank, otherRank := statusRank[keep.GetString("status")], statusRank[other.GetString("status")]; keepRank != otherRank {
+		if otherRank > keepRank {
+			return other
+		}
+		return keep
+	}
+	if hasResult(other) && !hasResult(keep) {
 		return other
 	}
 	return keep
+}
+
+// hasResult reports whether the participation has any part of a result: a
+// time, a rank, the number of people ranked, or a note.
+func hasResult(p *core.Record) bool {
+	return p.GetInt("finish_time_s") > 0 || p.GetInt("rank") > 0 || p.GetInt("rank_of") > 0 ||
+		p.GetString("result_note") != ""
 }
 
 // find returns the record of the collection that has that id, or the not found

@@ -315,12 +315,26 @@ func TestWinner(t *testing.T) {
 		p.Set("status", status)
 		return p
 	}
+	// withResult gives a participation a complete result, withNote only the note
+	// of one that gave up.
+	withResult := func(p *core.Record) *core.Record {
+		p.Set("finish_time_s", 15130)
+		p.Set("rank", 12)
+		p.Set("rank_of", 340)
+		p.Set("result_note", "3e V1H")
+		return p
+	}
+	withNote := func(p *core.Record) *core.Record {
+		p.Set("result_note", "abandon au km 30")
+		return p
+	}
 
-	rows := []struct {
+	type winnerRow struct {
 		name        string
 		keep, other *core.Record
 		wantOther   bool
-	}{
+	}
+	rows := []winnerRow{
 		{"a confirmed one beats a higher status", participation(true, "interested"), participation(false, "finished"), false},
 		{"a higher status beats a lower one", participation(false, "interested"), participation(false, "registered"), true},
 		{"the same rank keeps the kept one", participation(false, "dnf"), participation(false, "finished"), false},
@@ -338,6 +352,25 @@ func TestWinner(t *testing.T) {
 		{"a supporter and an interested runner, neither confirmed: the kept interested one wins", participation(false, "interested"), participation(false, "supporter"), false},
 		{"a supporter is below a registered runner", participation(false, "supporter"), participation(false, "registered"), true},
 		{"a confirmed supporter beats an interested runner who is not", participation(false, "interested"), participation(true, "supporter"), true},
+
+		// A result is what the runner entered after the race: it decides a tie
+		// of the confirmation and of the status, so that it is not deleted with
+		// the participation that does not have it.
+		{"a result on the merged side wins a tie", participation(false, "finished"), withResult(participation(false, "finished")), true},
+		{"a result on the kept side stays", withResult(participation(false, "finished")), participation(false, "finished"), false},
+		{"two results keep the kept one", withResult(participation(false, "finished")), withResult(participation(false, "finished")), false},
+		{"no result on either side keeps the kept one", participation(false, "finished"), participation(false, "finished"), false},
+		{"a result wins a tie of confirmed participations", participation(true, "finished"), withResult(participation(true, "finished")), true},
+		{"a note is a result: on the merged side of two retirements", participation(false, "dnf"), withNote(participation(false, "dnf")), true},
+		// The result only breaks a tie.
+		{"a confirmed one beats a result that is not", participation(true, "finished"), withResult(participation(false, "finished")), false},
+		{"a confirmed one beats a result whichever side it is on", withResult(participation(false, "finished")), participation(true, "finished"), true},
+	}
+	// Each part of a result counts alone.
+	for field, value := range map[string]any{"finish_time_s": 15130, "rank": 12, "rank_of": 340, "result_note": "3e V1H"} {
+		other := participation(false, "finished")
+		other.Set(field, value)
+		rows = append(rows, winnerRow{"a result that is only " + field + " counts", participation(false, "finished"), other, true})
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
@@ -970,6 +1003,22 @@ func TestMergeFormats(t *testing.T) {
 		}
 	}
 
+	// Alice has finished both formats, with her confirmation on both, and the
+	// result of the race is on the participation of F42 (P1) or of F15.
+	aliceFinishedBoth := func(resultOnF42 bool) hook {
+		return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			onF15 := participate(t, app, fx.AliceRunner, fx.F15, "finished", true)
+			setFields(t, app, "participations", fx.P1.Id, map[string]any{"status": "finished"})
+			withResult := onF15.Id
+			if resultOnF42 {
+				withResult = fx.P1.Id
+			}
+			setFields(t, app, "participations", withResult, map[string]any{
+				"finish_time_s": 15130, "rank": 12, "rank_of": 340, "result_note": "3e V1H",
+			})
+		}
+	}
+
 	testutil.RunRows(t, []testutil.Row{
 		{
 			Name:     "the participations move to the kept format and the other format is deleted",
@@ -1055,6 +1104,47 @@ func TestMergeFormats(t *testing.T) {
 				if n != 3 {
 					t.Errorf("%d participations left, want 3", n)
 				}
+			},
+		},
+		{
+			// Alice finished both, and confirmed both: nothing but the result
+			// tells them apart. The one with the result must not be deleted.
+			Name:     "a runner who finished both formats keeps the participation that has a result: the merged one",
+			Before:   aliceFinishedBoth(false),
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 2, DroppedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				gone(t, app, "participations", fx.P1)
+				got, err := app.FindFirstRecordByFilter("participations", "runner = {:runner} && format = {:format}",
+					dbx.Params{"runner": fx.AliceRunner.Id, "format": fx.F42.Id})
+				if err != nil {
+					t.Fatalf("Alice has no participation on F42: %v", err)
+				}
+				if got.GetInt("finish_time_s") != 15130 || got.GetInt("rank") != 12 || got.GetInt("rank_of") != 340 || got.GetString("result_note") != "3e V1H" {
+					t.Errorf("the result of Alice is %v, want the one of the participation that moved", got.FieldsData())
+				}
+				gone(t, app, "formats", fx.F15)
+			},
+		},
+		{
+			Name:     "a runner who finished both formats keeps the participation that has a result: the kept one",
+			Before:   aliceFinishedBoth(true),
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1, DroppedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				p1 := mustStore(t, app, "participations", fx.P1.Id)
+				if p1.GetString("format") != fx.F42.Id || p1.GetInt("finish_time_s") != 15130 || p1.GetString("result_note") != "3e V1H" {
+					t.Errorf("P1 changed: %v", p1.FieldsData())
+				}
+				gone(t, app, "formats", fx.F15)
 			},
 		},
 		unchanged(testutil.Row{
