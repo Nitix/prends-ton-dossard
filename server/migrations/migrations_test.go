@@ -908,3 +908,88 @@ func TestMigrations_RegistrationDownThenUp(t *testing.T) {
 		t.Errorf("formats.price_eur must be a number field again, got %T", field("formats", "price_eur"))
 	}
 }
+
+// The migration 9b adds the status "supporter" to the participations. Its
+// rollback turns the supporters into interested runners, since the status goes
+// away, and applying it again brings the status back.
+func TestMigrations_SupporterDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9b_supporter.go")
+
+	statuses := func() []string {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("participations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, ok := c.Fields.GetByName("status").(*core.SelectField)
+		if !ok {
+			t.Fatalf("participations.status must be a select field, got %T", c.Fields.GetByName("status"))
+		}
+		return status.Values
+	}
+	statusOf := func(id string) string {
+		t.Helper()
+		r, err := app.FindRecordById("participations", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.GetString("status")
+	}
+
+	want := []string{"interested", "registered", "finished", "dnf", "dns", "supporter"}
+	if got := statuses(); !slices.Equal(got, want) {
+		t.Errorf("participations.status values = %q, want %q", got, want)
+	}
+
+	// Sam cheers at the event of Lyon, and Admin is only interested in it.
+	supporter := mustSave(t, app, "participations", map[string]any{
+		"runner": fx.SamRunner.Id, "event": fx.Event2.Id, "status": "supporter", "added_by": fx.BobRunner.Id,
+	})
+	interested := mustSave(t, app, "participations", map[string]any{
+		"runner": fx.AdminRunner.Id, "event": fx.Event2.Id, "status": "interested",
+	})
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := statuses(), want[:5]; !slices.Equal(got, want) {
+		t.Errorf("after the rollback, participations.status values = %q, want %q", got, want)
+	}
+	if got := statusOf(supporter.Id); got != "interested" {
+		t.Errorf("after the rollback, the supporter is %q, want interested", got)
+	}
+	if got := statusOf(interested.Id); got != "interested" {
+		t.Errorf("after the rollback, the interested runner is %q, want interested", got)
+	}
+	// The other participations, and what else the supporter had, are left as
+	// they were.
+	if got := statusOf(fx.P1.Id); got != "registered" {
+		t.Errorf("after the rollback, P1 is %q, want registered", got)
+	}
+	if r, err := app.FindRecordById("participations", supporter.Id); err != nil {
+		t.Fatal(err)
+	} else if r.GetString("event") != fx.Event2.Id || r.GetString("runner") != fx.SamRunner.Id || r.GetString("added_by") != fx.BobRunner.Id {
+		t.Errorf("after the rollback, the former supporter changed beyond its status: %v", r.FieldsData())
+	}
+	// The status is gone for good: the schema refuses it.
+	if _, err := trySave(app, "participations", map[string]any{
+		"runner": fx.BobRunner.Id, "event": fx.Event2.Id, "status": "supporter",
+	}); err == nil {
+		t.Error("after the rollback, the status supporter must be refused")
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	if got := statuses(); !slices.Equal(got, want) {
+		t.Errorf("after applying again, participations.status values = %q, want %q", got, want)
+	}
+	if got := statusOf(supporter.Id); got != "interested" {
+		t.Errorf("a supporter does not come back with the status: %q, want interested", got)
+	}
+	mustSave(t, app, "participations", map[string]any{
+		"runner": fx.BobRunner.Id, "event": fx.Event2.Id, "status": "supporter",
+	})
+}

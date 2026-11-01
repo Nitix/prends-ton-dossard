@@ -113,7 +113,8 @@ func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
 // two members) that all have password, five runners (Sam and Julie have no
 // account), four events in the three months after today, one of them over two
 // months, and two events that are over, with participations in every status,
-// and one runner who is interested in an event without having chosen a race.
+// one runner who is interested in an event without having chosen a race, and
+// one supporter.
 // Two of the events to come have a registration deadline, and three of their
 // races have a price.
 //
@@ -233,9 +234,9 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 		}
 	}
 
-	// The runners who are interested in the event and have not chosen a format:
-	// the participation has no format. The hooks refuse one for a runner who is
-	// on a format of the event, so these come after the formats.
+	// The participations to the event only, interested or supporter: they have
+	// no format. The hooks refuse one for a runner who is on a format of the
+	// event, so these come after the formats.
 	for _, entry := range event.undecided {
 		runner, addedBy := runners[entry.runner], runners[entry.addedBy]
 		if _, err := create(app, "participations", map[string]any{
@@ -259,9 +260,10 @@ type eventSpec struct {
 	url, notes     string
 	createdBy      string
 	formats        []formatSpec
-	// undecided are the runners who are interested in the event and have not
-	// chosen a format yet: none of them is on a format of the event, and the
-	// status of each is "interested".
+	// undecided are the participations to the event only, without a format:
+	// the runners who are interested in the event and have not chosen a format
+	// yet ("interested"), and the ones who come to cheer ("supporter"). None of
+	// them is on a format of the event.
 	undecided []entrySpec
 }
 
@@ -342,6 +344,10 @@ func demoEvents(today time.Time) []eventSpec {
 				{
 					name: "Trail découverte", raceType: "Trail", distanceKm: 20, elevationGainM: 1200, date: multiEnd,
 				},
+			},
+			// Sam comes to cheer, as Bob says: Sam has not confirmed it.
+			undecided: []entrySpec{
+				{runnerSam, "supporter", runnerBob},
 			},
 		},
 		{

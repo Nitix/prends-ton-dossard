@@ -28,6 +28,7 @@ export const ERROR_CODES: readonly string[] = [
   "format_measure_required",
   "price_invalid",
   "format_required",
+  "supporter_with_format",
   "merge_same_record",
   "merge_formats_different_events",
   "not_found",

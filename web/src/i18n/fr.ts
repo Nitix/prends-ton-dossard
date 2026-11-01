@@ -489,6 +489,7 @@ export const fr = {
     format_measure_required: "Indique au moins une distance, une durée ou un temps max.",
     price_invalid: "Le prix se donne au centime près.",
     format_required: "Il faut choisir une épreuve.",
+    supporter_with_format: "Un supporteur ne court pas d'épreuve.",
     merge_same_record: "Choisis deux éléments différents.",
     merge_formats_different_events: "Ces deux épreuves ne sont pas du même événement.",
     not_found: "Introuvable : il a peut-être été supprimé.",

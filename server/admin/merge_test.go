@@ -235,6 +235,12 @@ func TestWinner(t *testing.T) {
 		{"dns is as high as finished", participation(false, "dns"), participation(false, "finished"), false},
 		{"finished is above registered", participation(false, "registered"), participation(false, "dns"), true},
 		{"nothing set keeps the kept one", participation(false, "interested"), participation(false, "interested"), false},
+		// A supporter is as low as an interested runner: neither is further
+		// along than the other, so the kept one wins whichever it is.
+		{"a supporter and an interested runner, neither confirmed: the kept supporter wins", participation(false, "supporter"), participation(false, "interested"), false},
+		{"a supporter and an interested runner, neither confirmed: the kept interested one wins", participation(false, "interested"), participation(false, "supporter"), false},
+		{"a supporter is below a registered runner", participation(false, "supporter"), participation(false, "registered"), true},
+		{"a confirmed supporter beats an interested runner who is not", participation(false, "interested"), participation(true, "supporter"), true},
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {

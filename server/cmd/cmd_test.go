@@ -345,6 +345,7 @@ func TestSeedDemo(t *testing.T) {
 	checkFormats(t, app)
 	checkParticipations(t, app)
 	checkRegistration(t, app, today)
+	checkSupporter(t, app)
 
 	// A second call is refused, and leaves the data as it is.
 	if err := cmd.SeedDemo(app, demoPassword, today); err == nil {
@@ -392,6 +393,43 @@ func checkRegistration(t *testing.T, app core.App, today time.Time) {
 	}
 }
 
+// checkSupporter checks that Sam comes to cheer at the Backyard des Aiguilles,
+// added by Bob: the participation is to the event, without a format, and Sam
+// has not confirmed it.
+func checkSupporter(t *testing.T, app core.App) {
+	t.Helper()
+	runnerID := func(name string) string {
+		t.Helper()
+		record, err := app.FindFirstRecordByData("runners", "name", name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return record.Id
+	}
+	event, err := app.FindFirstRecordByData("events", "name", "Backyard des Aiguilles")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	supporters, err := app.FindAllRecords("participations", dbx.HashExp{"status": "supporter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(supporters) != 1 {
+		t.Fatalf("%d supporters, want 1", len(supporters))
+	}
+	p := supporters[0]
+	if p.GetString("runner") != runnerID("Sam") || p.GetString("event") != event.Id {
+		t.Errorf("the supporter is runner %q in event %q, want Sam in the Backyard des Aiguilles", p.GetString("runner"), p.GetString("event"))
+	}
+	if p.GetString("format") != "" {
+		t.Errorf("the supporter is on the format %q, want none", p.GetString("format"))
+	}
+	if p.GetString("added_by") != runnerID("Bob") || p.GetBool("confirmed") {
+		t.Errorf("the supporter was added by %q and confirmed = %v, want Bob and false", p.GetString("added_by"), p.GetBool("confirmed"))
+	}
+}
+
 // checkFormats checks that the formats cover a backyard, a race against the
 // clock and a Hyrox.
 func checkFormats(t *testing.T, app core.App) {
@@ -422,7 +460,7 @@ func checkFormats(t *testing.T, app core.App) {
 	}
 }
 
-// checkParticipations checks that the five statuses are used, with and without
+// checkParticipations checks that the six statuses are used, with and without
 // confirmation, and that a participation is only confirmed by its own runner,
 // as the API would have it.
 func checkParticipations(t *testing.T, app core.App) {
@@ -459,7 +497,7 @@ func checkParticipations(t *testing.T, app core.App) {
 				p.Id, p.GetBool("confirmed"), want, runner, addedBy)
 		}
 	}
-	for _, status := range []string{"interested", "registered", "finished", "dnf", "dns"} {
+	for _, status := range []string{"interested", "registered", "finished", "dnf", "dns", "supporter"} {
 		if statuses[status] == 0 {
 			t.Errorf("no participation is %q", status)
 		}

@@ -4,9 +4,10 @@
 //
 // A participation is in an event, and usually in one of its formats. Without a
 // format it is for the event only: the runner is interested and has not chosen
-// yet. A runner has either that participation to the event or participations
-// to formats in it, never both: giving the runner a format replaces the one to
-// the event.
+// yet, or is a supporter who comes to cheer. A runner has either that
+// participation to the event or participations to formats in it, never both:
+// giving the runner a format replaces the one to the event, whether it is
+// "interested" or "supporter".
 //
 // What a request changes is decided by request hooks, since it depends on the
 // caller. The rules that hold for any write, such as the default status, the
@@ -26,9 +27,13 @@ import (
 )
 
 // statusInterested is the status of a participation that is created without
-// one, and the only one of a participation without a format. A select field has
-// no default value of its own.
+// one. A select field has no default value of its own.
 const statusInterested = "interested"
+
+// statusSupporter is the status of a runner who comes to cheer at the event
+// without running a race. With statusInterested, it is one of the two statuses
+// of a participation without a format, and it is not allowed with one.
+const statusSupporter = "supporter"
 
 // Register attaches the hooks of the participations collection to app.
 func Register(app core.App) {
@@ -145,11 +150,13 @@ func aboutCaller(e *core.RecordRequestEvent) (bool, error) {
 // the system validation has found the event, the format and the runner.
 //
 //   - With a format, the format must be one of the event
-//     (apperr.CodeFormatOtherEvent on format).
+//     (apperr.CodeFormatOtherEvent on format), and the status cannot be
+//     "supporter", since a supporter does not run a race
+//     (apperr.CodeSupporterWithFormat on status).
 //   - Without a format, the participation is for the event only, which only the
-//     status "interested" says (apperr.CodeFormatRequired on status), and the
-//     runner must not be on a format of the event (apperr.CodeFormatRequired on
-//     format).
+//     statuses "interested" and "supporter" say (apperr.CodeFormatRequired on
+//     status), and the runner must not be on a format of the event
+//     (apperr.CodeFormatRequired on format).
 func validate(app core.App, p *core.Record) error {
 	if format := p.GetString("format"); format != "" {
 		saved, err := app.FindRecordById("formats", format)
@@ -159,10 +166,13 @@ func validate(app core.App, p *core.Record) error {
 		if saved.GetString("event") != p.GetString("event") {
 			return apperr.Field("format", apperr.CodeFormatOtherEvent)
 		}
+		if p.GetString("status") == statusSupporter {
+			return apperr.Field("status", apperr.CodeSupporterWithFormat)
+		}
 		return nil
 	}
 
-	if p.GetString("status") != statusInterested {
+	if status := p.GetString("status"); status != statusInterested && status != statusSupporter {
 		return apperr.Field("status", apperr.CodeFormatRequired)
 	}
 	onFormats, err := app.CountRecords("participations",

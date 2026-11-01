@@ -308,8 +308,10 @@ func MergeFormats(app core.App, keepID, mergeID string, dryRun bool) (MergeResul
 }
 
 // statusRank orders the statuses of a participation by how far the runner got:
-// a status that is not here is the lowest.
+// a status that is not here is the lowest. A supporter is as low as an
+// interested runner: neither is further along than the other.
 var statusRank = map[string]int{
+	"supporter":  0,
 	"interested": 0,
 	"registered": 1,
 	"finished":   2,

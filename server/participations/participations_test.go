@@ -129,6 +129,13 @@ func createdIs(runner, format record, want func(testutil.Fixture) map[string]any
 // format, as the fixture does, and returns it.
 func undecided(t testing.TB, app core.App, runner, event, addedBy *core.Record, confirmed bool) *core.Record {
 	t.Helper()
+	return inTheEventOnly(t, app, "interested", runner, event, addedBy, confirmed)
+}
+
+// inTheEventOnly saves a participation of runner in the event only, without a
+// format, with that status, and returns it.
+func inTheEventOnly(t testing.TB, app core.App, status string, runner, event, addedBy *core.Record, confirmed bool) *core.Record {
+	t.Helper()
 	c, err := app.FindCollectionByNameOrId("participations")
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +143,7 @@ func undecided(t testing.TB, app core.App, runner, event, addedBy *core.Record, 
 	r := core.NewRecord(c)
 	r.Set("runner", runner.Id)
 	r.Set("event", event.Id)
-	r.Set("status", "interested")
+	r.Set("status", status)
 	r.Set("added_by", addedBy.Id)
 	r.Set("confirmed", confirmed)
 	if err := app.Save(r); err != nil {
@@ -1190,6 +1197,176 @@ func TestParticipations_Undecided(t *testing.T) {
 			Body:   body(`{"event":%q}`, event2),
 			Status: http.StatusNotFound,
 			After:  unchanged(p3),
+		},
+	})
+}
+
+// A supporter is a participation to the event, without a format, whose status
+// is "supporter": the runner comes to cheer. It keeps everything of the
+// participation to the event: the unique index, the conversion when the runner
+// is given a format, and the refusal when the runner is already on one. It is
+// the only status other than "interested" that goes without a format, and it
+// cannot be on a format.
+func TestParticipations_Supporter(t *testing.T) {
+	// The participation that the rows add to the database before the request,
+	// and then ask about.
+	var pending *core.Record
+	pendingOf := func(testutil.Fixture) *core.Record { return pending }
+	// aliceSupports makes Alice a supporter of the event of Lyon.
+	aliceSupports := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		pending = inTheEventOnly(t, app, "supporter", fx.AliceRunner, fx.Event2, fx.AliceRunner, true)
+	}
+	bobIsInterested := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		pending = undecided(t, app, fx.BobRunner, fx.Event2, fx.BobRunner, true)
+	}
+
+	testutil.RunRows(t, []testutil.Row{
+		// creation
+		{
+			Name:   "alice comes to cheer: confirmed, by her",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Body:   body(`{"runner":%q,"event":%q,"status":"supporter"}`, aliceRunner, event2),
+			Status: http.StatusOK,
+			After: createdUndecidedIs(aliceRunner, event2, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{
+					"format": "", "status": "supporter", "confirmed": true, "added_by": fx.AliceRunner.Id,
+				}
+			}),
+		},
+		{
+			Name:   "bob adds alice as a supporter: not confirmed",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Body:   body(`{"runner":%q,"event":%q,"status":"supporter"}`, aliceRunner, event2),
+			Status: http.StatusOK,
+			After: createdUndecidedIs(aliceRunner, event2, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{
+					"format": "", "status": "supporter", "confirmed": false, "added_by": fx.BobRunner.Id,
+				}
+			}),
+		},
+		{
+			Name:     "a supporter does not run a race",
+			As:       "alice",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Body:     body(`{"runner":%q,"event":%q,"format":%q,"status":"supporter"}`, aliceRunner, event, f15),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("status", apperr.CodeSupporterWithFormat)},
+			After:    count(3),
+		},
+		{
+			Name:     "a runner who is on a format of the event cannot be a supporter of it",
+			As:       "alice",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Body:     body(`{"runner":%q,"event":%q,"status":"supporter"}`, aliceRunner, event),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("format", apperr.CodeFormatRequired)},
+			After:    both(count(3), unchanged(p1)),
+		},
+		{
+			Name:     "a runner is a supporter of the event only once",
+			As:       "alice",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Before:   aliceSupports,
+			Body:     body(`{"runner":%q,"event":%q,"status":"supporter"}`, aliceRunner, event2),
+			Status:   http.StatusBadRequest,
+			Contains: []string{"validation_not_unique"},
+			After:    both(count(4), unchanged(pendingOf)),
+		},
+
+		// conversion
+		{
+			Name:   "a supporter who is given a format becomes a runner: the supporter is replaced",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Before: aliceSupports,
+			Body:   body(`{"runner":%q,"event":%q,"format":%q,"status":"registered"}`, aliceRunner, event2, fLyon),
+			Status: http.StatusOK,
+			After: both(
+				onlyIn(aliceRunner, event2, fLyon),
+				createdIs(aliceRunner, fLyon, func(testutil.Fixture) map[string]any {
+					return map[string]any{"status": "registered", "confirmed": true}
+				}),
+			),
+		},
+
+		// modification
+		{
+			Name:   "a supporter becomes interested in the event",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(pendingOf),
+			Before: aliceSupports,
+			Body:   body(`{"status":"interested"}`),
+			Status: http.StatusOK,
+			After: storedIs(pendingOf, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "interested", "format": "", "event": fx.Event2.Id}
+			}),
+		},
+		{
+			Name:   "a runner who is interested in the event becomes a supporter",
+			As:     "bob",
+			Method: http.MethodPatch,
+			URL:    participations(pendingOf),
+			Before: bobIsInterested,
+			Body:   body(`{"status":"supporter"}`),
+			Status: http.StatusOK,
+			After: storedIs(pendingOf, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "supporter", "format": "", "event": fx.Event2.Id}
+			}),
+		},
+		{
+			Name:     "without a format, a supporter cannot be registered",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(pendingOf),
+			Before:   aliceSupports,
+			Body:     body(`{"status":"registered"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("status", apperr.CodeFormatRequired)},
+			After:    unchanged(pendingOf),
+		},
+		{
+			Name:   "a supporter is given a format, and a status that goes with it",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(pendingOf),
+			Before: aliceSupports,
+			Body:   body(`{"format":%q,"status":"interested"}`, fLyon),
+			Status: http.StatusOK,
+			After: storedIs(pendingOf, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"format": fx.FLyon.Id, "status": "interested", "event": fx.Event2.Id}
+			}),
+		},
+		{
+			Name:     "a supporter cannot be given a format and stay a supporter",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(pendingOf),
+			Before:   aliceSupports,
+			Body:     body(`{"format":%q}`, fLyon),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("status", apperr.CodeSupporterWithFormat)},
+			After:    unchanged(pendingOf),
+		},
+		{
+			Name:     "a participation to a format cannot become a supporter",
+			As:       "bob",
+			Method:   http.MethodPatch,
+			URL:      participations(p2),
+			Body:     body(`{"status":"supporter"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("status", apperr.CodeSupporterWithFormat)},
+			After:    unchanged(p2),
 		},
 	})
 }

@@ -24,6 +24,7 @@ const (
 	CodeFormatMeasureRequired          = "format_measure_required"
 	CodePriceInvalid                   = "price_invalid"
 	CodeFormatRequired                 = "format_required"
+	CodeSupporterWithFormat            = "supporter_with_format"
 	CodeMergeSameRecord                = "merge_same_record"
 	CodeMergeFormatsDifferentEvents    = "merge_formats_different_events"
 	CodeNotFound                       = "not_found"
