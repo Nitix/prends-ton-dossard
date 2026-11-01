@@ -3,7 +3,8 @@
  * as it opens, a title that pops. While they run, a box is shifted by a
  * fraction of a pixel, and the height measured then can be 43.99997 for a box
  * of 44: a test that measures right after a dialog opens waits for this first.
- * An animation that never ends (the glow of the sky) is not waited for.
+ * An animation that never ends (the app has none, but a page might) is not
+ * waited for.
  */
 export async function animationsDone(): Promise<void> {
   const ending = document.getAnimations().filter(({ effect }) => {

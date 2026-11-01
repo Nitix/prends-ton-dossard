@@ -326,7 +326,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       {/* The hero: the sky of the dawn drawn like a map, the name in white, and the sun rising behind the ridges at its foot. */}
       <header className="on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
         <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-20 -left-16 size-56 animate-glow rounded-full bg-iris-400/35 blur-3xl" />
+          <span className="absolute -top-20 -left-16 size-56 rounded-full bg-iris-400/35 blur-3xl" />
           {/* Faint where the words are, clearer down by the mountains. */}
           <Contours className="mask-[linear-gradient(to_bottom,transparent,rgb(0_0_0/0.4)_40%,#000_85%)] text-white opacity-[0.14]" />
           <Ridges className="h-28 md:hidden" center={1560} sun={1870} sunSize={28} steep={1.2} />

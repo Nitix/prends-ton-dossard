@@ -37,7 +37,7 @@ export function RunnerProfile({ runnerId, extra }: { runnerId: string; extra?: R
       {/* A hero: the runner on the sky of the dawn drawn like a map, in front of the ridges, the sun rising behind them. */}
       <header className="on-dawn relative flex items-center gap-4 overflow-hidden rounded-[1.75rem] bg-dawn-hero p-5 pb-12 text-white shadow-glow md:gap-6 md:p-7 md:pb-14">
         <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-16 -left-12 size-48 animate-glow rounded-full bg-iris-400/35 blur-3xl" />
+          <span className="absolute -top-16 -left-12 size-48 rounded-full bg-iris-400/35 blur-3xl" />
           <Contours className="mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000_80%)] text-white opacity-[0.14]" />
           <Ridges className="h-24 md:hidden" center={1560} sun={1870} sunSize={24} steep={1.1} />
           <Ridges

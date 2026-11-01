@@ -209,6 +209,25 @@ test("AppShell — sans couleurs forcées, rien ne change : pas de bord au + ni 
   expect(edge(screen.getByRole("link", link(fr.nav.home)).element()).width).toBe(0);
 });
 
+test("AppShell — rien ne tourne sans fin dans le ciel, et la barre d'onglets ne floute pas ce qui passe dessous", async () => {
+  const screen = await renderShell();
+  const nav = screen.getByRole("navigation", { name: fr.nav.main });
+  await expect.element(nav).toBeVisible();
+
+  // The glows of the sky are still: no animation of the page runs for ever.
+  const endless = document
+    .getAnimations()
+    .filter((animation) => animation.effect?.getComputedTiming().endTime === Infinity)
+    .map((animation) => {
+      const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+      return target?.getAttribute("class") ?? String(target);
+    });
+  expect(endless).toEqual([]);
+  // The bar is all but opaque: a blur of what passes under it would cost a
+  // pass on every frame of a scroll, for nothing that can be seen.
+  expect(getComputedStyle(nav.getByRole("list").element()).backdropFilter).toBe("none");
+});
+
 test("AppShell — la page courante est marquée aria-current", async () => {
   const screen = await renderShell();
 

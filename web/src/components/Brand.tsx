@@ -67,8 +67,9 @@ export function PeakGlyph({ className = "" }: { className?: string }) {
 }
 
 /**
- * What is in the sky behind the header: two soft glows that drift (unless less
- * motion is asked for), the contour lines of a map, and at its foot, just
+ * What is in the sky behind the header: two soft glows (still: a blurred layer
+ * that moved for ever would keep a phone at work), the contour lines of a map,
+ * and at its foot, just
  * above the sheet of the page, the ridges, with the sun rising behind them
  * unless `sun` is false. The ridges are continued down behind the sheet, so
  * that its round corners show the night of the valley.
@@ -76,8 +77,8 @@ export function PeakGlyph({ className = "" }: { className?: string }) {
 export function DawnSky({ sun = true }: { sun?: boolean }) {
   return (
     <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <span className="absolute -top-16 -left-20 size-64 animate-glow rounded-full bg-iris-400/40 blur-3xl" />
-      <span className="absolute -right-10 -bottom-24 size-72 animate-glow rounded-full bg-peach-300/50 blur-3xl [animation-delay:-4s]" />
+      <span className="absolute -top-16 -left-20 size-64 rounded-full bg-iris-400/40 blur-3xl" />
+      <span className="absolute -right-10 -bottom-24 size-72 rounded-full bg-peach-300/50 blur-3xl" />
       <Contours tiled className="opacity-[0.15]" />
       {/* On a phone the name is on the left: the low valley is under it, the summits and the sun on the right. */}
       <Ridges

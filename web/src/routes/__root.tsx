@@ -40,7 +40,7 @@ function Page() {
     return (
       <div className="relative flex min-h-dvh flex-col overflow-hidden bg-dawn-sky">
         <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-16 -left-20 size-72 animate-glow rounded-full bg-iris-400/40 blur-3xl" />
+          <span className="absolute -top-16 -left-20 size-72 rounded-full bg-iris-400/40 blur-3xl" />
           <Contours className="text-white opacity-[0.16]" />
           <Ridges
             className="h-[15.75rem] md:hidden"

@@ -9,7 +9,7 @@ test("animationsDone — attend la fin d'une animation qui finit, pas celle d'un
   box.style.cssText = "height:44px;width:100px";
   host.append(box);
   document.body.append(host);
-  // As a dialog that rises when it opens, and as the glow of the sky.
+  // As a dialog that rises when it opens, and as something that turns for ever.
   const rises = host.animate([{ translate: "0 12px" }, { translate: "0 0" }], { duration: 120 });
   const glows = host.animate([{ opacity: 1 }, { opacity: 0.5 }], {
     duration: 100,
