@@ -1,6 +1,7 @@
 import { ClientResponseError } from "pocketbase";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { fieldErrors } from "../../i18n/errors";
 import { toEventView, type EventView } from "./api";
 import {
   buildBatch,
@@ -864,8 +865,41 @@ describe("uploadTraces", () => {
     expect(error.formats).toEqual(["Marathon", "b"]);
   });
 
+  test("uploadTraces — la raison de chaque échec est gardée, dans l'ordre des épreuves nommées", async () => {
+    const tooBig = new ClientResponseError({
+      status: 400,
+      response: {
+        status: 400,
+        message: "Failed to update record.",
+        data: { gpx: field("validation_file_size_limit") },
+      },
+    });
+    const offline = new Error("offline");
+    mocks.update
+      .mockRejectedValueOnce(tooBig)
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(offline);
+
+    const error = await unsent(
+      uploadTraces(
+        ["a", "b", "c"],
+        [
+          { label: "A", gpx: { kind: "new", file: gpxFile() } },
+          { label: "B", gpx: { kind: "remove" } },
+          { label: "C", gpx: { kind: "remove" } },
+        ],
+      ),
+    );
+
+    expect(error.formats).toEqual(["A", "C"]);
+    // One reason per name, in the same order: the code of the server for the first.
+    expect(error.causes).toEqual([tooBig, offline]);
+    expect(fieldErrors(error.causes[0])).toEqual({ gpx: "validation_file_size_limit" });
+  });
+
   test("saveEvent — la trace qui n'est pas partie laisse l'événement enregistré, et dit lequel", async () => {
-    mocks.update.mockRejectedValue(new Error("offline"));
+    const offline = new Error("offline");
+    mocks.update.mockRejectedValue(offline);
     const draft = editDraft();
     const [big, small] = draft.formats;
     if (!big || !small) throw new Error("the draft has two formats");
@@ -877,6 +911,7 @@ describe("uploadTraces", () => {
     const error = await unsent(saveEvent(draft, existing(), ME));
 
     expect(error.formats).toEqual(["Trail 42 km"]);
+    expect(error.causes).toEqual([offline]);
     expect(error.eventId).toBe("event");
     // The batch went through: the event is saved.
     expect(mocks.send).toHaveBeenCalledOnce();

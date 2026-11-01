@@ -56,6 +56,14 @@ export function toTrack(raw: RawPoint[]): TrackPoint[] {
  */
 export const MAX_ELEVATION_M = 100_000;
 
+/**
+ * The size of the biggest GPX file the server keeps: 10 MiB, the `MaxSize` of
+ * the field `gpx` of `formats` (server/migrations/9f_format_route.go). The form
+ * refuses a bigger file when it is chosen, rather than saving the event and
+ * learning afterwards that the track could not be sent.
+ */
+export const MAX_GPX_BYTES = 10 * 1024 * 1024;
+
 /** A number written in a file, or `undefined` when there is none: a blank is not a 0. */
 function numberOf(text: string | null | undefined): number | undefined {
   if (text === null || text === undefined || text.trim() === "") return undefined;

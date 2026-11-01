@@ -6,7 +6,7 @@ import { startTransition, useActionState, useRef, useState } from "react";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Field, INPUT } from "../../components/Field";
 import { useToast } from "../../components/Toast";
-import { errorCode, fieldErrors, translateError } from "../../i18n/errors";
+import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { RaceTypeRecord } from "../../lib/types";
 import { useSession } from "../auth/session";
@@ -235,8 +235,9 @@ function EventFields({
     const named = (row: FormatRow, index: number) =>
       displayName(row) ?? t.form.formatTitle(index + 1);
     let id: string;
-    // The formats whose track was not sent: the event is saved all the same.
+    // The formats whose track was not sent, and why: the event is saved all the same.
     let unsent: string[] = [];
+    let causes: unknown[] = [];
     try {
       const join = joinOffered && draft.join;
       id = await saveEvent(toEventDraft(draft, initial, join, named), initial, runner?.id);
@@ -244,9 +245,10 @@ function EventFields({
       if (!(err instanceof TraceUploadError)) return refusal(err, draft.rows);
       id = err.eventId;
       unsent = err.formats;
+      causes = err.causes;
     }
     await invalidateEvents(queryClient, id);
-    toast.show(unsent.length > 0 ? t.form.traceFailed(f.list(unsent)) : t.form.saved);
+    toast.show(unsent.length > 0 ? untracked(unsent, causes) : t.form.saved);
     await navigate({ to: "/evenements/$id", params: { id } });
     return NO_ERRORS;
   }, NO_ERRORS);
@@ -255,6 +257,20 @@ function EventFields({
     const code = errors.event[field];
     return code === undefined ? null : translateError(t, code);
   };
+
+  /**
+   * What to say when the track of these formats was not sent. When the server
+   * answered each of them with the same refusal of the file, and the form has
+   * words for it (too big, not a GPX file), the message says why; any other
+   * failure, or different reasons, get the general message.
+   */
+  function untracked(names: string[], causes: unknown[]): string {
+    const reasons = new Set(causes.map((cause) => fieldMessage(t, "gpx", fieldErrors(cause).gpx)));
+    const [reason] = reasons;
+    return reasons.size === 1 && reason !== undefined
+      ? t.form.traceFailedBecause(f.list(names), reason)
+      : t.form.traceFailed(f.list(names));
+  }
 
   /** What a row is called, as the page of the event will call it: none until it has a type. */
   function displayName(row: FormatRow): string | undefined {

@@ -333,6 +333,8 @@ export const fr = {
     gpxRead: (km: string, gain: string) => `Trace : ${km}, ${gain} D+`,
     // A file with no altitude: only its distance is said, and reused.
     gpxReadDistance: (km: string) => `Trace : ${km}`,
+    // Under the field of a track that is taken off, with the way back.
+    gpxRemoved: "La trace sera retirée à l'enregistrement.",
     gpxReuse: "Reprendre ces valeurs",
     routeUrl: "Lien du parcours",
     // What the server refuses in the file of a track (see translateFieldError).
@@ -404,6 +406,9 @@ export const fr = {
     // The event is saved, but not the track of these formats (already named and joined: "Trail 42 km et Route 10 km").
     traceFailed: (names: string) =>
       `L'événement est enregistré, mais la trace de ${names} n'a pas pu être envoyée.`,
+    // The same, when the server said why (the message of its refusal, which ends with a full stop).
+    traceFailedBecause: (names: string, reason: string) =>
+      `L'événement est enregistré, mais la trace de ${names} n'a pas pu être envoyée. ${reason}`,
   },
   // The filters of the list and of the calendar.
   filters: {

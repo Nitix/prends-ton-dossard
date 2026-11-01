@@ -6,7 +6,7 @@ import { Field, INPUT } from "../../components/Field";
 import { translateFieldError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { RaceTypeRecord } from "../../lib/types";
-import { gpxStats, parseGpx, type GpxStats } from "../route/gpx";
+import { gpxStats, MAX_GPX_BYTES, parseGpx, type GpxStats } from "../route/gpx";
 import type { FormatRow } from "./formDraft";
 
 /** Puts the focus on an element when it appears: the first field of a row that has just been added. */
@@ -48,27 +48,47 @@ export function FormatFieldset({
   const warningId = useId();
   const title = useRef<HTMLLegendElement>(null);
   const trackField = useRef<HTMLInputElement>(null);
-  // What the file chosen holds, read in the browser, and whether it could not be read.
+  const statusId = useId();
+  // What the file chosen holds, read in the browser.
   const [read, setRead] = useState<GpxStats | null>(null);
-  const [unreadable, setUnreadable] = useState(false);
+  // Why the file chosen last was left out: it could not be read, or the server would not take it.
+  const [refused, setRefused] = useState<"unreadable" | "tooBig" | null>(null);
+  // What the form did with the track before a file was chosen: where it goes back to when that file is dropped.
+  const [before, setBefore] = useState<"keep" | "remove">("keep");
 
   const message = (field: string): string | null => {
     const code = errors[field];
     return code === undefined ? null : translateFieldError(t, field, code);
   };
+  const trackError =
+    refused === "tooBig"
+      ? t.format.gpxTooBig
+      : refused === "unreadable"
+        ? t.route.unreadable
+        : message("gpx");
 
-  /** A file is chosen: it is read here, and only kept when it is a track. */
+  /** Drops the file chosen: the field is emptied, and the track goes back to what it was before the choice. */
+  function dropFile(input: HTMLInputElement | null, chosen: boolean) {
+    if (input) input.value = "";
+    setRead(null);
+    if (chosen) onChange({ gpx: { kind: before } });
+  }
+
+  /** A file is chosen: it is left out if it is too big for the server or is not a track, and read here before it is kept. */
   async function chooseTrack(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const file = input.files?.[0];
-    const chosen = row.gpx.kind === "new";
-    setUnreadable(false);
+    const { kind } = row.gpx;
+    const chosen = kind === "new";
+    setRefused(null);
     if (file === undefined) {
       // The choice was cancelled: the browser forgets the file it had, and so does the form.
-      if (chosen) {
-        setRead(null);
-        onChange({ gpx: { kind: "keep" } });
-      }
+      if (chosen) dropFile(null, chosen);
+      return;
+    }
+    if (file.size > MAX_GPX_BYTES) {
+      setRefused("tooBig");
+      dropFile(input, chosen);
       return;
     }
     let stats: GpxStats;
@@ -77,13 +97,12 @@ export function FormatFieldset({
     } catch {
       // Another file may have been chosen while this one was read: that one is the one to look at.
       if (input.files?.[0] !== file) return;
-      input.value = "";
-      setRead(null);
-      setUnreadable(true);
-      if (chosen) onChange({ gpx: { kind: "keep" } });
+      setRefused("unreadable");
+      dropFile(input, chosen);
       return;
     }
     if (input.files?.[0] !== file) return;
+    if (kind !== "new") setBefore(kind);
     setRead(stats);
     onChange({ gpx: { kind: "new", file } });
   }
@@ -98,23 +117,27 @@ export function FormatFieldset({
   }
 
   /**
-   * « Retirer la trace »: a file chosen and not sent yet is left aside; the
-   * track the format has on the server is taken off when the form is saved.
-   * The button goes with the track, and the focus with it: it goes to the title
-   * of the format.
+   * « Retirer la trace »: a file chosen and not sent yet is dropped, which puts
+   * the track back as it was before the choice; the track the format has on the
+   * server is taken off when the form is saved (and « Annuler » keeps it). The
+   * button goes with what it removed, and the focus with it: it goes to the title
+   * of the format, unless the button is still there.
    */
   function removeTrack() {
-    if (trackField.current) trackField.current.value = "";
-    setRead(null);
-    setUnreadable(false);
+    setRefused(null);
     if (row.gpx.kind === "new") {
-      onChange({ gpx: { kind: "keep" } });
-      // The track on the server is still there to take off: the button stays.
-      if (!row.hasTrack) title.current?.focus();
+      dropFile(trackField.current, true);
+      if (before === "remove" || !row.hasTrack) title.current?.focus();
     } else {
       onChange({ gpx: { kind: "remove" } });
       title.current?.focus();
     }
+  }
+
+  /** « Annuler » under the track that is to be taken off: it stays. Its button is gone, the focus goes to the title of the format. */
+  function keepTrack() {
+    onChange({ gpx: { kind: "keep" } });
+    title.current?.focus();
   }
 
   const hasTrackToRemove = row.gpx.kind === "new" || (row.gpx.kind === "keep" && row.hasTrack);
@@ -245,7 +268,7 @@ export function FormatFieldset({
       </Field>
 
       <div className="flex flex-col gap-2">
-        <Field label={t.format.gpx} error={unreadable ? t.route.unreadable : message("gpx")}>
+        <Field label={t.format.gpx} error={trackError}>
           {(control) => (
             <input
               {...control}
@@ -257,13 +280,16 @@ export function FormatFieldset({
             />
           )}
         </Field>
-        {row.gpx.kind === "new" && read !== null && (
-          <output className="text-sm text-neutral-700">
-            {read.min === undefined
+        {/* Always there, so that a screen reader says what is written in it when that changes. */}
+        <output id={statusId} className="text-sm text-neutral-700 empty:hidden">
+          {row.gpx.kind === "new" && read !== null
+            ? read.min === undefined
               ? t.format.gpxReadDistance(f.km(read.km))
-              : t.format.gpxRead(f.km(read.km), f.meters(read.gain))}
-          </output>
-        )}
+              : t.format.gpxRead(f.km(read.km), f.meters(read.gain))
+            : row.gpx.kind === "remove"
+              ? t.format.gpxRemoved
+              : null}
+        </output>
         <div className="flex flex-wrap gap-2 empty:hidden">
           {row.gpx.kind === "new" && read !== null && (
             <button type="button" onClick={reuseTrack} className={SECONDARY}>
@@ -273,6 +299,16 @@ export function FormatFieldset({
           {hasTrackToRemove && (
             <button type="button" onClick={removeTrack} className={SECONDARY}>
               {t.format.gpxRemove}
+            </button>
+          )}
+          {row.gpx.kind === "remove" && (
+            <button
+              type="button"
+              aria-describedby={statusId}
+              onClick={keepTrack}
+              className={SECONDARY}
+            >
+              {t.common.cancel}
             </button>
           )}
         </div>

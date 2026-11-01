@@ -4,7 +4,14 @@ import { ClientResponseError } from "pocketbase";
 import { describe, expect, test } from "vitest";
 
 import { en } from "./en";
-import { ERROR_CODES, errorCode, fieldErrors, translateError, translateFieldError } from "./errors";
+import {
+  ERROR_CODES,
+  errorCode,
+  fieldErrors,
+  fieldMessage,
+  translateError,
+  translateFieldError,
+} from "./errors";
 import { fr } from "./fr";
 
 // The server's own list of codes: the front end must know every one of them.
@@ -116,6 +123,21 @@ describe("translateFieldError", () => {
       fr.errors.validation_required,
     );
     expect(translateFieldError(fr, "gpx", undefined)).toBe(fr.errors.generic);
+  });
+});
+
+describe("fieldMessage", () => {
+  test("is the message of the field for a code it has words for, and of the code otherwise", () => {
+    expect(fieldMessage(fr, "gpx", "validation_file_size_limit")).toBe(fr.format.gpxTooBig);
+    expect(fieldMessage(fr, "gpx", "validation_invalid_mime_type")).toBe(fr.format.gpxNotGpx);
+    expect(fieldMessage(fr, "gpx", "validation_required")).toBe(fr.errors.validation_required);
+    expect(fieldMessage(fr, "name", "validation_required")).toBe(fr.errors.validation_required);
+  });
+
+  test("is nothing for a code that nobody has words for, never the generic message", () => {
+    expect(fieldMessage(fr, "gpx", "validation_something_new")).toBeUndefined();
+    expect(fieldMessage(fr, "gpx", undefined)).toBeUndefined();
+    expect(fieldMessage(fr, "gpx", "toString")).toBeUndefined();
   });
 });
 

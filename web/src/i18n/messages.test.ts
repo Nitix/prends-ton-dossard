@@ -167,6 +167,7 @@ describe("track texts", () => {
     expect(fr.format.gpxRemove).toBe("Retirer la trace");
     expect(fr.format.gpxRead("42,2 km", "2 400 m")).toBe("Trace : 42,2 km, 2 400 m D+");
     expect(fr.format.gpxReadDistance("42,2 km")).toBe("Trace : 42,2 km");
+    expect(fr.format.gpxRemoved).toBe("La trace sera retirée à l'enregistrement.");
     expect(fr.format.gpxReuse).toBe("Reprendre ces valeurs");
     expect(fr.format.routeUrl).toBe("Lien du parcours");
     expect(fr.format.gpxNotGpx).toBe("Ce fichier n'est pas une trace GPX.");
@@ -176,6 +177,9 @@ describe("track texts", () => {
     expect(fr.form.traceFailed("Trail 42 km")).toBe(
       "L'événement est enregistré, mais la trace de Trail 42 km n'a pas pu être envoyée.",
     );
+    expect(fr.form.traceFailedBecause("Trail 42 km", fr.format.gpxTooBig)).toBe(
+      "L'événement est enregistré, mais la trace de Trail 42 km n'a pas pu être envoyée. La trace est trop lourde : 10 Mo maximum.",
+    );
   });
 
   test("English", () => {
@@ -183,6 +187,7 @@ describe("track texts", () => {
     expect(en.format.gpxRemove).toBe("Remove the track");
     expect(en.format.gpxRead("42.2 km", "2,400 m")).toBe("Track: 42.2 km, 2,400 m gain");
     expect(en.format.gpxReadDistance("42.2 km")).toBe("Track: 42.2 km");
+    expect(en.format.gpxRemoved).toBe("The track will be removed when you save.");
     expect(en.format.gpxReuse).toBe("Use these values");
     expect(en.format.routeUrl).toBe("Course link");
     expect(en.format.gpxNotGpx).toBe("This file is not a GPX track.");
@@ -191,6 +196,9 @@ describe("track texts", () => {
     expect(en.route.open).toBe("See the course");
     expect(en.form.traceFailed("Trail 42 km")).toBe(
       "The event is saved, but the track of Trail 42 km could not be sent.",
+    );
+    expect(en.form.traceFailedBecause("Trail 42 km", en.format.gpxTooBig)).toBe(
+      "The event is saved, but the track of Trail 42 km could not be sent. The track is too big: 10 MB at most.",
     );
   });
 });

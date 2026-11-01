@@ -1544,6 +1544,8 @@ test("EventForm — « Retirer la trace » sur un fichier choisi mais pas encore
   await expect.element(trackRead(row)).not.toBeInTheDocument();
   await expect.element(removeTrack(row)).not.toBeInTheDocument();
   expect(filesIn(gpxField(row))).toBe(0);
+  // The button went with the file, and the focus did not go to the page: it is on the title of the format.
+  await expect.element(row.getByText(fr.form.formatTitle(1), { exact: true })).toHaveFocus();
   await save(screen).click();
   await savedEvent(router);
   expect(mocks.updateFormat).not.toHaveBeenCalled();
@@ -1603,4 +1605,279 @@ test("EventForm — en anglais, les textes de la trace sont anglais", async () =
   expect(plain(read.element().textContent)).toBe("Track: 22.2 km, 200 m gain");
   await expect.element(screen.getByRole("button", { name: "Use these values" })).toBeVisible();
   await expect.element(screen.getByRole("button", { name: "Remove the track" })).toBeVisible();
+});
+
+// --- A track that is too big, why a track was refused, and taking a track off ---
+
+/** What the server accepts for a track: 10 MiB (`MaxSize` in server/migrations/9f_format_route.go). */
+const LIMIT = 10 * 1024 * 1024;
+
+/** A readable GPX file of exactly this many bytes: a comment after the track pads it. */
+function gpxOfSize(bytes: number): File {
+  const padding = bytes - GPX.length - "<!---->".length;
+  return gpxFile(`${GPX}<!--${"x".repeat(padding)}-->`, "gros.gpx");
+}
+
+/** What PocketBase answers when the update of a format is refused for its file. */
+const uploadRefused = (code: string) =>
+  new ClientResponseError({
+    url: "/api/collections/formats/records/f",
+    status: 400,
+    response: { status: 400, message: "Failed to update record.", data: { gpx: field(code) } },
+  });
+
+const undo = (row: Row) => row.getByRole("button", { name: fr.common.cancel, exact: true });
+const formatTitleOf = (row: Row) => row.getByText(fr.form.formatTitle(1), { exact: true });
+
+test("EventForm — une trace de plus de 10 Mo est refusée au choix, avec son message, et n'est pas gardée", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+
+  await gpxField(row).upload(gpxOfSize(LIMIT + 1));
+
+  const message = row.getByText(fr.format.gpxTooBig);
+  await expect.element(message).toBeVisible();
+  expect(gpxField(row).element().getAttribute("aria-describedby")).toContain(message.element().id);
+  expect(gpxField(row).element().getAttribute("aria-invalid")).toBe("true");
+  // The file is not kept, though it could be read: the field is empty, nothing is shown of it.
+  expect(filesIn(gpxField(row))).toBe(0);
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  await expect.element(row.getByText(fr.route.unreadable)).not.toBeInTheDocument();
+  await expect.element(reuse(row)).not.toBeInTheDocument();
+  // Saving sends no track.
+  await save(screen).click();
+  await savedEvent(router);
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — une trace de 10 Mo pile est acceptée", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+
+  await gpxField(row).upload(gpxOfSize(LIMIT));
+
+  await expect.element(trackRead(row)).toBeVisible();
+  await expect.element(row.getByText(fr.format.gpxTooBig)).not.toBeInTheDocument();
+});
+
+test("EventForm — une trace trop lourde après une bonne ne laisse pas la bonne partir, un bon fichier efface le message", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await gpxField(row).upload(gpxFile());
+  await expect.element(trackRead(row)).toBeVisible();
+
+  await gpxField(row).upload(gpxOfSize(LIMIT + 1));
+
+  await expect.element(row.getByText(fr.format.gpxTooBig)).toBeVisible();
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  expect(filesIn(gpxField(row))).toBe(0);
+
+  await gpxField(row).upload(gpxFile());
+
+  await expect.element(trackRead(row)).toBeVisible();
+  await expect.element(row.getByText(fr.format.gpxTooBig)).not.toBeInTheDocument();
+  await save(screen).click();
+  await savedEvent(router);
+  expect(mocks.updateFormat).toHaveBeenCalledOnce();
+});
+
+test("EventForm — une trace que le serveur refuse : le message dit pourquoi, quand le formulaire a des mots pour ce motif", async () => {
+  mocks.updateFormat.mockRejectedValue(uploadRefused("validation_file_size_limit"));
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await gpxField(format(screen, 1)).upload(gpxFile());
+  await expect.element(trackRead(format(screen, 1))).toBeVisible();
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  const failed = screen.getByText(/mais la trace de /);
+  await expect.element(failed).toBeVisible();
+  expect(plain(failed.element().textContent)).toBe(
+    fr.form.traceFailedBecause("Trail 42 km", fr.format.gpxTooBig),
+  );
+  expect(plain(failed.element().textContent)).toContain(
+    "La trace est trop lourde : 10 Mo maximum.",
+  );
+});
+
+test("EventForm — un type de fichier refusé par le serveur est dit aussi", async () => {
+  mocks.updateFormat.mockRejectedValue(uploadRefused("validation_invalid_mime_type"));
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await gpxField(format(screen, 1)).upload(gpxFile());
+  await expect.element(trackRead(format(screen, 1))).toBeVisible();
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  const failed = screen.getByText(/mais la trace de /);
+  await expect.element(failed).toBeVisible();
+  expect(plain(failed.element().textContent)).toBe(
+    fr.form.traceFailedBecause("Trail 42 km", fr.format.gpxNotGpx),
+  );
+});
+
+test("EventForm — un motif que le formulaire ne connaît pas garde le message général", async () => {
+  mocks.updateFormat.mockRejectedValue(uploadRefused("validation_something_new"));
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await gpxField(format(screen, 1)).upload(gpxFile());
+  await expect.element(trackRead(format(screen, 1))).toBeVisible();
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  const failed = screen.getByText(/mais la trace de /);
+  await expect.element(failed).toBeVisible();
+  expect(plain(failed.element().textContent)).toBe(fr.form.traceFailed("Trail 42 km"));
+});
+
+/** The form with two formats, a 42 km trail and a 10 km road race, each with a track chosen. */
+async function twoTracks() {
+  const opened = await renderForm();
+  await fillEvent(opened.screen);
+  await addFormat(opened.screen).click();
+  await raceType(format(opened.screen, 2)).selectOptions(roadType.id);
+  await distance(format(opened.screen, 2)).fill("10");
+  for (const n of [1, 2]) {
+    await gpxField(format(opened.screen, n)).upload(gpxFile());
+    await expect.element(trackRead(format(opened.screen, n))).toBeVisible();
+  }
+  return opened;
+}
+
+test("EventForm — deux traces refusées pour le même motif le disent une fois, pour des motifs différents le message général", async () => {
+  mocks.updateFormat.mockRejectedValue(uploadRefused("validation_file_size_limit"));
+  const same = await twoTracks();
+
+  await save(same.screen).click();
+
+  await savedEvent(same.router);
+  const together = same.screen.getByText(/mais la trace de /);
+  await expect.element(together).toBeVisible();
+  expect(plain(together.element().textContent)).toBe(
+    fr.form.traceFailedBecause("Trail 42 km et Route 10 km", fr.format.gpxTooBig),
+  );
+  await same.screen.unmount();
+
+  mocks.updateFormat
+    .mockReset()
+    .mockRejectedValueOnce(uploadRefused("validation_file_size_limit"))
+    .mockRejectedValueOnce(uploadRefused("validation_invalid_mime_type"));
+  const mixed = await twoTracks();
+
+  await save(mixed.screen).click();
+
+  await savedEvent(mixed.router);
+  const apart = mixed.screen.getByText(/mais la trace de /);
+  await expect.element(apart).toBeVisible();
+  expect(plain(apart.element().textContent)).toBe(
+    fr.form.traceFailed("Trail 42 km et Route 10 km"),
+  );
+});
+
+test("EventForm — « Retirer la trace » d'une trace enregistrée dit qu'elle sera retirée, « Annuler » la garde, et le focus n'est jamais perdu", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+  const row = format(screen, 1);
+
+  await removeTrack(row).click();
+
+  // The removal is said, with the way back, and the focus is on the title of the format.
+  const said = row.getByText(fr.format.gpxRemoved);
+  await expect.element(said).toBeVisible();
+  await expect.element(undo(row)).toBeVisible();
+  expect(undo(row).element().getAttribute("aria-describedby")).toContain(said.element().id);
+  await expect.element(removeTrack(row)).not.toBeInTheDocument();
+  await expect.element(formatTitleOf(row)).toHaveFocus();
+
+  await undo(row).click();
+
+  // « Annuler » is gone with the message: the focus is on the title again, never on the page.
+  await expect.element(said).not.toBeInTheDocument();
+  await expect.element(undo(row)).not.toBeInTheDocument();
+  await expect.element(removeTrack(row)).toBeVisible();
+  await expect.element(formatTitleOf(row)).toHaveFocus();
+  expect(document.activeElement).not.toBe(document.body);
+  // The track is kept: nothing is sent.
+  await save(screen).click();
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — choisir un fichier puis « Retirer la trace » revient à l'état d'avant : un retrait en attente reste", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+  const row = format(screen, 1);
+  await removeTrack(row).click();
+  await expect.element(row.getByText(fr.format.gpxRemoved)).toBeVisible();
+
+  await gpxField(row).upload(gpxFile());
+
+  // The file replaces the removal: it says what it holds, and no longer that the track goes.
+  await expect.element(trackRead(row)).toBeVisible();
+  await expect.element(row.getByText(fr.format.gpxRemoved)).not.toBeInTheDocument();
+
+  await removeTrack(row).click();
+
+  // Back to the state before the choice: the removal is still to be done.
+  await expect.element(row.getByText(fr.format.gpxRemoved)).toBeVisible();
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  expect(filesIn(gpxField(row))).toBe(0);
+  await expect.element(formatTitleOf(row)).toHaveFocus();
+  await save(screen).click();
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).toHaveBeenCalledExactlyOnceWith("f15", { gpx: null });
+});
+
+test("EventForm — choisir un fichier puis « Retirer la trace » garde la trace enregistrée, et le bouton qui reste garde le focus", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+  const row = format(screen, 1);
+  await gpxField(row).upload(gpxFile());
+  await expect.element(trackRead(row)).toBeVisible();
+
+  await removeTrack(row).click();
+
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  await expect.element(row.getByText(fr.format.gpxRemoved)).not.toBeInTheDocument();
+  await expect.element(removeTrack(row)).toHaveFocus();
+  await save(screen).click();
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — un fichier illisible, ou trop lourd, laisse le retrait en attente comme il était", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+  const row = format(screen, 1);
+  await removeTrack(row).click();
+
+  // With no file chosen yet, a refused file changes nothing of the removal.
+  await gpxField(row).upload(gpxFile("ceci n'est pas une trace", "notes.gpx"));
+  await expect.element(row.getByText(fr.route.unreadable)).toBeVisible();
+  await expect.element(row.getByText(fr.format.gpxRemoved)).toBeVisible();
+
+  // After a good file, a refused one gives the removal back.
+  await gpxField(row).upload(gpxFile());
+  await expect.element(trackRead(row)).toBeVisible();
+  await gpxField(row).upload(gpxOfSize(LIMIT + 1));
+
+  await expect.element(row.getByText(fr.format.gpxTooBig)).toBeVisible();
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  await expect.element(row.getByText(fr.format.gpxRemoved)).toBeVisible();
+  await save(screen).click();
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).toHaveBeenCalledExactlyOnceWith("f15", { gpx: null });
 });

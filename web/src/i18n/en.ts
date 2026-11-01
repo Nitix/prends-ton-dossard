@@ -257,6 +257,7 @@ export const en = {
     gpxRemove: "Remove the track",
     gpxRead: (km: string, gain: string) => `Track: ${km}, ${gain} gain`,
     gpxReadDistance: (km: string) => `Track: ${km}`,
+    gpxRemoved: "The track will be removed when you save.",
     gpxReuse: "Use these values",
     routeUrl: "Course link",
     gpxNotGpx: "This file is not a GPX track.",
@@ -315,6 +316,8 @@ export const en = {
     saved: "Event saved.",
     traceFailed: (names: string) =>
       `The event is saved, but the track of ${names} could not be sent.`,
+    traceFailedBecause: (names: string, reason: string) =>
+      `The event is saved, but the track of ${names} could not be sent. ${reason}`,
   },
   filters: {
     title: "Filters",

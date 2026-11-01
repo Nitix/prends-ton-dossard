@@ -89,22 +89,36 @@ export function fieldErrors(err: unknown): Record<string, string> {
   return Object.fromEntries(codes);
 }
 
+/** The message of a code, or undefined when there is none for it. */
+function messageOf(t: Messages, code: string | undefined): string | undefined {
+  const messages: Readonly<Record<string, string>> = t.errors;
+  return code !== undefined && Object.hasOwn(messages, code) ? messages[code] : undefined;
+}
+
 /** The message for a code, in the language of `t`. An unknown code gets the generic message. */
 export function translateError(t: Messages, code: string | undefined): string {
-  const messages: Readonly<Record<string, string>> = t.errors;
-  const message = code !== undefined && Object.hasOwn(messages, code) ? messages[code] : undefined;
-  return message ?? t.errors.generic;
+  return messageOf(t, code) ?? t.errors.generic;
 }
 
 /**
- * The message for the code of a field. Most codes say the same whatever the
- * field is; the two refusals of a file say what the file is for: the photo of
- * a runner (`errors`) is not the GPX track of a format (`gpx`).
+ * The message for the code of a field, or undefined when the front end has no
+ * words for it. Most codes say the same whatever the field is; the two refusals
+ * of a file say what the file is for: the photo of a runner (`errors`) is not
+ * the GPX track of a format (`gpx`).
  */
-export function translateFieldError(t: Messages, field: string, code: string | undefined): string {
+export function fieldMessage(
+  t: Messages,
+  field: string,
+  code: string | undefined,
+): string | undefined {
   if (field === "gpx") {
     if (code === "validation_invalid_mime_type") return t.format.gpxNotGpx;
     if (code === "validation_file_size_limit") return t.format.gpxTooBig;
   }
-  return translateError(t, code);
+  return messageOf(t, code);
+}
+
+/** Like `fieldMessage`, with the generic message for a code that has none. */
+export function translateFieldError(t: Messages, field: string, code: string | undefined): string {
+  return fieldMessage(t, field, code) ?? t.errors.generic;
 }

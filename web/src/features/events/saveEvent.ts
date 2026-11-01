@@ -197,13 +197,16 @@ export function buildBatch(
 
 /**
  * The event is saved, but the track of some of its formats was not sent or not
- * taken off. `formats` names them, in the order of the form, and `eventId` is
- * the event that was saved, for the caller to go on with it.
+ * taken off. `formats` names them, in the order of the form, `causes` is what
+ * each request failed with (one per name, in the same order: the answer of the
+ * server tells why), and `eventId` is the event that was saved, for the caller
+ * to go on with it.
  */
 export class TraceUploadError extends Error {
   constructor(
     public readonly formats: string[],
     public readonly eventId = "",
+    public readonly causes: unknown[] = [],
   ) {
     super(`the track of ${formats.join(", ")} was not sent`);
     this.name = "TraceUploadError";
@@ -240,6 +243,7 @@ export async function uploadTraces(
   rows: { gpx?: GpxChange; label?: string; name?: string }[],
 ): Promise<void> {
   const failed: string[] = [];
+  const causes: unknown[] = [];
   for (const [i, row] of rows.entries()) {
     const id = formatIds[i];
     const change = row.gpx;
@@ -253,11 +257,12 @@ export async function uploadTraces(
         body.append("gpx", file, file.name);
         await pb.collection("formats").update(id, body);
       }
-    } catch {
+    } catch (err) {
       failed.push(row.label ?? (row.name || id));
+      causes.push(err);
     }
   }
-  if (failed.length > 0) throw new TraceUploadError(failed);
+  if (failed.length > 0) throw new TraceUploadError(failed, "", causes);
 }
 
 /** What a failed request of the batch was about, to show its error where the user can fix it. */
@@ -371,7 +376,9 @@ export async function saveEvent(
   try {
     await uploadTraces(formatIds, draft.formats);
   } catch (err) {
-    if (err instanceof TraceUploadError) throw new TraceUploadError(err.formats, eventId);
+    if (err instanceof TraceUploadError) {
+      throw new TraceUploadError(err.formats, eventId, err.causes);
+    }
     throw err;
   }
   return eventId;
