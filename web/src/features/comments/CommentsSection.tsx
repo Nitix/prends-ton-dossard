@@ -417,13 +417,18 @@ function DeleteForm({
   const { t } = useI18n();
   const remove = useDeleteComment(eventId);
   const [message, setMessage] = useState<string | null>(null);
+  // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
+  const sending = useRef(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     setMessage(null);
     try {
       await remove.mutateAsync(commentId);
     } catch (err) {
+      sending.current = false;
       setMessage(commentError(t, err));
       return;
     }
@@ -441,7 +446,11 @@ function DeleteForm({
         <button type="button" onClick={onClose} className={SECONDARY}>
           {t.comments.cancel}
         </button>
-        <button type="submit" disabled={remove.isPending} className={DANGER}>
+        <button
+          type="submit"
+          aria-disabled={remove.isPending || undefined}
+          className={`${DANGER} ${remove.isPending ? "opacity-60" : ""}`}
+        >
           {t.comments.remove}
         </button>
       </div>

@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { SUPPORT, UNDECIDED } from "../events/participants";
 import {
@@ -394,8 +395,37 @@ test("AddSomeoneDialog — si tout le monde est déjà sur toutes les épreuves,
   const { screen } = await renderDialog(everyoneEverywhere);
 
   await expect.element(screen.getByText(fr.participation.everyoneThere)).toBeVisible();
-  await expect.element(submit(screen)).toBeDisabled();
+  // Nothing to send: the button says so, and sends nothing.
+  await expect.element(submit(screen)).toHaveAttribute("aria-disabled", "true");
   await expect.element(runnerSelect(screen)).not.toBeInTheDocument();
+  // (Playwright does not click what is aria-disabled: the click is the page's own.)
+  buttonOf(submit(screen)).click();
+  expect(mocks.create).not.toHaveBeenCalled();
+});
+
+test("AddSomeoneDialog — le bouton garde le focus pendant l'envoi et après un refus qui ne tient à aucun champ, et un double envoi ne crée qu'une participation", async () => {
+  const pending = Promise.withResolvers<unknown>();
+  mocks.create.mockReturnValueOnce(pending.promise);
+  const { screen, onClose } = await renderDialog();
+  await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  const button = buttonOf(submit(screen));
+
+  clickTwice(button);
+
+  await expectBusy(button);
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+
+  pending.reject(
+    new ClientResponseError({
+      status: 403,
+      response: { status: 403, message: "…", data: { code: "forbidden" } },
+    }),
+  );
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
+  await expectAvailable(button);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(mocks.create).toHaveBeenCalledTimes(1);
 });
 
 test("AddSomeoneDialog — Annuler ferme sans rien créer", async () => {

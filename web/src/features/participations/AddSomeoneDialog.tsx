@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
@@ -15,7 +15,8 @@ import { FormatField, noFormatChoice, SelectField, StatusField } from "./fields"
  * they are not yet (and "Not decided yet" and "Coming to cheer", as for "I'm
  * in"), then of a status. A runner who has nothing left to choose is not
  * offered. The runner has to confirm it themselves later (unless it is the
- * member's own).
+ * member's own). While it is on its way, the button says it is busy and is not
+ * disabled (it would lose the focus); a second tap is ignored.
  */
 export function AddSomeoneDialog({
   open,
@@ -43,6 +44,8 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
   const [formatId, setFormatId] = useState("");
   const [status, setStatus] = useState<Status>("interested");
   const [message, setMessage] = useState<string | null>(null);
+  // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
+  const sending = useRef(false);
 
   if (runners.isPending) return <output>{t.common.loading}</output>;
   if (runners.isError) {
@@ -85,6 +88,9 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
   // « Pas encore décidé » and « Vient encourager » are on the event alone, with a status that is not a choice.
   const alone = noFormatChoice(chosenFormat);
 
+  // Busy, or nothing to send.
+  const busy = create.isPending || available.length === 0;
+
   function chooseRunner(id: string) {
     setChosenRunner(id);
     // Each runner starts from the first format that is offered to them.
@@ -93,6 +99,9 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Nobody is chosen when there is nobody to add: the button only says so.
+    if (runnerId === "" || sending.current) return;
+    sending.current = true;
     setMessage(null);
     const who = { runner: runnerId, event: view.event.id };
     try {
@@ -102,6 +111,8 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
       onClose();
     } catch (err) {
       setMessage(participationError(t, err));
+    } finally {
+      sending.current = false;
     }
   }
 
@@ -150,8 +161,8 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
         </button>
         <button
           type="submit"
-          disabled={create.isPending || available.length === 0}
-          className={PRIMARY}
+          aria-disabled={busy || undefined}
+          className={`${PRIMARY} ${busy ? "opacity-60" : ""}`}
         >
           {create.isPending ? t.auth.saving : t.participation.addSubmit}
         </button>

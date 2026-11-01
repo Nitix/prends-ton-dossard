@@ -7,6 +7,7 @@ import { render } from "vitest-browser-react";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { AddToOfferDialog } from "./AddToOfferDialog";
 import { offersKey, toOfferView, type OfferView } from "./api";
 
@@ -226,7 +227,11 @@ describe("who is offered", () => {
     await expect.element(screen.getByText(fr.offers.nobodyToAdd)).toBeVisible();
     expect(fr.offers.nobodyToAdd).toBe("Tout le monde a déjà une place.");
     await expect.element(runnerSelect(screen)).not.toBeInTheDocument();
-    await expect.element(submit(screen)).toBeDisabled();
+    // Nothing to send: the button says so, and sends nothing.
+    await expect.element(submit(screen)).toHaveAttribute("aria-disabled", "true");
+    // (Playwright does not click what is aria-disabled: the click is the page's own.)
+    buttonOf(submit(screen)).click();
+    expect(mocks.take).not.toHaveBeenCalled();
   });
 
   test("AddToOfferDialog — un coureur qui prend une place pendant que la fenêtre est ouverte n'est plus proposé ni choisi", async () => {
@@ -316,6 +321,39 @@ describe("adding someone", () => {
 
     await expect.element(dialog.getByRole("alert").getByText(fr.errors.offer_full)).toBeVisible();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("AddToOfferDialog — le bouton garde le focus pendant l'envoi et après un refus, et deux clics ne créent qu'une place", async () => {
+    const pending = Promise.withResolvers<unknown>();
+    mocks.take.mockReturnValueOnce(pending.promise);
+    const { screen, onClose } = await openDialog();
+    const dialog = dialogOf(screen);
+    await expect.element(dialog).toBeVisible();
+    await vi.waitFor(() => {
+      expect(offered(screen).length).toBeGreaterThan(0);
+    });
+    await runnerSelect(screen).selectOptions(zoe.id);
+    const button = buttonOf(submit(screen));
+
+    clickTwice(button);
+
+    await expectBusy(button);
+    expect(mocks.take).toHaveBeenCalledTimes(1);
+
+    pending.reject(
+      new ClientResponseError({
+        status: 400,
+        response: {
+          status: 400,
+          message: "Failed to create record.",
+          data: { offer: { code: "offer_full", message: "…" } },
+        },
+      }),
+    );
+    await expect.element(dialog.getByRole("alert").getByText(fr.errors.offer_full)).toBeVisible();
+    await expectAvailable(button);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mocks.take).toHaveBeenCalledTimes(1);
   });
 
   test("AddToOfferDialog — Annuler ne crée rien et rend le focus au bouton d'ouverture", async () => {

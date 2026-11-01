@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import {
   eventRecord,
@@ -231,6 +232,24 @@ test("ChooseFormatDialog — un autre refus est traduit d'après son code", asyn
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.format_other_event);
   expect(onClose).not.toHaveBeenCalled();
+});
+
+test("ChooseFormatDialog — Enregistrer garde le focus pendant l'envoi et après un refus qui ne tient à aucun champ, et un double envoi ne modifie qu'une fois", async () => {
+  const pending = Promise.withResolvers<unknown>();
+  mocks.update.mockReturnValueOnce(pending.promise);
+  const { screen, onClose } = await renderDialog();
+  const button = buttonOf(save(screen));
+
+  clickTwice(button);
+
+  await expectBusy(button);
+  expect(mocks.update).toHaveBeenCalledTimes(1);
+
+  pending.reject(new TypeError("Failed to fetch"));
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expectAvailable(button);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(mocks.update).toHaveBeenCalledTimes(1);
 });
 
 test("ChooseFormatDialog — Annuler ferme sans rien envoyer", async () => {

@@ -10,6 +10,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import type { Me } from "../participations/permissions";
 import { CommentsSection } from "./CommentsSection";
 
@@ -150,13 +151,6 @@ const item = (screen: Screen, author: string) =>
   screen.getByRole("listitem").filter({ has: page.getByText(author, { exact: true }) });
 const field = (screen: Screen) => screen.getByLabelText(fr.comments.newLabel);
 const send = (screen: Screen) => screen.getByRole("button", { name: fr.comments.send });
-
-/** The button a locator found: its `disabled` property is the one the browser follows. */
-function buttonOf(locator: { element(): Element }): HTMLButtonElement {
-  const element = locator.element();
-  if (!(element instanceof HTMLButtonElement)) throw new Error("not a button");
-  return element;
-}
 
 /** What the SDK throws for the 400 of a record whose `body` is invalid. */
 function bodyError(code: string): ClientResponseError {
@@ -599,6 +593,26 @@ describe("editing and deleting", () => {
     await expect.element(screen.getByText("Je viens avec Paul.")).not.toBeInTheDocument();
     await expect.element(dialog).not.toBeInTheDocument();
     await expect.element(heading(screen, 1)).toHaveFocus();
+  });
+
+  test("CommentsSection — Supprimer, dans la fenêtre, garde le focus pendant l'envoi et après un refus, et un double envoi ne supprime qu'une fois", async () => {
+    const pending = Promise.withResolvers<unknown>();
+    mocks.remove.mockReturnValueOnce(pending.promise);
+    const { screen } = await renderSection();
+    await expect.element(heading(screen, 2)).toBeVisible();
+    await remove(screen, "Alice").click();
+    const dialog = screen.getByRole("dialog", { name: fr.comments.removeConfirm });
+    const confirm = buttonOf(dialog.getByRole("button", { name: fr.comments.remove }));
+
+    clickTwice(confirm);
+
+    await expectBusy(confirm);
+    expect(mocks.remove).toHaveBeenCalledTimes(1);
+
+    pending.reject(new Error("boom"));
+    await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+    await expectAvailable(confirm);
+    expect(mocks.remove).toHaveBeenCalledTimes(1);
   });
 
   test("CommentsSection — l'admin supprime le commentaire d'un autre", async () => {

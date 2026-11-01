@@ -81,6 +81,8 @@ function AddToOfferForm({
     .toSorted((a, b) => a.name.localeCompare(b.name));
   // The page may load a change while the window is open: a runner who is not offered any more is not chosen any more.
   const runnerId = available.some((runner) => runner.id === chosen) ? chosen : "";
+  // Busy, or nothing to send: the button says so and is not disabled (it would lose the focus).
+  const busy = take.isPending || available.length === 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,8 +126,8 @@ function AddToOfferForm({
         </button>
         <button
           type="submit"
-          disabled={take.isPending || available.length === 0}
-          className={PRIMARY}
+          aria-disabled={busy || undefined}
+          className={`${PRIMARY} ${busy ? "opacity-60" : ""}`}
         >
           {take.isPending ? t.auth.saving : t.participation.addSubmit}
         </button>

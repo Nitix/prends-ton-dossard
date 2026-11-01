@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { SUPPORT, UNDECIDED } from "../events/participants";
 import {
@@ -371,6 +372,26 @@ test("JoinDialog — une erreur réseau donne le message générique", async () 
   await save(screen).click();
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+});
+
+test("JoinDialog — Enregistrer garde le focus pendant l'envoi et après un refus qui ne tient à aucun champ, et un double envoi ne crée qu'une participation", async () => {
+  const pending = Promise.withResolvers<unknown>();
+  mocks.create.mockReturnValueOnce(pending.promise);
+  const { screen, onClose } = await renderDialog(nina);
+  const button = buttonOf(save(screen));
+
+  // Two clicks in the same tick, before the page has drawn the busy state.
+  clickTwice(button);
+
+  await expectBusy(button);
+  expect(mocks.create).toHaveBeenCalledTimes(1);
+
+  // The server cannot be reached: nothing to show under a field, and the focus stays on the button.
+  pending.reject(new TypeError("Failed to fetch"));
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expectAvailable(button);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(mocks.create).toHaveBeenCalledTimes(1);
 });
 
 test("JoinDialog — Annuler ferme sans rien envoyer", async () => {

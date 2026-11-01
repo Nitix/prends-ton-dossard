@@ -9,6 +9,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import type { ParticipationRecord, RunnerRecord } from "../../lib/types";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import {
   aliceRunner,
@@ -575,6 +576,32 @@ test("ParticipationMenu — un retrait refusé le dit dans la fenêtre, qui rest
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
   await expect.element(dialog).toBeVisible();
+});
+
+test("ParticipationMenu — Retirer, dans la fenêtre, garde le focus pendant l'envoi et après un refus, et un double envoi ne retire qu'une fois", async () => {
+  const pending = Promise.withResolvers<unknown>();
+  mocks.remove.mockReturnValueOnce(pending.promise);
+  const { screen, onRemoved } = await renderMenu();
+  await open(screen);
+  await screen.getByRole("button", { name: fr.common.remove }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.removeTitle });
+  const confirm = buttonOf(dialog.getByRole("button", { name: fr.common.remove }));
+
+  clickTwice(confirm);
+
+  await expectBusy(confirm);
+  expect(mocks.remove).toHaveBeenCalledTimes(1);
+
+  pending.reject(
+    new ClientResponseError({
+      status: 403,
+      response: { status: 403, message: "…", data: { code: "forbidden" } },
+    }),
+  );
+  await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
+  await expectAvailable(confirm);
+  expect(onRemoved).not.toHaveBeenCalled();
+  expect(mocks.remove).toHaveBeenCalledTimes(1);
 });
 
 test("ParticipationMenu — un changement de statut refusé s'affiche en message", async () => {

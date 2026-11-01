@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
@@ -16,7 +16,9 @@ import { FormatField, StatusField } from "./fields";
  * on the event alone (interested, or supporter). All the formats of the event
  * are offered: the runner is on none of them, which the server requires of a
  * participation with no format. The participation then moves to its format,
- * and the status can be more than « Interested ».
+ * and the status can be more than « Interested ». While it is on its way, the
+ * button says it is busy and is not disabled (it would lose the focus); a
+ * second tap is ignored.
  */
 export function ChooseFormatDialog({
   open,
@@ -74,6 +76,8 @@ function ChooseForm({
     participation.status === "supporter" ? "interested" : participation.status,
   );
   const [message, setMessage] = useState<string | null>(null);
+  // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
+  const sending = useRef(false);
   // The page may load a change while the dialog is open: a format that is not
   // on the event any more is not chosen any more, the first one is.
   const formatId = view.formats.some(({ format }) => format.id === chosenFormat)
@@ -82,6 +86,8 @@ function ChooseForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     setMessage(null);
     try {
       await update.mutateAsync({ id: participation.id, patch: { format: formatId, status } });
@@ -96,6 +102,7 @@ function ChooseForm({
         (onChosen ?? onClose)();
         return;
       }
+      sending.current = false;
       setMessage(participationError(t, err));
       return;
     }
@@ -116,7 +123,11 @@ function ChooseForm({
         <button type="button" onClick={onClose} className={SECONDARY}>
           {t.common.cancel}
         </button>
-        <button type="submit" disabled={update.isPending} className={PRIMARY}>
+        <button
+          type="submit"
+          aria-disabled={update.isPending || undefined}
+          className={`${PRIMARY} ${update.isPending ? "opacity-60" : ""}`}
+        >
           {update.isPending ? t.auth.saving : t.common.save}
         </button>
       </div>

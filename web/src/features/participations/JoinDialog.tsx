@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
@@ -24,7 +24,10 @@ import type { Me } from "./permissions";
  *
  * Once the participation is saved, `onJoined` is given it, then the dialog
  * closes: the button that opened it may be gone with the last format to take,
- * and the page puts the focus where the new participation is.
+ * and the page puts the focus where the new participation is. While it is on
+ * its way, the button says it is busy and is not disabled (it would lose the
+ * focus, and a refusal that is not about a field would not give it back); a
+ * second tap is ignored.
  */
 export function JoinDialog({
   open,
@@ -70,11 +73,15 @@ function JoinForm({
   const [formatId, setFormatId] = useState(formats[0]?.format.id ?? (support ? SUPPORT : ""));
   const [status, setStatus] = useState<Status>("interested");
   const [message, setMessage] = useState<string | null>(null);
+  // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
+  const sending = useRef(false);
   // « Pas encore décidé » and « Je viens encourager » are on the event alone, with a status that is not a choice.
   const alone = noFormatChoice(formatId);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     setMessage(null);
     const who = { runner: me.runnerId, event: view.event.id };
     try {
@@ -85,6 +92,8 @@ function JoinForm({
       onClose();
     } catch (err) {
       setMessage(participationError(t, err));
+    } finally {
+      sending.current = false;
     }
   }
 
@@ -108,7 +117,11 @@ function JoinForm({
         <button type="button" onClick={onClose} className={SECONDARY}>
           {t.common.cancel}
         </button>
-        <button type="submit" disabled={create.isPending} className={PRIMARY}>
+        <button
+          type="submit"
+          aria-disabled={create.isPending || undefined}
+          className={`${PRIMARY} ${create.isPending ? "opacity-60" : ""}`}
+        >
           {create.isPending ? t.auth.saving : t.common.save}
         </button>
       </div>

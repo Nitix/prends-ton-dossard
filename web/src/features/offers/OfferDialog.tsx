@@ -112,7 +112,10 @@ function refusalOf(err: unknown, kind: OfferKind, attempt: number): Refusal {
  * changes one (`offer`, which is of this `kind`: the kind does not change).
  * It closes once the offer is saved, and the focus goes back to the button that
  * opened it, unless that button is gone: `onSaved` tells the page, before the
- * window closes, so that it places the focus.
+ * window closes, so that it places the focus. While the offer is on its way,
+ * the button says it is busy and is not disabled: it would lose the focus, and
+ * a refusal that is not about a field (shown above the buttons) would not give
+ * it back; a second click is ignored.
  */
 export function OfferDialog({
   open,
@@ -326,7 +329,11 @@ function OfferForm({
         <button type="button" onClick={onClose} className={SECONDARY}>
           {t.common.cancel}
         </button>
-        <button type="submit" disabled={save.isPending} className={PRIMARY}>
+        <button
+          type="submit"
+          aria-disabled={save.isPending || undefined}
+          className={`${PRIMARY} ${save.isPending ? "opacity-60" : ""}`}
+        >
           {save.isPending ? t.auth.saving : t.offers.form.save}
         </button>
       </div>

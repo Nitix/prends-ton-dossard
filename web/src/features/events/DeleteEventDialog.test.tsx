@@ -16,6 +16,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import {
@@ -339,6 +340,29 @@ test("DeleteEventDialog — un refus est dit dans la fenêtre : rien ne bouge", 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
   expect(router.state.location.pathname).toBe("/evenements/event");
   await expect.element(confirm(screen)).toBeEnabled();
+});
+
+test("DeleteEventDialog — Supprimer garde le focus pendant l'envoi et après un refus, et un double envoi ne supprime qu'une fois", async () => {
+  const pending = Promise.withResolvers<unknown>();
+  mocks.remove.mockReturnValueOnce(pending.promise);
+  const { screen, router } = await renderDialog();
+  const button = buttonOf(confirm(screen));
+
+  clickTwice(button);
+
+  await expectBusy(button);
+  expect(mocks.remove).toHaveBeenCalledTimes(1);
+
+  pending.reject(
+    new ClientResponseError({
+      status: 403,
+      response: { status: 403, message: "…", data: { code: "forbidden" } },
+    }),
+  );
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
+  await expectAvailable(button);
+  expect(router.state.location.pathname).toBe("/evenements/event");
+  expect(mocks.remove).toHaveBeenCalledTimes(1);
 });
 
 test("DeleteEventDialog — Annuler ferme sans rien supprimer", async () => {

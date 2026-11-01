@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { DANGER, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
@@ -64,6 +64,8 @@ function DeleteForm({ view, onClose }: { view: EventView; onClose: () => void })
   const comments = useComments(view.event.id);
   const offers = useOffers(view.event.id);
   const [message, setMessage] = useState<string | null>(null);
+  // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
+  const sending = useRef(false);
   const names = participantNames(view);
   // What else is lost, when it is known: the comments and the cars and lodgings, the ones that exist.
   const counts: [number, (n: number) => string][] = [
@@ -81,10 +83,13 @@ function DeleteForm({ view, onClose }: { view: EventView; onClose: () => void })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     setMessage(null);
     try {
       await remove.mutateAsync();
     } catch (err) {
+      sending.current = false;
       setMessage(describeError(t, err));
       return;
     }
@@ -117,7 +122,11 @@ function DeleteForm({ view, onClose }: { view: EventView; onClose: () => void })
         <button type="button" onClick={onClose} className={SECONDARY}>
           {t.common.cancel}
         </button>
-        <button type="submit" disabled={remove.isPending} className={DANGER}>
+        <button
+          type="submit"
+          aria-disabled={remove.isPending || undefined}
+          className={`${DANGER} ${remove.isPending ? "opacity-60" : ""}`}
+        >
           {t.common.delete}
         </button>
       </div>

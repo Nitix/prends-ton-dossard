@@ -10,6 +10,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import type { OfferKind } from "../../lib/types";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
 import { offersKey, toOfferView, type OfferView } from "./api";
@@ -409,6 +410,32 @@ describe("a refusal", () => {
     }
     await expect.element(dialog).toBeVisible();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("OfferDialog — Enregistrer garde le focus pendant l'envoi et après un refus qui ne tient à aucun champ, et un double envoi ne crée qu'une offre", async () => {
+    const pending = Promise.withResolvers<unknown>();
+    mocks.create.mockReturnValueOnce(pending.promise);
+    const { screen, onClose } = await openDialog({ kind: "ride" });
+    const dialog = dialogOf(screen, fr.offers.form.titleNew.ride);
+    await expect.element(dialog).toBeVisible();
+    await field(screen, fr.offers.form.place.ride).fill("Lyon");
+    await field(screen, fr.offers.form.seats.ride).fill("2");
+    const button = buttonOf(save(screen));
+
+    // Two clicks in the same tick, before the page has drawn the busy state.
+    clickTwice(button);
+
+    await expectBusy(button);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+
+    // The offer as a whole is refused: no field to give the focus to, so it stays on the button.
+    pending.reject(refusal("kind", "offer_already_member"));
+    await expect
+      .element(dialog.getByRole("alert").getByText(fr.errors.offer_already_member))
+      .toBeVisible();
+    await expectAvailable(button);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledTimes(1);
   });
 
   test("OfferDialog — un refus sans code donne le message générique, et la fenêtre reste ouverte", async () => {
