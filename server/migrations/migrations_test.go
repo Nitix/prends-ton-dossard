@@ -557,7 +557,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 			t.Errorf("users.%s must be gone", name)
 		}
 	}
-	if s := app.Settings(); s.Batch.Enabled || s.RateLimits.Enabled || s.Backups.Cron != "" {
+	if s := app.Settings(); s.Batch.Enabled || s.RateLimits.Enabled || s.Backups.Cron != "" || len(s.TrustedProxy.Headers) != 0 {
 		t.Errorf("settings must be back to the defaults: %+v", s)
 	}
 	if got := len(app.Settings().RateLimits.Rules); got != 4 {

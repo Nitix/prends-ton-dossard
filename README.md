@@ -109,6 +109,8 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
 
    Caddy obtient et renouvelle seul le certificat HTTPS.
 
+   Le programme se fie à l'en-tête `X-Forwarded-For` (une migration le règle) pour reconnaître chaque visiteur : c'est ce qui donne à chacun sa propre limite de requêtes sur la connexion et les invitations, au lieu d'une limite partagée par tout le groupe. C'est sûr parce que le port 8090 n'est publié que sur `127.0.0.1` et que Caddy remplace cet en-tête. **Ne jamais publier le port 8090 sur une interface publique** : n'importe qui pourrait alors choisir l'adresse qu'il présente, et contourner les limites.
+
 4. **Créer le super-admin PocketBase.** C'est le compte du tableau de bord (`https://courses.example.fr/_/`), qui sert à configurer les sauvegardes et à restaurer.
 
    ```sh

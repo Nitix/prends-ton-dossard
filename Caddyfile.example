@@ -1,5 +1,11 @@
 # Replace the domain with the one of APP_URL. Caddy gets and renews the HTTPS
 # certificate by itself.
+#
+# The program trusts the X-Forwarded-For header that Caddy sets: it tells the
+# visitors apart for the rate limits. That is safe only because the port of the
+# container is bound to 127.0.0.1, so never publish it on a public interface,
+# and because Caddy is the first proxy (no trusted_proxies), so it overwrites
+# the header that a visitor sends.
 courses.example.fr {
 	reverse_proxy 127.0.0.1:8090
 }
