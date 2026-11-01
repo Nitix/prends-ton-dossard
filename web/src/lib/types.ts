@@ -31,6 +31,8 @@ export type RunnerRecord = BaseRecord & {
   name: string;
   /** The account of the runner: empty until the person has one. */
   user?: string;
+  /** The name of the photo file, to ask `pb.files.getURL` for: empty without a photo. */
+  avatar?: string;
 };
 
 export type RaceTypeRecord = BaseRecord & {

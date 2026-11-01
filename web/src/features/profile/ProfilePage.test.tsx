@@ -6,6 +6,7 @@ import { render } from "vitest-browser-react";
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { imageFile, pixelURL, sizeOf } from "../../test/images";
 import { ProfilePage } from "./ProfilePage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn<() => void>(),
   registerPasskey: vi.fn<(name: string) => Promise<boolean>>(),
   passkeysSupported: vi.fn<() => boolean>(),
+  getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
 }));
 
 /** Replaces the signed-in record and tells the listeners, as the auth store of the SDK does. */
@@ -67,6 +69,7 @@ vi.mock("../../lib/pb", () => ({
           delete: mocks.passkeyDelete,
         },
       })[name],
+    files: { getURL: mocks.getURL },
   },
 }));
 
@@ -210,11 +213,101 @@ test("ProfilePage — les boutons et les champs font au moins 44 px de haut", as
   const screen = await renderProfile();
   await expect.element(screen.getByText(IPHONE.name)).toBeVisible();
 
-  const tooSmall = [...screen.container.querySelectorAll<HTMLElement>("button, input")]
+  // The file field of the photo is hidden from sight: the label around it is the target.
+  const tooSmall = [
+    ...screen.container.querySelectorAll<HTMLElement>(
+      "button, input:not([type=file]), label:has(input[type=file])",
+    ),
+  ]
     .filter((element) => element.getBoundingClientRect().height < 44)
     .map((element) => element.outerHTML);
 
   expect(tooSmall).toEqual([]);
+});
+
+// --- The photo ---
+
+test("ProfilePage — la section Photo propose de changer ma photo, et pas de bouton tant que mon coureur charge", async () => {
+  // The runner of the session is not there yet.
+  mocks.getFirstListItem.mockReturnValue(new Promise(() => {}));
+  const screen = await render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <I18nProvider languages={["fr"]}>
+        <ToastProvider>
+          <ProfilePage />
+        </ToastProvider>
+      </I18nProvider>
+    </QueryClientProvider>,
+  );
+
+  const photo = section(screen, fr.avatar.title);
+  await expect.element(photo.getByText(fr.common.loading)).toBeVisible();
+  await expect.element(photo.getByLabelText(fr.avatar.change)).not.toBeInTheDocument();
+  await expect.element(photo.getByRole("button")).not.toBeInTheDocument();
+});
+
+test("ProfilePage — la section Photo vient en premier et propose de changer ma photo", async () => {
+  const screen = await renderProfile();
+
+  const headings = screen
+    .getByRole("heading", { level: 2 })
+    .elements()
+    .map((element) => element.textContent);
+  expect(headings[0]).toBe(fr.avatar.title);
+  const photo = section(screen, fr.avatar.title);
+  await expect.element(photo.getByLabelText(fr.avatar.change)).toBeInTheDocument();
+  // No photo yet: nothing to remove, and the initial stands for it.
+  await expect
+    .element(photo.getByRole("button", { name: fr.avatar.remove }))
+    .not.toBeInTheDocument();
+  await expect.element(photo.getByText("A", { exact: true })).toBeVisible();
+});
+
+test("ProfilePage — choisir une photo l'envoie pour mon coureur, et la page lit le coureur de nouveau", async () => {
+  mocks.runnerUpdate.mockResolvedValue({ id: "r1" });
+  const screen = await renderProfile();
+
+  await section(screen, fr.avatar.title)
+    .getByLabelText(fr.avatar.change)
+    .upload(await imageFile(1600, 1200));
+
+  await expect
+    .element(section(screen, fr.avatar.title).getByRole("status").first())
+    .toHaveTextContent(fr.avatar.saved);
+  expect(mocks.runnerUpdate).toHaveBeenCalledOnce();
+  const [id, form] = mocks.runnerUpdate.mock.calls[0] ?? [];
+  expect(id).toBe("r1");
+  const sent = form instanceof FormData ? form.get("avatar") : null;
+  if (!(sent instanceof File)) throw new Error("update was not given a file");
+  expect(await sizeOf(sent)).toEqual({ width: 512, height: 384 });
+  // The photo is shown all over the app: the runner of the session is read again.
+  expect(mocks.getFirstListItem).toHaveBeenCalledTimes(2);
+});
+
+test("ProfilePage — avec une photo, elle est montrée en grand, et on peut la retirer", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  mocks.getFirstListItem.mockResolvedValue({
+    id: "r1",
+    name: "Alice",
+    user: "u1",
+    avatar: "alice_k3j9x2.webp",
+  });
+  mocks.runnerUpdate.mockResolvedValue({ id: "r1" });
+  const screen = await renderProfile();
+  const photo = section(screen, fr.avatar.title);
+
+  expect(photo.element().querySelector("img")?.getAttribute("src")).toBe(pixelURL());
+  expect(mocks.getURL).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "r1" }),
+    "alice_k3j9x2.webp",
+    { thumb: "256x256" },
+  );
+  await photo.getByRole("button", { name: fr.avatar.remove }).click();
+
+  await expect.element(photo.getByRole("status").first()).toHaveTextContent(fr.avatar.removed);
+  expect(mocks.runnerUpdate).toHaveBeenCalledExactlyOnceWith("r1", { avatar: null });
 });
 
 // --- The name ---

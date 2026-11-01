@@ -11,11 +11,13 @@ import {
 import { ClientResponseError } from "pocketbase";
 import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { page } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { pixelURL } from "../../test/images";
 import { EventPage } from "./EventPage";
 import {
   aliceRunner,
@@ -47,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn<(body: Rec) => Promise<unknown>>(),
   update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   remove: vi.fn<(id: string) => Promise<unknown>>(),
+  getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -65,6 +68,8 @@ vi.mock("../../lib/pb", () => ({
         runners: { getFullList: mocks.runners, getFirstListItem: mocks.myRunner },
         participations: { create: mocks.create, update: mocks.update, delete: mocks.remove },
       })[name],
+    // Only called for a runner who has a photo: none has, unless a test says so.
+    files: { getURL: mocks.getURL },
   },
 }));
 
@@ -95,6 +100,7 @@ beforeEach(() => {
     mocks.create,
     mocks.update,
     mocks.remove,
+    mocks.getURL,
   ]) {
     fn.mockReset();
   }
@@ -134,7 +140,7 @@ async function renderPage(
   else mocks.getOne.mockResolvedValue(event);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute({ component: Outlet });
-  const page = createRoute({
+  const eventPage = createRoute({
     getParentRoute: () => root,
     path: "/evenements/$id",
     component: Routed,
@@ -150,7 +156,7 @@ async function renderPage(
     component: () => <p>Page de la liste</p>,
   });
   const router = createRouter({
-    routeTree: root.addChildren([page, edit, list]),
+    routeTree: root.addChildren([eventPage, edit, list]),
     history: createMemoryHistory({ initialEntries: [`/evenements/${id}`] }),
   });
   const screen = await render(
@@ -177,10 +183,11 @@ async function loaded(screen: Screen, name = "Trail des Crêtes") {
 const plain = (s: string | null) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
 const format = (screen: Screen, name: RegExp) => screen.getByRole("region", { name });
-// The row of a runner: the list item that starts with their name (and not the
-// ones that only say "ajouté par Alice").
+// The row of a runner: the list item that has their name on a line of its own
+// (and not the ones that only say "ajouté par Alice"). Its text starts with the
+// initials of the runner, when they have no photo, so it is not matched on that.
 const row = (screen: Screen, runner: string) =>
-  screen.getByRole("listitem").filter({ hasText: new RegExp(`^${runner}`) });
+  screen.getByRole("listitem").filter({ has: page.getByText(runner, { exact: true }) });
 const menuOf = (screen: Screen, runner: string) =>
   screen.getByRole("button", { name: fr.participation.actionsFor(runner) });
 
@@ -312,6 +319,61 @@ test("EventPage — la mention porte le nom de qui a ajouté, et « non confirm�
   await loaded(screen);
   await expect.element(row(screen, "Bob").getByText(fr.event.unconfirmed)).toBeVisible();
   expect(row(screen, "Bob").element().textContent).not.toContain("ajouté par");
+});
+
+test("EventPage — une ligne de participant montre la photo à côté du nom, avec un alt vide", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  const bob = { ...bobRunner, avatar: "bob_x1y2z3.webp" };
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        participations_via_event: [
+          { ...p2, expand: { runner: bob, added_by: aliceRunner } },
+          p1,
+          p3,
+        ],
+      },
+    },
+  });
+  await loaded(screen);
+
+  const bobRow = row(screen, "Bob");
+  const image = bobRow.element().querySelector("img");
+  expect(image).not.toBeNull();
+  if (!image) return;
+  expect(image.getAttribute("alt")).toBe("");
+  expect(image.getAttribute("src")).toBe(pixelURL());
+  expect(mocks.getURL).toHaveBeenCalledWith(
+    expect.objectContaining({ id: bobRunner.id }),
+    "bob_x1y2z3.webp",
+    { thumb: "96x96" },
+  );
+  // The name is written next to it: the picture is decorative, nobody reads it out.
+  await expect.element(bobRow.getByRole("img")).not.toBeInTheDocument();
+  await expect.element(bobRow.getByText("Bob", { exact: true })).toBeVisible();
+  // Before the name, in the reading order as on the screen, in a 44 px round.
+  const name = bobRow.getByText("Bob", { exact: true }).element();
+  expect(image.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(image.getBoundingClientRect().right).toBeLessThanOrEqual(
+    name.getBoundingClientRect().left,
+  );
+  expect(image.getBoundingClientRect().width).toBe(44);
+  expect(image.getBoundingClientRect().height).toBe(44);
+  // The row still says that it is not confirmed, in words and in dashes.
+  await expect.element(bobRow.getByText("ajouté par Alice · non confirmé")).toBeVisible();
+  expect(getComputedStyle(bobRow.element()).borderStyle).toBe("dashed");
+});
+
+test("EventPage — sans photo, la ligne a les initiales avant le nom, cachées aux lecteurs d'écran", async () => {
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  const initials = row(screen, "Alice").getByText("A", { exact: true });
+  await expect.element(initials).toBeVisible();
+  await expect.element(initials).toHaveAttribute("aria-hidden", "true");
+  expect(mocks.getURL).not.toHaveBeenCalled();
 });
 
 test("EventPage — une épreuve sans participant le dit", async () => {

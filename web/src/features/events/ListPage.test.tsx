@@ -15,6 +15,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { pixelURL } from "../../test/images";
 import { EVENT_EXPAND } from "./api";
 import { ListPage } from "./ListPage";
 import { validateListSearch } from "./search";
@@ -26,6 +27,9 @@ import {
   f42,
   fLyon,
   ninaRunner,
+  p1,
+  p2,
+  p3,
   pNinaUndecided,
   roadType,
   samRunner,
@@ -45,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   runners: vi.fn<(options: Rec) => Promise<unknown>>(),
   raceTypes: vi.fn<(options: Rec) => Promise<unknown>>(),
   myRunner: vi.fn<(filter: string) => Promise<unknown>>(),
+  getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -63,6 +68,8 @@ vi.mock("../../lib/pb", () => ({
         runners: { getFullList: mocks.runners, getFirstListItem: mocks.myRunner },
         race_types: { getFullList: mocks.raceTypes },
       })[name],
+    // Only called for a runner who has a photo: none has, unless a test says so.
+    files: { getURL: mocks.getURL },
   },
 }));
 
@@ -92,7 +99,9 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  for (const fn of [mocks.events, mocks.runners, mocks.raceTypes, mocks.myRunner]) fn.mockReset();
+  for (const fn of [mocks.events, mocks.runners, mocks.raceTypes, mocks.myRunner, mocks.getURL]) {
+    fn.mockReset();
+  }
   mocks.user = aliceUser;
   mocks.events.mockResolvedValue([eventRecord, event2Record]);
   mocks.runners.mockResolvedValue([aliceRunner, bobRunner, samRunner]);
@@ -378,6 +387,87 @@ test("ParticipantChips — les puces montrent les initiales, et le nom reste lis
 
   await expect.element(bob.getByText("B", { exact: true })).toBeVisible();
   await expect.element(bob.getByText("Bob", { exact: true })).toBeInTheDocument();
+});
+
+test("ParticipantChips — avec une photo, l'image remplace les initiales ; la puce non confirmée garde ses pointillés et son texte", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  const bob = { ...bobRunner, avatar: "bob_x1y2z3.webp" };
+  mocks.events.mockResolvedValue([
+    {
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        participations_via_event: [
+          { ...p2, expand: { runner: bob, added_by: aliceRunner } },
+          p1,
+          p3,
+        ],
+      },
+    },
+  ]);
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  const chips = screen
+    .getByRole("list", { name: fr.event.participants })
+    .filter({ hasText: "Bob" })
+    .getByRole("listitem");
+  const chip = chips.filter({ hasText: "Bob" });
+
+  // The photo fills the chip, on the 96x96 thumb, with no text of its own.
+  const image = chip.element().querySelector("img");
+  expect(image?.getAttribute("src")).toBe(pixelURL());
+  expect(image?.getAttribute("alt")).toBe("");
+  expect(mocks.getURL).toHaveBeenCalledWith(
+    expect.objectContaining({ id: bobRunner.id }),
+    "bob_x1y2z3.webp",
+    { thumb: "96x96" },
+  );
+  await expect.element(chip.getByText("B", { exact: true })).not.toBeInTheDocument();
+  // He has not confirmed: still dashed, still said in words, still with who added him.
+  expect(getComputedStyle(chip.element()).borderStyle).toBe("dashed");
+  await expect.element(chip.getByText(fr.event.unconfirmed)).toBeInTheDocument();
+  expect(chip.element().getAttribute("title")).toBe(fr.event.addedBy("Alice"));
+  await expect.element(chip.getByText("Bob", { exact: true })).toBeInTheDocument();
+  // Alice has no photo: her initial stays, and the other chips are not touched.
+  const alice = chips.filter({ hasText: "Alice" });
+  await expect.element(alice.getByText("A", { exact: true })).toBeVisible();
+  expect(alice.element().querySelector("img")).toBeNull();
+});
+
+test("ParticipantChips — la photo remplit le rond de 32 px, sans le déformer", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  const bob = { ...bobRunner, avatar: "bob_x1y2z3.webp" };
+  mocks.events.mockResolvedValue([
+    {
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        participations_via_event: [
+          { ...p2, expand: { runner: bob, added_by: aliceRunner } },
+          p1,
+          p3,
+        ],
+      },
+    },
+  ]);
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  const chip = screen
+    .getByRole("list", { name: fr.event.participants })
+    .filter({ hasText: "Bob" })
+    .getByRole("listitem")
+    .filter({ hasText: "Bob" })
+    .element();
+  const image = chip.querySelector("img");
+  expect(chip.getBoundingClientRect().width).toBe(32);
+  expect(chip.getBoundingClientRect().height).toBe(32);
+  // Inside the 2 px border: the whole round, and it is a round.
+  expect(image?.getBoundingClientRect().width).toBe(28);
+  expect(image?.getBoundingClientRect().height).toBe(28);
+  expect(getComputedStyle(image ?? chip).objectFit).toBe("cover");
+  expect(getComputedStyle(image ?? chip).borderRadius).not.toBe("0px");
 });
 
 test("ParticipantChips — les initiales d'un nom composé", async () => {

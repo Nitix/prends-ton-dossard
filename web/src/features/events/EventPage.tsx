@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { Avatar } from "../../components/Avatar";
 import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useSession } from "../auth/session";
@@ -433,10 +434,11 @@ function NonStartersSection({
 }
 
 /**
- * A runner of a list: their name, a line under it (their status, or the format
- * they are on) when the list has one to tell, then who added them and that they
- * have not agreed yet when it is so. An unconfirmed one is dashed as well as
- * said in words: the state is never told by the border alone.
+ * A runner of a list: their photo (or their initials), their name, a line under
+ * it (their status, or the format they are on) when the list has one to tell,
+ * then who added them and that they have not agreed yet when it is so. An
+ * unconfirmed one is dashed as well as said in words: the state is never told
+ * by the border alone.
  */
 function ParticipantRow({
   eventId,
@@ -473,14 +475,21 @@ function ParticipantRow({
         confirmed ? "border-neutral-200" : "border-dashed border-neutral-400"
       }`}
     >
-      <div className="min-w-0 py-1">
-        <p className="font-medium break-words">{runner.name}</p>
-        {detail !== undefined && <p className="text-sm text-neutral-600">{detail}</p>}
-        {!confirmed && (
-          <p className="text-sm text-neutral-600">
-            {addedBy ? t.event.addedByUnconfirmed(addedBy.name) : t.event.unconfirmed}
-          </p>
-        )}
+      <div className="flex min-w-0 items-center gap-3 py-1">
+        <Avatar
+          runner={runner}
+          thumb="96x96"
+          className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
+        />
+        <div className="min-w-0">
+          <p className="font-medium break-words">{runner.name}</p>
+          {detail !== undefined && <p className="text-sm text-neutral-600">{detail}</p>}
+          {!confirmed && (
+            <p className="text-sm text-neutral-600">
+              {addedBy ? t.event.addedByUnconfirmed(addedBy.name) : t.event.unconfirmed}
+            </p>
+          )}
+        </div>
       </div>
       {me && canEditParticipation(participation, runner, me) && (
         <ParticipationMenu

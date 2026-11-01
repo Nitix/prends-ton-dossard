@@ -106,3 +106,39 @@ describe("admin texts", () => {
     expect(en.admin.copy).toBe("Copy");
   });
 });
+
+describe("avatar texts", () => {
+  test("French", () => {
+    expect(fr.avatar.title).toBe("Photo");
+    expect(fr.avatar.titleFor("Sam")).toBe("Photo de Sam");
+    expect(fr.avatar.change).toBe("Changer la photo");
+    expect(fr.avatar.remove).toBe("Retirer la photo");
+    expect(fr.avatar.preparing).toBe("Préparation de la photo…");
+    expect(fr.avatar.saved).toBe("Photo enregistrée.");
+    expect(fr.avatar.removed).toBe("Photo retirée.");
+    expect(fr.avatar.decodeFailed).toBe(
+      "Impossible de lire cette image. Choisis une photo JPEG, PNG ou WebP.",
+    );
+    expect(fr.errors.validation_file_size_limit).toBe("La photo est trop lourde : 5 Mo maximum.");
+    expect(fr.errors.validation_invalid_mime_type).toBe(
+      "Ce type d'image n'est pas accepté : JPEG, PNG ou WebP.",
+    );
+  });
+
+  test("English", () => {
+    expect(en.avatar.title).toBe("Photo");
+    expect(en.avatar.titleFor("Sam")).toBe("Sam's photo");
+    expect(en.avatar.change).toBe("Change the photo");
+    expect(en.avatar.remove).toBe("Remove the photo");
+    expect(en.avatar.preparing).toBe("Preparing the photo…");
+    expect(en.avatar.saved).toBe("Photo saved.");
+    expect(en.avatar.removed).toBe("Photo removed.");
+    expect(en.avatar.decodeFailed).toBe(
+      "This image cannot be read. Pick a JPEG, PNG or WebP photo.",
+    );
+    expect(en.errors.validation_file_size_limit).toBe("The photo is too big: 5 MB maximum.");
+    expect(en.errors.validation_invalid_mime_type).toBe(
+      "This image type is not accepted: JPEG, PNG or WebP.",
+    );
+  });
+});

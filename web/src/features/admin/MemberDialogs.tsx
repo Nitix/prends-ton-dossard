@@ -1,7 +1,9 @@
+import { AvatarPicker } from "../../components/AvatarPicker";
+import { Dialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { InvitationKind, InvitationRecord, RunnerRecord, UserRecord } from "../../lib/types";
-import { useMemberActions, type ShareLink } from "./api";
+import { useMemberActions, useMembers, type ShareLink } from "./api";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateLinkDialog } from "./CreateLinkDialog";
 import type { Member } from "./memberState";
@@ -13,6 +15,7 @@ import { UserPasskeys } from "./UserPasskeys";
 export type MemberDialog =
   | { kind: "create" }
   | { kind: "rename"; runner: RunnerRecord }
+  | { kind: "avatar"; runner: RunnerRecord }
   | { kind: "delete"; runner: RunnerRecord }
   | { kind: "link"; member: Member; linkKind: InvitationKind }
   | { kind: "share"; runner: RunnerRecord; linkKind: InvitationKind; link: ShareLink }
@@ -57,6 +60,8 @@ export function MemberDialogs({
   return (
     <>
       <RunnerNameDialog target={nameTarget} onClose={onClose} />
+
+      <AvatarDialog target={dialog?.kind === "avatar" ? dialog.runner : null} onClose={onClose} />
 
       <ConfirmDialog
         target={dialog?.kind === "delete" ? dialog.runner : null}
@@ -135,4 +140,33 @@ export function MemberDialogs({
       <UserPasskeys target={dialog?.kind === "passkeys" ? dialog : null} onClose={onClose} />
     </>
   );
+}
+
+/**
+ * The photo of a runner, in a window of its own: the admin changes the photo
+ * of any runner, which is the only way for a runner who has no account. It is
+ * open while it has a target.
+ */
+function AvatarDialog({ target, onClose }: { target: RunnerRecord | null; onClose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Dialog
+      open={target !== null}
+      onClose={onClose}
+      title={target === null ? "" : t.avatar.titleFor(target.name)}
+    >
+      {target !== null && <CurrentAvatarPicker runner={target} />}
+    </Dialog>
+  );
+}
+
+/**
+ * The window stays open after a change, and must show it. The runner the
+ * dialog was opened with is the one of that moment: the picker is given the
+ * one of the list, which is read again after each change.
+ */
+function CurrentAvatarPicker({ runner }: { runner: RunnerRecord }) {
+  const members = useMembers();
+  const current = members.data?.find((member) => member.runner.id === runner.id)?.runner;
+  return <AvatarPicker runner={current ?? runner} />;
 }

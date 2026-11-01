@@ -58,6 +58,16 @@ export const en = {
     passwordSignInAgain: "Password changed. Sign in again.",
     logout: "Sign out",
   },
+  avatar: {
+    title: "Photo",
+    titleFor: (name: string) => `${name}'s photo`,
+    change: "Change the photo",
+    remove: "Remove the photo",
+    preparing: "Preparing the photo…",
+    saved: "Photo saved.",
+    removed: "Photo removed.",
+    decodeFailed: "This image cannot be read. Pick a JPEG, PNG or WebP photo.",
+  },
   passkeys: {
     title: "My passkeys",
     intro:
@@ -399,5 +409,7 @@ export const en = {
     validation_invalid_old_password: "The current password is wrong.",
     validation_min_text_constraint: "This value is too short.",
     validation_values_mismatch: "The two values don't match.",
+    validation_file_size_limit: "The photo is too big: 5 MB maximum.",
+    validation_invalid_mime_type: "This image type is not accepted: JPEG, PNG or WebP.",
   },
 } satisfies Messages;

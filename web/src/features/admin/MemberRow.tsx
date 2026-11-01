@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Avatar } from "../../components/Avatar";
 import { DANGER_TEXT, SECONDARY } from "../../components/buttons";
 import { useToast } from "../../components/Toast";
 import type { Messages } from "../../i18n/fr";
@@ -29,11 +30,11 @@ function stateLine(t: Messages, f: Formatters, { state, user, invitation }: Memb
 }
 
 /**
- * A runner of the list: its name, what it is (no account, invited, active or
- * disabled, and the role of the account), and what the admin can do with it,
- * which depends on that. Most actions ask the page to open a dialog; making
- * somebody admin and enabling an account again happen at once, since they
- * take nothing away.
+ * A runner of the list: its photo and its name, what it is (no account,
+ * invited, active or disabled, and the role of the account), and what the
+ * admin can do with it, which depends on that. Most actions ask the page to
+ * open a dialog; making somebody admin and enabling an account again happen at
+ * once, since they take nothing away.
  */
 export function MemberRow({
   member,
@@ -62,26 +63,41 @@ export function MemberRow({
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-3">
-      <div className="min-w-0">
-        {/* It can take the focus (it is not in the tab order): it is where the focus goes when the button that had it is gone. */}
-        <h2
-          id={memberHeadingId(runner.id)}
-          tabIndex={-1}
-          className="text-lg font-semibold break-words"
-        >
-          {runner.name}
-        </h2>
-        <p className="text-sm">{stateLine(t, f, member)}</p>
-        {user && <p className="text-sm break-all text-neutral-600">{user.email}</p>}
-        {reset && (
-          <p className="text-sm">{t.admin.resetPending(f.dateLong(expiryDay(reset.expires_at)))}</p>
-        )}
+      <div className="flex items-start gap-3">
+        <Avatar
+          runner={runner}
+          thumb="96x96"
+          className="size-12 shrink-0 bg-neutral-200 text-lg font-semibold text-neutral-700"
+        />
+        <div className="min-w-0">
+          {/* It can take the focus (it is not in the tab order): it is where the focus goes when the button that had it is gone. */}
+          <h2
+            id={memberHeadingId(runner.id)}
+            tabIndex={-1}
+            className="text-lg font-semibold break-words"
+          >
+            {runner.name}
+          </h2>
+          <p className="text-sm">{stateLine(t, f, member)}</p>
+          {user && <p className="text-sm break-all text-neutral-600">{user.email}</p>}
+          {reset && (
+            <p className="text-sm">
+              {t.admin.resetPending(f.dateLong(expiryDay(reset.expires_at)))}
+            </p>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Action
           runner={runner}
           label={t.admin.rename}
           onClick={() => onOpen({ kind: "rename", runner })}
+        />
+        {/* Everybody has one, an account or not: it is the admin who puts a photo on a runner who has none. */}
+        <Action
+          runner={runner}
+          label={t.avatar.title}
+          onClick={() => onOpen({ kind: "avatar", runner })}
         />
         {(state === "no_account" || state === "invited") && (
           // The same button for both: it keeps the focus when the runner gets invited.

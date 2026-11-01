@@ -18,6 +18,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { imageFile, pixelURL } from "../../test/images";
 import { MembersPage } from "./MembersPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -45,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   passkeyDelete: vi.fn<(id: string) => Promise<unknown>>(),
   send: vi.fn<(path: string, options: SendOptions) => Promise<unknown>>(),
   myRunner: vi.fn<(filter: string) => Promise<unknown>>(),
+  getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
 }));
 
 /** Replaces the signed-in record and tells the listeners, as the auth store of the SDK does. */
@@ -81,6 +83,8 @@ vi.mock("../../lib/pb", () => ({
         users: { update: mocks.userUpdate },
         passkeys: { getFullList: mocks.passkeysList, delete: mocks.passkeyDelete },
       })[name],
+    // Only called for a runner who has a photo: none has, unless a test says so.
+    files: { getURL: mocks.getURL },
   },
 }));
 
@@ -863,6 +867,95 @@ test("MembersPage — un admin qui se retire le rôle admin quitte la page", asy
     expect(router.state.location.pathname).toBe("/");
   });
   await expect.element(screen.getByText("Page d'accueil")).toBeVisible();
+});
+
+// --- The photo ---
+
+test("MembersPage — chaque coureur a l'action « Photo », y compris un coureur sans compte ; elle ouvre la fenêtre « Photo de Sam »", async () => {
+  const { screen } = await renderPage();
+
+  for (const who of ["Alice", "Bob", "Max", "Sam", "Léa"]) {
+    await expect.element(action(screen, fr.avatar.title, who)).toBeVisible();
+  }
+  await action(screen, fr.avatar.title, "Sam").click();
+
+  const dialog = screen.getByRole("dialog", { name: fr.avatar.titleFor("Sam") });
+  await expect.element(dialog).toBeVisible();
+  await expect.element(dialog.getByLabelText(fr.avatar.change)).toBeInTheDocument();
+  // Sam has no photo: nothing to remove.
+  await expect
+    .element(dialog.getByRole("button", { name: fr.avatar.remove }))
+    .not.toBeInTheDocument();
+});
+
+test("MembersPage — chaque ligne montre la photo du coureur, ou ses initiales, avant son nom", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  const bob = findRunner("r-bob");
+  if (bob) bob.avatar = "bob_x1y2z3.webp";
+  const { screen } = await renderPage();
+
+  const bobRow = row(screen, "Bob");
+  const image = bobRow.element().querySelector("img");
+  expect(image?.getAttribute("alt")).toBe("");
+  expect(mocks.getURL).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "r-bob" }),
+    "bob_x1y2z3.webp",
+    { thumb: "96x96" },
+  );
+  const name = heading(screen, "Bob").element();
+  expect(
+    (image?.compareDocumentPosition(name) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(image?.getBoundingClientRect().right).toBeLessThanOrEqual(
+    name.getBoundingClientRect().left,
+  );
+  // Sam has none: the initial.
+  await expect.element(row(screen, "Sam").getByText("S", { exact: true })).toBeVisible();
+  expect(row(screen, "Sam").element().querySelector("img")).toBeNull();
+});
+
+test("MembersPage — une photo mise dans la fenêtre y apparaît aussitôt, avec « Retirer la photo », et dans la liste", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  mocks.runnerUpdate.mockImplementation((id, body) => {
+    // What the server does with a file: it keeps its name.
+    if (body instanceof FormData)
+      Object.assign(findRunner(id) ?? {}, { avatar: "sam_n3w0000.webp" });
+    return Promise.resolve({});
+  });
+  const { screen } = await renderPage();
+  await action(screen, fr.avatar.title, "Sam").click();
+  const dialog = screen.getByRole("dialog", { name: fr.avatar.titleFor("Sam") });
+
+  await dialog.getByLabelText(fr.avatar.change).upload(await imageFile(1200, 900));
+
+  await expect.element(dialog.getByRole("status").first()).toHaveTextContent(fr.avatar.saved);
+  expect(mocks.runnerUpdate).toHaveBeenCalledOnce();
+  expect(mocks.runnerUpdate.mock.calls[0]?.[0]).toBe("r-sam");
+  // The window follows the list, which was read again.
+  await expect.element(dialog.getByRole("button", { name: fr.avatar.remove })).toBeVisible();
+  expect(dialog.element().querySelector("img")).not.toBeNull();
+  await expect.element(row(screen, "Sam").getByText("S", { exact: true })).not.toBeInTheDocument();
+});
+
+test("MembersPage — retirer la photo dans la fenêtre envoie {avatar: null} pour ce coureur", async () => {
+  mocks.getURL.mockImplementation(() => pixelURL());
+  const sam = findRunner("r-sam");
+  if (sam) sam.avatar = "sam_old0000.webp";
+  mocks.runnerUpdate.mockImplementation((id, body) => {
+    Object.assign(findRunner(id) ?? {}, body);
+    return Promise.resolve({});
+  });
+  const { screen } = await renderPage();
+  await action(screen, fr.avatar.title, "Sam").click();
+  const dialog = screen.getByRole("dialog", { name: fr.avatar.titleFor("Sam") });
+
+  await dialog.getByRole("button", { name: fr.avatar.remove }).click();
+
+  await expect.element(dialog.getByRole("status").first()).toHaveTextContent(fr.avatar.removed);
+  expect(mocks.runnerUpdate).toHaveBeenCalledExactlyOnceWith("r-sam", { avatar: null });
+  await expect
+    .element(dialog.getByRole("button", { name: fr.avatar.remove }))
+    .not.toBeInTheDocument();
 });
 
 // --- The passkeys of an account ---

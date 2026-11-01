@@ -1,7 +1,12 @@
 package testutil
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -23,6 +28,9 @@ type Row struct {
 	URL    func(fx Fixture) string
 	// Body returns the JSON request body. Leave it nil for no body.
 	Body func(fx Fixture) string
+	// Form, when given, replaces Body: a multipart body and its Content-Type,
+	// for the requests that send a file (see ImageForm).
+	Form func(t testing.TB, fx Fixture) (body io.Reader, contentType string)
 	// Status is the expected HTTP status.
 	Status int
 	// Contains and NotContains are texts the response body must, or must not,
@@ -53,7 +61,12 @@ func RunRows(t *testing.T, rows []Row) {
 			}
 
 			var body io.Reader
-			if row.Body != nil {
+			switch {
+			case row.Form != nil:
+				var contentType string
+				body, contentType = row.Form(t, fx)
+				headers["Content-Type"] = contentType
+			case row.Body != nil:
 				body = strings.NewReader(row.Body(fx))
 			}
 
@@ -101,4 +114,52 @@ func userFor(t testing.TB, as string, fx Fixture) *core.Record {
 	}
 	t.Fatalf("unknown Row.As %q: want anon, admin, alice or bob", as)
 	return nil
+}
+
+// PNG returns an image/png of the given size, encoded in Go: a gradient, so
+// that the file is a real picture and not a blank one.
+func PNG(t testing.TB, width, height int) []byte {
+	t.Helper()
+	if width < 1 || height < 1 {
+		t.Fatalf("PNG: a %dx%d image is empty", width, height)
+	}
+
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	for y := range height {
+		for x := range width {
+			img.SetNRGBA(x, y, color.NRGBA{
+				R: uint8(x * 255 / width),
+				G: uint8(y * 255 / height),
+				B: 128,
+				A: 255,
+			})
+		}
+	}
+
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		t.Fatalf("PNG: encoding: %v", err)
+	}
+	return out.Bytes()
+}
+
+// ImageForm returns a multipart body with one file, data, in the field of that
+// name, and its Content-Type (with the boundary): what a browser sends for a
+// file input. Pass them as Row.Form.
+func ImageForm(t testing.TB, field, filename string, data []byte) (io.Reader, string) {
+	t.Helper()
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	part, err := form.CreateFormFile(field, filename)
+	if err != nil {
+		t.Fatalf("ImageForm: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("ImageForm: %v", err)
+	}
+	if err := form.Close(); err != nil {
+		t.Fatalf("ImageForm: %v", err)
+	}
+	return &body, form.FormDataContentType()
 }

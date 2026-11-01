@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { RecordAuthResponse } from "pocketbase";
 import { useActionState } from "react";
 
+import { AvatarPicker } from "../../components/AvatarPicker";
 import { TextField } from "../../components/TextField";
 import { useToast } from "../../components/Toast";
 import { translateError } from "../../i18n/errors";
@@ -17,9 +18,9 @@ const BUTTON =
   "min-h-11 self-start rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60";
 
 /**
- * The profile of the signed-in user: the name the group sees, the email and
- * the password of the account, the passkeys, and the sign-out. The app shell
- * around it owns the page's `<main>`.
+ * The profile of the signed-in user: the photo and the name the group sees,
+ * the email and the password of the account, the passkeys, and the sign-out.
+ * The app shell around it owns the page's `<main>`.
  */
 export function ProfilePage() {
   const { t } = useI18n();
@@ -32,6 +33,9 @@ export function ProfilePage() {
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">{t.nav.profile}</h1>
+      <Section title={t.avatar.title}>
+        {runner === null ? <output>{t.common.loading}</output> : <AvatarPicker runner={runner} />}
+      </Section>
       <Section title={t.profile.nameTitle}>
         {runner === null ? (
           <output>{t.common.loading}</output>

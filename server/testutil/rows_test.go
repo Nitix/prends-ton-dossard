@@ -1,6 +1,12 @@
 package testutil_test
 
 import (
+	"bytes"
+	"image"
+	"image/png"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"testing"
 
@@ -103,4 +109,65 @@ func TestRunRows(t *testing.T) {
 	if !afterRan {
 		t.Error("Row.After was never called")
 	}
+}
+
+func TestPNG(t *testing.T) {
+	data := testutil.PNG(t, 64, 32)
+
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decoding the image: %v", err)
+	}
+	if format != "png" || config.Width != 64 || config.Height != 32 {
+		t.Errorf("image = %s %dx%d, want png 64x32", format, config.Width, config.Height)
+	}
+	if _, err := png.Decode(bytes.NewReader(data)); err != nil {
+		t.Errorf("the whole image does not decode: %v", err)
+	}
+}
+
+func TestImageForm(t *testing.T) {
+	data := testutil.PNG(t, 8, 8)
+	body, contentType := testutil.ImageForm(t, "avatar", "photo.png", data)
+
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil || mediaType != "multipart/form-data" || params["boundary"] == "" {
+		t.Fatalf("Content-Type = %q (%v), want multipart/form-data with a boundary", contentType, err)
+	}
+	part, err := multipart.NewReader(body, params["boundary"]).NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if part.FormName() != "avatar" || part.FileName() != "photo.png" {
+		t.Errorf("part = field %q, file %q; want avatar, photo.png", part.FormName(), part.FileName())
+	}
+	if got, _ := io.ReadAll(part); !bytes.Equal(got, data) {
+		t.Error("the file in the form is not the one given")
+	}
+}
+
+// Form replaces Body, and its Content-Type goes with the request: the server
+// can only read the file if it knows the boundary.
+func TestRunRows_FormSendsAMultipartBody(t *testing.T) {
+	testutil.RunRows(t, []testutil.Row{
+		{
+			Name:   "the multipart body reaches the record",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    func(fx testutil.Fixture) string { return "/api/collections/runners/records/" + fx.SamRunner.Id },
+			Form: func(t testing.TB, fx testutil.Fixture) (io.Reader, string) {
+				var body bytes.Buffer
+				form := multipart.NewWriter(&body)
+				if err := form.WriteField("name", "Samantha"); err != nil {
+					t.Fatal(err)
+				}
+				if err := form.Close(); err != nil {
+					t.Fatal(err)
+				}
+				return &body, form.FormDataContentType()
+			},
+			Status:   http.StatusOK,
+			Contains: []string{`"name":"Samantha"`},
+		},
+	})
 }

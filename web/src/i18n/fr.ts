@@ -62,6 +62,19 @@ export const fr = {
     passwordSignInAgain: "Mot de passe modifié. Reconnecte-toi.",
     logout: "Se déconnecter",
   },
+  // The photo of a runner: the section of the profile, the window of the admin, and what the picker says (see components/AvatarPicker.tsx).
+  avatar: {
+    title: "Photo",
+    titleFor: (name: string) => `Photo de ${name}`,
+    change: "Changer la photo",
+    remove: "Retirer la photo",
+    // While the browser reduces the photo and sends it.
+    preparing: "Préparation de la photo…",
+    saved: "Photo enregistrée.",
+    removed: "Photo retirée.",
+    // The browser cannot read the file (HEIC outside Safari, or not a picture): nothing is sent.
+    decodeFailed: "Impossible de lire cette image. Choisis une photo JPEG, PNG ou WebP.",
+  },
   passkeys: {
     title: "Mes clés d'accès",
     intro:
@@ -467,6 +480,8 @@ export const fr = {
     validation_invalid_old_password: "Le mot de passe actuel est incorrect.",
     validation_min_text_constraint: "Cette valeur est trop courte.",
     validation_values_mismatch: "Les deux valeurs sont différentes.",
+    validation_file_size_limit: "La photo est trop lourde : 5 Mo maximum.",
+    validation_invalid_mime_type: "Ce type d'image n'est pas accepté : JPEG, PNG ou WebP.",
   },
 };
 
