@@ -28,6 +28,7 @@ export const ERROR_CODES: readonly string[] = [
   "format_measure_required",
   "price_invalid",
   "format_required",
+  "status_before_race",
   "supporter_with_format",
   "rank_above_total",
   "offer_seats_required",

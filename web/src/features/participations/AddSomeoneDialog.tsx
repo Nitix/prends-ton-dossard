@@ -3,10 +3,12 @@ import { useRef, useState, type FormEvent } from "react";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { useI18n } from "../../i18n/I18nProvider";
+import { raceStarted } from "../../lib/dates";
 import type { Status } from "../../lib/types";
+import { useToday } from "../../lib/useToday";
 import { useRunners, type EventView } from "../events/api";
 import { joinOptions, SUPPORT, UNDECIDED } from "../events/participants";
-import { useCreateParticipation } from "./api";
+import { allowedStatus, useCreateParticipation } from "./api";
 import { participationError } from "./errors";
 import { FormatField, noFormatChoice, SelectField, StatusField } from "./fields";
 
@@ -38,6 +40,7 @@ export function AddSomeoneDialog({
 function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => void }) {
   const { t } = useI18n();
   const runners = useRunners();
+  const today = useToday();
   const create = useCreateParticipation(view.event.id);
 
   const [chosenRunner, setChosenRunner] = useState("");
@@ -87,6 +90,11 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
   const chosenFormat = formatOffered ? formatId : firstFormat;
   // « Pas encore décidé » and « Vient encourager » are on the event alone, with a status that is not a choice.
   const alone = noFormatChoice(chosenFormat);
+  // Nobody finishes a race, or gives up on it, before its day: the status goes
+  // back to « Intéressé » when the format chosen has not started.
+  const picked = options?.formats.find(({ format }) => format.id === chosenFormat);
+  const started = picked !== undefined && raceStarted(picked.format, view.event, today);
+  const chosenStatus = allowedStatus(status, started);
 
   // Busy, or nothing to send.
   const busy = create.isPending || available.length === 0;
@@ -106,7 +114,9 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
     const who = { runner: runnerId, event: view.event.id };
     try {
       await create.mutateAsync(
-        alone ? { ...who, status: alone.status } : { ...who, format: chosenFormat, status },
+        alone
+          ? { ...who, status: alone.status }
+          : { ...who, format: chosenFormat, status: chosenStatus },
       );
       onClose();
     } catch (err) {
@@ -147,7 +157,12 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
               onChange={setFormatId}
             />
           )}
-          <StatusField value={status} onChange={setStatus} locked={alone?.lock} />
+          <StatusField
+            value={chosenStatus}
+            onChange={setStatus}
+            started={started}
+            locked={alone?.lock}
+          />
         </>
       )}
       {message !== null && (

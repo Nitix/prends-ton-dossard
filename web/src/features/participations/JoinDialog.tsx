@@ -3,10 +3,12 @@ import { useRef, useState, type FormEvent } from "react";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { useI18n } from "../../i18n/I18nProvider";
+import { raceStarted } from "../../lib/dates";
 import type { ParticipationRecord, Status } from "../../lib/types";
+import { useToday } from "../../lib/useToday";
 import type { EventView } from "../events/api";
 import { joinOptions, SUPPORT } from "../events/participants";
-import { useCreateParticipation } from "./api";
+import { allowedStatus, useCreateParticipation } from "./api";
 import { participationError } from "./errors";
 import { FormatField, noFormatChoice, StatusField } from "./fields";
 import type { Me } from "./permissions";
@@ -62,6 +64,7 @@ function JoinForm({
   onJoined?: (created: ParticipationRecord) => void;
 }) {
   const { t } = useI18n();
+  const today = useToday();
   const create = useCreateParticipation(view.event.id);
 
   // What the runner can choose from is settled when the dialog opens. Once
@@ -77,6 +80,11 @@ function JoinForm({
   const sending = useRef(false);
   // « Pas encore décidé » and « Je viens encourager » are on the event alone, with a status that is not a choice.
   const alone = noFormatChoice(formatId);
+  // Nobody finishes a race, or gives up on it, before its day: the status goes
+  // back to « Intéressé » when the format chosen has not started.
+  const picked = formats.find(({ format }) => format.id === formatId);
+  const started = picked !== undefined && raceStarted(picked.format, view.event, today);
+  const chosenStatus = allowedStatus(status, started);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,7 +94,9 @@ function JoinForm({
     const who = { runner: me.runnerId, event: view.event.id };
     try {
       const created = await create.mutateAsync(
-        alone ? { ...who, status: alone.status } : { ...who, format: formatId, status },
+        alone
+          ? { ...who, status: alone.status }
+          : { ...who, format: formatId, status: chosenStatus },
       );
       onJoined?.(created);
       onClose();
@@ -107,7 +117,12 @@ function JoinForm({
         value={formatId}
         onChange={setFormatId}
       />
-      <StatusField value={status} onChange={setStatus} locked={alone?.lock} />
+      <StatusField
+        value={chosenStatus}
+        onChange={setStatus}
+        started={started}
+        locked={alone?.lock}
+      />
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
           {message}

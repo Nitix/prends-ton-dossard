@@ -14,6 +14,7 @@ import {
   msUntilTomorrow,
   overlaps,
   parseDate,
+  raceStarted,
   today,
 } from "./dates";
 
@@ -147,6 +148,33 @@ describe("effectiveDate", () => {
 
   test("treats an empty date as absent (empty text field from the API)", () => {
     expect(iso(effectiveDate({ date: "" }, { start_date: "2026-06-13" }))).toBe("2026-06-13");
+  });
+});
+
+describe("raceStarted", () => {
+  // A weekend, the 42 km on the second day.
+  const f42 = { date: "2026-06-14" };
+
+  test("is false the day before the race, even when its event has started", () => {
+    // The day of the format beats the first day of the event.
+    expect(raceStarted(f42, weekend, date("2026-06-13"))).toBe(false);
+    expect(raceStarted(f42, weekend, date("2026-06-12"))).toBe(false);
+  });
+
+  test("is true on the day of the race", () => {
+    expect(raceStarted(f42, weekend, date("2026-06-14"))).toBe(true);
+  });
+
+  test("is true after the day of the race", () => {
+    expect(raceStarted(f42, weekend, date("2026-06-15"))).toBe(true);
+    expect(raceStarted(f42, weekend, date("2027-01-01"))).toBe(true);
+  });
+
+  test("a format without a date starts with the event", () => {
+    expect(raceStarted({}, weekend, date("2026-06-12"))).toBe(false);
+    expect(raceStarted({}, weekend, date("2026-06-13"))).toBe(true);
+    expect(raceStarted({ date: "" }, weekend, date("2026-06-12"))).toBe(false);
+    expect(raceStarted({ date: "" }, weekend, date("2026-06-13"))).toBe(true);
   });
 });
 

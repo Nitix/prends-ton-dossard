@@ -46,6 +46,19 @@ export function effectiveDate(
   return parseDate(format.date || event.start_date);
 }
 
+/**
+ * Whether the race of a format has started: its day (see `effectiveDate`) is
+ * `asOf` (today, for the screens) or before. The day itself counts. Nobody can
+ * say they have finished a race, or given up on it, before that.
+ */
+export function raceStarted(
+  format: { date?: string },
+  event: { start_date: string },
+  asOf: Temporal.PlainDate,
+): boolean {
+  return Temporal.PlainDate.compare(effectiveDate(format, event), asOf) <= 0;
+}
+
 /** First and last day of an event, both included. */
 export function eventRange(event: EventDates): {
   start: Temporal.PlainDate;

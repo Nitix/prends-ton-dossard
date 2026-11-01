@@ -677,9 +677,12 @@ func checkParticipations(t *testing.T, app core.App) {
 }
 
 // The dates only depend on today, whatever the day of the month, and an event
-// is always over two months.
+// is always over two months. The days are in the past: the races that are over
+// have results, which the participations refuse before the day of their race
+// (by the real clock), so a "today" to come would seed finishers of races that
+// have not happened.
 func TestSeedDemo_RelativeToToday(t *testing.T) {
-	for _, d := range []string{"2026-01-01", "2026-01-31", "2026-02-28", "2026-10-31", "2026-12-31", "2028-02-29"} {
+	for _, d := range []string{"2026-01-01", "2026-01-31", "2026-02-28", "2026-10-31", "2025-12-31", "2024-02-29"} {
 		t.Run(d, func(t *testing.T) {
 			today, err := time.Parse("2006-01-02", d)
 			if err != nil {

@@ -9,6 +9,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import type { ParticipationRecord, RunnerRecord } from "../../lib/types";
+import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import {
@@ -66,6 +67,10 @@ beforeEach(() => {
   mocks.remove.mockReset().mockResolvedValue(true);
 });
 
+// The day of the 42 km (and the second day of the event): the dialog of the formats
+// reads it, to know which of the races have started.
+const RACE_DAY = "2026-06-14";
+
 async function renderMenu(
   options: {
     participation?: ParticipationRecord;
@@ -75,6 +80,8 @@ async function renderMenu(
     formatsOf?: EventView;
     /** What the participation is on: its format, or the event when it has none. */
     label?: string;
+    /** The race has started, the day of the format being today or past: the case of most tests. */
+    started?: boolean;
   } = {},
 ) {
   const {
@@ -83,6 +90,7 @@ async function renderMenu(
     canConfirm = false,
     formatsOf,
     label = "Trail 42 km",
+    started = true,
   } = options;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -90,20 +98,23 @@ async function renderMenu(
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
-        <ToastProvider>
-          {/* On the right, where the menu of a row is. */}
-          <div className="flex justify-end p-4">
-            <ParticipationMenu
-              eventId="event"
-              participation={participation}
-              runner={runner}
-              label={label}
-              formatsOf={formatsOf}
-              canConfirm={canConfirm}
-              onRemoved={onRemoved}
-            />
-          </div>
-        </ToastProvider>
+        <TodayProvider value={Temporal.PlainDate.from(RACE_DAY)}>
+          <ToastProvider>
+            {/* On the right, where the menu of a row is. */}
+            <div className="flex justify-end p-4">
+              <ParticipationMenu
+                eventId="event"
+                participation={participation}
+                runner={runner}
+                label={label}
+                formatsOf={formatsOf}
+                started={started}
+                canConfirm={canConfirm}
+                onRemoved={onRemoved}
+              />
+            </div>
+          </ToastProvider>
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -199,6 +210,59 @@ test("ParticipationMenu — propose les cinq statuts, marque celui d'aujourd'hui
   await expect
     .element(screen.getByRole("button", { name: fr.status.finished }))
     .not.toHaveAttribute("aria-current", "true");
+});
+
+// --- Before the day of the race ---
+//
+// Nobody finishes a race, or gives up on it, before its day (the server refuses it
+// too): the menu does not offer « Terminé », « Abandon » or the result until then.
+
+test("ParticipationMenu — avant le jour de la course, ni Terminé, ni Abandon, ni Saisir le résultat", async () => {
+  const { screen } = await renderMenu({ started: false });
+  await trigger(screen).click();
+  await expect.element(screen.getByRole("button", { name: fr.status.dns })).toBeVisible();
+
+  expect(itemsOf(trigger(screen).element())).toEqual([
+    fr.status.interested,
+    fr.status.registered,
+    fr.status.dns,
+    fr.common.remove,
+  ]);
+});
+
+test("ParticipationMenu — le jour de la course, les cinq statuts et le résultat sont là", async () => {
+  const { screen } = await renderMenu({ started: true });
+  await open(screen);
+
+  expect(itemsOf(trigger(screen).element())).toEqual([
+    fr.status.interested,
+    fr.status.registered,
+    fr.status.finished,
+    fr.status.dnf,
+    fr.status.dns,
+    fr.results.enter,
+    fr.common.remove,
+  ]);
+});
+
+test("ParticipationMenu — le statut actuel reste dans la liste même s'il n'est plus proposé (course déplacée plus tard)", async () => {
+  // Bob had finished, then the race was moved to a later day.
+  const { screen } = await renderMenu({ participation: bobFinished, started: false });
+  await trigger(screen).click();
+  await expect.element(screen.getByRole("button", { name: fr.status.dns })).toBeVisible();
+
+  // « Abandon » is not offered, « Terminé » is: it is what he is. And his result can still be changed.
+  expect(itemsOf(trigger(screen).element())).toEqual([
+    fr.status.interested,
+    fr.status.registered,
+    fr.status.finished,
+    fr.status.dns,
+    fr.results.edit,
+    fr.common.remove,
+  ]);
+  await expect
+    .element(screen.getByRole("button", { name: fr.status.finished }))
+    .toHaveAttribute("aria-current", "true");
 });
 
 test("ParticipationMenu — changer le statut met la participation à jour, ferme le menu et invalide les listes", async () => {

@@ -149,6 +149,9 @@ function signIn(who: keyof typeof users) {
 /** The day of the tests, unless one says otherwise: nine days before the deadline of the 10th. */
 const TODAY = "2026-06-01";
 
+/** The day of the 42 km, the second day of the event: every race of the event has started. */
+const RACE_DAY = "2026-06-14";
+
 /** The page, as the route of the app gives it its `id`. */
 function Routed() {
   const { id } = useParams({ strict: false });
@@ -1225,6 +1228,106 @@ test("EventPage — l'admin a un menu sur toutes les participations", async () =
   await expect.element(menuOf(screen, "Sam")).toBeVisible();
 });
 
+// --- « Terminé » and « Abandon » come with the day of the race ---
+//
+// Nobody finishes a race, or gives up on it, before its day: the menus of the page do not
+// offer it, nor the result. The event runs on 13 and 14 June: F15 takes place on the first
+// day (it has no day of its own; Sam is on it), F42 on the second (Alice and Bob are on it).
+
+const finishedItem = (screen: Screen) => screen.getByRole("button", { name: fr.status.finished });
+const dnfItem = (screen: Screen) => screen.getByRole("button", { name: fr.status.dnf });
+const enterResultItem = (screen: Screen) =>
+  screen.getByRole("button", { name: fr.results.enter, exact: true });
+
+test("EventPage — avant le jour de l'épreuve, le menu n'offre ni Terminé, ni Abandon, ni Saisir le résultat", async () => {
+  signIn("admin");
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  await menuOf(screen, "Bob").click();
+
+  await expect.element(screen.getByRole("button", { name: fr.status.dns })).toBeVisible();
+  await expect.element(finishedItem(screen)).not.toBeInTheDocument();
+  await expect.element(dnfItem(screen)).not.toBeInTheDocument();
+  await expect.element(enterResultItem(screen)).not.toBeInTheDocument();
+});
+
+test("EventPage — le jour de l'épreuve, Terminé, Abandon et Saisir le résultat sont là, et le lendemain d'une autre épreuve de l'événement non", async () => {
+  signIn("admin");
+  const { screen } = await renderPage({ today: "2026-06-13" });
+  await loaded(screen);
+
+  // F15 is on the first day of the event, which is today.
+  await menuOf(screen, "Sam").click();
+  await expect.element(finishedItem(screen)).toBeVisible();
+  await expect.element(dnfItem(screen)).toBeVisible();
+  await expect.element(enterResultItem(screen)).toBeVisible();
+  await screen.unmount();
+
+  // F42 is on the second day: it has not started.
+  const second = await renderPage({ today: "2026-06-13" });
+  await loaded(second.screen);
+  await menuOf(second.screen, "Bob").click();
+  await expect.element(second.screen.getByRole("button", { name: fr.status.dns })).toBeVisible();
+  await expect.element(finishedItem(second.screen)).not.toBeInTheDocument();
+  await expect.element(dnfItem(second.screen)).not.toBeInTheDocument();
+  await expect.element(enterResultItem(second.screen)).not.toBeInTheDocument();
+});
+
+test("EventPage — un non partant suit le jour de son épreuve : pas de Terminé avant, Terminé après", async () => {
+  signIn("admin");
+  const before = await renderPage({ event: eventWith([dns(p2), p1, p3]), today: "2026-06-13" });
+  await loaded(before.screen);
+  await nonStartersSummary(before.screen).click();
+
+  await menuOf(before.screen, "Bob").click();
+
+  await expect.element(before.screen.getByRole("button", { name: fr.status.dns })).toBeVisible();
+  await expect.element(finishedItem(before.screen)).not.toBeInTheDocument();
+  await expect.element(enterResultItem(before.screen)).not.toBeInTheDocument();
+  await before.screen.unmount();
+
+  const after = await renderPage({ event: eventWith([dns(p2), p1, p3]), today: RACE_DAY });
+  await loaded(after.screen);
+  await nonStartersSummary(after.screen).click();
+
+  await menuOf(after.screen, "Bob").click();
+
+  await expect.element(finishedItem(after.screen)).toBeVisible();
+  await expect.element(enterResultItem(after.screen)).toBeVisible();
+});
+
+/** The statuses that the dialog of the formats offers, once opened from the menu of Zoe, who is interested in the event. */
+async function statusesOfTheDialog(today: string) {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe]), today });
+  await loaded(screen);
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.participation.chooseFormat }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
+  const select = dialog.getByLabelText(fr.participation.status).element();
+  const statuses = Array.from(select.querySelectorAll("option")).map(
+    (option) => option.textContent,
+  );
+  await screen.unmount();
+  return statuses;
+}
+
+test("EventPage — « Choisir l'épreuve » ne propose Terminé et Abandon qu'à partir du jour de l'épreuve", async () => {
+  // The format that is chosen first is F15, on the first day of the event.
+  expect(await statusesOfTheDialog("2026-06-12")).toEqual([
+    fr.status.interested,
+    fr.status.registered,
+    fr.status.dns,
+  ]);
+  expect(await statusesOfTheDialog("2026-06-13")).toEqual([
+    fr.status.interested,
+    fr.status.registered,
+    fr.status.finished,
+    fr.status.dnf,
+    fr.status.dns,
+  ]);
+});
+
 test("EventPage — Confirmer n'apparaît que pour Bob lui-même, sur sa participation non confirmée", async () => {
   signIn("bob");
   const { screen } = await renderPage();
@@ -1241,7 +1344,7 @@ test("EventPage — Confirmer n'apparaît que pour Bob lui-même, sur sa partici
 
 test("EventPage — l'admin ne peut pas confirmer à la place de Bob", async () => {
   signIn("admin");
-  const { screen } = await renderPage();
+  const { screen } = await renderPage({ today: RACE_DAY });
   await loaded(screen);
 
   await menuOf(screen, "Bob").click();
@@ -2207,7 +2310,7 @@ test("EventPage — la note d'un résultat s'affiche telle quelle, balises compr
 });
 
 test("EventPage — Saisir le résultat : la page recharge, la ligne montre le résultat, et le focus reste sur le bouton du menu", async () => {
-  const { screen } = await renderPage();
+  const { screen } = await renderPage({ today: RACE_DAY });
   await loaded(screen);
   mocks.update.mockImplementation(() => {
     mocks.getOne.mockResolvedValue(
@@ -2252,7 +2355,7 @@ test("EventPage — Saisir le résultat : la page recharge, la ligne montre le r
 });
 
 test("EventPage — le résultat d'un non partant le remet dans son épreuve, et le focus va au titre de l'épreuve", async () => {
-  const { screen } = await renderPage({ event: eventWith([dns(p2), p1, p3]) });
+  const { screen } = await renderPage({ event: eventWith([dns(p2), p1, p3]), today: RACE_DAY });
   await loaded(screen);
   await nonStartersSummary(screen).click();
   mocks.update.mockImplementation(() => {

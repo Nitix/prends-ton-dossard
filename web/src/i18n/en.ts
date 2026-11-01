@@ -571,6 +571,7 @@ export const en = {
     format_measure_required: "Enter at least a distance, a duration or a time limit.",
     price_invalid: "The price is to the cent at most.",
     format_required: "Pick a race.",
+    status_before_race: "The race has not happened yet.",
     supporter_with_format: "A supporter does not run a race.",
     rank_above_total: "The rank is higher than the number of finishers.",
     offer_seats_required: "Give the number of seats, from 1 to 8.",

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { createParticipation, deleteParticipation, updateParticipation } from "./api";
+import {
+  allowedStatus,
+  createParticipation,
+  deleteParticipation,
+  statusChoices,
+  updateParticipation,
+} from "./api";
 
 type Rec = Record<string, unknown>;
 
@@ -95,5 +101,44 @@ describe("deleteParticipation", () => {
     expect(mocks.collection).toHaveBeenCalledWith("participations");
     expect(mocks.remove).toHaveBeenCalledExactlyOnceWith("p1");
     expect(result).toBeUndefined();
+  });
+});
+
+describe("statusChoices", () => {
+  test("once the race has started, every status is there, from the plan to the result", () => {
+    expect(statusChoices(true)).toEqual(["interested", "registered", "finished", "dnf", "dns"]);
+  });
+
+  test("before the day of the race, nobody has finished it or given up on it", () => {
+    expect(statusChoices(false)).toEqual(["interested", "registered", "dns"]);
+  });
+
+  test("the status a participation has stays in the list, in its place, even when it is not offered", () => {
+    expect(statusChoices(false, "finished")).toEqual([
+      "interested",
+      "registered",
+      "finished",
+      "dns",
+    ]);
+    expect(statusChoices(false, "dnf")).toEqual(["interested", "registered", "dnf", "dns"]);
+  });
+
+  test("a status that is offered anyway changes nothing", () => {
+    expect(statusChoices(false, "registered")).toEqual(["interested", "registered", "dns"]);
+    expect(statusChoices(true, "finished")).toEqual(statusChoices(true));
+  });
+});
+
+describe("allowedStatus", () => {
+  test("keeps a status that can be chosen", () => {
+    expect(allowedStatus("registered", false)).toBe("registered");
+    expect(allowedStatus("dns", false)).toBe("dns");
+    expect(allowedStatus("finished", true)).toBe("finished");
+    expect(allowedStatus("dnf", true)).toBe("dnf");
+  });
+
+  test("goes back to « Intéressé » for « Terminé » or « Abandon » before the day of the race", () => {
+    expect(allowedStatus("finished", false)).toBe("interested");
+    expect(allowedStatus("dnf", false)).toBe("interested");
   });
 });

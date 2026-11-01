@@ -9,7 +9,9 @@ import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { RaceTypeRecord } from "../../lib/types";
+import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
+import { allowedStatus } from "../participations/api";
 import { SelectField, StatusField } from "../participations/fields";
 import { canDeleteEvent, type Me } from "../participations/permissions";
 import { invalidateEvents, useEvent, useRaceTypes, type EventView } from "./api";
@@ -21,6 +23,7 @@ import {
   hasMeasure,
   initialDraft,
   joinRowOf,
+  joinStarted,
   toEventDraft,
   type FormatRow,
 } from "./formDraft";
@@ -163,6 +166,7 @@ function EventFields({
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const today = useToday();
   const { user, runner, isAdmin } = useSession();
   const me: Me | null = user && runner ? { userId: user.id, runnerId: runner.id, isAdmin } : null;
 
@@ -179,6 +183,10 @@ function EventFields({
   // "I'm taking part" is for a new event, and needs the runner of the member.
   const joinOffered = initial === undefined && runner !== null;
   const joinRow = joinRowOf(draft);
+  // Nobody finishes a race, or gives up on it, before its day: the status goes
+  // back to « Intéressé » when the race to join has not started.
+  const started = joinStarted(draft, today);
+  const joinStatus = allowedStatus(draft.joinStatus, started);
 
   function change(patch: Partial<typeof draft>) {
     setDraft((current) => ({ ...current, ...patch }));
@@ -240,7 +248,11 @@ function EventFields({
     let causes: unknown[] = [];
     try {
       const join = joinOffered && draft.join;
-      id = await saveEvent(toEventDraft(draft, initial, join, named), initial, runner?.id);
+      id = await saveEvent(
+        toEventDraft({ ...draft, joinStatus }, initial, join, named),
+        initial,
+        runner?.id,
+      );
     } catch (err) {
       if (!(err instanceof TraceUploadError)) return refusal(err, draft.rows);
       id = err.eventId;
@@ -482,9 +494,10 @@ function EventFields({
                 ))}
               </SelectField>
               <StatusField
-                value={draft.joinStatus}
-                onChange={(joinStatus) => {
-                  change({ joinStatus });
+                value={joinStatus}
+                started={started}
+                onChange={(next) => {
+                  change({ joinStatus: next });
                 }}
               />
             </>

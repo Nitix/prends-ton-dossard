@@ -7,8 +7,9 @@ import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { SECTION } from "../../components/section";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
+import { raceStarted } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
-import type { ParticipationRecord } from "../../lib/types";
+import type { EventRecord, ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
@@ -311,7 +312,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
         {formats.map((formatView) => (
           <FormatSection
             key={formatView.format.id}
-            eventId={event.id}
+            event={event}
             formatView={formatView}
             showDate={severalDays}
             me={me}
@@ -322,12 +323,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
           <SupportersSection view={view} me={me} onDeparture={departed} />
         )}
         {notStarting.length > 0 && (
-          <NonStartersSection
-            eventId={event.id}
-            list={notStarting}
-            me={me}
-            onDeparture={departed}
-          />
+          <NonStartersSection event={event} list={notStarting} me={me} onDeparture={departed} />
         )}
         <OffersSection view={view} kind="ride" me={me} />
         <OffersSection view={view} kind="lodging" me={me} />
@@ -462,23 +458,26 @@ function statusLine(participation: ParticipationRecord, f: Formatters, t: Messag
 
 /** A format: its measures, its day when the event has several, the runners who start it, and its course. */
 function FormatSection({
-  eventId,
+  event,
   formatView,
   showDate,
   me,
   onDeparture,
 }: {
-  eventId: string;
+  event: EventRecord;
   formatView: FormatView;
   showDate: boolean;
   me: Me | null;
   onDeparture: Depart;
 }) {
   const { t, f } = useI18n();
+  const today = useToday();
   const headingId = useId();
   const { format, raceType, date, participations } = formatView;
   // Those who do not start are in the list at the bottom of the page.
   const onTheStart = starters(participations);
+  // Nobody has finished a race that has not started: the menus of the rows know it.
+  const started = raceStarted(format, event, today);
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-2 ${SECTION}`}>
@@ -498,10 +497,11 @@ function FormatSection({
           {onTheStart.map((participationView) => (
             <ParticipantRow
               key={participationView.participation.id}
-              eventId={eventId}
+              eventId={event.id}
               participationView={participationView}
               detail={statusLine(participationView.participation, f, t)}
               label={formatDisplayName(format, raceType.label, f, t)}
+              started={started}
               source={formatTitle(format.id)}
               me={me}
               onDeparture={onDeparture}
@@ -520,17 +520,18 @@ function FormatSection({
  * menu, to bring them back to another status.
  */
 function NonStartersSection({
-  eventId,
+  event,
   list,
   me,
   onDeparture,
 }: {
-  eventId: string;
+  event: EventRecord;
   list: NonStarter[];
   me: Me | null;
   onDeparture: Depart;
 }) {
   const { t, f } = useI18n();
+  const today = useToday();
 
   return (
     <details className={SECTION}>
@@ -546,10 +547,11 @@ function NonStartersSection({
           return (
             <ParticipantRow
               key={participationView.participation.id}
-              eventId={eventId}
+              eventId={event.id}
               participationView={participationView}
               detail={name}
               label={name}
+              started={raceStarted(formatView.format, event, today)}
               source={NON_STARTERS}
               me={me}
               onDeparture={onDeparture}
@@ -574,6 +576,7 @@ function ParticipantRow({
   detail,
   label,
   formatsOf,
+  started,
   source,
   me,
   onDeparture,
@@ -586,6 +589,8 @@ function ParticipantRow({
   label: string;
   /** Given for a participation on the event alone: see `ParticipationMenu`. */
   formatsOf?: EventView;
+  /** Given for a participation on a format: its race has started. See `ParticipationMenu`. */
+  started?: boolean;
   /** The title of the section of this row: where the focus goes if the participation is removed. */
   source: string;
   me: Me | null;
@@ -635,6 +640,7 @@ function ParticipantRow({
           runner={runner}
           label={label}
           formatsOf={formatsOf}
+          started={started}
           canConfirm={canConfirm(runner, me)}
           onRemoved={() => {
             onDeparture(participation.id, source, row.current);

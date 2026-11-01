@@ -5,9 +5,11 @@ import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
+import { raceStarted } from "../../lib/dates";
 import type { Status } from "../../lib/types";
+import { useToday } from "../../lib/useToday";
 import { invalidateEvents, type EventView, type ParticipationView } from "../events/api";
-import { useUpdateParticipation } from "./api";
+import { allowedStatus, useUpdateParticipation } from "./api";
 import { isNotFound, participationError } from "./errors";
 import { FormatField, StatusField } from "./fields";
 
@@ -67,6 +69,7 @@ function ChooseForm({
   const { t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const today = useToday();
   const update = useUpdateParticipation(view.event.id);
   const { participation, runner } = participationView;
 
@@ -83,6 +86,11 @@ function ChooseForm({
   const formatId = view.formats.some(({ format }) => format.id === chosenFormat)
     ? chosenFormat
     : (view.formats[0]?.format.id ?? "");
+  // Nobody finishes a race, or gives up on it, before its day: the status goes
+  // back to « Intéressé » when the format chosen has not started.
+  const picked = view.formats.find(({ format }) => format.id === formatId);
+  const started = picked !== undefined && raceStarted(picked.format, view.event, today);
+  const chosenStatus = allowedStatus(status, started);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -90,7 +98,10 @@ function ChooseForm({
     sending.current = true;
     setMessage(null);
     try {
-      await update.mutateAsync({ id: participation.id, patch: { format: formatId, status } });
+      await update.mutateAsync({
+        id: participation.id,
+        patch: { format: formatId, status: chosenStatus },
+      });
     } catch (err) {
       if (isNotFound(err)) {
         // The participation is not on the event alone any more (somebody gave
@@ -113,7 +124,7 @@ function ChooseForm({
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
       <p className="font-medium break-words">{runner.name}</p>
       <FormatField view={view} formats={view.formats} value={formatId} onChange={setChosenFormat} />
-      <StatusField value={status} onChange={setStatus} />
+      <StatusField value={chosenStatus} onChange={setStatus} started={started} />
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
           {message}

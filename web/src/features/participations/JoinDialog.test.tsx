@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { SUPPORT, UNDECIDED } from "../events/participants";
@@ -57,7 +58,10 @@ beforeEach(() => {
   mocks.update.mockReset().mockResolvedValue({ id: "p1" });
 });
 
-async function renderDialog(me: Me, eventView: EventView = view) {
+// The day of the 42 km (and the second day of the event): every race of the event has started.
+const RACE_DAY = "2026-06-14";
+
+async function renderDialog(me: Me, eventView: EventView = view, today = RACE_DAY) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onClose = vi.fn<() => void>();
@@ -65,9 +69,17 @@ async function renderDialog(me: Me, eventView: EventView = view) {
   const ui = (open: boolean) => (
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
-        <ToastProvider>
-          <JoinDialog open={open} onClose={onClose} onJoined={onJoined} view={eventView} me={me} />
-        </ToastProvider>
+        <TodayProvider value={Temporal.PlainDate.from(today)}>
+          <ToastProvider>
+            <JoinDialog
+              open={open}
+              onClose={onClose}
+              onJoined={onJoined}
+              view={eventView}
+              me={me}
+            />
+          </ToastProvider>
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>
   );
@@ -416,4 +428,69 @@ test("JoinDialog — les champs et les boutons font au moins 44 px", async () =>
   ]) {
     expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   }
+});
+
+// --- Before the day of the race ---
+//
+// Nobody finishes a race, or gives up on it, before its day: the server refuses it,
+// and the dialog does not offer it. The event of the fixture runs on 13 and 14 June,
+// F15 on the first day (it has no day of its own) and F42 on the second.
+
+const statusesOf = (screen: Screen) =>
+  optionsOf(statusSelect(screen).element()).map((option) => option.textContent);
+
+const BEFORE_RACES = [fr.status.interested, fr.status.registered, fr.status.dns];
+const ALL_STATUSES = [
+  fr.status.interested,
+  fr.status.registered,
+  fr.status.finished,
+  fr.status.dnf,
+  fr.status.dns,
+];
+
+test("JoinDialog — avant le jour de la course, ni « Terminé » ni « Abandon »", async () => {
+  const { screen } = await renderDialog(nina, view, "2026-06-12");
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("JoinDialog — le jour de la course, tous les statuts sont proposés", async () => {
+  const { screen } = await renderDialog(nina, view, "2026-06-13");
+
+  // F15 is the first format, and it takes place on the first day of the event.
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+});
+
+test("JoinDialog — l'épreuve du jour a commencé, pas celle du lendemain : la liste suit l'épreuve choisie", async () => {
+  const { screen } = await renderDialog(nina, view, "2026-06-13");
+
+  await formatSelect(screen).selectOptions("f42");
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+
+  await formatSelect(screen).selectOptions("f15");
+
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+});
+
+test("JoinDialog — « Terminé » choisi, puis une épreuve qui n'a pas commencé : le statut redevient « Intéressé »", async () => {
+  const { screen, onClose } = await renderDialog(nina, view, "2026-06-13");
+  await statusSelect(screen).selectOptions("finished");
+
+  await formatSelect(screen).selectOptions("f42");
+
+  await expect.element(statusSelect(screen)).toHaveValue("interested");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+    runner: nina.runnerId,
+    event: "event",
+    format: "f42",
+    status: "interested",
+  });
 });

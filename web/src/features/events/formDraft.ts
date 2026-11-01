@@ -1,3 +1,4 @@
+import { raceStarted } from "../../lib/dates";
 import { newId } from "../../lib/ids";
 import type { Status } from "../../lib/types";
 import type { EventView } from "./api";
@@ -138,6 +139,23 @@ export function hasMeasure(row: FormatRow): boolean {
  */
 export function joinRowOf(draft: FormDraft): FormatRow | undefined {
   return draft.rows.find((row) => row.key === draft.joinRow) ?? draft.rows[0];
+}
+
+/**
+ * Whether the race that the member takes part in has started, going by what is
+ * typed: the day of its row, else the first day of the event, being `today` or
+ * past. It is not while the day is not typed yet (or is not a day): nobody has
+ * finished a race that has no day.
+ */
+export function joinStarted(draft: FormDraft, today: Temporal.PlainDate): boolean {
+  const row = joinRowOf(draft);
+  if (!row) return false;
+  try {
+    return raceStarted({ date: row.date }, { start_date: draft.startDate }, today);
+  } catch {
+    // A RangeError: the day is empty, or half typed.
+    return false;
+  }
 }
 
 /**

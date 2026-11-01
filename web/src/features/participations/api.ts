@@ -8,6 +8,35 @@ import { invalidateEvents } from "../events/api";
 export const STATUSES: readonly Status[] = ["interested", "registered", "finished", "dnf", "dns"];
 
 /**
+ * The statuses that say the race was run. Nobody has finished a race, or given
+ * up on it, before its day: the server refuses them until then
+ * (`status_before_race`).
+ */
+const AFTER_START: readonly Status[] = ["finished", "dnf"];
+
+/**
+ * The statuses to offer for a participation on a format. `started` is whether
+ * the race has started, its day being today or past (`raceStarted`): until then
+ * « Finished » and « DNF » are left out. `current` is the status the
+ * participation has: it stays in the list, in its place, even when it is not
+ * offered (a race that moved to a later day after its result was entered).
+ */
+export function statusChoices(started: boolean, current?: Status): readonly Status[] {
+  return STATUSES.filter(
+    (status) => started || !AFTER_START.includes(status) || status === current,
+  );
+}
+
+/**
+ * The status to keep when the choices change under it (another format is chosen,
+ * or another day): the one chosen if it can still be, else « Interested », which
+ * is where a participation starts and which is always possible.
+ */
+export function allowedStatus(status: Status, started: boolean): Status {
+  return statusChoices(started).includes(status) ? status : "interested";
+}
+
+/**
  * The statuses of a participation on the event alone, with no format: the only
  * two the server accepts there (anything else is `format_required`).
  */

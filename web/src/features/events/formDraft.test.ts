@@ -1,7 +1,15 @@
 import { describe, expect, test } from "vitest";
 
 import { toEventView } from "./api";
-import { hasMeasure, initialDraft, joinRowOf, toEventDraft, type FormatRow } from "./formDraft";
+import {
+  hasMeasure,
+  initialDraft,
+  joinRowOf,
+  joinStarted,
+  toEventDraft,
+  type FormatRow,
+  type FormDraft,
+} from "./formDraft";
 import { eventRecord, f15, f42 } from "./testFixture";
 
 const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
@@ -246,5 +254,37 @@ describe("toEventDraft", () => {
 
     expect(draft.id).toBe("event");
     expect(draft.formats.map((format) => format.id)).toEqual(["f15", "f42"]);
+  });
+});
+
+// A new event that starts on 13 June, with the format typed so far.
+const typed = (extra: Partial<FormDraft> = {}): FormDraft => ({
+  ...initialDraft(undefined),
+  startDate: "2026-06-13",
+  ...extra,
+});
+const day = (s: string) => Temporal.PlainDate.from(s);
+
+describe("joinStarted", () => {
+  test("is false before the first day of the event, true on it and after", () => {
+    expect(joinStarted(typed(), day("2026-06-12"))).toBe(false);
+    expect(joinStarted(typed(), day("2026-06-13"))).toBe(true);
+    expect(joinStarted(typed(), day("2026-06-14"))).toBe(true);
+  });
+
+  test("the day of the format to join beats the first day of the event", () => {
+    const first = row({ key: "a", date: "2026-06-14" });
+    const second = row({ key: "b" });
+    const draft = typed({ rows: [first, second], joinRow: "a" });
+
+    expect(joinStarted(draft, day("2026-06-13"))).toBe(false);
+    expect(joinStarted(draft, day("2026-06-14"))).toBe(true);
+    // The other format has no day of its own.
+    expect(joinStarted({ ...draft, joinRow: "b" }, day("2026-06-13"))).toBe(true);
+  });
+
+  test("is false while the day is not typed (or not a day): nobody finishes a race with no day", () => {
+    expect(joinStarted(typed({ startDate: "" }), day("2026-06-13"))).toBe(false);
+    expect(joinStarted(typed({ startDate: "2026-06-3" }), day("2026-06-13"))).toBe(false);
   });
 });

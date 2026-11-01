@@ -24,6 +24,7 @@ const (
 	CodeFormatMeasureRequired          = "format_measure_required"
 	CodePriceInvalid                   = "price_invalid"
 	CodeFormatRequired                 = "format_required"
+	CodeStatusBeforeRace               = "status_before_race"
 	CodeSupporterWithFormat            = "supporter_with_format"
 	CodeRankAboveTotal                 = "rank_above_total"
 	CodeOfferSeatsRequired             = "offer_seats_required"

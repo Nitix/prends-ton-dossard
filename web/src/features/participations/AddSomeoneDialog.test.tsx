@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { SUPPORT, UNDECIDED } from "../events/participants";
@@ -65,16 +66,21 @@ beforeEach(() => {
   mocks.create.mockReset().mockResolvedValue({ id: "new" });
 });
 
-async function renderDialog(eventView: EventView = view) {
+// The day of the 42 km (and the second day of the event): every race of the event has started.
+const RACE_DAY = "2026-06-14";
+
+async function renderDialog(eventView: EventView = view, today = RACE_DAY) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onClose = vi.fn<() => void>();
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
-        <ToastProvider>
-          <AddSomeoneDialog open onClose={onClose} view={eventView} />
-        </ToastProvider>
+        <TodayProvider value={Temporal.PlainDate.from(today)}>
+          <ToastProvider>
+            <AddSomeoneDialog open onClose={onClose} view={eventView} />
+          </ToastProvider>
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -322,18 +328,74 @@ test("AddSomeoneDialog — un supporteur n'a plus « Vient encourager » ni « P
   ]);
 });
 
-test("AddSomeoneDialog — le statut de départ est « Intéressé », et les cinq statuts sont proposés", async () => {
+const statusesOf = (screen: Screen) =>
+  optionsOf(statusSelect(screen).element()).map((option) => option.textContent);
+
+const BEFORE_RACES = [fr.status.interested, fr.status.registered, fr.status.dns];
+const ALL_STATUSES = [
+  fr.status.interested,
+  fr.status.registered,
+  fr.status.finished,
+  fr.status.dnf,
+  fr.status.dns,
+];
+
+test("AddSomeoneDialog — le statut de départ est « Intéressé », et les cinq statuts sont proposés une fois l'épreuve du jour choisie", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
 
   await expect.element(statusSelect(screen)).toHaveValue("interested");
-  expect(optionsOf(statusSelect(screen).element()).map((option) => option.textContent)).toEqual([
-    fr.status.interested,
-    fr.status.registered,
-    fr.status.finished,
-    fr.status.dnf,
-    fr.status.dns,
-  ]);
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+});
+
+// --- Before the day of the race ---
+//
+// Nobody finishes a race, or gives up on it, before its day: the server refuses it,
+// and the dialog does not offer it. The event of the fixture runs on 13 and 14 June,
+// F15 on the first day (it has no day of its own) and F42 on the second.
+
+test("AddSomeoneDialog — avant le jour de la course, ni « Terminé » ni « Abandon »", async () => {
+  const { screen } = await renderDialog(view, "2026-06-12");
+  await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("AddSomeoneDialog — la liste suit l'épreuve choisie : celle du jour a commencé, pas celle du lendemain", async () => {
+  const { screen } = await renderDialog(view, "2026-06-13");
+  await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+
+  await formatSelect(screen).selectOptions("f42");
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("AddSomeoneDialog — « Terminé » choisi, puis une épreuve qui n'a pas commencé : le statut envoyé est « Intéressé »", async () => {
+  const { screen, onClose } = await renderDialog(view, "2026-06-13");
+  await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  await statusSelect(screen).selectOptions("finished");
+
+  await formatSelect(screen).selectOptions("f42");
+
+  await expect.element(statusSelect(screen)).toHaveValue("interested");
+
+  await submit(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+    runner: ninaRunner.id,
+    event: "event",
+    format: "f42",
+    status: "interested",
+  });
 });
 
 test("AddSomeoneDialog — on ne peut pas valider sans avoir choisi un coureur", async () => {

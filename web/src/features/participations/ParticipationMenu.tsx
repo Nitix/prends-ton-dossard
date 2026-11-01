@@ -9,7 +9,12 @@ import type { ParticipationRecord, RunnerRecord, Status } from "../../lib/types"
 import { invalidateEvents, type EventView } from "../events/api";
 import { ResultDialog } from "../results/ResultDialog";
 import { hasResult } from "../results/resultText";
-import { EVENT_STATUSES, STATUSES, useDeleteParticipation, useUpdateParticipation } from "./api";
+import {
+  EVENT_STATUSES,
+  statusChoices,
+  useDeleteParticipation,
+  useUpdateParticipation,
+} from "./api";
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 import { isNotFound, participationError } from "./errors";
 
@@ -28,6 +33,12 @@ type Opened = "remove" | "choose" | "result";
  * outside, and with a click on one of its actions, with no script. Removing
  * asks first, in a dialog. On a format, it also opens the dialog of the result
  * (« Enter the result », « Edit the result » when there is one).
+ *
+ * Nobody has finished a race, or given up on it, before its day: until the race
+ * has `started`, the menu offers neither « Finished » nor « DNF » nor the
+ * result, the server refusing them (`status_before_race`). What the participation
+ * is stays in the list, and its result can still be changed, when it is one of
+ * them already (a race that moved to a later day).
  *
  * Who may do what is the page's call: it only shows this to those who may
  * edit the participation, and passes `canConfirm` for the runner it is about.
@@ -48,6 +59,7 @@ export function ParticipationMenu({
   runner,
   label,
   formatsOf,
+  started = false,
   canConfirm,
   onRemoved,
 }: {
@@ -59,6 +71,8 @@ export function ParticipationMenu({
   label: string;
   /** Given for a participation on the event alone: the event, whose formats it can take. */
   formatsOf?: EventView;
+  /** Given for a participation on a format: its race has started, the day of the format being today or past. Not read on the event alone. */
+  started?: boolean;
   canConfirm: boolean;
   /** The participation has just left its row (removed, moved to another list, or found gone): this menu is about to go away. */
   onRemoved: () => void;
@@ -69,6 +83,9 @@ export function ParticipationMenu({
   const menuId = useId();
   const update = useUpdateParticipation(eventId);
   const [opened, setOpened] = useState<Opened | null>(null);
+  // The result goes with « Finished » and « DNF »: it follows them.
+  const held = participation.status;
+  const resultOffered = !formatsOf && (started || held === "finished" || held === "dnf");
 
   // A dialog opens from an item of the popover, which closes at the same time.
   // The native dialog would take that item, now hidden, as the place to give
@@ -133,7 +150,7 @@ export function ParticipationMenu({
       >
         {/* With no format, only two statuses are possible: the participation is on the event alone. */}
         <ul aria-label={t.participation.status}>
-          {(formatsOf ? EVENT_STATUSES : STATUSES).map((status) => {
+          {(formatsOf ? EVENT_STATUSES : statusChoices(started, held)).map((status) => {
             const current = status === participation.status;
             return (
               <li key={status}>
@@ -173,8 +190,8 @@ export function ParticipationMenu({
               </button>
             </li>
           )}
-          {/* A participation on the event alone has started nothing: it has no result. */}
-          {!formatsOf && (
+          {/* A participation on the event alone has started nothing: it has no result. Nor has one whose race has not started. */}
+          {resultOffered && (
             <li>
               <button
                 type="button"

@@ -12,7 +12,8 @@
 // A finished participation can carry a result: the time, the rank, how many
 // were ranked, and a note (the note also goes with "dnf"). A result only means
 // something with its status, so changing the status clears what no longer
-// applies instead of refusing the write.
+// applies instead of refusing the write. Nor can a runner finish a race, or give
+// up on it, before its day: "finished" and "dnf" are refused until then.
 //
 // What a request changes is decided by request hooks, since it depends on the
 // caller. The rules that hold for any write, such as the default status, the
@@ -23,6 +24,10 @@ package participations
 import (
 	"database/sql"
 	"errors"
+	"time"
+
+	// The image has no time zone database: the program carries its own.
+	_ "time/tzdata"
 
 	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
@@ -47,6 +52,21 @@ const (
 	statusFinished = "finished"
 	statusDNF      = "dnf"
 )
+
+// now is the clock of the hooks, which the tests replace.
+var now = time.Now
+
+// paris is the time zone of the days of the races: "today" is the day it is in
+// Paris, whatever the zone of the server. It is the zone of the scheduled jobs
+// (setup.CronTimezone), which this package cannot import: setup imports it.
+var paris = func() *time.Location {
+	location, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		// Not possible with the database of time/tzdata linked in.
+		panic("loading the time zone of the races: " + err.Error())
+	}
+	return location
+}()
 
 // Register attaches the hooks of the participations collection to app.
 func Register(app core.App) {
@@ -81,6 +101,9 @@ func Register(app core.App) {
 			return err
 		}
 		if err := validate(e.App, e.Record); err != nil {
+			return err
+		}
+		if err := validateStarted(e.App, e.Record); err != nil {
 			return err
 		}
 		return validateResult(e.Record)
@@ -207,6 +230,69 @@ func validate(app core.App, p *core.Record) error {
 		return apperr.Field("format", apperr.CodeFormatRequired)
 	}
 	return nil
+}
+
+// validateStarted refuses the status "finished" or "dnf" for a race that has
+// not started: nobody finishes a race, or gives up on it, before its day
+// (apperr.CodeStatusBeforeRace on status). The race starts on its day, in
+// Paris: the day of its format, or the first day of its event when the format
+// has none. The day itself counts.
+//
+// It only looks at a status that is being set: on a new participation, or when
+// the status changes. A participation that already has the status is left
+// alone, so that its note, its time and its rank can be changed even when its
+// event has moved later since. Moving from "finished" to "dnf" is a new status,
+// which is checked. A format or an event that cannot be found, or a day that is
+// not one, are not this check's to report: it lets them pass.
+func validateStarted(app core.App, p *core.Record) error {
+	status := p.GetString("status")
+	if status != statusFinished && status != statusDNF {
+		return nil
+	}
+	if !p.IsNew() && p.Original().GetString("status") == status {
+		return nil
+	}
+
+	day, found, err := raceDay(app, p)
+	if err != nil || !found {
+		return err
+	}
+	year, month, dayOfMonth := now().In(paris).Date()
+	if day.After(time.Date(year, month, dayOfMonth, 0, 0, 0, 0, time.UTC)) {
+		return apperr.Field("status", apperr.CodeStatusBeforeRace)
+	}
+	return nil
+}
+
+// raceDay returns the day of the race that the participation is on: the day of
+// its format, or the first day of its event when the format has none. It is
+// midnight UTC of that day. The day is not found when the participation has no
+// format, or when the format, the event or the day cannot be read.
+func raceDay(app core.App, p *core.Record) (time.Time, bool, error) {
+	if p.GetString("format") == "" {
+		return time.Time{}, false, nil
+	}
+	format, err := app.FindRecordById("formats", p.GetString("format"))
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+
+	text := format.GetString("date")
+	if text == "" {
+		event, err := app.FindRecordById("events", p.GetString("event"))
+		if errors.Is(err, sql.ErrNoRows) {
+			return time.Time{}, false, nil
+		}
+		if err != nil {
+			return time.Time{}, false, err
+		}
+		text = event.GetString("start_date")
+	}
+	day, ok := events.ParseDay(text)
+	return day, ok, nil
 }
 
 // clearResult empties the parts of the result that the status of the

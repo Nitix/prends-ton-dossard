@@ -16,6 +16,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { TodayProvider } from "../../lib/useToday";
 import { EditEventPage, EventForm } from "./EventForm";
 import {
   aliceRunner,
@@ -150,9 +151,12 @@ function Routed() {
   return <EditEventPage id={id ?? ""} />;
 }
 
+/** The day of the tests: before the races of the examples (13 and 14 June), none of them has started. */
+const TODAY = "2026-06-01";
+
 /** Opens the app at a page of the form, without waiting for anything. */
-async function mountForm(options: { at?: string; languages?: string[] } = {}) {
-  const { at = "/evenements/nouveau", languages = ["fr"] } = options;
+async function mountForm(options: { at?: string; languages?: string[]; today?: string } = {}) {
+  const { at = "/evenements/nouveau", languages = ["fr"], today = TODAY } = options;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const root = createRootRoute({ component: Outlet });
@@ -173,9 +177,11 @@ async function mountForm(options: { at?: string; languages?: string[] } = {}) {
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
+        <TodayProvider value={Temporal.PlainDate.from(today)}>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -183,7 +189,9 @@ async function mountForm(options: { at?: string; languages?: string[] } = {}) {
 }
 
 /** Opens the form and waits until it is there: its title is the one given. */
-async function renderForm(options: { at?: string; languages?: string[]; heading?: string } = {}) {
+async function renderForm(
+  options: { at?: string; languages?: string[]; heading?: string; today?: string } = {},
+) {
   const { heading = fr.form.createTitle, ...mount } = options;
   const opened = await mountForm(mount);
   await expect
@@ -549,6 +557,91 @@ test("EventForm — pendant l'envoi le bouton est désactivé et dit « Enregist
   answer.resolve([]);
   await vi.waitFor(() => {
     expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+});
+
+// --- « I'm taking part » before the day of the race ---
+//
+// Nobody finishes a race, or gives up on it, before its day: the server refuses it, and the
+// form does not offer it for the race that the member takes part in. The event of `fillEvent`
+// runs on 13 and 14 June.
+
+const statusesOf = (screen: Screen) =>
+  optionsOf(screen.getByLabelText(fr.participation.status).element()).map(
+    (option) => option.textContent,
+  );
+
+const BEFORE_RACES = [fr.status.interested, fr.status.registered, fr.status.dns];
+const ALL_STATUSES = [
+  fr.status.interested,
+  fr.status.registered,
+  fr.status.finished,
+  fr.status.dnf,
+  fr.status.dns,
+];
+
+test("EventForm — « Je participe » à une course à venir : ni « Terminé » ni « Abandon »", async () => {
+  const { screen } = await renderForm({ today: "2026-06-12" });
+  await fillEvent(screen);
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("EventForm — le premier jour de la course ou après, tous les statuts sont proposés (on saisit une course passée)", async () => {
+  for (const today of ["2026-06-13", "2026-09-01"]) {
+    const { screen } = await renderForm({ today });
+    await fillEvent(screen);
+
+    expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+    await screen.unmount();
+  }
+});
+
+test("EventForm — tant que la date de début n'est pas saisie, ni « Terminé » ni « Abandon »", async () => {
+  const { screen } = await renderForm({ today: "2026-09-01" });
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+
+  await startDate(screen).fill("2026-06-13");
+
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+});
+
+test("EventForm — la liste suit l'épreuve choisie, et son jour s'il en a un", async () => {
+  const { screen } = await renderForm({ today: "2026-06-13" });
+  await fillEvent(screen);
+  await addFormat(screen).click();
+  const second = format(screen, 2);
+  await raceType(second).selectOptions(roadType.id);
+  await minutesOf(second, fr.form.timeLimit).fill("90");
+  await formatDate(second).fill("2026-06-14");
+
+  // The first format has no day: it is the first day of the event, today.
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+
+  await chooseJoinFormat(screen, 2);
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("EventForm — « Terminé » choisi, puis un début plus tard : le statut envoyé est « Intéressé »", async () => {
+  const { screen } = await renderForm({ today: "2026-06-13" });
+  await fillEvent(screen);
+  await screen.getByLabelText(fr.participation.status).selectOptions("finished");
+
+  await startDate(screen).fill("2026-06-20");
+  await endDate(screen).fill("2026-06-21");
+
+  await expect.element(screen.getByLabelText(fr.participation.status)).toHaveValue("interested");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.send).toHaveBeenCalledOnce();
+  });
+  expect(mocks.calls.at(-1)).toMatchObject({
+    collection: "participations",
+    body: { status: "interested" },
   });
 });
 

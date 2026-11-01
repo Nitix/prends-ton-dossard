@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import {
@@ -46,8 +47,13 @@ beforeEach(() => {
   mocks.update.mockReset().mockResolvedValue({ id: "pNinaUndecided" });
 });
 
-async function renderDialog(options: { withOnChosen?: boolean; supporter?: boolean } = {}) {
-  const { withOnChosen = false, supporter = false } = options;
+// The day of the 42 km (and the second day of the event): every race of the event has started.
+const RACE_DAY = "2026-06-14";
+
+async function renderDialog(
+  options: { withOnChosen?: boolean; supporter?: boolean; today?: string } = {},
+) {
+  const { withOnChosen = false, supporter = false, today = RACE_DAY } = options;
   const shown = supporter ? supporterView : view;
   const participationView = (supporter ? shown.supporters : shown.interested)[0];
   if (!participationView) throw new Error("the fixture has no participation on the event alone");
@@ -58,15 +64,17 @@ async function renderDialog(options: { withOnChosen?: boolean; supporter?: boole
   const ui = (eventView: EventView) => (
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
-        <ToastProvider>
-          <ChooseFormatDialog
-            open
-            onClose={onClose}
-            onChosen={withOnChosen ? onChosen : undefined}
-            view={eventView}
-            participationView={participationView}
-          />
-        </ToastProvider>
+        <TodayProvider value={Temporal.PlainDate.from(today)}>
+          <ToastProvider>
+            <ChooseFormatDialog
+              open
+              onClose={onClose}
+              onChosen={withOnChosen ? onChosen : undefined}
+              view={eventView}
+              participationView={participationView}
+            />
+          </ToastProvider>
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>
   );
@@ -312,4 +320,57 @@ test("ChooseFormatDialog — avec onChosen, une participation introuvable (404) 
   });
   expect(onClose).not.toHaveBeenCalled();
   await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+});
+
+// --- Before the day of the race ---
+//
+// Nobody finishes a race, or gives up on it, before its day: the server refuses it,
+// and the dialog does not offer it. The event of the fixture runs on 13 and 14 June,
+// F15 on the first day (it has no day of its own) and F42 on the second.
+
+const statusesOf = (screen: Screen) =>
+  optionsOf(statusSelect(screen).element()).map((option) => option.textContent);
+
+const BEFORE_RACES = [fr.status.interested, fr.status.registered, fr.status.dns];
+const ALL_STATUSES = [
+  fr.status.interested,
+  fr.status.registered,
+  fr.status.finished,
+  fr.status.dnf,
+  fr.status.dns,
+];
+
+test("ChooseFormatDialog — avant le jour de la course, ni « Terminé » ni « Abandon »", async () => {
+  const { screen } = await renderDialog({ today: "2026-06-12" });
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("ChooseFormatDialog — la liste suit l'épreuve choisie : celle du jour a commencé, pas celle du lendemain", async () => {
+  const { screen } = await renderDialog({ today: "2026-06-13" });
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
+  expect(statusesOf(screen)).toEqual(ALL_STATUSES);
+
+  await formatSelect(screen).selectOptions("f42");
+
+  expect(statusesOf(screen)).toEqual(BEFORE_RACES);
+});
+
+test("ChooseFormatDialog — « Terminé » choisi, puis une épreuve qui n'a pas commencé : le statut envoyé est « Intéressé »", async () => {
+  const { screen, onClose } = await renderDialog({ today: "2026-06-13" });
+  await statusSelect(screen).selectOptions("finished");
+
+  await formatSelect(screen).selectOptions("f42");
+
+  await expect.element(statusSelect(screen)).toHaveValue("interested");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pNinaUndecided", {
+    format: "f42",
+    status: "interested",
+  });
 });

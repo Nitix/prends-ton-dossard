@@ -717,6 +717,7 @@ export const fr = {
     format_measure_required: "Indique au moins une distance, une durée ou un temps max.",
     price_invalid: "Le prix se donne au centime près.",
     format_required: "Il faut choisir une épreuve.",
+    status_before_race: "La course n'a pas encore eu lieu.",
     supporter_with_format: "Un supporteur ne court pas d'épreuve.",
     rank_above_total: "Le classement dépasse le nombre de classés.",
     offer_seats_required: "Indique le nombre de places, de 1 à 8.",

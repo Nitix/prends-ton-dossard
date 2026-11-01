@@ -5,7 +5,7 @@ import type { Status } from "../../lib/types";
 import type { EventView, FormatView } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
 import { SUPPORT, UNDECIDED } from "../events/participants";
-import { EVENT_STATUSES, STATUSES } from "./api";
+import { EVENT_STATUSES, STATUSES, statusChoices } from "./api";
 
 /**
  * A labelled native select: the browser gives the picker, the keyboard and the
@@ -128,14 +128,22 @@ export function noFormatChoice(
  * a choice: « Intéressé » when the format is to be decided (`"undecided"`),
  * « Supporteur » for somebody who comes to cheer (`"support"`). The field is
  * disabled on that status, and tells why under it.
+ *
+ * On a format, « Terminé » and « Abandon » are only offered once its race has
+ * started (`started`, see `raceStarted`): nobody has finished a race that has
+ * not happened. The current `value` stays in the list all the same; a form
+ * that lets the format change under it gives `allowedStatus` back as the value.
  */
 export function StatusField({
   value,
   onChange,
+  started,
   locked,
 }: {
   value: Status;
   onChange: (status: Status) => void;
+  /** The race of the chosen format has started: its day is today or past. Not read when `locked`. */
+  started: boolean;
   /**
    * No format chosen: disabled on « Intéressé » (`"undecided"`, with
    * `t.participation.undecidedHint` under it) or on « Supporteur »
@@ -156,7 +164,7 @@ export function StatusField({
         if (isStatus(next)) onChange(next);
       }}
     >
-      {(lock ? EVENT_STATUSES : STATUSES).map((status) => (
+      {(lock ? EVENT_STATUSES : statusChoices(started, value)).map((status) => (
         <option key={status} value={status}>
           {t.status[status]}
         </option>
