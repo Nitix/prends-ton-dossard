@@ -726,6 +726,285 @@ test("PendingConfirmations — une erreur de chargement se signale et se retente
   await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
 });
 
+// ---- Inscriptions à faire
+
+const todoBlock = (screen: Screen) => screen.getByRole("region", { name: fr.home.todoTitle });
+const todoRows = (screen: Screen) => todoBlock(screen).getByRole("listitem");
+const doneButton = (row: ReturnType<typeof todoRows>) =>
+  row.getByRole("button", { name: fr.home.todoDone });
+
+/** The event with a registration deadline, and the address of its official site. */
+function withDeadline<E extends object>(event: E, deadline: string, url = "") {
+  return { ...event, registration_deadline: deadline, registration_url: url };
+}
+
+/** Bob, interested (and confirmed: he added himself) in the 10 km of Lyon. */
+const bobLyon = {
+  ...p2,
+  id: "p-lyon",
+  event: "event2",
+  format: "fLyon",
+  confirmed: true,
+  added_by: bobRunner.id,
+  expand: { runner: bobRunner },
+};
+
+/** The trail (deadline 10 June, Bob on F42) and Lyon (deadline 20 May, Bob on its 10 km). */
+const trailAndLyon = () => [
+  withDeadline(eventRecord, "2026-06-10"),
+  withParticipations(withDeadline(event2Record, "2026-05-20"), [bobLyon]),
+];
+
+test("Inscriptions à faire — mes participations intéressées, triées par date limite", async () => {
+  // Bob is interested on F42 and on the 10 km of Lyon, whose deadline comes
+  // first, though the server gives the trail first. Alice has registered and
+  // Sam is interested: not Bob's.
+  mocks.events.mockResolvedValue(trailAndLyon());
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const rows = todoRows(screen);
+  await expect.element(rows.first()).toBeVisible();
+  expect(rows.elements().map((row) => row.querySelector("h3")?.textContent)).toEqual([
+    "10 km de Lyon",
+    "Trail des Crêtes",
+  ]);
+  const [lyon, trail] = rows.elements().map((row) => plain(row.textContent));
+  expect(lyon).toContain("Route 10 km");
+  expect(lyon).toContain("avant le mer. 20 mai");
+  expect(lyon).toContain("dans 20 jours");
+  expect(trail).toContain("Trail 42 km");
+  expect(trail).toContain("avant le mer. 10 juin");
+  expect(trail).toContain("dans 41 jours");
+  expect(todoBlock(screen).element().textContent).not.toContain("Trail 15 km");
+  // The event is a link to its page.
+  const link = todoBlock(screen).getByRole("link", { name: "Trail des Crêtes" });
+  expect(link.element().getAttribute("href")).toBe("/evenements/event");
+  // Each row has « Je suis inscrit »; the site is not known here, so no « S'inscrire ».
+  expect(doneButton(rows).elements()).toHaveLength(2);
+  await expect
+    .element(todoBlock(screen).getByRole("link", { name: fr.home.todoRegister }))
+    .not.toBeInTheDocument();
+});
+
+test("Inscriptions à faire — le bloc est entre « À confirmer » et « Mes prochaines courses »", async () => {
+  mocks.pending.mockResolvedValue([pendingP2]);
+  mocks.events.mockResolvedValue(trailAndLyon());
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  const titles = screen
+    .getByRole("heading", { level: 2 })
+    .elements()
+    .map((heading) => heading.textContent);
+  expect(titles).toEqual([
+    fr.home.pendingTitle,
+    fr.home.todoTitle,
+    fr.home.upcomingTitle,
+    fr.home.groupTitle,
+  ]);
+});
+
+test("Inscriptions à faire — le jour de la date limite, « aujourd'hui »", async () => {
+  // Review Focus 2: on the day of the deadline one can still register.
+  mocks.events.mockResolvedValue([withDeadline(eventRecord, "2026-06-10")]);
+
+  const { screen } = await renderHome({ today: "2026-06-10" });
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const row = todoRows(screen);
+  await expect.element(row.getByText("aujourd’hui")).toBeVisible();
+  expect(plain(row.element().textContent)).toContain("avant le mer. 10 juin");
+});
+
+test("Inscriptions à faire — une participation sans épreuve affiche « Format à choisir », sans « Je suis inscrit »", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([
+    withParticipations(withDeadline(eventRecord, "2026-06-10", "https://example.org/inscription"), [
+      pNinaUndecided,
+    ]),
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const row = todoRows(screen);
+  await expect.element(row.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  expect(plain(row.element().textContent)).toContain(fr.event.formatToChoose);
+  expect(plain(row.element().textContent)).toContain("dans 41 jours");
+  // There is no format to say one is registered for: the page of the event
+  // is where one chooses it. The official site is still one tap away.
+  await expect.element(doneButton(row)).not.toBeInTheDocument();
+  await expect.element(row.getByRole("link", { name: fr.home.todoRegister })).toBeVisible();
+});
+
+test("Inscriptions à faire — « Je suis inscrit » passe la participation en Inscrit, la ligne disparaît et le focus va sur un titre", async () => {
+  let events: { expand: object }[] = trailAndLyon();
+  mocks.events.mockImplementation(() => Promise.resolve(events));
+  mocks.update.mockImplementation((id, body) => {
+    events = events.map((event) => withStatus(event, id, String(body.status)));
+    return Promise.resolve({});
+  });
+  const { screen } = await renderHome();
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const eventsAsked = mocks.events.mock.calls.length;
+
+  // Lyon is the first row, and its button the first.
+  await doneButton(todoRows(screen).first()).click();
+
+  expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-lyon", { status: "registered" });
+  // The events are asked for again, and the row is gone.
+  await expect
+    .element(todoBlock(screen).getByRole("link", { name: "10 km de Lyon" }))
+    .not.toBeInTheDocument();
+  expect(mocks.events.mock.calls.length).toBeGreaterThan(eventsAsked);
+  // The other row is still there, and the title of the block has the focus.
+  await expect
+    .element(todoBlock(screen).getByRole("link", { name: "Trail des Crêtes" }))
+    .toBeVisible();
+  await expect
+    .element(todoBlock(screen).getByRole("heading", { level: 2, name: fr.home.todoTitle }))
+    .toHaveFocus();
+
+  // The last row takes the block with it: the focus goes to the title of the page.
+  await doneButton(todoRows(screen)).click();
+
+  expect(mocks.update).toHaveBeenLastCalledWith("p2", { status: "registered" });
+  await expect.element(screen.getByText(fr.home.todoTitle)).not.toBeInTheDocument();
+  await expect.element(screen.getByRole("heading", { level: 1, name: fr.nav.home })).toHaveFocus();
+  expect(document.activeElement).not.toBe(document.body);
+});
+
+test("Inscriptions à faire — « Je suis inscrit » refusé : message, événements redemandés, la ligne reste et le bouton reprend le focus", async () => {
+  mocks.events.mockResolvedValue([withDeadline(eventRecord, "2026-06-10")]);
+  // A real request takes longer than a frame: the browser drops the focus of a
+  // button that is disabled once it has had the time to.
+  mocks.update.mockImplementation(
+    () => new Promise((_, reject) => setTimeout(() => reject(new Error("network")), 150)),
+  );
+  const { screen } = await renderHome();
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const eventsAsked = mocks.events.mock.calls.length;
+
+  await doneButton(todoRows(screen)).click();
+
+  await expect.element(screen.getByText(fr.errors.generic)).toBeVisible();
+  await expect.element(doneButton(todoRows(screen))).toBeEnabled();
+  await expect.element(doneButton(todoRows(screen))).toHaveFocus();
+  // What the screen shows may be what is wrong: the events are asked for again.
+  expect(mocks.events.mock.calls.length).toBeGreaterThan(eventsAsked);
+});
+
+test("Inscriptions à faire — « Je suis inscrit » sur une participation supprimée (404) : « Introuvable », la ligne part et le focus va au titre de la page", async () => {
+  let events: { expand: object }[] = [withDeadline(eventRecord, "2026-06-10")];
+  mocks.events.mockImplementation(() => Promise.resolve(events));
+  mocks.update.mockImplementation(() => {
+    // Somebody deleted it meanwhile.
+    events = [eventRecord];
+    return Promise.reject(
+      new ClientResponseError({
+        status: 404,
+        response: { status: 404, message: "The requested resource wasn't found.", data: {} },
+      }),
+    );
+  });
+  const { screen } = await renderHome();
+  await expect.element(todoBlock(screen)).toBeVisible();
+
+  await doneButton(todoRows(screen)).click();
+
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  await expect.element(screen.getByText(fr.home.todoTitle)).not.toBeInTheDocument();
+  await expect.element(screen.getByRole("heading", { level: 1, name: fr.nav.home })).toHaveFocus();
+});
+
+test("Inscriptions à faire — « S'inscrire » ouvre le site officiel dans un nouvel onglet", async () => {
+  // The address of the second event is not a web address: no link for it.
+  mocks.events.mockResolvedValue([
+    withDeadline(eventRecord, "2026-06-10", "https://example.org/inscription?course=42"),
+    withParticipations(withDeadline(event2Record, "2026-06-12", "javascript:alert(1)"), [bobLyon]),
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const links = todoBlock(screen).getByRole("link", { name: fr.home.todoRegister });
+  await expect.element(links).toBeVisible();
+  expect(links.elements()).toHaveLength(1);
+  const link = links.element();
+  expect(link.getAttribute("href")).toBe("https://example.org/inscription?course=42");
+  expect(link.getAttribute("target")).toBe("_blank");
+  expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  // It is in the row of the trail (deadline the 10th), the first.
+  const trail = todoRows(screen).first();
+  await expect.element(trail.getByRole("link", { name: fr.home.todoRegister })).toBeVisible();
+  expect(trail.element().querySelector("h3")?.textContent).toBe("Trail des Crêtes");
+});
+
+test("Inscriptions à faire — pas de bloc sans rien à faire", async () => {
+  // Bob has registered on the trail, is not starting the 10 km of Lyon, and
+  // is interested in an event whose deadline has passed.
+  const lyonDns = { ...bobLyon, status: "dns" };
+  const paris = {
+    ...event2Record,
+    id: "event3",
+    name: "Marathon de Paris",
+    start_date: "2026-06-20",
+    expand: { formats_via_event: [{ ...fLyon, id: "fParis", event: "event3" }] },
+  };
+  const parisClosed = { ...bobLyon, id: "p-paris", event: "event3", format: "fParis" };
+  mocks.events.mockResolvedValue([
+    withDeadline(withStatus(eventRecord, "p2", "registered"), "2026-06-10"),
+    withParticipations(withDeadline(event2Record, "2026-05-20"), [lyonDns]),
+    withParticipations(withDeadline(paris, "2026-04-29"), [parisClosed]),
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  await expect.element(screen.getByText(fr.home.todoTitle)).not.toBeInTheDocument();
+});
+
+test("Inscriptions à faire — en anglais, les textes et le décompte suivent la langue", async () => {
+  mocks.events.mockResolvedValue(trailAndLyon());
+
+  const { screen } = await renderHome({ languages: ["en-GB"] });
+
+  const block = screen.getByRole("region", { name: "Registrations to do" });
+  await expect.element(block).toBeVisible();
+  const rows = block.getByRole("listitem");
+  await expect.element(rows.first()).toBeVisible();
+  const first = plain(rows.first().element().textContent);
+  expect(first).toContain("in 20 days");
+  expect(first).toContain(en.home.todoBefore("Wed 20 May"));
+  expect(en.home.todoBefore("Wed 20 May")).toBe("by Wed 20 May");
+  await expect.element(rows.first().getByRole("button", { name: "I'm registered" })).toBeVisible();
+});
+
+test("Inscriptions à faire — zones tactiles d'au moins 44 px", async () => {
+  await page.viewport(390, 844);
+  mocks.events.mockResolvedValue([
+    withDeadline(eventRecord, "2026-06-10", "https://example.org/inscription"),
+  ]);
+  const { screen } = await renderHome();
+  await expect.element(todoBlock(screen)).toBeVisible();
+
+  const targets = [
+    todoBlock(screen).getByRole("link", { name: "Trail des Crêtes" }),
+    todoBlock(screen).getByRole("link", { name: fr.home.todoRegister }),
+    doneButton(todoRows(screen)),
+  ];
+  for (const target of targets) {
+    const { width, height } = target.element().getBoundingClientRect();
+    expect(width).toBeGreaterThanOrEqual(44);
+    expect(height).toBeGreaterThanOrEqual(44);
+  }
+  await page.viewport(414, 896);
+});
+
 // ---- Mes prochaines courses
 
 test("MyUpcoming — affiche « dans 45 jours » pour F42", async () => {

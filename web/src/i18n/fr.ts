@@ -262,6 +262,13 @@ export const fr = {
     removeFor: (event: string) => `Retirer de ${event}`,
     confirmed: "Participation confirmée.",
     removed: "Participation retirée.",
+    // The races the user is interested in and has not registered for yet, while they still can.
+    todoTitle: "Inscriptions à faire",
+    // The deadline, the date being formatted already: « avant le mer. 10 juin ».
+    todoBefore: (date: string) => `avant le ${date}`,
+    // The link to the official site, and the button that says it is done (the status becomes « Inscrit »).
+    todoRegister: "S'inscrire",
+    todoDone: "Je suis inscrit",
     upcomingTitle: "Mes prochaines courses",
     upcomingEmpty: "Aucune course à venir. Ouvre un événement et touche « J'y vais ».",
     groupTitle: "Bientôt dans le groupe",

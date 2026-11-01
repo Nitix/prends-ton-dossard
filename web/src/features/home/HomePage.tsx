@@ -9,13 +9,14 @@ import { GroupSoon } from "./GroupSoon";
 import { MyUpcoming } from "./MyUpcoming";
 import { PasskeyBanner } from "./PasskeyBanner";
 import { PendingConfirmations } from "./PendingConfirmations";
+import { RegistrationTodoBlock } from "./RegistrationTodoBlock";
 
 /**
  * The home page: the invitation to add a passkey, what the user has to
- * confirm, their next races, and what the group is up to. The app shell around
- * it owns the page's `<main>`.
+ * confirm, the registrations they have to make, their next races, and what the
+ * group is up to. The app shell around it owns the page's `<main>`.
  *
- * The events that are to come are asked for once, for the two blocks that are
+ * The events that are to come are asked for once, for the three blocks that are
  * made of them. The title of the page can take the focus (it is not in the tab
  * order): it is where the focus goes when a block that had it goes away.
  */
@@ -36,6 +37,7 @@ export function HomePage() {
       {/* A refresh that fails keeps what the blocks already show. */}
       {events.data ? (
         <>
+          <RegistrationTodoBlock views={events.data} runnerId={runner?.id} pageHeading={title} />
           <MyUpcoming views={events.data} runnerId={runner?.id} />
           <GroupSoon views={events.data} />
         </>
