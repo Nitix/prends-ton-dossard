@@ -4,6 +4,8 @@
 // `Temporal` is only touched inside functions, never at module scope: Safari
 // loads the polyfill after the static imports have run (see ./temporal.ts).
 
+import { PARIS } from "./dates";
+
 export type Formatters = {
   /** Short weekday, day and short month: "dim. 14 juin", "Sun 14 Jun". */
   date(d: Temporal.PlainDate): string;
@@ -15,6 +17,13 @@ export type Formatters = {
   monthTitle(m: Temporal.PlainYearMonth): string;
   /** A number of days from today, in words when there are some: "dans 45 jours", "aujourd’hui". */
   inDays(n: number): string;
+  /**
+   * How long ago, in words when there are some: "maintenant", "il y a 2 heures", "hier".
+   * The value is negative for the past (see `elapsed` in ./dates.ts).
+   */
+  ago(value: number, unit: Intl.RelativeTimeFormatUnit): string;
+  /** An instant as a long date and the time, in Paris: "1 novembre 2026 à 05:30". */
+  dateTime(instant: Temporal.Instant): string;
   /** Kilometers, at most one decimal: "42,2 km". */
   km(n: number): string;
   /** Meters, no decimal: "2 400 m". */
@@ -71,6 +80,9 @@ export function createFormatters(locale: string): Formatters {
     monthTitle: (m) =>
       m.toPlainDate({ day: 1 }).toLocaleString(locale, { month: "long", year: "numeric" }),
     inDays: (n) => relativeTime.format(n, "day"),
+    ago: (value, unit) => relativeTime.format(value, unit),
+    dateTime: (instant) =>
+      instant.toLocaleString(locale, { dateStyle: "long", timeStyle: "short", timeZone: PARIS }),
     km: (n) => kilometers.format(n),
     meters: (n) => meters.format(n),
     price: (eur) => euros.format(eur),

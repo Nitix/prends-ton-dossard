@@ -4,6 +4,7 @@ import { SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
+import { LatestComments } from "../comments/LatestComments";
 import { useEvents } from "../events/api";
 import { GroupSoon } from "./GroupSoon";
 import { MyUpcoming } from "./MyUpcoming";
@@ -13,12 +14,14 @@ import { RegistrationTodoBlock } from "./RegistrationTodoBlock";
 
 /**
  * The home page: the invitation to add a passkey, what the user has to
- * confirm, the registrations they have to make, their next races, and what the
- * group is up to. The app shell around it owns the page's `<main>`.
+ * confirm, the registrations they have to make, their next races, what the
+ * group is up to, and what has been said lately. The app shell around it owns
+ * the page's `<main>`.
  *
  * The events that are to come are asked for once, for the three blocks that are
- * made of them. The title of the page can take the focus (it is not in the tab
- * order): it is where the focus goes when a block that had it goes away.
+ * made of them; the last comments ask for themselves. The title of the page can
+ * take the focus (it is not in the tab order): it is where the focus goes when
+ * a block that had it goes away.
  */
 export function HomePage() {
   const { t } = useI18n();
@@ -40,6 +43,7 @@ export function HomePage() {
           <RegistrationTodoBlock views={events.data} runnerId={runner?.id} pageHeading={title} />
           <MyUpcoming views={events.data} runnerId={runner?.id} />
           <GroupSoon views={events.data} />
+          <LatestComments />
         </>
       ) : events.isError ? (
         <div className="flex flex-col gap-3">

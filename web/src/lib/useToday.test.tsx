@@ -3,7 +3,7 @@ import { render } from "vitest-browser-react";
 
 import { today } from "./dates";
 import { ensureTemporal } from "./temporal";
-import { TodayProvider, useToday } from "./useToday";
+import { TodayProvider, useClock, useToday } from "./useToday";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -104,4 +104,41 @@ test("useToday — une valeur fixée ne suit pas l'horloge", async () => {
   document.dispatchEvent(new Event("visibilitychange"));
 
   await expect.element(screen.getByTestId("today")).toHaveTextContent("2026-04-30");
+});
+
+function ClockProbe() {
+  return <p data-testid="clock">{useClock()().toString()}</p>;
+}
+
+test("useClock — rend l'horloge du fournisseur", async () => {
+  const fixed = Temporal.Instant.from("2026-11-01T04:30:22Z");
+  const screen = await render(
+    <TodayProvider value={Temporal.PlainDate.from("2026-11-01")} now={() => fixed}>
+      <ClockProbe />
+    </TodayProvider>,
+  );
+
+  await expect.element(screen.getByTestId("clock")).toHaveTextContent("2026-11-01T04:30:22Z");
+});
+
+test("useClock — sans horloge donnée, c'est l'instant présent", async () => {
+  const before = Temporal.Now.instant();
+  const screen = await render(
+    <TodayProvider>
+      <ClockProbe />
+    </TodayProvider>,
+  );
+  const after = Temporal.Now.instant();
+
+  const shown = Temporal.Instant.from(screen.getByTestId("clock").element().textContent);
+  expect(Temporal.Instant.compare(shown, before)).toBeGreaterThanOrEqual(0);
+  expect(Temporal.Instant.compare(shown, after)).toBeLessThanOrEqual(0);
+});
+
+test("useClock — hors fournisseur, lève une erreur", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+
+  await expect(render(<ClockProbe />)).rejects.toThrow(
+    "useClock must be used inside a TodayProvider",
+  );
 });

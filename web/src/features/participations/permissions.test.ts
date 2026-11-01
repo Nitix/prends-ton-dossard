@@ -1,7 +1,14 @@
 import { describe, expect, test } from "vitest";
 
 import type { EventRecord, ParticipationRecord, RunnerRecord } from "../../lib/types";
-import { canConfirm, canDeleteEvent, canEditParticipation, type Me } from "./permissions";
+import {
+  canConfirm,
+  canDeleteComment,
+  canDeleteEvent,
+  canEditComment,
+  canEditParticipation,
+  type Me,
+} from "./permissions";
 
 const base = { created: "", updated: "", collectionId: "", collectionName: "" };
 
@@ -139,5 +146,35 @@ describe("canDeleteEvent", () => {
     { title: "the admin", me: meAdmin, expected: true },
   ])("$title: $expected", ({ me, expected }) => {
     expect(canDeleteEvent(event, me)).toBe(expected);
+  });
+});
+
+// "Modifier un commentaire: le sien" ; "Supprimer un commentaire: le sien, ou admin (tous)".
+describe("canEditComment", () => {
+  test.each([
+    { title: "its author", me: meAlice, expected: true },
+    { title: "another member", me: meBob, expected: false },
+    { title: "the admin, on a comment of somebody else", me: meAdmin, expected: false },
+  ])("$title: $expected", ({ me, expected }) => {
+    expect(canEditComment(alice, me)).toBe(expected);
+  });
+
+  test("an empty user id is nobody", () => {
+    expect(canEditComment(sam, { userId: "", runnerId: "x", isAdmin: false })).toBe(false);
+  });
+});
+
+describe("canDeleteComment", () => {
+  test.each([
+    { title: "its author", me: meAlice, expected: true },
+    { title: "another member", me: meBob, expected: false },
+    { title: "the admin, on a comment of somebody else", me: meAdmin, expected: true },
+  ])("$title: $expected", ({ me, expected }) => {
+    expect(canDeleteComment(alice, me)).toBe(expected);
+  });
+
+  test("an empty user id is nobody, the admin apart", () => {
+    expect(canDeleteComment(sam, { userId: "", runnerId: "x", isAdmin: false })).toBe(false);
+    expect(canDeleteComment(sam, meAdmin)).toBe(true);
   });
 });

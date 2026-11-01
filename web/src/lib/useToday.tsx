@@ -4,6 +4,7 @@ import { msUntilTomorrow, today } from "./dates";
 import { onResume } from "./resume";
 
 const TodayContext = createContext<Temporal.PlainDate | null>(null);
+const ClockContext = createContext<(() => Temporal.Instant) | null>(null);
 
 /** The current instant. Temporal is only read when this runs (see dates.ts). */
 function currentInstant(): Temporal.Instant {
@@ -16,8 +17,9 @@ function currentInstant(): Temporal.Instant {
  * app comes back to the foreground: a phone keeps a tab for days, and its
  * timers sleep meanwhile.
  *
- * `value` replaces it with a fixed day, and `now` replaces the clock: both are
- * meant for tests.
+ * `value` replaces it with a fixed day, and `now` replaces the clock (which
+ * `useClock` gives to the screens that show a time, such as "2 hours ago"):
+ * both are meant for tests.
  */
 export function TodayProvider({
   value,
@@ -60,11 +62,26 @@ export function TodayProvider({
     };
   }, [now, value]);
 
-  return <TodayContext value={value ?? current}>{children}</TodayContext>;
+  return (
+    <ClockContext value={now}>
+      <TodayContext value={value ?? current}>{children}</TodayContext>
+    </ClockContext>
+  );
 }
 
 export function useToday(): Temporal.PlainDate {
   const value = use(TodayContext);
   if (!value) throw new Error("useToday must be used inside a TodayProvider");
+  return value;
+}
+
+/**
+ * The clock of the app: the current instant, `Temporal.Now.instant` unless a
+ * test gave another to the `TodayProvider`. A function, not a value: it is read
+ * when a time is shown, not before.
+ */
+export function useClock(): () => Temporal.Instant {
+  const value = use(ClockContext);
+  if (!value) throw new Error("useClock must be used inside a TodayProvider");
   return value;
 }

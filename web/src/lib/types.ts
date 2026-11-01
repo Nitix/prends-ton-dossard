@@ -103,3 +103,11 @@ export type PasskeyRecord = BaseRecord & {
   credential_id: string;
   last_used_at?: string;
 };
+
+export type CommentRecord = BaseRecord & {
+  event: string;
+  /** The runner who wrote it: set by the server, never sent. */
+  author: string;
+  /** Plain text, 1 to 2000 characters. */
+  body: string;
+};

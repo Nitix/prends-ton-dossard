@@ -4,9 +4,11 @@ import {
   PARIS,
   daysBetween,
   effectiveDate,
+  elapsed,
   eventDays,
   eventRange,
   groupByMonth,
+  instantOf,
   isUpcoming,
   monthGrid,
   msUntilTomorrow,
@@ -367,5 +369,67 @@ describe("daysBetween", () => {
 
   test("counts whole days across years", () => {
     expect(daysBetween(date("2026-12-31"), date("2027-01-01"))).toBe(1);
+  });
+});
+
+describe("instantOf", () => {
+  test("instantOf — lit le format de PocketBase", () => {
+    const instant = instantOf("2026-11-01 04:30:22.123Z");
+
+    expect(instant.toString()).toBe("2026-11-01T04:30:22.123Z");
+    expect(instant.epochMilliseconds).toBe(Date.UTC(2026, 10, 1, 4, 30, 22, 123));
+  });
+
+  test("a record that was never saved has an empty date: it is not read as a time", () => {
+    expect(() => instantOf("")).toThrow(RangeError);
+  });
+});
+
+describe("elapsed", () => {
+  const now = Temporal.Instant.from("2026-11-01T11:00:00Z");
+  const ago = (spec: Temporal.DurationLike) => elapsed(now.subtract(spec), now);
+  const days = (n: number) => ago({ hours: 24 * n });
+
+  test("elapsed — choisit l'unité", () => {
+    expect(ago({ seconds: 30 })).toEqual({ value: 0, unit: "second" });
+    expect(ago({ minutes: 5 })).toEqual({ value: -5, unit: "minute" });
+    expect(ago({ hours: 2 })).toEqual({ value: -2, unit: "hour" });
+    expect(days(3)).toEqual({ value: -3, unit: "day" });
+    // 1 September to 1 November: 61 days.
+    expect(elapsed(Temporal.Instant.from("2026-09-01T11:00:00Z"), now)).toEqual({
+      value: -2,
+      unit: "month",
+    });
+    // 1 November 2025 to 1 November 2026: 365 days.
+    expect(elapsed(Temporal.Instant.from("2025-11-01T11:00:00Z"), now)).toEqual({
+      value: -1,
+      unit: "year",
+    });
+  });
+
+  test("elapsed — les limites entre deux unités", () => {
+    expect(ago({ seconds: 59 })).toEqual({ value: 0, unit: "second" });
+    expect(ago({ seconds: 60 })).toEqual({ value: -1, unit: "minute" });
+    expect(ago({ minutes: 59, seconds: 59 })).toEqual({ value: -59, unit: "minute" });
+    expect(ago({ hours: 1 })).toEqual({ value: -1, unit: "hour" });
+    expect(ago({ hours: 23, minutes: 59 })).toEqual({ value: -23, unit: "hour" });
+    expect(days(1)).toEqual({ value: -1, unit: "day" });
+    expect(days(29)).toEqual({ value: -29, unit: "day" });
+    expect(days(30)).toEqual({ value: -1, unit: "month" });
+    // The last month before a year is the 11th, never a "12 mois" next to "1 an".
+    expect(days(364)).toEqual({ value: -11, unit: "month" });
+    expect(days(365)).toEqual({ value: -1, unit: "year" });
+  });
+
+  test("elapsed — arrondit vers zéro", () => {
+    expect(ago({ minutes: 119 })).toEqual({ value: -1, unit: "hour" });
+    expect(ago({ hours: 47 })).toEqual({ value: -1, unit: "day" });
+    expect(days(59)).toEqual({ value: -1, unit: "month" });
+    expect(days(729)).toEqual({ value: -1, unit: "year" });
+    expect(days(730)).toEqual({ value: -2, unit: "year" });
+  });
+
+  test("elapsed — une date dans le futur (horloge en retard) compte pour maintenant", () => {
+    expect(elapsed(now.add({ minutes: 3 }), now)).toEqual({ value: 0, unit: "second" });
   });
 });

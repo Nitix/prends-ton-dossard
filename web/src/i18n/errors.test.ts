@@ -21,6 +21,7 @@ const POCKETBASE_CODES = [
   "validation_invalid_email",
   "validation_invalid_old_password",
   "validation_min_text_constraint",
+  "validation_max_text_constraint",
   "validation_values_mismatch",
   "validation_file_size_limit",
   "validation_invalid_mime_type",

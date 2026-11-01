@@ -33,3 +33,13 @@ export function canConfirm(runner: RunnerRecord, me: Me): boolean {
 export function canDeleteEvent(event: EventRecord, me: Me): boolean {
   return event.created_by === me.runnerId || me.isAdmin;
 }
+
+/** Editing a comment: its author, nobody else, the admin included. */
+export function canEditComment(author: RunnerRecord, me: Me): boolean {
+  return isMine(author, me);
+}
+
+/** Deleting a comment: its author, or an admin. */
+export function canDeleteComment(author: RunnerRecord, me: Me): boolean {
+  return isMine(author, me) || me.isAdmin;
+}

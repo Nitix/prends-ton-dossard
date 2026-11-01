@@ -1,3 +1,5 @@
+import { createElement, Fragment, type ReactNode } from "react";
+
 import type { Messages } from "./fr";
 
 // The English dictionary. `satisfies Messages` makes a missing or extra key
@@ -145,6 +147,19 @@ export const en = {
     chooseFormat: "Pick the race",
     chooseFormatTitle: "Pick the race",
   },
+  comments: {
+    title: (n: number) => `Comments (${n})`,
+    empty: "No comment yet.",
+    newLabel: "Your comment",
+    send: "Send",
+    edit: "Edit",
+    save: "Save",
+    cancel: "Cancel",
+    remove: "Delete",
+    removeConfirm: "Delete this comment?",
+    edited: "edited",
+    sendHint: "Ctrl+Enter to send",
+  },
   format: {
     max: (duration: string) => `max ${duration}`,
     elevation: (height: string) => `${height} gain`,
@@ -228,6 +243,9 @@ export const en = {
     upcomingEmpty: "No upcoming races. Open an event and tap “I'm in”.",
     groupTitle: "Coming up in the group",
     groupEmpty: "Nobody has joined an upcoming event yet.",
+    latestCommentsTitle: "Latest comments",
+    commentOn: (name: ReactNode, event: ReactNode): ReactNode =>
+      createElement(Fragment, null, name, " on ", event),
     passkeyTitle: "Add a passkey",
     passkeyLink: "Add it in my profile",
     passkeyDismiss: "Hide",
@@ -378,6 +396,7 @@ export const en = {
         one: "race date cleared (outside the event's dates)",
         other: "race dates cleared (outside the event's dates)",
       },
+      movedComments: { one: "comment moved", other: "comments moved" },
     },
     merge: "Merge",
     mergeConfirmTitle: { events: "Merge these events?", formats: "Merge these races?" },
@@ -428,6 +447,7 @@ export const en = {
     validation_invalid_email: "This email is not valid.",
     validation_invalid_old_password: "The current password is wrong.",
     validation_min_text_constraint: "This value is too short.",
+    validation_max_text_constraint: "This text is too long.",
     validation_values_mismatch: "The two values don't match.",
     validation_file_size_limit: "The photo is too big: 5 MB maximum.",
     validation_invalid_mime_type: "This image type is not accepted: JPEG, PNG or WebP.",

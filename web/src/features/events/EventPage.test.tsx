@@ -52,6 +52,14 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   remove: vi.fn<(id: string) => Promise<unknown>>(),
   getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
+  // The comments at the bottom of the page: it only asks for the list of the event.
+  comments: {
+    getFullList: vi.fn<(options: Rec) => Promise<unknown>>(),
+    getList: vi.fn<(page: number, perPage: number, options: Rec) => Promise<unknown>>(),
+    create: vi.fn<(body: Rec) => Promise<unknown>>(),
+    update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
+    delete: vi.fn<(id: string) => Promise<unknown>>(),
+  },
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -69,6 +77,7 @@ vi.mock("../../lib/pb", () => ({
         events: { getOne: mocks.getOne, delete: mocks.eventDelete },
         runners: { getFullList: mocks.runners, getFirstListItem: mocks.myRunner },
         participations: { create: mocks.create, update: mocks.update, delete: mocks.remove },
+        comments: mocks.comments,
       })[name],
     // Only called for a runner who has a photo: none has, unless a test says so.
     files: { getURL: mocks.getURL },
@@ -103,9 +112,11 @@ beforeEach(() => {
     mocks.update,
     mocks.remove,
     mocks.getURL,
+    ...Object.values(mocks.comments),
   ]) {
     fn.mockReset();
   }
+  mocks.comments.getFullList.mockResolvedValue([]);
   mocks.getOne.mockResolvedValue(eventRecord);
   mocks.runners.mockResolvedValue([aliceRunner, bobRunner, samRunner, adminRunner, newRunner]);
   mocks.create.mockResolvedValue({ id: "new" });
@@ -485,7 +496,12 @@ test("EventPage — chaque épreuve a son titre (type, mesures), dans l'ordre de
     .getByRole("heading", { level: 2 })
     .elements()
     .map((element) => plain(element.textContent));
-  expect(titles).toEqual(["Trail 15 km · 700 m D+", "Trail 42 km · 2 400 m D+ · max 10h"]);
+  // The comments come after the formats.
+  expect(titles).toEqual([
+    "Trail 15 km · 700 m D+",
+    "Trail 42 km · 2 400 m D+ · max 10h",
+    fr.comments.title(0),
+  ]);
   await expect.element(format(screen, /^Trail 15/).getByText("sam. 13 juin")).toBeVisible();
   await expect.element(format(screen, /^Trail 42/).getByText("dim. 14 juin")).toBeVisible();
 });
@@ -1719,6 +1735,55 @@ test("EventPage — J'y vais en « Je viens encourager » : la participation arr
   await vi.waitFor(() => {
     expect(focused()).toBe(join.element());
   });
+});
+
+// --- The comments ---
+
+test("EventPage — la section Commentaires vient en dernier", async () => {
+  mocks.comments.getFullList.mockResolvedValue([
+    {
+      ...base,
+      collectionName: "comments",
+      id: "c1",
+      event: "event",
+      author: bobRunner.id,
+      body: "Je prends la voiture.",
+      created: "2026-05-30 09:00:00.000Z",
+      updated: "2026-05-30 09:00:00.000Z",
+      expand: { author: bobRunner },
+    },
+  ]);
+  // A format, the supporters and those who do not start, all open: the comments come after them.
+  const { screen } = await renderPage({ event: eventWith([p1, dns(p2), p3, pNinaSupporter]) });
+  await loaded(screen);
+  await nonStartersSummary(screen).click();
+
+  const comments = screen.getByRole("region", { name: fr.comments.title(1) });
+  await expect.element(comments).toBeVisible();
+  await expect.element(comments.getByText("Je prends la voiture.")).toBeVisible();
+  expect(before(supportersSection(screen).element(), comments.element())).toBe(true);
+  expect(before(nonStartersSummary(screen).element(), comments.element())).toBe(true);
+  expect(before(format(screen, /^Trail 42/).element(), comments.element())).toBe(true);
+  // Nothing of the page comes after it, and it is the comments of this event that were asked for.
+  const sections = screen.container.querySelectorAll("article section, article details");
+  expect(sections[sections.length - 1]).toBe(comments.element());
+  expect(mocks.comments.getFullList).toHaveBeenCalledWith(
+    expect.objectContaining({ filter: expect.stringContaining("event"), sort: "created" }),
+  );
+});
+
+test("EventPage — un membre peut écrire un commentaire ; tant que son coureur charge, on lit sans écrire", async () => {
+  const { screen: member } = await renderPage();
+  await loaded(member);
+  await expect.element(member.getByLabelText(fr.comments.newLabel)).toBeVisible();
+  await member.unmount();
+
+  mocks.myRunner.mockReturnValue(new Promise(() => {}));
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  await expect.element(screen.getByRole("region", { name: fr.comments.title(0) })).toBeVisible();
+  await expect.element(screen.getByLabelText(fr.comments.newLabel)).not.toBeInTheDocument();
 });
 
 // --- Loading and failures ---

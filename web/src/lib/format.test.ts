@@ -157,3 +157,34 @@ describe("weekday", () => {
     expect(createFormatters("fr-FR").weekday(date("2026-06-21"), "short")).toBe("dim.");
   });
 });
+
+describe("ago", () => {
+  test("ago — « maintenant », « il y a 2 heures », « hier »", () => {
+    const fr = createFormatters("fr-FR");
+    expect(plain(fr.ago(0, "second"))).toBe("maintenant");
+    expect(plain(fr.ago(-2, "hour"))).toBe("il y a 2 heures");
+    expect(plain(fr.ago(-1, "day"))).toBe("hier");
+    expect(plain(fr.ago(-5, "minute"))).toBe("il y a 5 minutes");
+    expect(plain(fr.ago(-2, "month"))).toBe("il y a 2 mois");
+    expect(plain(fr.ago(-1, "year"))).toBe("l’année dernière");
+    const gb = createFormatters("en-GB");
+    expect(plain(gb.ago(0, "second"))).toBe("now");
+    expect(plain(gb.ago(-2, "hour"))).toBe("2 hours ago");
+    expect(plain(gb.ago(-1, "day"))).toBe("yesterday");
+  });
+});
+
+describe("dateTime", () => {
+  test("dateTime — la date longue et l'heure, à Paris", () => {
+    // 04:30 UTC is 05:30 in Paris in November (UTC+1).
+    const winter = Temporal.Instant.from("2026-11-01T04:30:22.123Z");
+    expect(plain(createFormatters("fr-FR").dateTime(winter))).toBe("1 novembre 2026 à 05:30");
+    expect(plain(createFormatters("en-GB").dateTime(winter))).toBe("1 November 2026 at 05:30");
+  });
+
+  test("dateTime — l'heure d'été, et le jour de Paris même quand celui d'UTC est un autre", () => {
+    // 22:30 UTC on 14 June is 00:30 on 15 June in Paris (UTC+2).
+    const summer = Temporal.Instant.from("2026-06-14T22:30:00Z");
+    expect(plain(createFormatters("fr-FR").dateTime(summer))).toBe("15 juin 2026 à 00:30");
+  });
+});

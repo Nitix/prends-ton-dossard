@@ -4,10 +4,12 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { Avatar } from "../../components/Avatar";
 import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
+import { SECTION } from "../../components/section";
 import { useI18n } from "../../i18n/I18nProvider";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
+import { CommentsSection } from "../comments/CommentsSection";
 import { AddSomeoneDialog } from "../participations/AddSomeoneDialog";
 import { JoinDialog } from "../participations/JoinDialog";
 import { ParticipationMenu } from "../participations/ParticipationMenu";
@@ -27,9 +29,6 @@ const SEPARATOR = " · ";
 
 /** The days that are counted next to the deadline: a week or less. */
 const DAYS_LEFT_SHOWN = 7;
-
-/** The box of a section of the page: the interested, a format, the supporters, those who do not start. */
-const SECTION = "rounded-lg border border-neutral-200 bg-white p-3";
 
 // The titles that the focus can be given to, by their `data-focus`: the title of
 // the page, of the section of the interested, of a format, of the supporters, of
@@ -78,8 +77,8 @@ function titleOfParticipation(view: EventView, id: string): string | undefined {
 /**
  * The page of an event: what it is, its link to register, who is interested
  * with no format yet, each format with who starts it and in what state, the
- * supporters, those who do not start, and the actions the signed-in member may
- * take. The app shell around it owns the page's `<main>`.
+ * supporters, those who do not start, the comments, and the actions the
+ * signed-in member may take. The app shell around it owns the page's `<main>`.
  */
 export function EventPage({ id }: { id: string }) {
   const { t } = useI18n();
@@ -303,6 +302,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             onDeparture={departed}
           />
         )}
+        <CommentsSection eventId={event.id} me={me} />
       </div>
 
       {me && (

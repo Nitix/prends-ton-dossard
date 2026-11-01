@@ -52,6 +52,14 @@ const mocks = vi.hoisted(() => ({
   events: vi.fn<(options: Rec) => Promise<unknown>>(),
   myRunner: vi.fn<(filter: string) => Promise<unknown>>(),
   passkeys: vi.fn<(page: number, perPage: number, options: Rec) => Promise<unknown>>(),
+  // The last comments: the home page only asks for the list of the last five.
+  comments: {
+    getFullList: vi.fn<(options: Rec) => Promise<unknown>>(),
+    getList: vi.fn<(page: number, perPage: number, options: Rec) => Promise<unknown>>(),
+    create: vi.fn<(body: Rec) => Promise<unknown>>(),
+    update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
+    delete: vi.fn<(id: string) => Promise<unknown>>(),
+  },
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -70,12 +78,15 @@ vi.mock("../../lib/pb", () => ({
         events: { getFullList: mocks.events },
         runners: { getFirstListItem: mocks.myRunner },
         passkeys: { getList: mocks.passkeys },
+        comments: mocks.comments,
       })[name],
   },
 }));
 
 const DISMISSED_KEY = "courses.passkeyBanner.dismissed";
 const TODAY = "2026-04-30";
+/** Noon in Paris on the day of the tests: the comments say how long ago they were written from this. */
+const NOW = "2026-04-30T10:00:00Z";
 
 // What the server sends for the participations to confirm: each one with its
 // event, and, when it has one, its format with the race type of the format.
@@ -115,6 +126,9 @@ function signIn(who: keyof typeof users) {
   mocks.myRunner.mockResolvedValue(runner);
 }
 
+/** The answer of the server to a request of the last comments, when there are none. */
+const noComments = { items: [], page: 1, perPage: 5, totalItems: 0, totalPages: 0 };
+
 const noPasskey = { items: [], page: 1, perPage: 1, totalItems: -1, totalPages: -1 };
 const onePasskey = { ...noPasskey, items: [{ id: "k1" }] };
 
@@ -130,9 +144,11 @@ beforeEach(() => {
     mocks.events,
     mocks.myRunner,
     mocks.passkeys,
+    ...Object.values(mocks.comments),
   ]) {
     fn.mockReset();
   }
+  mocks.comments.getList.mockResolvedValue(noComments);
   mocks.pending.mockResolvedValue([]);
   mocks.update.mockResolvedValue({});
   mocks.remove.mockResolvedValue(true);
@@ -173,7 +189,10 @@ async function renderHome(options: { languages?: string[]; today?: string } = {}
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
-        <TodayProvider value={Temporal.PlainDate.from(today)}>
+        <TodayProvider
+          value={Temporal.PlainDate.from(today)}
+          now={() => Temporal.Instant.from(NOW)}
+        >
           <ToastProvider>
             <RouterProvider router={router} />
           </ToastProvider>
@@ -194,6 +213,8 @@ const pendingBlock = (screen: Screen) => screen.getByRole("region", { name: fr.h
 const upcomingBlock = (screen: Screen) =>
   screen.getByRole("region", { name: fr.home.upcomingTitle });
 const groupBlock = (screen: Screen) => screen.getByRole("region", { name: fr.home.groupTitle });
+const commentsBlock = (screen: Screen) =>
+  screen.getByRole("region", { name: fr.home.latestCommentsTitle });
 const banner = (screen: Screen) => screen.getByRole("region", { name: fr.home.passkeyTitle });
 
 /** What the storage does in a private window with blocked site data. */
@@ -1400,6 +1421,180 @@ test("GroupSoon — un événement avec un partant et un supporteur est proposé
   await expect
     .element(card.getByRole("list", { name: fr.event.supportersTitle }).getByText("Nina"))
     .toBeInTheDocument();
+});
+
+// ---- Derniers commentaires
+
+const commentBase = { created: "", updated: "", collectionId: "", collectionName: "comments" };
+
+/** A comment as the server sends it for the last comments: the author and the event are expanded. */
+function lastComment(
+  id: string,
+  author: typeof aliceRunner,
+  event: { id: string },
+  body: string,
+  created: string,
+) {
+  return {
+    ...commentBase,
+    id,
+    event: event.id,
+    author: author.id,
+    body,
+    created,
+    updated: created,
+    expand: { author, event },
+  };
+}
+
+/** The answer of the server to the request of the last comments: the page of the newest first. */
+const answerWith = (items: unknown[]) => ({
+  items,
+  page: 1,
+  perPage: 5,
+  totalItems: items.length,
+  totalPages: 1,
+});
+
+const LONG =
+  "Je pars de Lyon à 6h avec ma voiture, il reste deux places. On peut se retrouver au parking du stade et partager l'essence, et je peux aussi ramener quelqu'un le dimanche soir.";
+
+/** The first line of an item of the block: who wrote, and on what event. */
+const whoOn = (line: { element(): Element }) =>
+  plain(line.element().querySelector("p")?.textContent ?? "");
+
+test("LatestComments — les 5 derniers, avec auteur, événement et extrait", async () => {
+  mocks.comments.getList.mockResolvedValue(
+    answerWith([
+      lastComment("c5", bobRunner, event2Record, "Je suis inscrit !", "2026-04-30 09:55:00.000Z"),
+      lastComment("c4", aliceRunner, eventRecord, LONG, "2026-04-30 08:00:00.000Z"),
+      lastComment("c3", bobRunner, eventRecord, "Ligne 1\n\n  ligne 2", "2026-04-29 10:00:00.000Z"),
+      lastComment("c2", aliceRunner, event2Record, "<i>Oui</i>", "2026-04-20 10:00:00.000Z"),
+      lastComment("c1", bobRunner, eventRecord, "Le plus ancien", "2026-02-20 10:00:00.000Z"),
+    ]),
+  );
+
+  const { screen } = await renderHome();
+
+  await expect.element(commentsBlock(screen)).toBeVisible();
+  // The five newest of all the events, asked for by creation, with the author and the event.
+  expect(mocks.comments.getList).toHaveBeenCalledWith(
+    1,
+    5,
+    expect.objectContaining({ sort: "-created", expand: "author,event" }),
+  );
+  const lines = commentsBlock(screen).getByRole("listitem");
+  expect(lines.elements()).toHaveLength(5);
+
+  // In the order of the server (the newest first), each with its author and its event.
+  const first = lines.nth(0);
+  expect(whoOn(first)).toBe("Bob sur 10 km de Lyon");
+  await expect.element(first.getByText("Je suis inscrit !")).toBeVisible();
+  await expect.element(first.getByText("il y a 5 minutes")).toBeVisible();
+  // The event is a link to its page.
+  const link = first.getByRole("link", { name: "10 km de Lyon" });
+  await expect.element(link).toHaveAttribute("href", "/evenements/event2");
+
+  // A long text is cut at a word, with the dots.
+  const second = lines.nth(1);
+  expect(whoOn(second)).toBe("Alice sur Trail des Crêtes");
+  const shown = second.element().querySelectorAll("p")[1]?.textContent ?? "";
+  expect(shown.endsWith("…")).toBe(true);
+  expect(shown.length).toBeLessThanOrEqual(141);
+  expect(LONG.startsWith(shown.slice(0, -1))).toBe(true);
+  expect(LONG[shown.length - 1]).toBe(" ");
+  await expect.element(second.getByText("il y a 2 heures")).toBeVisible();
+
+  // The line breaks become spaces; a tag is text; the older ones say days and months.
+  await expect.element(lines.nth(2).getByText("Ligne 1 ligne 2")).toBeVisible();
+  await expect.element(lines.nth(2).getByText("hier")).toBeVisible();
+  expect(lines.nth(3).element().querySelector("i")).toBeNull();
+  await expect.element(lines.nth(3).getByText("<i>Oui</i>")).toBeVisible();
+  await expect.element(lines.nth(3).getByText("il y a 10 jours")).toBeVisible();
+  await expect.element(lines.nth(4).getByText("il y a 2 mois")).toBeVisible();
+});
+
+test("LatestComments — après « Bientôt dans le groupe », en dernier", async () => {
+  mocks.comments.getList.mockResolvedValue(
+    answerWith([lastComment("c1", bobRunner, eventRecord, "Salut", "2026-04-30 09:00:00.000Z")]),
+  );
+
+  const { screen } = await renderHome();
+
+  await expect.element(commentsBlock(screen)).toBeVisible();
+  const titles = screen
+    .getByRole("heading", { level: 2 })
+    .elements()
+    .map((heading) => heading.textContent);
+  expect(titles).toEqual([fr.home.upcomingTitle, fr.home.groupTitle, fr.home.latestCommentsTitle]);
+});
+
+test("LatestComments — absent sans commentaire", async () => {
+  mocks.comments.getList.mockResolvedValue(noComments);
+
+  const { screen } = await renderHome();
+
+  // The rest of the page is there, and the comments have been asked for.
+  await expect.element(groupBlock(screen)).toBeVisible();
+  await vi.waitFor(() => {
+    expect(mocks.comments.getList).toHaveBeenCalled();
+  });
+  await expect.element(commentsBlock(screen)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.home.latestCommentsTitle)).not.toBeInTheDocument();
+});
+
+test("LatestComments — absent pendant le chargement, et quand les commentaires ne chargent pas", async () => {
+  mocks.comments.getList.mockReturnValue(new Promise(() => {}));
+  const loading = await renderHome();
+  await expect.element(groupBlock(loading.screen)).toBeVisible();
+  await expect
+    .element(loading.screen.getByText(fr.home.latestCommentsTitle))
+    .not.toBeInTheDocument();
+  await loading.screen.unmount();
+
+  mocks.comments.getList.mockReset();
+  mocks.comments.getList.mockRejectedValue(new Error("boom"));
+  const failing = await renderHome();
+  await expect.element(groupBlock(failing.screen)).toBeVisible();
+  await vi.waitFor(() => {
+    expect(mocks.comments.getList).toHaveBeenCalled();
+  });
+  await expect
+    .element(failing.screen.getByText(fr.home.latestCommentsTitle))
+    .not.toBeInTheDocument();
+  // And the rest of the page does not say that something is wrong.
+  await expect.element(failing.screen.getByRole("alert")).not.toBeInTheDocument();
+});
+
+test("LatestComments — en anglais, « on » et la date relative suivent la langue", async () => {
+  mocks.comments.getList.mockResolvedValue(
+    answerWith([lastComment("c1", bobRunner, eventRecord, "Hello", "2026-04-30 08:00:00.000Z")]),
+  );
+
+  const { screen } = await renderHome({ languages: ["en-GB"] });
+
+  const block = screen.getByRole("region", { name: "Latest comments" });
+  await expect.element(block).toBeVisible();
+  const line = block.getByRole("listitem");
+  expect(whoOn(line)).toBe("Bob on Trail des Crêtes");
+  await expect.element(line.getByText("2 hours ago")).toBeVisible();
+});
+
+test("LatestComments — le lien de l'événement fait au moins 44 px", async () => {
+  await page.viewport(390, 844);
+  mocks.comments.getList.mockResolvedValue(
+    answerWith([lastComment("c1", bobRunner, eventRecord, "Salut", "2026-04-30 09:00:00.000Z")]),
+  );
+  const { screen } = await renderHome();
+  await expect.element(commentsBlock(screen)).toBeVisible();
+
+  const { width, height } = commentsBlock(screen)
+    .getByRole("link", { name: "Trail des Crêtes" })
+    .element()
+    .getBoundingClientRect();
+  expect(width).toBeGreaterThanOrEqual(44);
+  expect(height).toBeGreaterThanOrEqual(44);
+  await page.viewport(414, 896);
 });
 
 test("HomePage — demande les événements à venir une seule fois pour les deux blocs", async () => {

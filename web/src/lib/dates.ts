@@ -142,3 +142,48 @@ export function monthGrid(
 export function daysBetween(from: Temporal.PlainDate, to: Temporal.PlainDate): number {
   return from.until(to, { largestUnit: "day" }).days;
 }
+
+/**
+ * Reads a date-time of PocketBase, `YYYY-MM-DD HH:MM:SS.sssZ` (UTC): a space
+ * stands where ISO 8601 has a `T`. Throws a RangeError when it is not one,
+ * an empty string included.
+ */
+export function instantOf(pocketbaseDate: string): Temporal.Instant {
+  return Temporal.Instant.from(pocketbaseDate.replace(" ", "T"));
+}
+
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+// A month is 30 days and a year 365: no calendar, so that a day more or less
+// never depends on the zone or the clock changes. A year is not 12 months, so
+// the months stop at 11.
+const MONTH_DAYS = 30;
+const YEAR_DAYS = 365;
+const MAX_MONTHS = 11;
+
+/**
+ * How long ago `from` was, as the biggest whole unit that fits, in the shape
+ * `Intl.RelativeTimeFormat` takes: a negative value for the past, rounded
+ * toward zero (59 minutes is not "1 hour").
+ *
+ * - under a minute: 0 seconds, which reads "maintenant" (a comment from the
+ *   future, because the clock of the browser is late, counts as now too);
+ * - then minutes, hours, days (under 30), months (under a year), years.
+ */
+export function elapsed(
+  from: Temporal.Instant,
+  now: Temporal.Instant,
+): { value: number; unit: Intl.RelativeTimeFormatUnit } {
+  const ms = now.epochMilliseconds - from.epochMilliseconds;
+  if (ms < MINUTE) return { value: 0, unit: "second" };
+  if (ms < HOUR) return { value: -Math.trunc(ms / MINUTE), unit: "minute" };
+  if (ms < DAY) return { value: -Math.trunc(ms / HOUR), unit: "hour" };
+  const days = Math.trunc(ms / DAY);
+  if (days < MONTH_DAYS) return { value: -days, unit: "day" };
+  if (days < YEAR_DAYS) {
+    return { value: -Math.min(MAX_MONTHS, Math.trunc(days / MONTH_DAYS)), unit: "month" };
+  }
+  return { value: -Math.trunc(days / YEAR_DAYS), unit: "year" };
+}

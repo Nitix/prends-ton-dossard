@@ -1,6 +1,9 @@
+import { createElement, Fragment, type ReactNode } from "react";
+
 // The French dictionary is the reference. en.ts is typed against it
 // (`satisfies Messages`), so a missing or extra key fails the type check.
-// A text with a variable is a function.
+// A text with a variable is a function; one that is put in a sentence with a
+// link (see `home.commentOn`) takes nodes, and gives a node.
 export const fr = {
   common: {
     appName: "Prends ton dossard",
@@ -177,6 +180,22 @@ export const fr = {
     chooseFormat: "Choisir l'épreuve",
     chooseFormatTitle: "Choisir l'épreuve",
   },
+  // The comments of an event, at the bottom of its page (see features/comments).
+  comments: {
+    title: (n: number) => `Commentaires (${n})`,
+    empty: "Pas encore de commentaire.",
+    newLabel: "Ton commentaire",
+    send: "Envoyer",
+    edit: "Modifier",
+    save: "Enregistrer",
+    cancel: "Annuler",
+    remove: "Supprimer",
+    removeConfirm: "Supprimer ce commentaire ?",
+    // Next to the date of a comment that was changed after it was written.
+    edited: "modifié",
+    // The help under the field: the keys that send the comment.
+    sendHint: "Ctrl+Entrée pour envoyer",
+  },
   // The measures of a format, next to its name (see features/events/formatName.ts).
   format: {
     // The cut-off time, the duration already formatted: "max 10h".
@@ -281,6 +300,10 @@ export const fr = {
     upcomingEmpty: "Aucune course à venir. Ouvre un événement et touche « J'y vais ».",
     groupTitle: "Bientôt dans le groupe",
     groupEmpty: "Personne n'est encore inscrit à un événement à venir.",
+    // The last comments of all the events. The event is a link, so both are nodes: "Alice sur Trail des Crêtes".
+    latestCommentsTitle: "Derniers commentaires",
+    commentOn: (name: ReactNode, event: ReactNode): ReactNode =>
+      createElement(Fragment, null, name, " sur ", event),
     // The banner that suggests a passkey (the text under it is `passkeys.intro`).
     passkeyTitle: "Ajoute une clé d'accès",
     passkeyLink: "Ajouter dans mon profil",
@@ -452,6 +475,7 @@ export const fr = {
         one: "date d'épreuve effacée (hors des dates de l'événement)",
         other: "dates d'épreuve effacées (hors des dates de l'événement)",
       },
+      movedComments: { one: "commentaire déplacé", other: "commentaires déplacés" },
     },
     merge: "Fusionner",
     mergeConfirmTitle: {
@@ -511,6 +535,7 @@ export const fr = {
     validation_invalid_email: "Cet email n'est pas valide.",
     validation_invalid_old_password: "Le mot de passe actuel est incorrect.",
     validation_min_text_constraint: "Cette valeur est trop courte.",
+    validation_max_text_constraint: "Ce texte est trop long.",
     validation_values_mismatch: "Les deux valeurs sont différentes.",
     validation_file_size_limit: "La photo est trop lourde : 5 Mo maximum.",
     validation_invalid_mime_type: "Ce type d'image n'est pas accepté : JPEG, PNG ou WebP.",

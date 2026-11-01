@@ -9,6 +9,7 @@ const none: MergeResult = {
   movedParticipations: 0,
   droppedParticipations: 0,
   clearedFormatDates: 0,
+  movedComments: 0,
 };
 
 describe("describeMerge", () => {
@@ -40,19 +41,33 @@ describe("describeMerge", () => {
       movedParticipations: 5,
       droppedParticipations: 1,
       clearedFormatDates: 1,
+      movedComments: 4,
     };
     expect(describeMerge(all, fr, "fr")).toEqual([
       "2 épreuves déplacées",
       "5 participations déplacées",
       "1 participation en double supprimée",
       "1 date d'épreuve effacée (hors des dates de l'événement)",
+      "4 commentaires déplacés",
     ]);
     expect(describeMerge(all, en, "en")).toEqual([
       "2 races moved",
       "5 participations moved",
       "1 duplicate participation removed",
       "1 race date cleared (outside the event's dates)",
+      "4 comments moved",
     ]);
+  });
+
+  test("describeMerge — commentaires déplacés", () => {
+    expect(describeMerge({ ...none, movedComments: 1 }, fr, "fr")).toEqual([
+      "1 commentaire déplacé",
+    ]);
+    expect(describeMerge({ ...none, movedComments: 3 }, fr, "fr")).toEqual([
+      "3 commentaires déplacés",
+    ]);
+    expect(describeMerge({ ...none, movedComments: 1 }, en, "en")).toEqual(["1 comment moved"]);
+    expect(describeMerge({ ...none, movedComments: 2 }, en, "en")).toEqual(["2 comments moved"]);
   });
 
   test("both counters of a merge of formats: two moved and one dropped", () => {

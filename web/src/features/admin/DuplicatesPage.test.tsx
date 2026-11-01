@@ -66,12 +66,13 @@ const dupEvent = {
 };
 const events = [eventRecord, event2Record, dupEvent];
 
-/** The counters of a merge of two events: formats moved, and one date that went. */
+/** The counters of a merge of two events: formats and comments moved, and one date that went. */
 const EVENTS_PREVIEW = {
   movedFormats: 1,
   movedParticipations: 3,
   droppedParticipations: 0,
   clearedFormatDates: 1,
+  movedComments: 2,
 };
 /** The counters of a merge of two formats: the other one wins a duplicate, so two moved and one dropped. */
 const FORMATS_PREVIEW = {
@@ -79,6 +80,7 @@ const FORMATS_PREVIEW = {
   movedParticipations: 2,
   droppedParticipations: 1,
   clearedFormatDates: 0,
+  movedComments: 0,
 };
 
 const MERGE_EVENTS = "/api/app/admin/merge-events";
@@ -310,6 +312,7 @@ test("DuplicatesPage — « Fusionner » désactivé avant l'aperçu, actif apr�
 
   await expect.element(screen.getByText("1 épreuve déplacée")).toBeVisible();
   await expect.element(screen.getByText("3 participations déplacées")).toBeVisible();
+  await expect.element(screen.getByText("2 commentaires déplacés")).toBeVisible();
   await expect
     .element(screen.getByText("1 date d'épreuve effacée (hors des dates de l'événement)"))
     .toBeVisible();
@@ -360,6 +363,7 @@ test("DuplicatesPage — la confirmation redit ce qui est gardé, ce qui est sup
   await expect.element(dialog.getByText(t.removedLine(label(eventRecord)))).toBeVisible();
   await expect.element(dialog.getByText("1 épreuve déplacée")).toBeVisible();
   await expect.element(dialog.getByText("3 participations déplacées")).toBeVisible();
+  await expect.element(dialog.getByText("2 commentaires déplacés")).toBeVisible();
   await expect.element(dialog.getByText(t.mergeIrreversible)).toBeVisible();
   expect(mocks.send).toHaveBeenCalledTimes(1);
 
@@ -427,6 +431,7 @@ test("DuplicatesPage — un aperçu sans rien à déplacer le dit", async () => 
     movedParticipations: 0,
     droppedParticipations: 0,
     clearedFormatDates: 0,
+    movedComments: 0,
   });
   const { screen } = await renderPage();
   await pickTwoEvents(screen);
