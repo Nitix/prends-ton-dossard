@@ -1,7 +1,6 @@
-import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 
@@ -14,9 +13,9 @@ export default defineConfig({
       autoCodeSplitting: true,
       routeFileIgnorePattern: "\\.test\\.tsx?$",
     }),
-    react(),
-    // React Compiler, as documented by @vitejs/plugin-react.
-    babel({ presets: [reactCompilerPreset()] }),
+    // React Compiler: the native one, written in Rust (oxc-transform-react), run
+    // by @vitejs/plugin-react itself, without Babel. It is experimental.
+    react({ compiler: true }),
     tailwindcss(),
   ],
   server: {
