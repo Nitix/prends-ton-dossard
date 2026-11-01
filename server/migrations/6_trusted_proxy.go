@@ -20,8 +20,8 @@ const forwardedForHeader = "X-Forwarded-For"
 // single abuser could lock the login and the invitations for everybody.
 //
 // This is safe only because the program is reachable only through the proxy:
-// compose.yaml publishes port 8090 on 127.0.0.1, and Caddy overwrites the
-// header it receives. UseLeftmostIP stays false: PocketBase then takes the
+// compose.yaml publishes its port on 127.0.0.1 only (HOST_PORT of .env, 8090
+// by default), and Caddy overwrites the header it receives. UseLeftmostIP stays false: PocketBase then takes the
 // rightmost address, the one that the proxy appended, so a header that a client
 // sent along does not choose the bucket.
 func upTrustedProxy(app core.App) error {

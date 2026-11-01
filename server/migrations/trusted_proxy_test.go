@@ -2,6 +2,8 @@ package migrations_test
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -90,4 +92,28 @@ func TestMigrations_TrustedProxyRateLimitPerClient(t *testing.T) {
 	}
 	send("first visitor, over the limit", "203.0.113.7", http.StatusTooManyRequests, limited)
 	send("second visitor, own bucket", "198.51.100.9", http.StatusNotFound, passed)
+}
+
+// Caddyfile.example keeps the dashboard and the superuser API off the
+// internet. PocketBase also takes a collection by its id in the URL, so the
+// block names the id of _superusers too: this checks that it is the right one.
+func TestCaddyfileExample_HidesTheSuperusers(t *testing.T) {
+	superusers, err := testutil.NewApp(t).FindCollectionByNameOrId(core.CollectionNameSuperusers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caddyfile, err := os.ReadFile(filepath.Join("..", "..", "Caddyfile.example"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{
+		"/_/*",
+		"/api/collections/" + core.CollectionNameSuperusers + "/*",
+		"/api/collections/" + superusers.Id + "/*",
+	} {
+		if !strings.Contains(string(caddyfile), " "+path) {
+			t.Errorf("Caddyfile.example does not block %s", path)
+		}
+	}
 }

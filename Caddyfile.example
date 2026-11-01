@@ -7,5 +7,19 @@
 # and because Caddy is the first proxy (no trusted_proxies), so it overwrites
 # the header that a visitor sends.
 courses.example.fr {
+	encode zstd gzip
+
+	# The PocketBase dashboard and the sign-in of its superusers stay off the
+	# internet: reach them through an SSH tunnel (see the README). The API
+	# takes a collection by its id as well as by its name, and pbc_3142635823
+	# is the id of _superusers.
+	@pbadmin path /_/* /api/collections/_superusers/* /api/collections/pbc_3142635823/*
+	respond @pbadmin 404
+
+	# Vite puts a hash of their content in the names of the built files, so a
+	# name never serves another content: browsers may keep them for a year.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
 	reverse_proxy 127.0.0.1:8090
 }

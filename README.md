@@ -98,24 +98,37 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
 
    ```
    courses.example.fr {
+   	encode zstd gzip
+
+   	@pbadmin path /_/* /api/collections/_superusers/* /api/collections/pbc_3142635823/*
+   	respond @pbadmin 404
+
+   	@assets path /assets/*
+   	header @assets Cache-Control "public, max-age=31536000, immutable"
+
    	reverse_proxy 127.0.0.1:8090
    }
    ```
 
    ```sh
    sudo systemctl reload caddy
-   curl -s https://courses.example.fr/api/health
+   curl -s https://courses.example.fr/api/health                               # {"message":"API is healthy."…}
+   curl -s -o /dev/null -w '%{http_code}\n' https://courses.example.fr/_/       # 404
    ```
 
-   Caddy obtient et renouvelle seul le certificat HTTPS.
+   Caddy obtient et renouvelle seul le certificat HTTPS. Le bloc compresse les réponses, laisse les navigateurs garder un an les fichiers de `/assets/` (leur nom change à chaque version), et **cache d'Internet le tableau de bord de PocketBase et la connexion de ses super-admins** : ils répondent 404 sur le domaine public, et s'ouvrent par un tunnel SSH (voir « Tableau de bord PocketBase », plus bas). `pbc_3142635823` est l'identifiant de la collection `_superusers` : l'API accepte l'identifiant d'une collection à la place de son nom, il faut donc bloquer les deux (un test du serveur vérifie cet identifiant).
 
    Le programme se fie à l'en-tête `X-Forwarded-For` (une migration le règle) pour reconnaître chaque visiteur : c'est ce qui donne à chacun sa propre limite de requêtes sur la connexion et les invitations, au lieu d'une limite partagée par tout le groupe. C'est sûr parce que le port du conteneur n'est publié que sur `127.0.0.1` et que Caddy remplace cet en-tête. **Ne jamais publier ce port sur une interface publique** (garder `127.0.0.1` dans `compose.yaml`) : n'importe qui pourrait alors choisir l'adresse qu'il présente, et contourner les limites.
 
-4. **Créer le super-admin PocketBase.** C'est le compte du tableau de bord (`https://courses.example.fr/_/`), qui sert à configurer les sauvegardes et à restaurer.
+4. **Créer le super-admin PocketBase.** C'est le compte du tableau de bord, qui sert à configurer les sauvegardes et à restaurer ; le tableau de bord s'ouvre par un tunnel SSH (voir « Tableau de bord PocketBase », plus bas). Ce compte peut tout lire et tout changer : lui donner un mot de passe long, propre à ce site. Pour que ce mot de passe ne reste pas dans l'historique du shell, le lire avec `read -s` (bash) au lieu de l'écrire dans la commande :
 
    ```sh
-   docker compose exec courses /app/courses superuser upsert <email> <mot de passe>
+   read -rs PB_PASSWORD     # taper le mot de passe (rien ne s'affiche), puis Entrée
+   docker compose exec courses /app/courses superuser upsert <email> "$PB_PASSWORD"
+   unset PB_PASSWORD
    ```
+
+   La même commande change le mot de passe plus tard ; on peut aussi le changer dans le tableau de bord, par le tunnel (collection `_superusers`).
 
    Au premier démarrage, `docker compose logs courses` affiche un lien d'installation du tableau de bord (`/_/#/pbinstall/…`) : ne pas l'utiliser. Le compte d'installation qu'il suppose est supprimé dès qu'un super-admin existe.
 
@@ -131,15 +144,27 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
 
 7. **Faire la recette sur iPhone** (voir plus bas).
 
+## Tableau de bord PocketBase
+
+Le tableau de bord de PocketBase (`/_/`) sert à configurer les sauvegardes, à restaurer, et au besoin à corriger une donnée à la main. Son super-admin peut tout lire et tout changer, sans second facteur (le site n'envoie pas d'email) : Caddy le cache donc d'Internet, et on l'ouvre par un tunnel SSH, depuis son ordinateur :
+
+```sh
+ssh -L 8090:127.0.0.1:<HOST_PORT> root@<serveur>
+```
+
+Tant que cette session SSH reste ouverte, le tableau de bord est sur **`http://localhost:8090/_/`**, dans le navigateur de l'ordinateur. `<HOST_PORT>` est celui de `.env` (8090 par défaut). Si le port 8090 de l'ordinateur est déjà pris (par le serveur de développement, par exemple), en prendre un autre à gauche : `ssh -L 18090:127.0.0.1:<HOST_PORT> …`, puis `http://localhost:18090/_/`.
+
 ## Mise à jour
 
 ```sh
 git pull && docker compose up -d --build
 ```
 
-Les migrations de la base s'appliquent au démarrage. Le volume n'est pas touché. Avant une mise à jour qui ajoute une migration, créer une sauvegarde depuis le tableau de bord (Settings, puis Backups).
+Les migrations de la base s'appliquent au démarrage. Le volume n'est pas touché. Avant une mise à jour qui ajoute une migration, créer une sauvegarde depuis le tableau de bord, par le tunnel SSH (Settings, puis Backups).
 
 ## Sauvegardes
+
+Le tableau de bord dont parle cette section s'ouvre par le tunnel SSH (voir « Tableau de bord PocketBase »).
 
 - **Chaque nuit à 3 h (heure de Paris)**, PocketBase crée une sauvegarde et garde les 7 dernières. Ce réglage vient d'une migration ; il se voit dans le tableau de bord, sous Settings puis Backups, où l'expression `0 3 * * *` s'entend à l'heure de Paris (le programme règle le fuseau de ses tâches planifiées). Une sauvegarde est une archive `.zip` du dossier de données : `data.db` et `auxiliary.db` (copiés de façon cohérente pendant que l'application tourne) et les éventuels fichiers déposés.
 - **Le fichier SQLite n'est jamais copié à la main pendant que l'application tourne.** Pas de `cp` ni de `rsync` sur le volume : seules les sauvegardes de PocketBase font foi.
@@ -164,7 +189,7 @@ Les migrations de la base s'appliquent au démarrage. Le volume n'est pas touch�
 
 Quand l'application démarre encore :
 
-1. Ouvrir le tableau de bord (`/_/`), sous Settings puis Backups.
+1. Ouvrir le tableau de bord par le tunnel SSH (`http://localhost:8090/_/`, voir « Tableau de bord PocketBase »), sous Settings puis Backups.
 2. Choisir la sauvegarde dans la liste (elle vient du bucket si S3 est activé), puis « Restore », et confirmer en tapant son nom.
 3. PocketBase remplace les données et redémarre seul.
 4. Vérifier (voir plus bas).
@@ -199,7 +224,7 @@ Quand l'application ne démarre plus, ou que le volume est perdu :
 - `docker compose logs courses` ne montre aucune erreur ;
 - `curl -s https://courses.example.fr/api/health` répond 200 ;
 - se connecter au site avec un compte connu : les événements et les participations sont ceux de la sauvegarde ;
-- se connecter au tableau de bord avec le super-admin ;
+- se connecter au tableau de bord avec le super-admin, par le tunnel SSH ;
 - créer une sauvegarde à la main : elle doit apparaître dans la liste (ou dans le bucket).
 
 ## Recette manuelle sur iPhone
