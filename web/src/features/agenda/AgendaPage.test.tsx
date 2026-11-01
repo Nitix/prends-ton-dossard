@@ -22,9 +22,12 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  pNinaUndecided,
   roadType,
   samRunner,
   trailType,
+  withParticipations,
+  withStatus,
 } from "../events/testFixture";
 import { AgendaPage } from "./AgendaPage";
 import { validateAgendaSearch } from "./search";
@@ -567,6 +570,35 @@ test("AgendaPage — la liste du jour a la carte de la liste: lieu, épreuves et
   expect(link.element().getAttribute("href")).toBe("/evenements/event");
   await expect.element(screen.getByText("Annecy")).toBeVisible();
   await expect.element(screen.getByText(/^Trail 42\s+km/)).toBeVisible();
+});
+
+test("AgendaPage — la liste du jour ne montre pas la pastille d'un non partant", async () => {
+  mocks.events.mockResolvedValue([withStatus(eventRecord, "p2", "dns"), event2Record]);
+  const { screen } = await renderAgenda("/agenda?mois=2026-06");
+
+  await day(screen, "sam. 13 juin").click();
+
+  await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  // Bob does not start F42: no chip for him. The others have theirs. (The
+  // names are also in the options of the filter: the card is where to look.)
+  const card = screen.getByRole("article");
+  await expect.element(card.getByText("Alice", { exact: true })).toBeInTheDocument();
+  await expect.element(card.getByText("Bob", { exact: true })).not.toBeInTheDocument();
+  await expect.element(card.getByText("Sam", { exact: true })).toBeInTheDocument();
+});
+
+test("AgendaPage — la liste du jour dit « Format à choisir » pour les intéressés sans épreuve", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
+  const { screen } = await renderAgenda("/agenda?mois=2026-06&jour=2026-06-13");
+
+  await expect.element(screen.getByText(fr.event.formatToChoose, { exact: true })).toBeVisible();
+  await expect
+    .element(
+      screen
+        .getByRole("list", { name: fr.event.interestedTitle })
+        .getByText("Nina", { exact: true }),
+    )
+    .toBeInTheDocument();
 });
 
 test("AgendaPage — à partir de md, les noms des courses sont dans les cases, et la liste du jour n'y est plus", async () => {

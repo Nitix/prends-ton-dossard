@@ -4,18 +4,21 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { EventView, FormatView } from "./api";
 import { formatMeasures } from "./formatName";
 import { ParticipantChips } from "./ParticipantChips";
+import { starters } from "./participants";
 
 const SEPARATOR = " · ";
 
 /**
  * An event in a list: its day or days, its name (the link to its page, a bar
- * as wide as the card and tall enough to tap), its place, and each of its
- * formats with its measures and its participants.
+ * as wide as the card and tall enough to tap), its place, the runners who are
+ * interested with no format chosen yet, and each of its formats with its
+ * measures and its participants. Those who do not start are not on the card.
  */
 export function EventCard({ view }: { view: EventView }) {
   const { t, f } = useI18n();
   const { event, formats, start, end } = view;
   const severalDays = !start.equals(end);
+  const interested = starters(view.interested);
 
   return (
     <article className="flex flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-3">
@@ -32,12 +35,19 @@ export function EventCard({ view }: { view: EventView }) {
         </Link>
       </h3>
       <p className="text-sm text-neutral-600">{event.location}</p>
+      {/* Before the formats, since there is something left to choose. The words say it, not the place. */}
+      {interested.length > 0 && (
+        <div className="mt-1 flex flex-col gap-1">
+          <p className="text-sm">{t.event.formatToChoose}</p>
+          <ParticipantChips participations={interested} label={t.event.interestedTitle} />
+        </div>
+      )}
       {formats.length > 0 && (
         <ul className="mt-1 flex flex-col gap-2">
           {formats.map((formatView) => (
             <li key={formatView.format.id} className="flex flex-col gap-1">
               <FormatLine formatView={formatView} showDate={severalDays} />
-              <ParticipantChips participations={formatView.participations} />
+              <ParticipantChips participations={starters(formatView.participations)} />
             </li>
           ))}
         </ul>

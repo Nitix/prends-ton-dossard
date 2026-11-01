@@ -14,14 +14,16 @@ import { toParticipationView, type ParticipationView } from "../events/api";
 
 /**
  * A participation the user has not confirmed: who it is for and who added it
- * (`ParticipationView`), and what it is on: its format, the event of the
- * format, and the race type that gives the format its name.
+ * (`ParticipationView`), and what it is on: its event, and, unless it is on the
+ * event alone ("format to choose"), its format with the race type that gives
+ * the format its name.
  */
 export type PendingView = ParticipationView & {
   event: EventRecord;
-  format: FormatRecord;
-  raceType: RaceTypeRecord;
-  /** The day of the format: its own date, or the start of its event. */
+  /** Absent for a participation without a format. */
+  format?: FormatRecord;
+  raceType?: RaceTypeRecord;
+  /** The day of the format, or the start of the event without a format. */
   date: Temporal.PlainDate;
 };
 
@@ -29,7 +31,7 @@ export type PendingView = ParticipationView & {
 export const PENDING_KEY = ["pending"] as const;
 
 /** The `expand` that gives `toPendingViews` everything it needs. */
-export const PENDING_EXPAND = "format.event,format.race_type,added_by,runner";
+export const PENDING_EXPAND = "event,format.race_type,added_by,runner";
 
 // What the server sends for PENDING_EXPAND. An expand that is empty is left
 // out of the record, hence all the `?`.
@@ -37,31 +39,31 @@ type ExpandedPending = ParticipationRecord & {
   expand?: {
     runner?: RunnerRecord;
     added_by?: RunnerRecord;
-    format?: FormatRecord & { expand?: { event?: EventRecord; race_type?: RaceTypeRecord } };
+    event?: EventRecord;
+    format?: FormatRecord & { expand?: { race_type?: RaceTypeRecord } };
   };
 };
 
 /**
  * One participation of the answer to a request made with `PENDING_EXPAND`.
  * The shape is the server's contract: a record without something that has to
- * be there (the runner, the format with its event and its race type) throws.
+ * be there (the runner, the event, and, when the participation has a format,
+ * the format with its race type) throws.
  */
 function toPendingView(record: ExpandedPending): PendingView {
+  const event = record.expand?.event;
+  if (!event) throw new Error(`participation ${record.id}: its event is missing from the answer`);
+  const view = toParticipationView(record);
+  if (!record.format) return { ...view, event, date: effectiveDate({}, event) };
+
   const format = record.expand?.format;
-  const event = format?.expand?.event;
   const raceType = format?.expand?.race_type;
-  if (!format || !event || !raceType) {
+  if (!format || !raceType) {
     throw new Error(
-      `participation ${record.id}: its format, event or race type is missing from the answer`,
+      `participation ${record.id}: its format or race type is missing from the answer`,
     );
   }
-  return {
-    ...toParticipationView(record),
-    event,
-    format,
-    raceType,
-    date: effectiveDate(format, event),
-  };
+  return { ...view, event, format, raceType, date: effectiveDate(format, event) };
 }
 
 /** The participations of the answer, the ones that come first on top. */

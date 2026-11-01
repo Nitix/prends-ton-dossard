@@ -3,21 +3,24 @@ import { useId } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import { sortEvents, type EventView } from "../events/api";
 import { EventCard } from "../events/EventCard";
+import { hasStarters } from "../events/participants";
 
 /** How many events the block shows. */
 const COUNT = 5;
 
-/** The next events that somebody is down for, whoever they are, the nearest first. */
+/**
+ * The next events that somebody is down for, whoever they are, the nearest
+ * first: somebody who starts a format, or who is interested with no format
+ * yet. An event with only runners who do not start is not one.
+ */
 function soonOf(views: EventView[]): EventView[] {
-  const withRunners = views.filter(({ formats }) =>
-    formats.some(({ participations }) => participations.length > 0),
-  );
-  return sortEvents(withRunners, "asc").slice(0, COUNT);
+  return sortEvents(views.filter(hasStarters), "asc").slice(0, COUNT);
 }
 
 /**
  * « Bientôt dans le groupe »: the next 5 events that have at least one
- * participation, as the cards of the list, with their chips.
+ * participation that is not a "not starting", as the cards of the list, with
+ * their chips.
  */
 export function GroupSoon({ views }: { views: EventView[] }) {
   const { t } = useI18n();

@@ -160,3 +160,21 @@ export function withParticipations<E extends { expand: object }>(event: E, extra
     expand: { ...event.expand, participations_via_event: [...known, ...extra] },
   };
 }
+
+/** A copy of the event where the participation `id` has this status (it keeps its place in the list). */
+export function withStatus<E extends { expand: object }>(event: E, id: string, status: string) {
+  const known =
+    "participations_via_event" in event.expand &&
+    Array.isArray(event.expand.participations_via_event)
+      ? event.expand.participations_via_event
+      : [];
+  return {
+    ...event,
+    expand: {
+      ...event.expand,
+      participations_via_event: known.map((record: { id: string }) =>
+        record.id === id ? { ...record, status } : record,
+      ),
+    },
+  };
+}

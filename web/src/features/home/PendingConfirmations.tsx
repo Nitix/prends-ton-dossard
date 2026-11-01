@@ -91,6 +91,9 @@ export function PendingConfirmations({
 /**
  * One participation to confirm. Dashed, like every participation that is not
  * confirmed, and said in words by the title of the block and the sentence.
+ * A participation on a format names the format, and has the day of the format;
+ * one on the event alone names the event, has the start of the event, and says
+ * « Format à choisir » on its own line.
  * Both buttons are off while a request of the row is on its way, so that a
  * second tap cannot send it twice.
  *
@@ -125,7 +128,8 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
     pressed.current = null;
     if (button?.isConnected && document.activeElement === document.body) button.focus();
   }, [busy]);
-  const formatName = formatDisplayName(format, raceType.label, f, t);
+  // What the participation is on: its format, or the event when it has none yet.
+  const subject = format && raceType ? formatDisplayName(format, raceType.label, f, t) : event.name;
 
   // After a failure, what the screen shows may be what is wrong. Resolves once
   // the lists have their new data, as a mutation that succeeds does.
@@ -190,9 +194,10 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
         <p className="text-sm text-neutral-600">{f.date(date)}</p>
         <p className="text-sm">
           {addedBy
-            ? t.home.addedYou(addedBy.name, formatName)
-            : `${formatName}${SEPARATOR}${t.event.unconfirmed}`}
+            ? t.home.addedYou(addedBy.name, subject)
+            : `${subject}${SEPARATOR}${t.event.unconfirmed}`}
         </p>
+        {!format && <p className="text-sm">{t.event.formatToChoose}</p>}
       </div>
       <div className="flex flex-wrap gap-2">
         <button

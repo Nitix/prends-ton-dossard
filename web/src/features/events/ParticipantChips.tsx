@@ -14,7 +14,9 @@ function initials(name: string): string {
 }
 
 /**
- * The runners of a format, as round chips with their initials.
+ * The runners of a format (or of an event with no format yet), as round chips
+ * with their initials. `label` is the accessible name of the list: "Participants"
+ * unless the list is something else, like the runners who are interested.
  *
  * A participation the runner has not confirmed is dashed, and it says so in
  * words too: a text for screen readers, and a tooltip that tells who added it.
@@ -22,12 +24,18 @@ function initials(name: string): string {
  * screen readers (the initials are hidden from them) and in the tooltip of a
  * confirmed chip.
  */
-export function ParticipantChips({ participations }: { participations: ParticipationView[] }) {
+export function ParticipantChips({
+  participations,
+  label,
+}: {
+  participations: ParticipationView[];
+  label?: string;
+}) {
   const { t } = useI18n();
 
   if (participations.length === 0) return null;
   return (
-    <ul aria-label={t.event.participants} className="flex flex-wrap gap-1">
+    <ul aria-label={label ?? t.event.participants} className="flex flex-wrap gap-1">
       {participations.map(({ participation, runner, addedBy }) => {
         const confirmed = participation.confirmed;
         const title = confirmed || !addedBy ? runner.name : t.event.addedBy(addedBy.name);

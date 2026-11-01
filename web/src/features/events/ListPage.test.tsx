@@ -25,9 +25,13 @@ import {
   eventRecord,
   f42,
   fLyon,
+  ninaRunner,
+  pNinaUndecided,
   roadType,
   samRunner,
   trailType,
+  withParticipations,
+  withStatus,
 } from "./testFixture";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -277,6 +281,70 @@ test("EventCard — sur plusieurs jours, chaque épreuve dit son jour", async ()
   await expect.element(screen.getByText("dim. 14 juin", { exact: true })).toBeVisible();
 });
 
+test("EventCard — un « Non partant » n'a pas de pastille ; un « Abandon » en a une", async () => {
+  mocks.events.mockResolvedValue([withStatus(eventRecord, "p2", "dns")]);
+  const { screen, queryClient } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  // Bob did not start: he is not on the card. The others are. (The names are
+  // also in the options of the filter: the card is where to look.)
+  const card = screen.getByRole("article").filter({ hasText: "Trail des Crêtes" });
+  await expect.element(card.getByText("Alice", { exact: true })).toBeInTheDocument();
+  await expect.element(card.getByText("Bob", { exact: true })).not.toBeInTheDocument();
+  await expect.element(card.getByText("Sam", { exact: true })).toBeInTheDocument();
+
+  // "Did not finish" is a start: the chip is there.
+  mocks.events.mockResolvedValue([withStatus(eventRecord, "p2", "dnf")]);
+  await queryClient.invalidateQueries({ queryKey: ["events"] });
+  await expect.element(card.getByText("Bob", { exact: true })).toBeInTheDocument();
+});
+
+test("EventCard — les intéressés sans épreuve ont leurs pastilles sous « Format à choisir », dit en texte", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided]), event2Record]);
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  // The words say it: the chips are not told apart by their place alone.
+  const label = screen.getByText(fr.event.formatToChoose, { exact: true });
+  await expect.element(label).toBeVisible();
+  const chips = screen.getByRole("list", { name: fr.event.interestedTitle });
+  await expect.element(chips.getByText("Nina", { exact: true })).toBeInTheDocument();
+  expect(chips.getByRole("listitem").elements()).toHaveLength(1);
+  // The chip is the usual one: Nina added herself, so it is confirmed.
+  expect(chips.element().textContent).not.toContain(fr.event.unconfirmed);
+  // Before the formats, and only on the event that has such participations.
+  const firstFormat = screen.getByText(/^Trail 42\s+km/);
+  expect(label.element().getBoundingClientRect().top).toBeLessThan(
+    firstFormat.element().getBoundingClientRect().top,
+  );
+  expect(screen.getByText(fr.event.formatToChoose).elements()).toHaveLength(1);
+});
+
+test("EventCard — un événement sans intéressés sans épreuve n'a pas de ligne « Format à choisir »", async () => {
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  await expect.element(screen.getByText(fr.event.formatToChoose)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("list", { name: fr.event.interestedTitle }))
+    .not.toBeInTheDocument();
+});
+
+test("EventCard — en anglais, la ligne des intéressés dit « Format to pick »", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
+  const { screen } = await renderList("/liste", ["en-GB"]);
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  await expect.element(screen.getByText("Format to pick", { exact: true })).toBeVisible();
+  await expect
+    .element(
+      screen
+        .getByRole("list", { name: "Interested, format to pick" })
+        .getByText("Nina", { exact: true }),
+    )
+    .toBeInTheDocument();
+});
+
 test("ParticipantChips — la puce de Bob, non confirmée, le dit en texte, en pointillés, avec son auteur", async () => {
   const { screen } = await renderList();
   await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
@@ -372,6 +440,28 @@ test("ListPage — ?personne=<id> garde les événements de ce coureur", async (
   await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
   await expect.element(screen.getByText("10 km de Lyon")).not.toBeInTheDocument();
   await expect.element(screen.getByLabelText(fr.filters.person)).toHaveValue(bobRunner.id);
+});
+
+test("ListPage — ?personne=<id> garde un événement où ce coureur est intéressé sans épreuve", async () => {
+  mocks.runners.mockResolvedValue([aliceRunner, bobRunner, ninaRunner, samRunner]);
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided]), event2Record]);
+
+  const { screen } = await renderList(`/liste?personne=${ninaRunner.id}`);
+
+  await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  await expect.element(screen.getByText("10 km de Lyon")).not.toBeInTheDocument();
+  await expect.element(screen.getByLabelText(fr.filters.person)).toHaveValue(ninaRunner.id);
+});
+
+test("ListPage — ?personne=<id> ne garde pas un événement où ce coureur n'est que non partant", async () => {
+  // Bob is only on F42 of the first event, and he does not start it.
+  mocks.events.mockResolvedValue([withStatus(eventRecord, "p2", "dns"), event2Record]);
+
+  const { screen } = await renderList(`/liste?personne=${bobRunner.id}`);
+
+  await expect.element(screen.getByText(fr.list.empty)).toBeVisible();
+  await expect.element(screen.getByText("Trail des Crêtes")).not.toBeInTheDocument();
+  await expect.element(screen.getByText("10 km de Lyon")).not.toBeInTheDocument();
 });
 
 test("ListPage — ?type=<id> garde les événements qui ont une épreuve de ce type", async () => {

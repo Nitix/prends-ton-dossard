@@ -13,6 +13,7 @@ import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
+import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
@@ -24,12 +25,15 @@ import {
   eventRecord,
   f42,
   fLyon,
+  ninaRunner,
   p1,
   p2,
   p3,
+  pNinaUndecided,
   roadType,
   trailType,
   withParticipations,
+  withStatus,
 } from "../events/testFixture";
 import { HomePage } from "./HomePage";
 
@@ -73,14 +77,14 @@ const DISMISSED_KEY = "courses.passkeyBanner.dismissed";
 const TODAY = "2026-04-30";
 
 // What the server sends for the participations to confirm: each one with its
-// format, and the event and the race type of the format.
-const f42Expanded = { ...f42, expand: { event: eventRecord, race_type: trailType } };
-const fLyonExpanded = { ...fLyon, expand: { event: event2Record, race_type: roadType } };
+// event, and, when it has one, its format with the race type of the format.
+const f42Expanded = { ...f42, expand: { race_type: trailType } };
+const fLyonExpanded = { ...fLyon, expand: { race_type: roadType } };
 
 /** Bob, added by Alice on F42. */
 const pendingP2 = {
   ...p2,
-  expand: { runner: bobRunner, added_by: aliceRunner, format: f42Expanded },
+  expand: { runner: bobRunner, added_by: aliceRunner, event: eventRecord, format: f42Expanded },
 };
 /** Bob again, added by Alice on the 10 km of Lyon. */
 const pendingLyon = {
@@ -88,12 +92,20 @@ const pendingLyon = {
   id: "p-lyon",
   event: "event2",
   format: "fLyon",
-  expand: { runner: bobRunner, added_by: aliceRunner, format: fLyonExpanded },
+  expand: { runner: bobRunner, added_by: aliceRunner, event: event2Record, format: fLyonExpanded },
+};
+/** Bob, added by Alice on the event alone: no format yet. */
+const pendingUndecided = {
+  ...p2,
+  id: "p-undecided",
+  format: "",
+  expand: { runner: bobRunner, added_by: aliceRunner, event: eventRecord },
 };
 
 const users = {
   alice: { id: "u-alice", collectionName: "users", role: "member", runner: aliceRunner },
   bob: { id: "u-bob", collectionName: "users", role: "member", runner: bobRunner },
+  nina: { id: "u-nina", collectionName: "users", role: "member", runner: ninaRunner },
 };
 
 function signIn(who: keyof typeof users) {
@@ -202,7 +214,7 @@ const removeButton = (screen: Screen, event = "Trail des Crêtes") =>
 
 // ---- À confirmer
 
-test("PendingConfirmations — demande les participations de l'utilisateur à confirmer, avec leur expand", async () => {
+test("PendingConfirmations — demande les participations avec l'expand event,format.race_type,added_by,runner", async () => {
   mocks.pending.mockResolvedValue([pendingP2]);
 
   const { screen, queryClient } = await renderHome();
@@ -210,7 +222,7 @@ test("PendingConfirmations — demande les participations de l'utilisateur à co
 
   expect(mocks.pending).toHaveBeenCalledOnce();
   const options = mocks.pending.mock.calls[0]?.[0];
-  expect(options?.expand).toBe("format.event,format.race_type,added_by,runner");
+  expect(options?.expand).toBe("event,format.race_type,added_by,runner");
   // The user is a parameter of the filter, never written into it.
   expect(options?.filter).toContain("runner.user = {:me} && confirmed = false");
   expect(options?.filter).toContain('"me":"u-bob"');
@@ -253,7 +265,7 @@ test("PendingConfirmations — une ligne non confirmée est en pointillés, et l
 
 test("PendingConfirmations — sans le coureur qui l'a ajoutée, la ligne dit « non confirmé »", async () => {
   mocks.pending.mockResolvedValue([
-    { ...pendingP2, expand: { runner: bobRunner, format: f42Expanded } },
+    { ...pendingP2, expand: { runner: bobRunner, event: eventRecord, format: f42Expanded } },
   ]);
 
   const { screen } = await renderHome();
@@ -261,6 +273,91 @@ test("PendingConfirmations — sans le coureur qui l'a ajoutée, la ligne dit «
   await expect.element(pendingBlock(screen)).toBeVisible();
   const row = pendingBlock(screen).getByRole("listitem");
   expect(plain(row.element().textContent)).toContain(`Trail 42 km · ${fr.event.unconfirmed}`);
+});
+
+test("PendingConfirmations — une participation sans épreuve : nom de l'événement, date de début et « Format à choisir »", async () => {
+  mocks.pending.mockResolvedValue([pendingUndecided]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  const block = pendingBlock(screen);
+  // The event stands where the name of the format stood.
+  const line = block.getByText(/Alice/);
+  expect(plain(line.element().textContent)).toBe(fr.home.addedYou("Alice", "Trail des Crêtes"));
+  // The day is the start of the event (the event runs from the 13th to the 14th).
+  await expect.element(block.getByText("sam. 13 juin", { exact: true })).toBeVisible();
+  await expect.element(block.getByText("dim. 14 juin")).not.toBeInTheDocument();
+  await expect.element(block.getByText(fr.event.formatToChoose, { exact: true })).toBeVisible();
+  const link = block.getByRole("link", { name: "Trail des Crêtes" });
+  expect(link.element().getAttribute("href")).toBe("/evenements/event");
+
+  await confirmButton(screen).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-undecided", { confirmed: true });
+  });
+  await expect.element(screen.getByText(fr.home.confirmed)).toBeVisible();
+});
+
+test("PendingConfirmations — une participation sans épreuve, dont on ne sait plus qui l'a ajoutée, dit « non confirmé »", async () => {
+  mocks.pending.mockResolvedValue([
+    { ...pendingUndecided, expand: { runner: bobRunner, event: eventRecord } },
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  const row = pendingBlock(screen).getByRole("listitem");
+  expect(plain(row.element().textContent)).toContain(`Trail des Crêtes · ${fr.event.unconfirmed}`);
+  await expect.element(row.getByText(fr.event.formatToChoose, { exact: true })).toBeVisible();
+});
+
+test("PendingConfirmations — une participation à une épreuve n'a pas de ligne « Format à choisir »", async () => {
+  mocks.pending.mockResolvedValue([pendingP2]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  await expect.element(screen.getByText(fr.event.formatToChoose)).not.toBeInTheDocument();
+});
+
+test("PendingConfirmations — en anglais, une participation sans épreuve dit « Format to pick »", async () => {
+  mocks.pending.mockResolvedValue([pendingUndecided]);
+
+  const { screen } = await renderHome({ languages: ["en-GB"] });
+
+  const block = screen.getByRole("region", { name: en.home.pendingTitle });
+  await expect.element(block).toBeVisible();
+  const line = block.getByText(/Alice/);
+  expect(plain(line.element().textContent)).toBe(en.home.addedYou("Alice", "Trail des Crêtes"));
+  await expect.element(block.getByText("Format to pick", { exact: true })).toBeVisible();
+});
+
+test("PendingConfirmations — une réponse dont l'événement manque fait échouer le bloc", async () => {
+  mocks.pending.mockResolvedValue([
+    { ...pendingUndecided, expand: { runner: bobRunner, added_by: aliceRunner } },
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expect.element(pendingBlock(screen)).not.toBeInTheDocument();
+});
+
+test("PendingConfirmations — une réponse dont l'épreuve annoncée est incomplète fait échouer le bloc", async () => {
+  // The participation says it is on a format, but the race type of the format is missing.
+  mocks.pending.mockResolvedValue([
+    {
+      ...pendingP2,
+      expand: { runner: bobRunner, event: eventRecord, format: { ...f42, expand: {} } },
+    },
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expect.element(pendingBlock(screen)).not.toBeInTheDocument();
 });
 
 test("PendingConfirmations — Confirmer appelle updateParticipation(P2.id, {confirmed: true})", async () => {
@@ -713,6 +810,94 @@ test("MyUpcoming — un état vide quand je n'ai aucune course à venir", async 
   await expect.element(upcomingBlock(screen).getByText(fr.home.upcomingEmpty)).toBeVisible();
 });
 
+test("MyUpcoming — une participation sans épreuve compte, à la date de début de l'événement, avec « Format à choisir »", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  const row = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  // The event starts on the 13th of June: 44 days after the 30th of April.
+  await expect.element(row.getByText("dans 44 jours")).toBeVisible();
+  await expect.element(row.getByText("sam. 13 juin", { exact: true })).toBeVisible();
+  const text = plain(row.element().textContent);
+  expect(text).toContain(`${fr.event.formatToChoose} · ${fr.status.interested}`);
+  // Nina added herself: nothing to confirm.
+  expect(text).not.toContain(fr.event.unconfirmed);
+  expect(getComputedStyle(row.element()).borderStyle).toBe("solid");
+});
+
+test("MyUpcoming — les épreuves et les événements sans épreuve sont triés ensemble par date", async () => {
+  signIn("alice");
+  // Alice is on F42 (the 14th) and on the 10 km of Lyon (the 22nd), and
+  // interested in an event of the 20th with no format yet.
+  const alicesLyon = {
+    ...p1,
+    id: "p-lyon",
+    event: "event2",
+    format: "fLyon",
+    expand: { runner: aliceRunner },
+  };
+  const parisUndecided = {
+    ...pNinaUndecided,
+    id: "p-paris",
+    runner: aliceRunner.id,
+    event: "event3",
+    added_by: aliceRunner.id,
+    expand: { runner: aliceRunner, added_by: aliceRunner },
+  };
+  const paris = {
+    ...event2Record,
+    id: "event3",
+    name: "Marathon de Paris",
+    start_date: "2026-06-20",
+    expand: { formats_via_event: [{ ...fLyon, id: "fParis", event: "event3" }] },
+  };
+  mocks.events.mockResolvedValue([
+    withParticipations(event2Record, [alicesLyon]),
+    withParticipations(paris, [parisUndecided]),
+    eventRecord,
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  const rows = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(rows.first()).toBeVisible();
+  expect(rows.elements().map((row) => plain(row.textContent))).toEqual([
+    expect.stringContaining("dans 45 jours"),
+    expect.stringContaining("dans 51 jours"),
+    expect.stringContaining("dans 53 jours"),
+  ]);
+  expect(rows.elements().map((row) => row.querySelector("h3")?.textContent)).toEqual([
+    "Trail des Crêtes",
+    "Marathon de Paris",
+    "10 km de Lyon",
+  ]);
+});
+
+test("MyUpcoming — une participation sans épreuve d'un événement déjà commencé n'y est plus", async () => {
+  signIn("nina");
+  // The event runs from the 13th to the 14th of June: on the 14th it has started.
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
+
+  const { screen } = await renderHome({ today: "2026-06-14" });
+
+  await expect.element(upcomingBlock(screen).getByText(fr.home.upcomingEmpty)).toBeVisible();
+});
+
+test("MyUpcoming — mes participations « Non partant » n'y sont pas", async () => {
+  signIn("alice");
+  mocks.events.mockResolvedValue([withStatus(eventRecord, "p1", "dns")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen).getByText(fr.home.upcomingEmpty)).toBeVisible();
+  await expect.element(upcomingBlock(screen).getByRole("listitem")).not.toBeInTheDocument();
+});
+
 // ---- Bientôt dans le groupe
 
 test("GroupSoon — les événements qui ont au moins une participation, avec leurs pastilles", async () => {
@@ -762,6 +947,46 @@ test("GroupSoon — un état vide quand personne n'est inscrit", async () => {
   const { screen } = await renderHome();
 
   await expect.element(groupBlock(screen).getByText(fr.home.groupEmpty)).toBeVisible();
+});
+
+test("GroupSoon — un événement dont les seuls participants sont non partants n'est pas proposé", async () => {
+  // Alice, Bob and Sam, none of whom starts.
+  mocks.events.mockResolvedValue([
+    withStatus(withStatus(withStatus(eventRecord, "p1", "dns"), "p2", "dns"), "p3", "dns"),
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(groupBlock(screen).getByText(fr.home.groupEmpty)).toBeVisible();
+  await expect.element(groupBlock(screen).getByRole("article")).not.toBeInTheDocument();
+});
+
+test("GroupSoon — un événement avec un seul partant parmi des non partants est proposé, sans la pastille des non partants", async () => {
+  mocks.events.mockResolvedValue([withStatus(withStatus(eventRecord, "p2", "dns"), "p3", "dns")]);
+
+  const { screen } = await renderHome();
+
+  const card = groupBlock(screen).getByRole("article");
+  await expect.element(card.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  await expect.element(card.getByText("Alice", { exact: true })).toBeInTheDocument();
+  await expect.element(card.getByText("Bob", { exact: true })).not.toBeInTheDocument();
+  await expect.element(card.getByText("Sam", { exact: true })).not.toBeInTheDocument();
+});
+
+test("GroupSoon — un événement avec seulement des intéressés sans épreuve est proposé", async () => {
+  mocks.events.mockResolvedValue([
+    withParticipations(event2Record, [{ ...pNinaUndecided, event: "event2" }]),
+  ]);
+
+  const { screen } = await renderHome();
+
+  const card = groupBlock(screen).getByRole("article");
+  await expect.element(card.getByRole("link", { name: "10 km de Lyon" })).toBeVisible();
+  await expect.element(card.getByText(fr.event.formatToChoose, { exact: true })).toBeVisible();
+  await expect
+    .element(card.getByRole("list", { name: fr.event.interestedTitle }).getByText("Nina"))
+    .toBeInTheDocument();
+  await expect.element(groupBlock(screen).getByText(fr.home.groupEmpty)).not.toBeInTheDocument();
 });
 
 test("HomePage — demande les événements à venir une seule fois pour les deux blocs", async () => {

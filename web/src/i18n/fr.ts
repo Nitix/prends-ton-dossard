@@ -115,6 +115,8 @@ export const fr = {
     deleted: "Événement supprimé.",
     // The section of the participations on the event alone, before the formats.
     interestedTitle: "Intéressés, format à choisir",
+    // A participation with no format yet, said in words (never by a colour alone) on the cards and on the home page.
+    formatToChoose: "Format à choisir",
     // The summary of the closed list, at the bottom, of those who do not start: the count.
     nonStarters: (n: number) => `Non partants (${n})`,
   },

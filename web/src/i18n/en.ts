@@ -102,6 +102,7 @@ export const en = {
     deleteParticipants: "Participants concerned:",
     deleted: "Event deleted.",
     interestedTitle: "Interested, format to pick",
+    formatToChoose: "Format to pick",
     nonStarters: (n: number) => `Did not start (${n})`,
   },
   participation: {
