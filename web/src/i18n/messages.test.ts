@@ -142,3 +142,17 @@ describe("avatar texts", () => {
     );
   });
 });
+
+describe("site name", () => {
+  test("French", () => {
+    expect(fr.common.appName).toBe("Prends ton dossard");
+    expect(fr.admin.shareSubject.invite).toBe("Invitation sur Prends ton dossard");
+    expect(fr.admin.shareSubject.reset).toBe("Nouveau mot de passe sur Prends ton dossard");
+  });
+
+  test("English", () => {
+    expect(en.common.appName).toBe("Prends ton dossard");
+    expect(en.admin.shareSubject.invite).toBe("Invitation to Prends ton dossard");
+    expect(en.admin.shareSubject.reset).toBe("New password on Prends ton dossard");
+  });
+});

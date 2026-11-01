@@ -4,7 +4,7 @@ import type { Messages } from "./fr";
 // fail the type check.
 export const en = {
   common: {
-    appName: "Courses",
+    appName: "Prends ton dossard",
     loading: "Loading…",
     save: "Save",
     cancel: "Cancel",
@@ -276,8 +276,8 @@ export const en = {
     copyFailed: "Could not copy. Select the link and copy it by hand.",
     shareFailed: "Sharing failed. Copy the link instead.",
     shareSubject: {
-      invite: "Invitation to Courses",
-      reset: "New password on Courses",
+      invite: "Invitation to Prends ton dossard",
+      reset: "New password on Prends ton dossard",
     },
     revoke: {
       invite: {

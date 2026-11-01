@@ -30,7 +30,7 @@ const ceremonyTTL = 5 * time.Minute
 func NewWebAuthn(cfg config.Config) (*webauthn.WebAuthn, error) {
 	return webauthn.New(&webauthn.Config{
 		RPID:          cfg.RPID,
-		RPDisplayName: "Courses",
+		RPDisplayName: "Prends ton dossard",
 		RPOrigins:     []string{cfg.Origin},
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			ResidentKey:        protocol.ResidentKeyRequirementRequired,

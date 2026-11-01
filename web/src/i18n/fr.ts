@@ -3,7 +3,7 @@
 // A text with a variable is a function.
 export const fr = {
   common: {
-    appName: "Courses",
+    appName: "Prends ton dossard",
     loading: "Chargement…",
     save: "Enregistrer",
     cancel: "Annuler",
@@ -327,8 +327,8 @@ export const fr = {
     shareFailed: "Le partage a échoué. Copie le lien à la place.",
     // The title of what the share sheet of the phone sends (the subject of an email, for instance).
     shareSubject: {
-      invite: "Invitation sur Courses",
-      reset: "Nouveau mot de passe sur Courses",
+      invite: "Invitation sur Prends ton dossard",
+      reset: "Nouveau mot de passe sur Prends ton dossard",
     },
     // Revoking a link that is waiting to be used.
     revoke: {

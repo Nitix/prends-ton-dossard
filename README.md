@@ -1,6 +1,6 @@
-# Courses
+# Prends ton dossard
 
-Un site privé, pensé d'abord pour le mobile, où un groupe d'amis note les courses et les trails que chacun prévoit de faire. Le serveur est un programme Go (PocketBase utilisé comme bibliothèque) qui embarque le front React compilé : un seul binaire, un seul conteneur.
+« Prends ton dossard » est un site privé, pensé d'abord pour le mobile, où un groupe d'amis note les courses et les trails que chacun prévoit de faire. Le serveur est un programme Go (PocketBase utilisé comme bibliothèque) qui embarque le front React compilé : un seul binaire, un seul conteneur.
 
 La spécification est dans [`docs/superpowers/specs/2026-10-31-courses-design.md`](docs/superpowers/specs/2026-10-31-courses-design.md).
 

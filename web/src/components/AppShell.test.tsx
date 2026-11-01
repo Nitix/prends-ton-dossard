@@ -161,3 +161,16 @@ test("AppShell — barre d'onglets en bas sous md, en haut à partir de md", asy
   expect(nav.element().getBoundingClientRect().top).toBe(0);
   expect(getComputedStyle(nav.element()).position).not.toBe("fixed");
 });
+
+test("AppShell — la barre d'onglets porte le nom du site à partir de md", async () => {
+  const screen = await renderShell();
+  const nav = screen.getByRole("navigation", { name: fr.nav.main });
+  const name = nav.getByText("Prends ton dossard");
+
+  // The name is only there from md: a phone has room for the tabs alone.
+  await page.viewport(390, 844);
+  await expect.element(name).not.toBeVisible();
+
+  await page.viewport(1024, 768);
+  await expect.element(name).toBeVisible();
+});

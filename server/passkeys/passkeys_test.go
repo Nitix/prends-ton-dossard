@@ -30,7 +30,7 @@ const (
 
 // rp is the site as the browser of the tests sees it: testutil.NewApp sets
 // APP_URL to http://localhost:5173.
-var rp = virtualwebauthn.RelyingParty{ID: "localhost", Name: "Courses", Origin: "http://localhost:5173"}
+var rp = virtualwebauthn.RelyingParty{ID: "localhost", Name: "Prends ton dossard", Origin: "http://localhost:5173"}
 
 // code is how the API reports a refused request: data.code.
 func code(c string) string { return `"code":"` + c + `"` }
@@ -252,8 +252,8 @@ func TestPasskeys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if opts.RelyingPartyID != "localhost" || opts.RelyingPartyName != "Courses" {
-			t.Errorf("rp = %q %q, want localhost Courses", opts.RelyingPartyID, opts.RelyingPartyName)
+		if opts.RelyingPartyID != "localhost" || opts.RelyingPartyName != "Prends ton dossard" {
+			t.Errorf("rp = %q %q, want localhost Prends ton dossard", opts.RelyingPartyID, opts.RelyingPartyName)
 		}
 		if opts.UserID != fx.Alice.Id {
 			t.Errorf("user.id decodes to %q, want the id of alice %q", opts.UserID, fx.Alice.Id)
