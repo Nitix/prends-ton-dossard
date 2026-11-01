@@ -29,6 +29,8 @@ func adminRunner(fx testutil.Fixture) *core.Record { return fx.AdminRunner }
 func f42(fx testutil.Fixture) *core.Record         { return fx.F42 }
 func f15(fx testutil.Fixture) *core.Record         { return fx.F15 }
 func fLyon(fx testutil.Fixture) *core.Record       { return fx.FLyon }
+func event(fx testutil.Fixture) *core.Record       { return fx.Event }
+func event2(fx testutil.Fixture) *core.Record      { return fx.Event2 }
 
 // participations builds the URL of the participations, or of one of them.
 func participations(of ...record) func(testutil.Fixture) string {
@@ -91,6 +93,7 @@ func unchanged(of record) check {
 		want := of(fx)
 		assertStored(t, stored(t, app, want.Id), map[string]any{
 			"runner":    want.GetString("runner"),
+			"event":     want.GetString("event"),
 			"format":    want.GetString("format"),
 			"status":    want.GetString("status"),
 			"added_by":  want.GetString("added_by"),
@@ -117,6 +120,77 @@ func createdIs(runner, format record, want func(testutil.Fixture) map[string]any
 			dbx.Params{"runner": runner(fx).Id, "format": format(fx).Id})
 		if err != nil {
 			t.Fatalf("the participation was not created: %v", err)
+		}
+		assertStored(t, r, want(fx))
+	}
+}
+
+// undecided saves a participation of runner in the event only, without a
+// format, as the fixture does, and returns it.
+func undecided(t testing.TB, app core.App, runner, event, addedBy *core.Record, confirmed bool) *core.Record {
+	t.Helper()
+	c, err := app.FindCollectionByNameOrId("participations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := core.NewRecord(c)
+	r.Set("runner", runner.Id)
+	r.Set("event", event.Id)
+	r.Set("status", "interested")
+	r.Set("added_by", addedBy.Id)
+	r.Set("confirmed", confirmed)
+	if err := app.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// undecidedBy is a Before that makes the runner interested in the event
+// without a format, added by the runner (so confirmed) or by somebody else.
+func undecidedBy(runner, event, addedBy record, confirmed bool) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		undecided(t, app, runner(fx), event(fx), addedBy(fx), confirmed)
+	}
+}
+
+// inEvent returns the participations of the runner in the event, whatever
+// their format.
+func inEvent(t testing.TB, app core.App, runner, event *core.Record) []*core.Record {
+	t.Helper()
+	found, err := app.FindAllRecords("participations", dbx.HashExp{"runner": runner.Id, "event": event.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return found
+}
+
+// onlyIn asserts that the runner has exactly one participation in the event,
+// and that it is on that format (without a format when the format is nil).
+func onlyIn(runner, event, format record) check {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		found := inEvent(t, app, runner(fx), event(fx))
+		if len(found) != 1 {
+			t.Fatalf("%d participations in the event, want 1", len(found))
+		}
+		want := ""
+		if format != nil {
+			want = format(fx).Id
+		}
+		assertStored(t, found[0], map[string]any{"format": want})
+	}
+}
+
+// createdUndecidedIs asserts the participation of that runner in that event
+// without a format, which the request has just created.
+func createdUndecidedIs(runner, event record, want func(testutil.Fixture) map[string]any) check {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		r, err := app.FindFirstRecordByFilter("participations", "runner = {:runner} && event = {:event} && format = ''",
+			dbx.Params{"runner": runner(fx).Id, "event": event(fx).Id})
+		if err != nil {
+			t.Fatalf("the participation without a format was not created: %v", err)
 		}
 		assertStored(t, r, want(fx))
 	}
@@ -762,7 +836,7 @@ func TestParticipations_FormatStaysInEvent(t *testing.T) {
 	})
 
 	t.Run("a new participation in any format", func(t *testing.T) {
-		// Only a change is held against the format: a creation has none.
+		// Without an event, the event is the one of the format.
 		c, err := app.FindCollectionByNameOrId("participations")
 		if err != nil {
 			t.Fatal(err)
@@ -773,6 +847,25 @@ func TestParticipations_FormatStaysInEvent(t *testing.T) {
 		r.Set("status", "interested")
 		if err := app.Save(r); err != nil {
 			t.Fatal(err)
+		}
+	})
+
+	t.Run("a new participation whose format is of another event than its event", func(t *testing.T) {
+		c, err := app.FindCollectionByNameOrId("participations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := core.NewRecord(c)
+		r.Set("runner", fx.SamRunner.Id)
+		r.Set("event", fx.Event.Id)
+		r.Set("format", fx.FLyon.Id)
+		r.Set("status", "interested")
+		if got := codeOf(app.Save(r), "format"); got != apperr.CodeFormatOtherEvent {
+			t.Errorf("code = %q, want %q", got, apperr.CodeFormatOtherEvent)
+		}
+		// Sam is still on F15 only (P3): nothing was added.
+		if got, err := app.CountRecords("participations", dbx.HashExp{"runner": fx.SamRunner.Id}); err != nil || got != 1 {
+			t.Errorf("Sam has %d participations (%v), want his 1", got, err)
 		}
 	})
 }
@@ -793,4 +886,310 @@ func TestParticipations_DefaultStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertStored(t, stored(t, app, r.Id), map[string]any{"status": "interested"})
+}
+
+// The event of a participation that has a format and no event is the one of
+// its format, also for the writes that do not come from the API (the clients
+// of the v1 never sent an event).
+func TestParticipations_EventFilledFromFormat(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+
+	c, err := app.FindCollectionByNameOrId("participations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := core.NewRecord(c)
+	r.Set("runner", fx.AdminRunner.Id)
+	r.Set("format", fx.F15.Id)
+	if err := app.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	assertStored(t, stored(t, app, r.Id), map[string]any{"event": fx.Event.Id, "format": fx.F15.Id})
+}
+
+// A participation can be for an event only, without a format ("interested,
+// format to be chosen"): that is what the first rows create. When the runner
+// is given a format of the event, the participation to the event is replaced
+// by the new one, in the same transaction.
+func TestParticipations_Undecided(t *testing.T) {
+	// The participation without a format that some rows add to the database,
+	// before the request, and then ask about.
+	var pending *core.Record
+	pendingOf := func(testutil.Fixture) *core.Record { return pending }
+	bobPending := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		pending = undecided(t, app, fx.BobRunner, fx.Event2, fx.BobRunner, true)
+	}
+	// bobAndAdminPending adds the one of Bob, and the one of Admin.
+	bobAndAdminPending := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		bobPending(t, app, fx)
+		undecided(t, app, fx.AdminRunner, fx.Event2, fx.AdminRunner, true)
+	}
+	// bobOnTheFormatAndPending leaves the database in a state that the hooks
+	// refuse to create: Bob is on FLyon, and still has a participation to the
+	// event. The second one is added without validation.
+	bobOnTheFormatAndPending := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		addParticipation(bobRunner, fLyon)(t, app, fx)
+		c, err := app.FindCollectionByNameOrId("participations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending = core.NewRecord(c)
+		pending.Set("runner", fx.BobRunner.Id)
+		pending.Set("event", fx.Event2.Id)
+		pending.Set("status", "interested")
+		if err := app.SaveNoValidate(pending); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// stillThere asserts that the participation without a format of the runner
+	// is in the database.
+	stillThere := func(runner record) check {
+		return createdUndecidedIs(runner, event2, func(testutil.Fixture) map[string]any {
+			return map[string]any{"format": ""}
+		})
+	}
+
+	testutil.RunRows(t, []testutil.Row{
+		// creation without a format
+		{
+			Name:   "bob says he is interested in an event: confirmed, by him",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Body:   body(`{"runner":%q,"event":%q,"status":"interested"}`, bobRunner, event2),
+			Status: http.StatusOK,
+			After: createdUndecidedIs(bobRunner, event2, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{
+					"format": "", "event": fx.Event2.Id, "confirmed": true, "added_by": fx.BobRunner.Id,
+				}
+			}),
+		},
+		{
+			Name:   "the event is the one of the format when the request has none",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Body:   body(`{"runner":%q,"format":%q,"status":"registered"}`, samRunner, fLyon),
+			Status: http.StatusOK,
+			After: createdIs(samRunner, fLyon, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"event": fx.Event2.Id, "status": "registered"}
+			}),
+		},
+		{
+			Name:     "a format of another event than the event of the request is refused",
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Body:     body(`{"runner":%q,"event":%q,"format":%q,"status":"interested"}`, bobRunner, event, fLyon),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("format", apperr.CodeFormatOtherEvent)},
+			After:    count(3),
+		},
+		{
+			Name:     "without a format, the status can only be interested",
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Body:     body(`{"runner":%q,"event":%q,"status":"registered"}`, bobRunner, event2),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("status", apperr.CodeFormatRequired)},
+			After:    count(3),
+		},
+		{
+			Name:     "neither an event nor a format is a validation error",
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Body:     body(`{"runner":%q,"status":"interested"}`, bobRunner),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("event", "validation_required")},
+			After:    count(3),
+		},
+		{
+			Name:   "an unknown event is a validation error, not a failure",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Body:   body(`{"runner":%q,"event":"doesnotexist000","status":"interested"}`, bobRunner),
+			Status: http.StatusBadRequest,
+			After:  count(3),
+		},
+		{
+			Name:     "a runner who is on a format of the event cannot be interested in the event only",
+			As:       "alice",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Body:     body(`{"runner":%q,"event":%q,"status":"interested"}`, aliceRunner, event),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("format", apperr.CodeFormatRequired)},
+			After:    both(count(3), unchanged(p1)),
+		},
+		{
+			Name:     "a second participation to the same event, without a format",
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Before:   bobPending,
+			Body:     body(`{"runner":%q,"event":%q,"status":"interested"}`, bobRunner, event2),
+			Status:   http.StatusBadRequest,
+			Contains: []string{"validation_not_unique"},
+			After:    both(count(4), unchanged(pendingOf)),
+		},
+
+		// conversion
+		{
+			Name:   "bob chooses a format: his participation to the event is replaced",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Before: bobPending,
+			Body:   body(`{"runner":%q,"format":%q,"status":"registered"}`, bobRunner, fLyon),
+			Status: http.StatusOK,
+			After: both(
+				onlyIn(bobRunner, event2, fLyon),
+				createdIs(bobRunner, fLyon, func(fx testutil.Fixture) map[string]any {
+					return map[string]any{"event": fx.Event2.Id, "confirmed": true, "status": "registered"}
+				}),
+			),
+		},
+		{
+			Name:   "alice chooses a format for bob: it replaces his, and it is not confirmed",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Before: bobPending,
+			Body:   body(`{"runner":%q,"format":%q,"status":"interested"}`, bobRunner, fLyon),
+			Status: http.StatusOK,
+			After: both(
+				onlyIn(bobRunner, event2, fLyon),
+				createdIs(bobRunner, fLyon, func(fx testutil.Fixture) map[string]any {
+					return map[string]any{"confirmed": false, "added_by": fx.AliceRunner.Id}
+				}),
+			),
+		},
+		{
+			Name:   "the conversion leaves the participations of the other runners",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Before: bobAndAdminPending,
+			Body:   body(`{"runner":%q,"format":%q}`, bobRunner, fLyon),
+			Status: http.StatusOK,
+			After:  both(onlyIn(bobRunner, event2, fLyon), stillThere(adminRunner)),
+		},
+		{
+			// The new participation is refused by the unique index, which is
+			// after the delete of the participation to the event.
+			Name:     "the conversion is undone when the new participation is refused",
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      participations(),
+			Before:   bobOnTheFormatAndPending,
+			Body:     body(`{"runner":%q,"format":%q}`, bobRunner, fLyon),
+			Status:   http.StatusBadRequest,
+			Contains: []string{"validation_not_unique"},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				t.Helper()
+				stillThere(bobRunner)(t, app, fx)
+				if got := len(inEvent(t, app, fx.BobRunner, fx.Event2)); got != 2 {
+					t.Errorf("%d participations of Bob in the event, want his 2", got)
+				}
+			},
+		},
+		{
+			Name:   "a batch that is interested, then chooses a format, leaves the format",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    func(testutil.Fixture) string { return "/api/batch" },
+			Body: body(`{"requests":[`+
+				`{"method":"POST","url":"/api/collections/participations/records",`+
+				`"body":{"runner":%q,"event":%q,"status":"interested"}},`+
+				`{"method":"POST","url":"/api/collections/participations/records",`+
+				`"body":{"runner":%q,"format":%q,"status":"registered"}}]}`,
+				bobRunner, event2, bobRunner, fLyon),
+			Status:   http.StatusOK,
+			Contains: []string{`"status":200`},
+			After:    onlyIn(bobRunner, event2, fLyon),
+		},
+
+		// modification
+		{
+			Name:   "bob gives a format to his participation to the event",
+			As:     "bob",
+			Method: http.MethodPatch,
+			URL:    participations(pendingOf),
+			Before: bobPending,
+			Body:   body(`{"format":%q,"status":"registered"}`, fLyon),
+			Status: http.StatusOK,
+			After: storedIs(pendingOf, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"format": fx.FLyon.Id, "event": fx.Event2.Id, "status": "registered"}
+			}),
+		},
+		{
+			Name:     "without a format, the status cannot change to anything but interested",
+			As:       "bob",
+			Method:   http.MethodPatch,
+			URL:      participations(pendingOf),
+			Before:   bobPending,
+			Body:     body(`{"status":"registered"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{apperr.CodeFormatRequired},
+			After:    unchanged(pendingOf),
+		},
+		{
+			Name:     "a participation cannot lose its format while it is registered",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p1),
+			Body:     body(`{"format":""}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("status", apperr.CodeFormatRequired)},
+			After:    unchanged(p1),
+		},
+		{
+			Name:   "a participation that is only interested can lose its format",
+			As:     "bob",
+			Method: http.MethodPatch,
+			URL:    participations(p2),
+			Body:   body(`{"format":"","status":"interested"}`),
+			Status: http.StatusOK,
+			After: storedIs(p2, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"format": "", "event": fx.Event.Id, "status": "interested"}
+			}),
+		},
+
+		// the event never changes through the API
+		{
+			Name:   "alice cannot move her participation to another event",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"event":%q}`, event2),
+			Status: http.StatusNotFound,
+			After: both(unchanged(p1), storedIs(p1, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"event": fx.Event.Id}
+			})),
+		},
+		{
+			Name:   "the event cannot be sent again with the same value",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"event":%q}`, event),
+			Status: http.StatusNotFound,
+			After:  unchanged(p1),
+		},
+		{
+			Name:   "an anonymous caller cannot change the event of a participation either",
+			Method: http.MethodPatch,
+			URL:    participations(p3),
+			Body:   body(`{"event":%q}`, event2),
+			Status: http.StatusNotFound,
+			After:  unchanged(p3),
+		},
+	})
 }

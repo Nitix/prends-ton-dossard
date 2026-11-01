@@ -314,8 +314,13 @@ func TestMergeEvents(t *testing.T) {
 					t.Errorf("the date of F42 is %q, want 2026-06-14", got)
 				}
 				for _, p := range []*core.Record{fx.P1, fx.P2, fx.P3} {
-					if got, want := mustStore(t, app, "participations", p.Id).GetString("format"), p.GetString("format"); got != want {
-						t.Errorf("the participation %s is on the format %q, want %q", p.Id, got, want)
+					got := mustStore(t, app, "participations", p.Id)
+					if got.GetString("format") != p.GetString("format") {
+						t.Errorf("the participation %s is on the format %q, want %q", p.Id, got.GetString("format"), p.GetString("format"))
+					}
+					// A participation is in the event of its format.
+					if got.GetString("event") != wide.Id {
+						t.Errorf("the participation %s is in the event %q, want %q", p.Id, got.GetString("event"), wide.Id)
 					}
 				}
 				gone(t, app, "events", fx.Event)

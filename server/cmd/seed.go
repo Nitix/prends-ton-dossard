@@ -112,7 +112,8 @@ func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
 // SeedDemo fills an empty database with demo data: three accounts (one admin,
 // two members) that all have password, five runners (Sam and Julie have no
 // account), four events in the three months after today, one of them over two
-// months, and two events that are over, with participations in every status.
+// months, and two events that are over, with participations in every status,
+// and one runner who is interested in an event without having chosen a race.
 //
 // Every date comes from today, so the same day gives the same data. It refuses
 // when an account exists, and writes nothing when it fails.
@@ -217,6 +218,7 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			// when that one adds it.
 			if _, err := create(app, "participations", map[string]any{
 				"runner":    runner.Id,
+				"event":     saved.Id,
 				"format":    savedFormat.Id,
 				"status":    entry.status,
 				"added_by":  addedBy.Id,
@@ -224,6 +226,22 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			}); err != nil {
 				return fmt.Errorf("the participation of %s in %q: %w", entry.runner, format.name, err)
 			}
+		}
+	}
+
+	// The runners who are interested in the event and have not chosen a format:
+	// the participation has no format. The hooks refuse one for a runner who is
+	// on a format of the event, so these come after the formats.
+	for _, entry := range event.undecided {
+		runner, addedBy := runners[entry.runner], runners[entry.addedBy]
+		if _, err := create(app, "participations", map[string]any{
+			"runner":    runner.Id,
+			"event":     saved.Id,
+			"status":    entry.status,
+			"added_by":  addedBy.Id,
+			"confirmed": runner.Id == addedBy.Id,
+		}); err != nil {
+			return fmt.Errorf("the participation of %s, without a format: %w", entry.runner, err)
 		}
 	}
 	return nil
@@ -236,6 +254,10 @@ type eventSpec struct {
 	url, notes     string
 	createdBy      string
 	formats        []formatSpec
+	// undecided are the runners who are interested in the event and have not
+	// chosen a format yet: none of them is on a format of the event, and the
+	// status of each is "interested".
+	undecided []entrySpec
 }
 
 // formatSpec describes a format of the demo. A measure that is zero is not set.
@@ -290,6 +312,10 @@ func demoEvents(today time.Time) []eventSpec {
 						{runnerJulie, "registered", runnerBob},
 					},
 				},
+			},
+			// Admin is on neither of the two formats yet.
+			undecided: []entrySpec{
+				{runnerAdmin, "interested", runnerAdmin},
 			},
 		},
 		{

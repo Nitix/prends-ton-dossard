@@ -21,6 +21,7 @@ const (
 	CodeFormatDateOutOfRange        = "format_date_out_of_range"
 	CodeFormatOtherEvent            = "format_other_event"
 	CodeFormatMeasureRequired       = "format_measure_required"
+	CodeFormatRequired              = "format_required"
 	CodeMergeSameRecord             = "merge_same_record"
 	CodeMergeFormatsDifferentEvents = "merge_formats_different_events"
 	CodeNotFound                    = "not_found"

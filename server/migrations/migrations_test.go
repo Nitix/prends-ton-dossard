@@ -109,6 +109,15 @@ func TestMigrations_ParticipationUnique(t *testing.T) {
 	if err == nil {
 		t.Error("a second participation of Alice in F42 must fail")
 	}
+
+	// A participation to an event, without a format, is unique by runner and
+	// event. Sam is on no format of Event2, so the first one is accepted: that
+	// is what shows that the second one is refused for the duplicate.
+	undecided := map[string]any{"runner": fx.SamRunner.Id, "event": fx.Event2.Id, "status": "interested"}
+	mustSave(t, app, "participations", undecided)
+	if _, err := trySave(app, "participations", undecided); err == nil {
+		t.Error("a second participation of Sam in Event2, without a format, must fail")
+	}
 }
 
 func TestMigrations_PasskeyCredentialIDUnique(t *testing.T) {
@@ -269,24 +278,28 @@ func TestMigrations_UsersEmailNoCaseDownThenUp(t *testing.T) {
 	}
 }
 
-// The rules of "participations" are added with the code that keeps its
-// invariants, by the migration 5_participation_rules.go: rolling it back
-// leaves them superuser-only, and applying it again restores them. The
-// migration is run on its own so that the test does not depend on the ones
-// added after it. What the rules allow is tested with the hooks, in the
-// participations package.
-func TestMigrations_ParticipationRulesDownThenUp(t *testing.T) {
-	app := testutil.NewApp(t)
-
-	var migration *core.Migration
+// migrationFile returns the migration of the application that is in that file.
+func migrationFile(t testing.TB, file string) *core.Migration {
+	t.Helper()
 	for _, m := range core.AppMigrations.Items() {
-		if m.File == "5_participation_rules.go" {
-			migration = m
+		if m.File == file {
+			return m
 		}
 	}
-	if migration == nil {
-		t.Fatal("the migration 5_participation_rules.go is not registered")
-	}
+	t.Fatalf("the migration %s is not registered", file)
+	return nil
+}
+
+// The rules of "participations" are added with the code that keeps its
+// invariants, by the migration 5_participation_rules.go: rolling it back
+// leaves them superuser-only, and applying it again restores the ones that it
+// sets, which are not the final ones (the migration 8 adds a guard to the
+// update rule). The migration is run on its own so that the test does not
+// depend on the ones added after it. What the rules allow is tested with the
+// hooks, in the participations package.
+func TestMigrations_ParticipationRulesDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	migration := migrationFile(t, "5_participation_rules.go")
 
 	// rules returns the rules of the collection in the order list, view,
 	// create, update, delete.
@@ -298,8 +311,7 @@ func TestMigrations_ParticipationRulesDownThenUp(t *testing.T) {
 		}
 		return []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule}
 	}
-	before := rules()
-	for i, r := range before {
+	for i, r := range rules() {
 		if r == nil {
 			t.Errorf("participations: rule %d is null, want one", i)
 		}
@@ -317,10 +329,147 @@ func TestMigrations_ParticipationRulesDownThenUp(t *testing.T) {
 	if err := migration.Up(app); err != nil {
 		t.Fatal(err)
 	}
+	const (
+		signedIn = `@request.auth.id != ""`
+		owner    = `(@request.auth.role = "admin" || runner.user = @request.auth.id || confirmed = false)`
+	)
+	want := []string{
+		signedIn,
+		signedIn,
+		signedIn,
+		signedIn + ` && @request.body.runner:isset = false && @request.body.added_by:isset = false && ` + owner,
+		signedIn + ` && ` + owner,
+	}
 	for i, got := range rules() {
-		want := before[i]
-		if (got == nil) != (want == nil) || (got != nil && *got != *want) {
-			t.Errorf("participations: rule %d differs after applying the migration again", i)
+		if got == nil || *got != want[i] {
+			t.Errorf("participations: rule %d = %v after applying the migration again, want %q", i, got, want[i])
+		}
+	}
+}
+
+// The participations belong to an event as well as to a format (migration
+// 8_participation_event.go): a participation without a format is for the event
+// only.
+func TestMigrations_ParticipationEvent(t *testing.T) {
+	app := testutil.NewApp(t)
+	participations, err := app.FindCollectionByNameOrId("participations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := app.FindCollectionByNameOrId("events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	formats, err := app.FindCollectionByNameOrId("formats")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	event, ok := participations.Fields.GetByName("event").(*core.RelationField)
+	if !ok {
+		t.Fatal("participations.event must be a relation field")
+	}
+	if event.CollectionId != events.Id || event.MaxSelect != 1 {
+		t.Errorf("participations.event = collection %q, maxSelect %d; want events, 1", event.CollectionId, event.MaxSelect)
+	}
+	if !event.Required || !event.CascadeDelete {
+		t.Errorf("participations.event = required %v, cascade %v; want both", event.Required, event.CascadeDelete)
+	}
+
+	format, ok := participations.Fields.GetByName("format").(*core.RelationField)
+	if !ok {
+		t.Fatal("participations.format must be a relation field")
+	}
+	if format.CollectionId != formats.Id {
+		t.Errorf("participations.format points at %q, want formats", format.CollectionId)
+	}
+	if format.Required {
+		t.Error("participations.format must not be required any more")
+	}
+	if !format.CascadeDelete {
+		t.Error("participations.format must still be deleted with its format")
+	}
+
+	// The unique index of a runner and a format only counts the participations
+	// that have a format, and a second one counts those that have none.
+	for _, want := range []string{
+		"CREATE UNIQUE INDEX idx_participations_runner_format ON participations (runner, format) WHERE format != ''",
+		"CREATE UNIQUE INDEX idx_participations_runner_event ON participations (runner, event) WHERE format = ''",
+	} {
+		if !slices.Contains(participations.Indexes, want) {
+			t.Errorf("participations.indexes = %q, want %q among them", participations.Indexes, want)
+		}
+	}
+	if len(participations.Indexes) != 2 {
+		t.Errorf("participations has %d indexes, want the 2 partial ones: %q", len(participations.Indexes), participations.Indexes)
+	}
+
+	// The update rule keeps every guard of the v1, and refuses a body that has
+	// an event.
+	if participations.UpdateRule == nil {
+		t.Fatal("participations: the update rule is null")
+	}
+	update := *participations.UpdateRule
+	if !strings.HasPrefix(update, `@request.auth.id != "" && `) {
+		t.Errorf("the update rule must start with the signed-in guard: %q", update)
+	}
+	if !strings.Contains(update, `@request.body.event:isset = false`) {
+		t.Errorf("the update rule must refuse an event in the body: %q", update)
+	}
+}
+
+// The migration 8 gives an event to the participations that exist when the
+// application is updated: the event of their format. The rollback takes the
+// column away, and applying the migration again fills it.
+func TestMigrations_ParticipationEventBackfill(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "8_participation_event.go")
+
+	// A participation without a format does not exist in the v1: the rollback
+	// deletes it, as the v1 schema could not hold it.
+	undecided := mustSave(t, app, "participations", map[string]any{
+		"runner": fx.AdminRunner.Id, "event": fx.Event2.Id, "status": "interested",
+	})
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("participations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	c := collection()
+	if c.Fields.GetByName("event") != nil {
+		t.Error("participations.event must be gone after the rollback")
+	}
+	if format, ok := c.Fields.GetByName("format").(*core.RelationField); !ok || !format.Required {
+		t.Error("participations.format must be required again after the rollback")
+	}
+	for _, p := range []*core.Record{fx.P1, fx.P2, fx.P3} {
+		if _, err := app.FindRecordById("participations", p.Id); err != nil {
+			t.Errorf("the participation %s must survive the rollback: %v", p.Id, err)
+		}
+	}
+	if _, err := app.FindRecordById("participations", undecided.Id); err == nil {
+		t.Error("a participation without a format must be deleted by the rollback")
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []*core.Record{fx.P1, fx.P2, fx.P3} {
+		got, err := app.FindRecordById("participations", p.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.GetString("event") != fx.Event.Id {
+			t.Errorf("the participation %s is in the event %q, want %q", p.Id, got.GetString("event"), fx.Event.Id)
 		}
 	}
 }
@@ -363,11 +512,15 @@ func TestMigrations_CascadeDelete(t *testing.T) {
 		"credential":    map[string]any{"id": "abc"},
 	})
 
-	// Deleting an event deletes its formats, and their participations.
+	// Deleting an event deletes its formats, and their participations, and the
+	// participations that are for the event only.
+	undecided := mustSave(t, app, "participations", map[string]any{
+		"runner": fx.AdminRunner.Id, "event": fx.Event.Id, "status": "interested",
+	})
 	if err := app.Delete(fx.Event); err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range []*core.Record{fx.F42, fx.F15, fx.P1, fx.P2, fx.P3} {
+	for _, r := range []*core.Record{fx.F42, fx.F15, fx.P1, fx.P2, fx.P3, undecided} {
 		if _, err := app.FindRecordById(r.Collection(), r.Id); err == nil {
 			t.Errorf("%s %s must be deleted with the event", r.Collection().Name, r.Id)
 		}

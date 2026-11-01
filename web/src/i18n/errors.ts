@@ -25,6 +25,7 @@ export const ERROR_CODES: readonly string[] = [
   "format_date_out_of_range",
   "format_other_event",
   "format_measure_required",
+  "format_required",
   "merge_same_record",
   "merge_formats_different_events",
   "not_found",

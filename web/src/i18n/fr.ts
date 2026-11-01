@@ -440,6 +440,7 @@ export const fr = {
       "La date de l'épreuve doit être comprise dans les dates de l'événement.",
     format_other_event: "Cette épreuve appartient à un autre événement.",
     format_measure_required: "Indique au moins une distance, une durée ou un temps max.",
+    format_required: "Il faut choisir une épreuve.",
     merge_same_record: "Choisis deux éléments différents.",
     merge_formats_different_events: "Ces deux épreuves ne sont pas du même événement.",
     not_found: "Introuvable : il a peut-être été supprimé.",

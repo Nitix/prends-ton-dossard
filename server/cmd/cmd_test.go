@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 
 	"courses/server/cmd"
@@ -397,9 +398,22 @@ func checkParticipations(t *testing.T, app core.App) {
 	}
 	statuses := map[string]int{}
 	confirmed := map[bool]int{}
+	// A participation to an event only, without a format, in an event that has
+	// at least two: it is how the demo shows "interested, format to be chosen".
+	var undecided int
 	for _, p := range participations {
 		statuses[p.GetString("status")]++
 		confirmed[p.GetBool("confirmed")]++
+
+		if p.GetString("format") == "" {
+			formats, err := app.CountRecords("formats", dbx.HashExp{"event": p.GetString("event")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.GetString("status") == "interested" && formats >= 2 {
+				undecided++
+			}
+		}
 
 		runner, addedBy := p.GetString("runner"), p.GetString("added_by")
 		if addedBy == "" {
@@ -417,6 +431,9 @@ func checkParticipations(t *testing.T, app core.App) {
 	}
 	if confirmed[true] == 0 || confirmed[false] == 0 {
 		t.Errorf("confirmed participations: %d, unconfirmed: %d, want both", confirmed[true], confirmed[false])
+	}
+	if undecided == 0 {
+		t.Error("no participation is interested in an event of at least two formats without a format")
 	}
 }
 

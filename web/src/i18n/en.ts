@@ -378,6 +378,7 @@ export const en = {
     format_date_out_of_range: "The race date must fall within the dates of the event.",
     format_other_event: "This race belongs to another event.",
     format_measure_required: "Enter at least a distance, a duration or a time limit.",
+    format_required: "Pick a format.",
     merge_same_record: "Pick two different items.",
     merge_formats_different_events: "These two races are not in the same event.",
     not_found: "Not found: it may have been deleted.",

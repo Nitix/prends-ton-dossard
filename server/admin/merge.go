@@ -58,12 +58,12 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 
 		start, end := keep.GetString("start_date"), keep.GetString("end_date")
 		for _, format := range formats {
-			carried, err := tx.CountRecords("participations", dbx.HashExp{"format": format.Id})
+			carried, err := tx.FindAllRecords("participations", dbx.HashExp{"format": format.Id})
 			if err != nil {
 				return err
 			}
 			result.MovedFormats++
-			result.MovedParticipations += int(carried)
+			result.MovedParticipations += len(carried)
 
 			format.Set("event", keep.Id)
 			// The date is cleared before the save: the validation of a format
@@ -78,11 +78,20 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			if err := tx.Save(format); err != nil {
 				return err
 			}
+			// A participation is in the event of its format: they follow it,
+			// or the deletion of the event below would delete them.
+			for _, p := range carried {
+				p.Set("event", keep.Id)
+				if err := tx.Save(p); err != nil {
+					return err
+				}
+			}
 		}
 		if dryRun {
 			return nil
 		}
-		// Nothing is left to cascade to: every format has moved.
+		// Nothing is left to cascade to: every format has moved, with its
+		// participations.
 		return tx.Delete(merged)
 	})
 	if err != nil {
