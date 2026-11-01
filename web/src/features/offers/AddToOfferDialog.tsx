@@ -14,25 +14,39 @@ import { canTakePlace } from "./offerRules";
  * in it. The runners who are offered are those who can take a place in it
  * (`canTakePlace`: not the owner, nobody who has a place of this kind already,
  * and nobody once it is full). `offers` are those of the event, of both kinds,
- * which is what that depends on. The server has the last word.
+ * which is what that depends on. The server has the last word. Once someone is
+ * put in the offer, `onAdded` is called, just before `onClose`. The offer is
+ * missing when the page no longer has it (somebody deleted it while the window
+ * was open): there is nothing to show then, and the page closes the window.
  */
 export function AddToOfferDialog({
   open,
   onClose,
+  onAdded,
   eventId,
   offers,
   offer,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Called when the place is created, just before `onClose`. */
+  onAdded?: () => void;
   eventId: string;
   offers: OfferView[];
-  offer: OfferView;
+  offer: OfferView | undefined;
 }) {
   const { t } = useI18n();
   return (
     <Dialog open={open} onClose={onClose} title={t.offers.addSomeoneTitle}>
-      <AddToOfferForm eventId={eventId} offers={offers} offer={offer} onClose={onClose} />
+      {offer && (
+        <AddToOfferForm
+          eventId={eventId}
+          offers={offers}
+          offer={offer}
+          onClose={onClose}
+          onAdded={onAdded}
+        />
+      )}
     </Dialog>
   );
 }
@@ -42,11 +56,13 @@ function AddToOfferForm({
   offers,
   offer,
   onClose,
+  onAdded,
 }: {
   eventId: string;
   offers: OfferView[];
   offer: OfferView;
   onClose: () => void;
+  onAdded: (() => void) | undefined;
 }) {
   const { t } = useI18n();
   const runners = useRunners();
@@ -96,6 +112,7 @@ function AddToOfferForm({
       setMessage(describeError(t, err));
       return;
     }
+    onAdded?.();
     onClose();
   }
 

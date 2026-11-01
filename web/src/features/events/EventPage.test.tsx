@@ -958,6 +958,15 @@ test("EventPage — Alice, auteur de l'événement : J'y vais, Ajouter quelqu'un
   await expect.element(screen.getByRole("button", { name: fr.common.delete })).toBeVisible();
 });
 
+test("EventPage — Ajouter quelqu'un de la page est décrit par le titre de l'événement : les offres ont le leur", async () => {
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  await expect
+    .element(screen.getByRole("button", { name: fr.participation.addSomeone, exact: true }))
+    .toHaveAccessibleDescription("Trail des Crêtes");
+});
+
 test("EventPage — Bob, qui n'est pas l'auteur, n'a pas Supprimer mais le reste", async () => {
   signIn("bob");
   const { screen } = await renderPage();

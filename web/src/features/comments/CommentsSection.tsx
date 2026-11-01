@@ -172,6 +172,8 @@ function CommentItem({
   const { t } = useI18n();
   const { comment, author } = view;
   const [editing, setEditing] = useState(false);
+  // The line of the author (the name, and when) describes the actions: they have the same names on every comment.
+  const authorId = useId();
   const editButton = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
 
@@ -198,7 +200,7 @@ function CommentItem({
           thumb="96x96"
           className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
         />
-        <div className="min-w-0">
+        <div id={authorId} className="min-w-0">
           <p className="font-medium break-words">{author.name}</p>
           <p className="text-sm text-neutral-600">
             <RelativeTime at={comment.created} />
@@ -229,6 +231,7 @@ function CommentItem({
                 <button
                   ref={editButton}
                   type="button"
+                  aria-describedby={authorId}
                   onClick={() => {
                     setEditing(true);
                   }}
@@ -238,7 +241,12 @@ function CommentItem({
                 </button>
               )}
               {canDelete && (
-                <button type="button" onClick={onRemove} className={`${SECONDARY} ${DANGER_TEXT}`}>
+                <button
+                  type="button"
+                  aria-describedby={authorId}
+                  onClick={onRemove}
+                  className={`${SECONDARY} ${DANGER_TEXT}`}
+                >
                   {t.comments.remove}
                 </button>
               )}

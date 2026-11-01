@@ -47,8 +47,14 @@ const SEPARATOR = " · ";
  * focus from here), and neither is the title of an offer. An offer that has
  * just been proposed takes the button that opened its window away too (the
  * member has their place now, and there is no more to propose): the title of
- * the section has the focus then as well. The windows of the other actions give
- * it back to their button, which stays.
+ * the section has the focus then as well.
+ *
+ * The windows that change an offer or put someone in it are the section's, not
+ * the offer's, and are looked after the same way while they are open: they
+ * give the focus back to their button, which stays, unless the offer has gone
+ * in the meantime (somebody deleted it: the window goes with it, and the title
+ * of the section has the focus) or the button has (the last place was taken:
+ * the title of the offer has it).
  */
 export function OffersSection({
   view,
@@ -67,6 +73,8 @@ export function OffersSection({
   const root = useRef<HTMLElement>(null);
   // The offer the open confirmation is about, and what the member is doing that can take the focus away.
   const [removing, setRemoving] = useState<string | null>(null);
+  // The offer whose window is open, and which: the one that changes it, or the one that puts someone in it.
+  const [managing, setManaging] = useState<{ offer: string; action: "edit" | "add" } | null>(null);
   const [guard, setGuard] = useState<Guard | null>(null);
   // The guard that is history: it is not looked after any more.
   const finished = useRef<Guard | null>(null);
@@ -86,6 +94,9 @@ export function OffersSection({
   // The confirmation follows the list: the people it names are those who are in the offer now.
   const target = removing === null ? undefined : all?.find(({ offer }) => offer.id === removing);
   const names = target?.members.map(({ runner }) => runner.name) ?? [];
+  // The same for the windows of the owner: they close with the offer they are about.
+  const managed =
+    managing === null ? undefined : all?.find(({ offer }) => offer.id === managing.offer);
 
   /**
    * Marks the request of the member on this offer as over: the list has been
@@ -111,6 +122,24 @@ export function OffersSection({
   function cancel() {
     setRemoving(null);
     setGuard(null);
+  }
+
+  /** Opens the window that changes an offer, or puts someone in it, and looks after the offer until it is closed. */
+  function manage(offer: string, action: "edit" | "add") {
+    setManaging({ offer, action });
+    setGuard({ offer, to: "title", over: false });
+  }
+
+  /**
+   * Closes that window. What it did is history once it is saved (`over`: the
+   * next draw has the answer, and moves the focus if the button that opened the
+   * window went with it); a window that was only closed leaves nothing in
+   * waiting, and its button, which stays, gets the focus back from the browser.
+   */
+  function closeManaging() {
+    const offer = managing?.offer;
+    setManaging(null);
+    setGuard((current) => (current && current.offer === offer && !current.over ? null : current));
   }
 
   // The focus is only moved when it has been lost, never when the member has
@@ -168,6 +197,9 @@ export function OffersSection({
                   event={view}
                   me={me}
                   guarded={guarded}
+                  onManage={(action) => {
+                    manage(offerView.offer.id, action);
+                  }}
                   onDelete={() => {
                     // The offer goes with the confirmation, and with the button that opened it.
                     setRemoving(offerView.offer.id);
@@ -216,6 +248,26 @@ export function OffersSection({
         }}
         view={view}
         kind={kind}
+      />
+      <OfferDialog
+        open={managing?.action === "edit" && managed !== undefined}
+        onClose={closeManaging}
+        onSaved={() => {
+          if (managing) over(managing.offer);
+        }}
+        view={view}
+        kind={kind}
+        offer={managed}
+      />
+      <AddToOfferDialog
+        open={managing?.action === "add" && managed !== undefined}
+        onClose={closeManaging}
+        onAdded={() => {
+          if (managing) over(managing.offer);
+        }}
+        eventId={eventId}
+        offers={all ?? []}
+        offer={managed}
       />
       <Dialog
         open={target !== undefined}
@@ -286,6 +338,7 @@ function OfferItem({
   event,
   me,
   guarded,
+  onManage,
   onDelete,
 }: {
   view: OfferView;
@@ -295,6 +348,8 @@ function OfferItem({
   me: Me | null;
   /** Runs a request on this offer, and has the section look after the focus until the page shows the answer. */
   guarded: (offer: string, to: FocusTo, request: () => Promise<unknown>) => Promise<void>;
+  /** Opens the window of the section that changes the offer, or puts someone in it. */
+  onManage: (action: "edit" | "add") => void;
   onDelete: () => void;
 }) {
   const { t, f } = useI18n();
@@ -305,9 +360,6 @@ function OfferItem({
   const take = useTakePlace(eventId);
   const leave = useLeavePlace(eventId);
   const [message, setMessage] = useState<string | null>(null);
-  // The windows of the owner and the admin: they give the focus back to their button when they close.
-  const [editing, setEditing] = useState(false);
-  const [adding, setAdding] = useState(false);
   // Set on the spot: the state of a mutation is there after a render only, and two taps can come before it.
   const acting = useRef(false);
   const busy = take.isPending || leave.isPending;
@@ -411,12 +463,14 @@ function OfferItem({
           {message}
         </p>
       )}
+      {/* The buttons that every offer has under the same name are described by the title of their offer. */}
       {me && (canTake || mine || manage) && (
         <div className="flex flex-wrap gap-2">
           {canTake && (
             <button
               data-offer-focus="toggle"
               type="button"
+              aria-describedby={titleId}
               aria-disabled={busy || undefined}
               onClick={() => {
                 void run(
@@ -433,6 +487,7 @@ function OfferItem({
             <button
               data-offer-focus="toggle"
               type="button"
+              aria-describedby={titleId}
               aria-disabled={busy || undefined}
               onClick={() => {
                 const place = members.find(({ runner }) => runner.id === me.runnerId);
@@ -445,52 +500,40 @@ function OfferItem({
           )}
           {manage && (
             <>
+              {/* Nobody can be put in an offer that is full: the card says so. */}
+              {!isFull(view) && (
+                <button
+                  type="button"
+                  aria-describedby={titleId}
+                  onClick={() => {
+                    onManage("add");
+                  }}
+                  className={SECONDARY}
+                >
+                  {t.offers.addSomeone}
+                </button>
+              )}
               <button
                 type="button"
+                aria-describedby={titleId}
                 onClick={() => {
-                  setAdding(true);
-                }}
-                className={SECONDARY}
-              >
-                {t.offers.addSomeone}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(true);
+                  onManage("edit");
                 }}
                 className={SECONDARY}
               >
                 {t.offers.edit}
               </button>
-              <button type="button" onClick={onDelete} className={`${SECONDARY} ${DANGER_TEXT}`}>
+              <button
+                type="button"
+                aria-describedby={titleId}
+                onClick={onDelete}
+                className={`${SECONDARY} ${DANGER_TEXT}`}
+              >
                 {t.offers.delete}
               </button>
             </>
           )}
         </div>
-      )}
-      {manage && (
-        <>
-          <AddToOfferDialog
-            open={adding}
-            onClose={() => {
-              setAdding(false);
-            }}
-            eventId={eventId}
-            offers={offers}
-            offer={view}
-          />
-          <OfferDialog
-            open={editing}
-            onClose={() => {
-              setEditing(false);
-            }}
-            view={event}
-            kind={kind}
-            offer={view}
-          />
-        </>
       )}
     </article>
   );

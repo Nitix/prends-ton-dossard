@@ -193,6 +193,8 @@ function RegisterLink({ href, className }: { href: string; className?: string })
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const { t, f } = useI18n();
   const today = useToday();
+  // The title describes « Ajouter quelqu'un » of the page, which the offers have a button of the same name to put someone in a car.
+  const titleId = useId();
   const { event, formats, start, end } = view;
   const [opened, setOpened] = useState<Opened | null>(null);
   const close = () => {
@@ -217,7 +219,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   return (
     <article ref={root} className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 data-focus={PAGE_TITLE} tabIndex={-1} className="text-2xl font-semibold">
+        <h1 id={titleId} data-focus={PAGE_TITLE} tabIndex={-1} className="text-2xl font-semibold">
           {event.name}
         </h1>
         <p className="text-neutral-600">
@@ -258,6 +260,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
         {me && formats.length > 0 && (
           <button
             type="button"
+            aria-describedby={titleId}
             onClick={() => {
               setOpened("add");
             }}

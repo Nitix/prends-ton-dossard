@@ -1289,6 +1289,52 @@ describe("managing an offer", () => {
     await expect.element(addSomeone(offerOf(boss.screen, "Alice"))).toBeVisible();
   });
 
+  test("OffersSection — Ajouter quelqu'un n'est pas proposé sur une offre pleine, mais Modifier et Supprimer le restent", async () => {
+    // Alice's car has 2 seats, and Sam and Bob are in them; Bob's lodging gives no limit.
+    rows = [
+      offer("ride1", "ride", alice, { place: "Lyon", seats: 2 }, [
+        ["m-sam", sam],
+        ["m-bob", bob],
+      ]),
+      lodging(),
+    ];
+    const rides = await renderSection({ me: meAlice });
+    const full = offerOf(rides.screen, "Alice");
+    await expect.element(full.getByText(fr.offers.full)).toBeVisible();
+    await expect.element(addSomeone(full)).not.toBeInTheDocument();
+    await expect.element(edit(full)).toBeVisible();
+    await expect.element(deleteButton(full)).toBeVisible();
+    await rides.screen.unmount();
+
+    // An offer with no limit is never full: an admin can always put someone in.
+    const lodgings = await renderSection({ me: meAdmin, kind: "lodging" });
+    await expect.element(addSomeone(offerOf(lodgings.screen, "Bob"))).toBeVisible();
+  });
+
+  test("OffersSection — les boutons qui se répètent d'une offre à l'autre sont décrits par le titre de leur offre", async () => {
+    rows = [
+      offer("r1", "ride", alice, { place: "Lyon", seats: 3 }),
+      offer("r2", "ride", sam, { place: "Paris", seats: 3 }),
+    ];
+    // The admin manages both offers: three buttons each, with the same names.
+    const boss = await renderSection({ me: meAdmin });
+    for (const owner of ["Alice", "Sam"]) {
+      const one = offerOf(boss.screen, owner);
+      await expect.element(one).toBeVisible();
+      for (const name of [fr.offers.addSomeone, fr.offers.edit, fr.offers.delete]) {
+        await expect.element(button(one, name)).toHaveAccessibleDescription(owner);
+      }
+    }
+    await boss.screen.unmount();
+
+    // « Je monte » is on each offer where a place can be taken.
+    const guest = await renderSection({ me: meNina });
+    for (const owner of ["Alice", "Sam"]) {
+      const one = offerOf(guest.screen, owner);
+      await expect.element(button(one, fr.offers.take.ride)).toHaveAccessibleDescription(owner);
+    }
+  });
+
   test("OffersSection — Modifier ouvre le formulaire prérempli, enregistre, et rend le focus à Modifier", async () => {
     const { screen } = await renderSection({ me: meAlice });
     const one = offerOf(screen, "Alice");
@@ -1381,6 +1427,110 @@ describe("managing an offer", () => {
     expect(people(offerOf(screen, "Alice"))).toEqual(["Bob", "Nina", "Sam"]);
     await expect.element(dialog).not.toBeInTheDocument();
     await expect.element(addSomeone(offerOf(screen, "Alice"))).toHaveFocus();
+  });
+
+  test("OffersSection — Ajouter quelqu'un qui remplit l'offre : le bouton s'en va avec la dernière place, et le focus va sur le titre de l'offre", async () => {
+    rows = [
+      offer("ride1", "ride", alice, { place: "Lyon", seats: 3 }, [
+        ["m-sam", sam],
+        ["m-bob", bob],
+      ]),
+    ];
+    const { screen } = await renderSection({ me: meAlice });
+    const one = offerOf(screen, "Alice");
+    await expect.element(one).toBeVisible();
+    await addSomeone(one).click();
+    const dialog = screen.getByRole("dialog", { name: fr.offers.addSomeoneTitle });
+    const who = dialog.getByLabelText(fr.participation.runner);
+    await expect.element(who).toBeVisible();
+    await who.selectOptions(nina.id);
+
+    await dialog.getByRole("button", { name: fr.participation.addSubmit, exact: true }).click();
+
+    await expect.element(offerOf(screen, "Alice").getByText(fr.offers.full)).toBeVisible();
+    await expect.element(dialog).not.toBeInTheDocument();
+    // The button that opened the window is gone with the last place: the title of the offer has the focus.
+    await expect.element(addSomeone(offerOf(screen, "Alice"))).not.toBeInTheDocument();
+    await expect.element(titleOf(screen, "Alice")).toHaveFocus();
+  });
+
+  test("OffersSection — Ajouter quelqu'un : la page montre la réponse bien après la fin de la requête, et le focus la suit", async () => {
+    rows = [
+      offer("ride1", "ride", alice, { place: "Lyon", seats: 3 }, [
+        ["m-sam", sam],
+        ["m-bob", bob],
+      ]),
+    ];
+    // The request is over, and the list is in the cache, when the page draws it a moment later.
+    notifyManager.setScheduler((callback) => {
+      setTimeout(callback, 150);
+    });
+    try {
+      const { screen } = await renderSection({ me: meAlice });
+      await expect.element(offerOf(screen, "Alice")).toBeVisible();
+      await addSomeone(offerOf(screen, "Alice")).click();
+      const dialog = screen.getByRole("dialog", { name: fr.offers.addSomeoneTitle });
+      const who = dialog.getByLabelText(fr.participation.runner);
+      await expect.element(who).toBeVisible();
+      await who.selectOptions(nina.id);
+
+      await dialog.getByRole("button", { name: fr.participation.addSubmit, exact: true }).click();
+
+      await expect.element(dialog).not.toBeInTheDocument();
+      await expect.element(titleOf(screen, "Alice")).toHaveFocus();
+    } finally {
+      notifyManager.setScheduler((callback) => {
+        setTimeout(callback, 0);
+      });
+    }
+  });
+
+  test("OffersSection — une offre supprimée par un autre pendant que sa fenêtre Modifier est ouverte : le focus va sur le titre de la section", async () => {
+    const { screen, queryClient } = await renderSection({ me: meAlice });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+    await edit(offerOf(screen, "Alice")).click();
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleEdit });
+    await expect.element(dialog).toBeVisible();
+
+    rows = [];
+    await queryClient.invalidateQueries({ queryKey: ["offers", "event"] });
+
+    // The offer goes, and the window with it: the title of the section has the focus, never the page.
+    await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(sectionTitle(screen)).toHaveFocus();
+  });
+
+  test("OffersSection — une offre supprimée par un autre pendant que sa fenêtre Ajouter quelqu'un est ouverte : le focus va sur le titre de la section", async () => {
+    const { screen, queryClient } = await renderSection({ me: meAlice });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+    await addSomeone(offerOf(screen, "Alice")).click();
+    const dialog = screen.getByRole("dialog", { name: fr.offers.addSomeoneTitle });
+    await expect.element(dialog).toBeVisible();
+
+    rows = [];
+    await queryClient.invalidateQueries({ queryKey: ["offers", "event"] });
+
+    await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(sectionTitle(screen)).toHaveFocus();
+  });
+
+  test("OffersSection — fermer la fenêtre Modifier ne laisse rien en attente : une offre supprimée plus tard ne prend pas le focus", async () => {
+    const { screen, queryClient } = await renderSection({ me: meAlice });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+    await edit(offerOf(screen, "Alice")).click();
+    await screen.getByRole("dialog").getByRole("button", { name: fr.common.cancel }).click();
+    await expect.element(edit(offerOf(screen, "Alice"))).toHaveFocus();
+
+    // Nothing has the focus, and somebody else deletes the offer: not the member's action.
+    if (!(document.activeElement instanceof HTMLElement)) throw new Error("nothing is focused");
+    document.activeElement.blur();
+    rows = [];
+    await queryClient.invalidateQueries({ queryKey: ["offers", "event"] });
+
+    await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    expect(focused()).toBe(document.body);
   });
 
   test("OffersSection — l'admin place quelqu'un dans la voiture d'un autre", async () => {

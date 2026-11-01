@@ -483,6 +483,27 @@ describe("editing and deleting", () => {
     await expect.element(edit(adminPage.screen, "Bob")).not.toBeInTheDocument();
   });
 
+  test("CommentsSection — Modifier et Supprimer sont décrits par la ligne de leur auteur, pour qu'on distingue ceux d'un commentaire à l'autre", async () => {
+    // The admin deletes any comment: two buttons with the same name, one under each comment.
+    const boss = await renderSection({ me: meAdmin });
+    await expect.element(heading(boss.screen, 2)).toBeVisible();
+    // The author, and when: two comments of one author are told apart too.
+    await expect
+      .element(remove(boss.screen, "Alice"))
+      .toHaveAccessibleDescription(/^Alice\s+il y a 2 heures/);
+    await expect
+      .element(remove(boss.screen, "Bob"))
+      .toHaveAccessibleDescription(/^Bob\s+il y a 5 minutes/);
+    await boss.screen.unmount();
+
+    // The author changes her own.
+    const author = await renderSection({ me: meAlice });
+    await expect.element(heading(author.screen, 2)).toBeVisible();
+    await expect
+      .element(edit(author.screen, "Alice"))
+      .toHaveAccessibleDescription(/^Alice\s+il y a 2 heures/);
+  });
+
   test("CommentsSection — modifier envoie le nouveau texte ; Annuler rend le focus", async () => {
     const { screen } = await renderSection();
     await expect.element(heading(screen, 2)).toBeVisible();
