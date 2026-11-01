@@ -15,42 +15,53 @@ type Asking = "renew" | "remove";
 
 /**
  * "Calendar" on the profile page: the link that a calendar app subscribes to.
- * Without a link, a button makes one. The link is shown when it is made, in a
- * field to copy it from, for as long as the page stays open: the server keeps
- * its fingerprint only, so it cannot say it again. After that the page only says
- * that there is one, and offers a new one (the old one stops working) or to
- * delete it, each after a confirmation.
+ * Without a link, a button makes one, and the link is shown at once, in a field
+ * to copy it from. With a link, the page says so and offers to show it again
+ * (the server keeps it, and the status carries its address), a new one (the old
+ * one stops working) or to delete it, the last two after a confirmation, and
+ * always: also when the link has just been made. A link made before the server
+ * kept the address cannot be shown: the page says so, and the member makes a
+ * new one.
  *
- * The focus never falls to the page. A new link takes it, selected, as the
- * next thing to do is to copy it; when the link is deleted, the button that had
- * it goes, and the title of the section takes it; when the status could not be
- * read and the member asks again, the title takes it as they tap (see
- * `LoadFailure`), and not when the status comes back, which can be on its own
- * when the window is focused again: the page must not scroll to the title then;
- * cancelling a confirmation gives it back to the button that opened it.
+ * The focus never falls to the page. A link that is shown takes it, selected,
+ * as the next thing to do is to copy it (the button that was tapped to show it
+ * is gone); when the link is deleted, the button that had it goes, and the title
+ * of the section takes it; when the status could not be read and the member asks
+ * again, the title takes it as they tap (see `LoadFailure`), and not when the
+ * status comes back, which can be on its own when the window is focused again:
+ * the page must not scroll to the title then; cancelling a confirmation gives it
+ * back to the button that opened it.
  */
 export function CalendarSection() {
   const { t, lang } = useI18n();
   const status = useCalendarStatus();
   const create = useCreateCalendar();
   const remove = useDeleteCalendar();
-  // The address of the link that has just been made. It is kept in this state
-  // only, and goes with the page.
-  const [link, setLink] = useState<string | null>(null);
+  // Whether the member has the link on screen: they asked for it, or made it.
+  // The address is the one of the status, which a new link replaces.
+  const [shown, setShown] = useState(false);
   const [asking, setAsking] = useState<Asking | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const field = useRef<HTMLInputElement>(null);
   // The button that opened the window that asks first.
   const opener = useRef<HTMLElement | null>(null);
 
+  // The address that the field is to take the focus for, once it shows it: the
+  // one that was asked for, or that has just been made. The status takes the
+  // address of a new link a moment after the answer, so that the field can have
+  // the old one when the member asks for the new one: it waits for the right one.
+  const focusFor = useRef<string | null>(null);
+
   // From the section, not from the field: the window that asked first closes in
   // its own effect, which runs before this one. A modal window makes the page
   // behind it inert, and the field cannot take the focus until it is closed.
+  const url = status.data?.url ?? "";
   useEffect(() => {
-    if (link === null) return;
+    if (!shown || asking !== null || url === "" || focusFor.current !== url) return;
+    focusFor.current = null;
     field.current?.focus();
     field.current?.select();
-  }, [link]);
+  }, [shown, asking, url]);
 
   const unreadable = status.isError && status.data === undefined;
   // The browser gives the focus back to the button that opened a window when it
@@ -67,29 +78,42 @@ export function CalendarSection() {
   const cancel = () => {
     setAsking(null);
   };
+  const show = () => {
+    focusFor.current = url;
+    setShown(true);
+  };
   const makeLink = async () => {
     const made = await create.mutateAsync(lang);
-    setLink(made.url);
+    focusFor.current = made.url;
+    setShown(true);
   };
   // Both states change in the same step, so that the page draws once: the window
   // is closed by the time the field takes the focus (see the effect above).
   const renew = async () => {
     const made = await create.mutateAsync(lang);
-    setLink(made.url);
+    focusFor.current = made.url;
+    setShown(true);
     setAsking(null);
   };
   const deleteLink = async () => {
     await remove.mutateAsync();
+    setShown(false);
     setAsking(null);
   };
 
   return (
     <Section title={t.calendar.title} headingRef={heading}>
-      {link !== null && <LinkField url={link} inputRef={field} />}
-      {link === null && status.data?.exists === true && (
+      {status.data?.exists === true && (
         <>
           <p>{t.calendar.exists}</p>
+          {shown && url !== "" && <LinkField url={url} inputRef={field} />}
+          {url === "" && <p>{t.calendar.legacy}</p>}
           <div className="flex flex-wrap gap-2">
+            {!shown && url !== "" && (
+              <button type="button" onClick={show} className={PRIMARY}>
+                {t.calendar.show}
+              </button>
+            )}
             <button
               type="button"
               onClick={(event) => {
@@ -111,11 +135,9 @@ export function CalendarSection() {
           </div>
         </>
       )}
-      {link === null && status.data?.exists === false && <CreateLink make={makeLink} />}
-      {link === null && unreadable && <LoadFailure onRetry={status.refetch} heading={heading} />}
-      {link === null && status.data === undefined && !unreadable && (
-        <output>{t.common.loading}</output>
-      )}
+      {status.data?.exists === false && <CreateLink make={makeLink} />}
+      {unreadable && <LoadFailure onRetry={status.refetch} heading={heading} />}
+      {status.data === undefined && !unreadable && <output>{t.common.loading}</output>}
 
       <Dialog open={asking === "renew"} onClose={cancel} title={t.calendar.renew}>
         <ConfirmForm
@@ -235,10 +257,10 @@ function ConfirmForm({
 }
 
 /**
- * The link that has just been made, in a field that cannot be typed in, with
- * a button to copy it and what to do with it. If the browser cannot copy (it
- * refuses, or has no clipboard), the text is selected for the member to copy it
- * by hand, and nothing says it was copied.
+ * The link, in a field that cannot be typed in, with a button to copy it and
+ * what to do with it. If the browser cannot copy (it refuses, or has no
+ * clipboard), the text is selected for the member to copy it by hand, and
+ * nothing says it was copied.
  */
 function LinkField({
   url,
@@ -249,7 +271,6 @@ function LinkField({
 }) {
   const { t } = useI18n();
   const toast = useToast();
-  const onceId = useId();
   const helpId = useId();
 
   async function copy() {
@@ -271,16 +292,13 @@ function LinkField({
           readOnly
           value={url}
           aria-label={t.calendar.title}
-          aria-describedby={`${onceId} ${helpId}`}
+          aria-describedby={helpId}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 text-base"
         />
         <button type="button" onClick={() => void copy()} className={SECONDARY}>
           {t.calendar.copy}
         </button>
       </div>
-      <p id={onceId} className="text-sm font-medium">
-        {t.calendar.shownOnce}
-      </p>
       <p id={helpId} className="text-sm text-neutral-600">
         {t.calendar.help}
       </p>

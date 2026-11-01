@@ -1599,3 +1599,102 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 	}
 	saveFeed(fx.Alice)
 }
+
+// The migration 9h adds the token itself to the calendar link, next to its
+// hash, so that the site can show the link again. The field is hidden and not
+// required: the links made before the migration have none. Its rollback takes
+// the field away, with the tokens, and keeps the links, which go on working
+// through their hash; applying it again gives the field back, empty.
+func TestMigrations_CalendarTokenDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9h_calendar_token.go")
+
+	field := func() core.Field {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("calendar_feeds")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Fields.GetByName("token")
+	}
+	checkField := func(when string) {
+		t.Helper()
+		token, ok := field().(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: calendar_feeds.token must be a text field, got %T", when, field())
+		}
+		// Hidden, like the hash: no API response shows it. Not required: a link
+		// made before the migration has none.
+		if token.Required || !token.Hidden {
+			t.Errorf("%s: calendar_feeds.token = required %v, hidden %v; want optional and hidden", when, token.Required, token.Hidden)
+		}
+	}
+	// hashes is the hash that each account's link was saved with.
+	hashes := map[string]string{}
+	saveLink := func(user *core.Record, hash, token string) {
+		t.Helper()
+		values := map[string]any{"user": user.Id, "token_hash": hash, "lang": "fr"}
+		if token != "" {
+			values["token"] = token
+		}
+		mustSave(t, app, "calendar_feeds", values)
+		hashes[user.Id] = hash
+	}
+	linkOf := func(user *core.Record) *core.Record {
+		t.Helper()
+		link, err := app.FindFirstRecordByData("calendar_feeds", "user", user.Id)
+		if err != nil {
+			t.Fatalf("the link of %s is gone: %v", user.Id, err)
+		}
+		return link
+	}
+
+	checkField("as created")
+	// One link made before the migration (no token), one after.
+	saveLink(fx.Alice, "alices-hash", "")
+	saveLink(fx.Bob, "bobs-hash", "bobs-token")
+	if got := linkOf(fx.Alice).GetString("token"); got != "" {
+		t.Errorf("a link saved without a token has token %q, want it empty", got)
+	}
+	if got := linkOf(fx.Bob).GetString("token"); got != "bobs-token" {
+		t.Errorf("the token of Bob's link is %q, want bobs-token", got)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with tokens: %v", err)
+	}
+	if field() != nil {
+		t.Error("calendar_feeds.token must be gone after the rollback")
+	}
+	// The links stay as they were, token apart: the hash is what finds them.
+	for _, user := range []*core.Record{fx.Alice, fx.Bob} {
+		link := linkOf(user)
+		if link.GetString("token_hash") != hashes[user.Id] || link.GetString("lang") != "fr" {
+			t.Errorf("after the rollback, the link of %s changed beyond its token: %v", user.Id, link.FieldsData())
+		}
+	}
+	// Rolling back again, with nothing left to remove, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	for _, user := range []*core.Record{fx.Alice, fx.Bob} {
+		if got := linkOf(user).GetString("token"); got != "" {
+			t.Errorf("after applying again, the link of %s has token %q, want it empty", user.Id, got)
+		}
+	}
+	// The field takes a token again.
+	alice := linkOf(fx.Alice)
+	alice.Set("token", "new-token")
+	if err := app.Save(alice); err != nil {
+		t.Fatal(err)
+	}
+	if got := linkOf(fx.Alice).GetString("token"); got != "new-token" {
+		t.Errorf("after applying again, the token is %q, want new-token", got)
+	}
+}

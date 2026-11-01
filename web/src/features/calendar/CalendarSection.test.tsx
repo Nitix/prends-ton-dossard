@@ -34,25 +34,34 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, "clipboard");
 });
 
+/** What the server says of an account that has no link. */
+const NONE = { exists: false, url: "" };
+/** A link whose address is kept, so that it can be shown. */
+const KEPT = { exists: true, url: link(0) };
+/** A link made before the address was kept: there is one, and its address is empty. */
+const LEGACY = { exists: true, url: "" };
+
 /**
  * The server of the link of the account, as far as the section can tell: it
- * says whether there is a link, makes a new one (each is different) when it is
- * asked to, and deletes it.
+ * says whether there is a link and its address, makes a new one (each is
+ * different, numbered from 1) when it is asked to, and deletes it.
  */
-function serve(options: { exists: boolean }) {
-  let exists = options.exists;
+function serve(state: { exists: boolean; url: string }) {
+  let { exists, url } = state;
   let made = 0;
   mocks.send.mockImplementation((path, request) => {
     if (path !== PATH) return Promise.reject(new Error(`unexpected request to ${path}`));
     switch (request.method) {
       case "GET":
-        return Promise.resolve({ exists });
+        return Promise.resolve({ exists, url });
       case "POST":
         exists = true;
         made += 1;
-        return Promise.resolve({ url: link(made) });
+        url = link(made);
+        return Promise.resolve({ url });
       case "DELETE":
         exists = false;
+        url = "";
         return Promise.resolve({});
       default:
         return Promise.reject(new Error(`unexpected method ${String(request.method)}`));
@@ -115,8 +124,8 @@ function inputOf(locator: { element(): Element }): HTMLInputElement {
 
 // --- Creating the link ---
 
-test("CalendarSection — créer affiche le lien une fois, avec Copier", async () => {
-  serve({ exists: false });
+test("CalendarSection — créer affiche le lien, avec Copier", async () => {
+  serve(NONE);
   const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
   const screen = await mount();
 
@@ -131,9 +140,10 @@ test("CalendarSection — créer affiche le lien une fois, avec Copier", async (
   // The link, in a field that cannot be typed in, selected, with what to do with it.
   await expectSelected(screen, link(1));
   await expect.element(field(screen)).toHaveAttribute("readonly");
-  await expect.element(section(screen).getByText(fr.calendar.shownOnce)).toBeVisible();
   await expect.element(section(screen).getByText(fr.calendar.help)).toBeVisible();
   await expect.element(button(screen, fr.calendar.create)).not.toBeInTheDocument();
+  // It is shown already: there is nothing to ask for.
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
   expect(changes()).toEqual([["POST", { lang: "fr" }]]);
 
   await button(screen, fr.calendar.copy).click();
@@ -144,17 +154,125 @@ test("CalendarSection — créer affiche le lien une fois, avec Copier", async (
     button(screen, fr.calendar.copy).element().getBoundingClientRect().height,
   ).toBeGreaterThanOrEqual(44);
 
-  // The server only keeps the fingerprint of the token: once the page is left, the
-  // link is not shown again, only that there is one.
+  // Once the page is left, the link is not on screen any more: the page says there
+  // is one, and shows it again when asked to.
   await screen.unmount();
   const again = await mount();
   await expect.element(section(again).getByText(fr.calendar.exists)).toBeVisible();
+  await expect.element(button(again, fr.calendar.show)).toBeVisible();
   await expect.element(field(again)).not.toBeInTheDocument();
-  expect(again.container.textContent).not.toContain("token-1");
+});
+
+// --- Showing the link again ---
+
+test("CalendarSection — « Afficher le lien » montre le lien avec Copier", async () => {
+  serve(KEPT);
+  const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const screen = await mount();
+
+  await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
+  // The link is not on screen until it is asked for.
+  await expect.element(field(screen)).not.toBeInTheDocument();
+  await expect.element(section(screen).getByText(fr.calendar.legacy)).not.toBeInTheDocument();
+  await expect.element(button(screen, fr.calendar.create)).not.toBeInTheDocument();
+  const show = button(screen, fr.calendar.show);
+  await expect.element(show).toBeVisible();
+  expect(show.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+
+  await show.click();
+
+  // The link, in a field that cannot be typed in, selected as the next thing to
+  // do is to copy it, with what to do with it. Nothing was asked of the server.
+  await expectSelected(screen, link(0));
+  await expect.element(field(screen)).toHaveAttribute("readonly");
+  await expect.element(section(screen).getByText(fr.calendar.help)).toBeVisible();
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
+  expect(changes()).toEqual([]);
+
+  await button(screen, fr.calendar.copy).click();
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(link(0));
+  await expect.element(screen.getByText(fr.calendar.copied)).toBeVisible();
+  expect(
+    button(screen, fr.calendar.copy).element().getBoundingClientRect().height,
+  ).toBeGreaterThanOrEqual(44);
+});
+
+test("CalendarSection — Nouveau lien et Supprimer restent proposés, même après la création", async () => {
+  serve(NONE);
+  const screen = await mount();
+  await expect.element(button(screen, fr.calendar.renew)).not.toBeInTheDocument();
+  await expect.element(button(screen, fr.calendar.remove)).not.toBeInTheDocument();
+
+  await button(screen, fr.calendar.create).click();
+
+  // The link is on screen, and the two actions on it are still there.
+  await expectSelected(screen, link(1));
+  for (const name of [fr.calendar.renew, fr.calendar.remove]) {
+    const opener = button(screen, name);
+    await expect.element(opener).toBeVisible();
+    expect(opener.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+
+  // A new link, which asks first: the field then shows the new address, not the
+  // one that is replaced, and the two actions are still there.
+  await button(screen, fr.calendar.renew).click();
+  await inDialog(screen, fr.calendar.renew).click();
+  await expectSelected(screen, link(2));
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
+  await expect.element(button(screen, fr.calendar.renew)).toBeVisible();
+  await expect.element(button(screen, fr.calendar.remove)).toBeVisible();
+  expect(changes()).toEqual([
+    ["POST", { lang: "fr" }],
+    ["POST", { lang: "fr" }],
+  ]);
+
+  // The page that is left and opened again shows the last address when asked.
+  await screen.unmount();
+  const again = await mount();
+  await button(again, fr.calendar.show).click();
+  await expectSelected(again, link(2));
+});
+
+test("CalendarSection — un lien ancien invite à en créer un nouveau", async () => {
+  serve(LEGACY);
+  const screen = await mount();
+
+  // There is a link, which cannot be shown: the page says so, and offers no
+  // button to show it.
+  await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
+  await expect.element(section(screen).getByText(fr.calendar.legacy)).toBeVisible();
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
+  await expect.element(field(screen)).not.toBeInTheDocument();
+  // A new link, or none, are what can be done with it.
+  for (const name of [fr.calendar.renew, fr.calendar.remove]) {
+    await expect.element(button(screen, name)).toBeVisible();
+  }
+
+  await button(screen, fr.calendar.renew).click();
+  await inDialog(screen, fr.calendar.renew).click();
+
+  // The new link has an address: it is shown, and the text that said it could
+  // not be is gone.
+  await expectSelected(screen, link(1));
+  await expect.element(section(screen).getByText(fr.calendar.legacy)).not.toBeInTheDocument();
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
+  expect(changes()).toEqual([["POST", { lang: "fr" }]]);
+});
+
+test("CalendarSection — un lien ancien peut être supprimé", async () => {
+  serve(LEGACY);
+  const screen = await mount();
+
+  await button(screen, fr.calendar.remove).click();
+  await inDialog(screen, fr.calendar.remove).click();
+
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  await expect.element(section(screen).getByText(fr.calendar.legacy)).not.toBeInTheDocument();
+  expect(changes()).toEqual([["DELETE", undefined]]);
 });
 
 test("CalendarSection — un lien actif propose Nouveau lien et Supprimer, avec confirmation", async () => {
-  serve({ exists: true });
+  serve(KEPT);
   const screen = await mount();
 
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
@@ -197,7 +315,7 @@ test("CalendarSection — un lien actif propose Nouveau lien et Supprimer, avec 
 });
 
 test("CalendarSection — annuler rend le focus au bouton même quand le navigateur ne le lui avait pas donné", async () => {
-  serve({ exists: true });
+  serve(KEPT);
   const screen = await mount();
   await expect.element(button(screen, fr.calendar.renew)).toBeVisible();
 
@@ -212,7 +330,7 @@ test("CalendarSection — annuler rend le focus au bouton même quand le navigat
 });
 
 test("CalendarSection — Nouveau lien confirmé remplace le lien et le montre, sélectionné", async () => {
-  serve({ exists: true });
+  serve(KEPT);
   const screen = await mount();
 
   await button(screen, fr.calendar.renew).click();
@@ -220,15 +338,33 @@ test("CalendarSection — Nouveau lien confirmé remplace le lien et le montre, 
 
   await expectSelected(screen, link(1));
   await expect.element(dialog(screen)).not.toBeInTheDocument();
-  await expect.element(section(screen).getByText(fr.calendar.shownOnce)).toBeVisible();
-  // The old state is gone: it is the new link that is on the page.
-  await expect.element(section(screen).getByText(fr.calendar.exists)).not.toBeInTheDocument();
-  await expect.element(button(screen, fr.calendar.renew)).not.toBeInTheDocument();
+  // It is the new link that is on the page, and it is the one there is: the
+  // old one is not shown any more, and there is nothing to ask for.
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
+  expect(section(screen).element().textContent).not.toContain(link(0));
+  await expect.element(button(screen, fr.calendar.renew)).toBeVisible();
+  await expect.element(button(screen, fr.calendar.remove)).toBeVisible();
+  expect(changes()).toEqual([["POST", { lang: "fr" }]]);
+});
+
+test("CalendarSection — Nouveau lien confirmé, le lien étant déjà affiché, montre le nouveau et non l'ancien", async () => {
+  serve(KEPT);
+  const screen = await mount();
+  await button(screen, fr.calendar.show).click();
+  await expectSelected(screen, link(0));
+
+  await button(screen, fr.calendar.renew).click();
+  await inDialog(screen, fr.calendar.renew).click();
+
+  // The field was on the page already: it takes the new address, and the focus
+  // and the selection come to it once it has it.
+  await expectSelected(screen, link(1));
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
   expect(changes()).toEqual([["POST", { lang: "fr" }]]);
 });
 
 test("CalendarSection — Supprimer le lien confirmé le supprime, puis propose d'en créer un, et le focus va au titre", async () => {
-  serve({ exists: true });
+  serve(KEPT);
   const screen = await mount();
 
   await button(screen, fr.calendar.remove).click();
@@ -244,10 +380,31 @@ test("CalendarSection — Supprimer le lien confirmé le supprime, puis propose 
     .toHaveFocus();
 });
 
+test("CalendarSection — un lien affiché puis supprimé ne reste pas à l'écran, et le suivant s'affiche", async () => {
+  serve(KEPT);
+  const screen = await mount();
+  await button(screen, fr.calendar.show).click();
+  await expectSelected(screen, link(0));
+
+  await button(screen, fr.calendar.remove).click();
+  await inDialog(screen, fr.calendar.remove).click();
+
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  await expect.element(field(screen)).not.toBeInTheDocument();
+  await expect.element(button(screen, fr.calendar.renew)).not.toBeInTheDocument();
+
+  await button(screen, fr.calendar.create).click();
+  await expectSelected(screen, link(1));
+  expect(changes()).toEqual([
+    ["DELETE", undefined],
+    ["POST", { lang: "fr" }],
+  ]);
+});
+
 // --- The language ---
 
 test("CalendarSection — envoie la langue de l'interface", async () => {
-  serve({ exists: false });
+  serve(NONE);
   const screen = await mount(["en-GB"]);
 
   // The texts are in English, and so is the link that is asked for.
@@ -255,13 +412,14 @@ test("CalendarSection — envoie la langue de l'interface", async () => {
   await expect.element(section(screen)).toHaveAccessibleName(english.title);
   await button(screen, english.create).click();
   await expectSelected(screen, link(1));
-  await expect.element(screen.getByText(english.shownOnce)).toBeVisible();
   await expect.element(screen.getByText(english.help)).toBeVisible();
   expect(changes()).toEqual([["POST", { lang: "en" }]]);
 
-  // A new link too.
+  // The link is asked for again in English too, and a new one.
   await screen.unmount();
   const again = await mount(["en-GB"]);
+  await button(again, english.show).click();
+  await expectSelected(again, link(1));
   await button(again, english.renew).click();
   await expect.element(dialog(again).getByText(english.renewHint)).toBeVisible();
   await inDialog(again, english.renew).click();
@@ -274,7 +432,7 @@ test("CalendarSection — envoie la langue de l'interface", async () => {
   // And in French, French.
   await again.unmount();
   mocks.send.mockClear();
-  serve({ exists: false });
+  serve(NONE);
   const french = await mount(["fr-FR"]);
   await button(french, fr.calendar.create).click();
   await expectSelected(french, link(1));
@@ -300,7 +458,7 @@ test.each([
 ])(
   "CalendarSection — quand %s, le lien est sélectionné et « Lien copié » ne s'affiche pas",
   async (_case, breakClipboard) => {
-    serve({ exists: false });
+    serve(NONE);
     const screen = await mount();
     await button(screen, fr.calendar.create).click();
     await expectSelected(screen, link(1));
@@ -327,7 +485,7 @@ test("CalendarSection — tant que le statut charge, rien à toucher", async () 
   await expect.element(button(screen, fr.calendar.renew)).not.toBeInTheDocument();
   await expect.element(button(screen, fr.calendar.remove)).not.toBeInTheDocument();
 
-  status.resolve({ exists: false });
+  status.resolve(NONE);
   await expect.element(button(screen, fr.calendar.create)).toBeVisible();
 });
 
@@ -339,7 +497,7 @@ test("CalendarSection — un statut qu'on n'a pas pu lire le dit, et on peut ré
   // Not "create": it is not known whether there is a link.
   await expect.element(button(screen, fr.calendar.create)).not.toBeInTheDocument();
 
-  serve({ exists: true });
+  serve(KEPT);
   await button(screen, fr.common.retry).click();
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
   // The button went with the request: the title has the focus, not the page.
@@ -356,7 +514,7 @@ test("CalendarSection — un statut illisible relu par la fenêtre, sans « Rée
   const heading = section(screen).getByRole("heading", { name: fr.calendar.title });
 
   // The window gets the focus again: the status is read again by itself, and it comes.
-  serve({ exists: true });
+  serve(KEPT);
   window.dispatchEvent(new Event("visibilitychange"));
 
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
@@ -385,7 +543,7 @@ test("CalendarSection — « Réessayer » : le focus est sur le titre dès l'ap
     .toHaveFocus();
   // The first read, and one more.
   expect(reads()).toBe(2);
-  answer.resolve({ exists: true });
+  answer.resolve(KEPT);
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
   await expect
     .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
@@ -393,13 +551,13 @@ test("CalendarSection — « Réessayer » : le focus est sur le titre dès l'ap
 });
 
 test("CalendarSection — créer : un seul envoi, le bouton dit qu'il travaille sans perdre le focus, et un refus se lit et se réessaie", async () => {
-  serve({ exists: false });
+  serve(NONE);
   const screen = await mount();
   await expect.element(button(screen, fr.calendar.create)).toBeVisible();
   // From now on the server takes its time to answer.
   const pending = Promise.withResolvers<unknown>();
   mocks.send.mockImplementation((_path, request) =>
-    request.method === "GET" ? Promise.resolve({ exists: false }) : pending.promise,
+    request.method === "GET" ? Promise.resolve(NONE) : pending.promise,
   );
 
   // Two taps in the same tick: one request.
@@ -413,19 +571,19 @@ test("CalendarSection — créer : un seul envoi, le bouton dit qu'il travaille 
   await expect.element(section(screen).getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
   await expectAvailable(create);
 
-  serve({ exists: false });
+  serve(NONE);
   create.click();
   await expectSelected(screen, link(1));
   await expect.element(section(screen).getByRole("alert")).not.toBeInTheDocument();
 });
 
 test("CalendarSection — Nouveau lien refusé reste dans la fenêtre, qui dit pourquoi et peut recommencer", async () => {
-  serve({ exists: true });
+  serve(KEPT);
   const screen = await mount();
   await button(screen, fr.calendar.renew).click();
   const pending = Promise.withResolvers<unknown>();
   mocks.send.mockImplementation((_path, request) =>
-    request.method === "GET" ? Promise.resolve({ exists: true }) : pending.promise,
+    request.method === "GET" ? Promise.resolve(KEPT) : pending.promise,
   );
 
   const confirm = buttonOf(inDialog(screen, fr.calendar.renew));
@@ -438,20 +596,18 @@ test("CalendarSection — Nouveau lien refusé reste dans la fenêtre, qui dit p
   await expectAvailable(confirm);
   await expect.element(dialog(screen)).toBeVisible();
 
-  serve({ exists: true });
+  serve(KEPT);
   confirm.click();
   await expectSelected(screen, link(1));
   await expect.element(dialog(screen)).not.toBeInTheDocument();
 });
 
 test("CalendarSection — Supprimer le lien refusé reste dans la fenêtre, qui dit pourquoi", async () => {
-  serve({ exists: true });
+  serve(KEPT);
   const screen = await mount();
   await button(screen, fr.calendar.remove).click();
   mocks.send.mockImplementation((_path, request) =>
-    request.method === "GET"
-      ? Promise.resolve({ exists: true })
-      : Promise.reject(new TypeError("network")),
+    request.method === "GET" ? Promise.resolve(KEPT) : Promise.reject(new TypeError("network")),
   );
 
   const confirm = buttonOf(inDialog(screen, fr.calendar.remove));

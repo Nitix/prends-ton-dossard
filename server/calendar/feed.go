@@ -3,8 +3,10 @@
 // account and the days that registrations close.
 //
 // The link carries a random token in its path, since a calendar app can only
-// ask for an address. Only the SHA-256 of the token is stored, as for the
-// invitations (see the invitations package).
+// ask for an address. The token is stored, hidden, so that the site can show the
+// address again, with its SHA-256, which finds the feed (as for the invitations,
+// see the invitations package). A link made before the token was kept has the
+// hash only.
 package calendar
 
 import (

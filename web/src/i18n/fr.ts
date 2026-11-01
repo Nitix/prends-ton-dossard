@@ -108,12 +108,13 @@ export const fr = {
     title: "Agenda",
     create: "Créer mon lien d'agenda",
     help: "Ajoute-le comme abonnement dans ton agenda (Google Agenda, Apple Calendrier, Outlook).",
-    // The server keeps the fingerprint of the link only: it is shown when it is made, and no more.
-    shownOnce: "Ce lien ne sera plus affiché : copie-le maintenant.",
     copy: "Copier",
     copied: "Lien copié.",
-    // When a link exists and is not on screen.
+    // When a link exists: it is shown when it is made, and again when asked for.
     exists: "Ton lien d'agenda est actif.",
+    show: "Afficher le lien",
+    // A link made before the server kept the address: it works, but it cannot be shown.
+    legacy: "Ce lien ne peut plus être affiché : crée un nouveau lien.",
     // The button, and the title and the text of the window that asks first.
     renew: "Nouveau lien",
     renewHint: "L'ancien lien cessera de marcher.",

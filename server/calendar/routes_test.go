@@ -71,10 +71,21 @@ func feeds(t testing.TB, app core.App) []*core.Record {
 // hashOf gives what the table stores for a token: its hash.
 var hashOf = invitations.Hash
 
-// linkOf stores a calendar link for the user, whose token is token.
+// linkOf stores a calendar link for the user, whose token is token, as the
+// site made them before the v3.1: the hash of the token only, so the address
+// cannot be shown again.
 func linkOf(t testing.TB, app core.App, user *core.Record, token, lang string) *core.Record {
 	t.Helper()
 	return save(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": hashOf(token), "lang": lang})
+}
+
+// keptLinkOf stores a calendar link for the user, whose token is token, as the
+// site makes them: the token itself is kept, next to its hash.
+func keptLinkOf(t testing.TB, app core.App, user *core.Record, token, lang string) *core.Record {
+	t.Helper()
+	return save(t, app, "calendar_feeds", map[string]any{
+		"user": user.Id, "token": token, "token_hash": hashOf(token), "lang": lang,
+	})
 }
 
 func TestCalendarRoutes(t *testing.T) {
@@ -113,6 +124,12 @@ func TestCalendarRoutes(t *testing.T) {
 				}
 				if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(stored[0].GetString("token_hash")) {
 					t.Errorf("token_hash = %q, want the 64 hexadecimal digits of a SHA-256", stored[0].GetString("token_hash"))
+				}
+				// The token is kept as well, so that the address can be shown
+				// again, and its hash is the one that finds the feed.
+				token := stored[0].GetString("token")
+				if token == "" || hashOf(token) != stored[0].GetString("token_hash") {
+					t.Errorf("token = %q, want the token whose SHA-256 is token_hash %q", token, stored[0].GetString("token_hash"))
 				}
 			},
 		},
@@ -167,20 +184,48 @@ func TestCalendarRoutes(t *testing.T) {
 				if len(bobs) != 1 || bobs[0].GetString("token_hash") != hashOf("bobs") {
 					t.Errorf("Bob's links = %v, want his own, untouched", bobs)
 				}
+				if token := alices[0].GetString("token"); token == "" || hashOf(token) != alices[0].GetString("token_hash") {
+					t.Errorf("Alice's link has token %q, want the one whose hash it stores", token)
+				}
+			},
+		},
+		{
+			// A link made before the v3.1 has a hash and no token: a new one
+			// gives it a token.
+			Name: "a new link gives a link that had no token one", As: "alice", Method: http.MethodPost, URL: at(calendarURL), Body: lang("fr"),
+			Status: http.StatusOK, Contains: []string{`.ics"`},
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { linkOf(t, app, fx.Alice, "old", "fr") },
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				stored := feeds(t, app)
+				if len(stored) != 1 || stored[0].GetString("token") == "" || stored[0].GetString("token_hash") == hashOf("old") {
+					t.Errorf("stored links = %v, want one, with a new token that is kept", stored)
+				}
 			},
 		},
 
-		{Name: "there is no link yet", As: "alice", Method: http.MethodGet, URL: at(calendarURL), Status: http.StatusOK, Contains: []string{`"exists":false`}},
 		{
-			Name: "there is a link", As: "alice", Method: http.MethodGet, URL: at(calendarURL), Status: http.StatusOK,
-			Contains:    []string{`"exists":true`},
-			NotContains: []string{"token", "hash"},
+			Name: "there is no link yet", As: "alice", Method: http.MethodGet, URL: at(calendarURL), Status: http.StatusOK,
+			Contains: []string{`"exists":false`, `"url":""`},
+		},
+		{
+			// A link made before the v3.1: only the hash of its token exists,
+			// so the address is empty. Neither is in the response.
+			Name: "there is a link whose address cannot be shown", As: "alice", Method: http.MethodGet, URL: at(calendarURL), Status: http.StatusOK,
+			Contains:    []string{`"exists":true`, `"url":""`},
+			NotContains: []string{"token", "hash", hashOf("tok")},
 			Before:      func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { linkOf(t, app, fx.Alice, "tok", "fr") },
 		},
 		{
+			Name: "there is a link whose address is shown", As: "alice", Method: http.MethodGet, URL: at(calendarURL), Status: http.StatusOK,
+			Contains:    []string{`"exists":true`, `"url":"` + appURL + `/api/app/calendar/tok.ics"`},
+			NotContains: []string{"token_hash", hashOf("tok")},
+			Before:      func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { keptLinkOf(t, app, fx.Alice, "tok", "fr") },
+		},
+		{
 			Name: "the link of somebody else does not count", As: "alice", Method: http.MethodGet, URL: at(calendarURL), Status: http.StatusOK,
-			Contains: []string{`"exists":false`},
-			Before:   func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { linkOf(t, app, fx.Bob, "tok", "fr") },
+			Contains:    []string{`"exists":false`, `"url":""`},
+			NotContains: []string{"tok.ics"},
+			Before:      func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { keptLinkOf(t, app, fx.Bob, "tok", "fr") },
 		},
 
 		{
@@ -203,8 +248,8 @@ func TestCalendarRoutes(t *testing.T) {
 		{
 			Name: "the table is not open through the collection API", As: "alice", Method: http.MethodGet, URL: at("/api/collections/calendar_feeds/records"),
 			Status:      http.StatusForbidden,
-			NotContains: []string{"token_hash"},
-			Before:      func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { linkOf(t, app, fx.Alice, "tok", "fr") },
+			NotContains: []string{"token_hash", `"token"`},
+			Before:      func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) { keptLinkOf(t, app, fx.Alice, "tok", "fr") },
 		},
 	})
 }
@@ -247,22 +292,51 @@ func request(t *testing.T, app *tests.TestApp, method, url string, user *core.Re
 	return header, text
 }
 
-// subscribe creates the calendar link of the user, as the site does, and
-// returns the path of its feed.
-func subscribe(t *testing.T, app *tests.TestApp, user *core.Record, lang string) string {
+// parseURL reads the address of a feed from the JSON answer of the calendar
+// routes, whose "url" it is, and checks it is the address of a feed.
+func parseURL(t *testing.T, body string) string {
 	t.Helper()
-	_, body := request(t, app, http.MethodPost, calendarURL, user, fmt.Sprintf(`{"lang":%q}`, lang), http.StatusOK)
 	var response struct {
 		URL string `json:"url"`
 	}
 	if err := json.Unmarshal([]byte(body), &response); err != nil {
 		t.Fatalf("the response %q is not JSON: %v", body, err)
 	}
-	path, ok := strings.CutPrefix(response.URL, appURL)
+	return response.URL
+}
+
+// pathOf is the path of the address of a feed, which it checks is
+// <APP_URL>/api/app/calendar/<token>.ics.
+func pathOf(t *testing.T, url string) string {
+	t.Helper()
+	path, ok := strings.CutPrefix(url, appURL)
 	if !ok || !strings.HasPrefix(path, calendarURL+"/") || !strings.HasSuffix(path, ".ics") {
-		t.Fatalf("the link %q is not %s/api/app/calendar/<token>.ics", response.URL, appURL)
+		t.Fatalf("the link %q is not %s/api/app/calendar/<token>.ics", url, appURL)
 	}
 	return path
+}
+
+// subscribe creates the calendar link of the user, as the site does, and
+// returns the path of its feed.
+func subscribe(t *testing.T, app *tests.TestApp, user *core.Record, lang string) string {
+	t.Helper()
+	_, body := request(t, app, http.MethodPost, calendarURL, user, fmt.Sprintf(`{"lang":%q}`, lang), http.StatusOK)
+	return pathOf(t, parseURL(t, body))
+}
+
+// shown asks whether the user has a link, as the site does, and returns the
+// answer: whether there is one, and its address (empty when it cannot be shown).
+func shown(t *testing.T, app *tests.TestApp, user *core.Record) (exists bool, url string) {
+	t.Helper()
+	_, body := request(t, app, http.MethodGet, calendarURL, user, "", http.StatusOK)
+	var response struct {
+		Exists bool   `json:"exists"`
+		URL    string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(body), &response); err != nil {
+		t.Fatalf("the response %q is not JSON: %v", body, err)
+	}
+	return response.Exists, response.URL
 }
 
 // TestCalendarRoutes_Replace and the ones that follow need several requests on
@@ -291,6 +365,88 @@ func TestCalendarRoutes_Replace(t *testing.T) {
 	if !strings.Contains(body, `"exists":false`) {
 		t.Errorf("after deleting the link, the answer is %q, want exists false", body)
 	}
+}
+
+// The address of the link is shown again on demand: the site asks for it each
+// time it draws the profile, and gets the one that the last POST made.
+func TestCalendarRoutes_Show(t *testing.T) {
+	t.Run("the address that was made is the one that is shown, until a new one is made", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+
+		if exists, url := shown(t, app, fx.Alice); exists || url != "" {
+			t.Fatalf("before any link, the answer is exists %v, url %q, want false and empty", exists, url)
+		}
+
+		_, body := request(t, app, http.MethodPost, calendarURL, fx.Alice, `{"lang":"fr"}`, http.StatusOK)
+		first := parseURL(t, body)
+		pathOf(t, first)
+		if exists, url := shown(t, app, fx.Alice); !exists || url != first {
+			t.Errorf("after a POST, the answer is exists %v, url %q, want true and %q", exists, url, first)
+		}
+		// Asking again does not change anything.
+		if exists, url := shown(t, app, fx.Alice); !exists || url != first {
+			t.Errorf("asking again, the answer is exists %v, url %q, want true and %q", exists, url, first)
+		}
+
+		_, body = request(t, app, http.MethodPost, calendarURL, fx.Alice, `{"lang":"fr"}`, http.StatusOK)
+		second := parseURL(t, body)
+		if second == first {
+			t.Fatal("a new link must have a new address")
+		}
+		if exists, url := shown(t, app, fx.Alice); !exists || url != second {
+			t.Errorf("after a second POST, the answer is exists %v, url %q, want true and %q", exists, url, second)
+		}
+		// The address that is shown is the one that works, and the old one does not.
+		request(t, app, http.MethodGet, pathOf(t, second), nil, "", http.StatusOK)
+		request(t, app, http.MethodGet, pathOf(t, first), nil, "", http.StatusNotFound)
+	})
+
+	t.Run("nobody is shown the address of somebody else", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		alices := subscribe(t, app, fx.Alice, "fr")
+		bobs := subscribe(t, app, fx.Bob, "fr")
+
+		_, url := shown(t, app, fx.Alice)
+		if url != appURL+alices {
+			t.Errorf("Alice is shown %q, want her own %q", url, appURL+alices)
+		}
+		_, url = shown(t, app, fx.Bob)
+		if url != appURL+bobs {
+			t.Errorf("Bob is shown %q, want his own %q", url, appURL+bobs)
+		}
+	})
+
+	t.Run("a link made before the address was kept has none to show, and goes on working", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		linkOf(t, app, fx.Alice, "old", "fr")
+
+		if exists, url := shown(t, app, fx.Alice); !exists || url != "" {
+			t.Errorf("the answer is exists %v, url %q, want true and empty", exists, url)
+		}
+		// Its feed is found by the hash, as before.
+		request(t, app, http.MethodGet, calendarURL+"/old.ics", nil, "", http.StatusOK)
+
+		// A new link has an address to show, and the old one stops.
+		made := subscribe(t, app, fx.Alice, "fr")
+		if exists, url := shown(t, app, fx.Alice); !exists || url != appURL+made {
+			t.Errorf("after a new link, the answer is exists %v, url %q, want true and %q", exists, url, appURL+made)
+		}
+		request(t, app, http.MethodGet, calendarURL+"/old.ics", nil, "", http.StatusNotFound)
+	})
+
+	t.Run("a deleted link has no address", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		subscribe(t, app, fx.Alice, "fr")
+
+		request(t, app, http.MethodDelete, calendarURL, fx.Alice, "", http.StatusNoContent)
+		if exists, url := shown(t, app, fx.Alice); exists || url != "" {
+			t.Errorf("after deleting, the answer is exists %v, url %q, want false and empty", exists, url)
+		}
+	})
 }
 
 // vevent is the properties of an event of a feed, by name, without their
