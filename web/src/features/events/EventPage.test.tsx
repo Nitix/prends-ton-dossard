@@ -415,7 +415,7 @@ test("EventPage — le menu d'un intéressé sans épreuve propose « Choisir l'
     .not.toBeInTheDocument();
 });
 
-test("EventPage — choisir l'épreuve d'un intéressé la lui donne : il passe dans l'épreuve, et le focus va au titre qu'il quitte", async () => {
+test("EventPage — choisir l'épreuve d'un intéressé la lui donne : il passe dans l'épreuve, et le focus va au titre de cette épreuve", async () => {
   const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe, pNinaUndecided]) });
   await loaded(screen);
   // Once saved, the server has Zoe on F42, and Nina is still interested.
@@ -444,8 +444,8 @@ test("EventPage — choisir l'épreuve d'un intéressé la lui donne : il passe 
   await expect
     .element(interestedSection(screen).getByText("Zoe", { exact: true }))
     .not.toBeInTheDocument();
-  // The row has gone: the focus is on the title of the section it left, which stays.
-  const heading = screen.getByRole("heading", { level: 2, name: fr.event.interestedTitle });
+  // The row has gone: the focus is on the title of the format it is in now.
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 42/ });
   await vi.waitFor(() => {
     expect(focused()).toBe(heading.element());
   });
@@ -514,7 +514,7 @@ test("EventPage — une épreuve dont le seul participant est non partant dit «
   expect(detailsOf(screen).open).toBe(false);
 });
 
-test("EventPage — depuis « Non partants », le menu rend un autre statut, et la ligne revient dans son épreuve", async () => {
+test("EventPage — depuis « Non partants », le menu rend un autre statut : la ligne revient dans son épreuve, la section disparaît avec son seul non partant, le focus va au titre de l'épreuve", async () => {
   const { screen } = await renderPage({ event: eventWith([dns(p2), p1, p3]) });
   await loaded(screen);
   await nonStartersSummary(screen).click();
@@ -531,9 +531,14 @@ test("EventPage — depuis « Non partants », le menu rend un autre statut, et 
   });
   await expect.element(format(screen, /^Trail 42/).getByText("Bob", { exact: true })).toBeVisible();
   expect(screen.container.querySelector("details")).toBeNull();
+  // The list of those who do not start is gone, with its title: the focus is where Bob is.
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 42/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
 });
 
-test("EventPage — passer quelqu'un en « Non partant » le sort de son épreuve, et le focus va au titre de l'épreuve", async () => {
+test("EventPage — passer quelqu'un en « Non partant » le sort de son épreuve, et le focus va au résumé « Non partants »", async () => {
   const { screen } = await renderPage();
   await loaded(screen);
   mocks.update.mockImplementation(() => {
@@ -548,10 +553,42 @@ test("EventPage — passer quelqu'un en « Non partant » le sort de son épreuv
   await expect
     .element(format(screen, /^Trail 42/).getByText("Bob", { exact: true }))
     .not.toBeInTheDocument();
-  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 42/ });
+  // The focus goes where Bob is now: the list of those who do not start.
   await vi.waitFor(() => {
-    expect(focused()).toBe(heading.element());
+    expect(focused()).toBe(nonStartersSummary(screen).element());
   });
+});
+
+test("EventPage — si on a pris le focus ailleurs avant que la ligne ne change de liste, on ne le lui reprend pas", async () => {
+  const { screen } = await renderPage();
+  await loaded(screen);
+  // The server answers when the test says so.
+  const server: { answer?: () => void } = {};
+  mocks.update.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        server.answer = () => {
+          mocks.getOne.mockResolvedValue(eventWith([dns(p2), p1, p3]));
+          resolve({});
+        };
+      }),
+  );
+  await menuOf(screen, "Bob").click();
+  await screen.getByRole("button", { name: fr.status.dns }).click();
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledOnce();
+  });
+  // The user goes on with the page while it waits.
+  const edit = screen.getByRole("link", { name: fr.common.edit }).element();
+  if (!(edit instanceof HTMLElement)) throw new Error("not an element");
+  edit.focus();
+
+  server.answer?.();
+
+  await expect.element(nonStartersSummary(screen)).toBeVisible();
+  // Let the page react to the answer, if it were to.
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(focused()).toBe(edit);
 });
 
 // --- The actions of the page ---
@@ -833,6 +870,113 @@ test("EventPage — après J'y vais, la page recharge l'événement et montre la
 
 const focused = () => document.activeElement;
 
+/** The participation of Alice that the server creates, with the answer to the next request of the event. */
+const aliceNew = (formatId: string, event: string) => ({
+  ...base,
+  id: "pAliceNew",
+  runner: aliceRunner.id,
+  event,
+  format: formatId,
+  status: "interested",
+  confirmed: true,
+  added_by: aliceRunner.id,
+  expand: { runner: aliceRunner, added_by: aliceRunner },
+});
+
+test("EventPage — J'y vais sur un événement à une seule épreuve : le bouton disparaît, le focus va au titre de l'épreuve rejointe", async () => {
+  const { screen } = await renderPage({ event: event2Record });
+  await loaded(screen, "10 km de Lyon");
+  mocks.create.mockResolvedValue({ id: "pAliceNew" });
+  mocks.getOne.mockResolvedValue({
+    ...event2Record,
+    expand: {
+      ...event2Record.expand,
+      participations_via_event: [aliceNew("fLyon", "event2")],
+    },
+  });
+
+  await screen.getByRole("button", { name: fr.participation.join }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.joinTitle });
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("button", { name: fr.participation.join }))
+    .not.toBeInTheDocument();
+  const heading = screen.getByRole("heading", { level: 2, name: /^Route 10/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+  expect(focused()).not.toBe(document.body);
+});
+
+test("EventPage — J'y vais pour la dernière épreuve qu'il me reste : le focus va au titre de cette épreuve", async () => {
+  // Alice is on F42; F15 is the last one she can take.
+  const { screen } = await renderPage();
+  await loaded(screen);
+  mocks.create.mockResolvedValue({ id: "pAliceNew" });
+  mocks.getOne.mockResolvedValue(withParticipations(eventRecord, [aliceNew("f15", "event")]));
+
+  await screen.getByRole("button", { name: fr.participation.join }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.joinTitle });
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("button", { name: fr.participation.join }))
+    .not.toBeInTheDocument();
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 15/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+});
+
+test("EventPage — J'y vais qui laisse le bouton : le focus lui revient, la page n'y touche pas", async () => {
+  // Nina is on none of the formats: after taking F42 she can still take F15.
+  signIn("nina");
+  const { screen } = await renderPage();
+  await loaded(screen);
+  mocks.create.mockResolvedValue({ id: "pNinaNew" });
+  mocks.getOne.mockResolvedValue(
+    withParticipations(eventRecord, [
+      { ...pNinaUndecided, id: "pNinaNew", format: "f42", status: "interested" },
+    ]),
+  );
+  const join = screen.getByRole("button", { name: fr.participation.join });
+
+  await join.click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.joinTitle });
+  await dialog.getByLabelText(fr.participation.format).selectOptions("f42");
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(row(screen, "Nina")).toBeVisible();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(join.element());
+  });
+});
+
+test("EventPage — J'y vais en « Pas encore décidé » : la participation arrive chez les intéressés, et le bouton reste, avec le focus", async () => {
+  // Both formats are still Nina's to take: the button stays, and gets the focus back.
+  signIn("nina");
+  const { screen } = await renderPage();
+  await loaded(screen);
+  mocks.create.mockResolvedValue({ id: "pNinaUndecided" });
+  mocks.getOne.mockResolvedValue(withParticipations(eventRecord, [pNinaUndecided]));
+  const join = screen.getByRole("button", { name: fr.participation.join });
+
+  await join.click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.joinTitle });
+  await dialog.getByLabelText(fr.participation.format).selectOptions("undecided");
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(interestedSection(screen)).toBeVisible();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(join.element());
+  });
+});
+
 async function openRemovalDialog(screen: Screen, runner: string) {
   await menuOf(screen, runner).click();
   await screen.getByRole("button", { name: fr.common.remove }).click();
@@ -920,6 +1064,68 @@ test("EventPage — après le retrait d'un non partant, le focus va au résumé 
   await expect.element(summary).toBeVisible();
   await vi.waitFor(() => {
     expect(focused()).toBe(summary.element());
+  });
+});
+
+test("EventPage — après le retrait du seul intéressé, la section disparaît et le focus va au titre de la page", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe]) });
+  await loaded(screen);
+  mocks.remove.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(eventWith([p1, p2, p3]));
+    return Promise.resolve(true);
+  });
+  const dialog = await openRemovalDialog(screen, "Zoe");
+
+  await dialog.getByRole("button", { name: fr.common.remove }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(interestedSection(screen)).not.toBeInTheDocument();
+  const title = screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(title.element());
+  });
+});
+
+test("EventPage — après le retrait du seul non partant, la section disparaît et le focus va au titre de la page", async () => {
+  const { screen } = await renderPage({ event: eventWith([dns(p2), p1, p3]) });
+  await loaded(screen);
+  await nonStartersSummary(screen).click();
+  mocks.remove.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(eventWith([p1, p3]));
+    return Promise.resolve(true);
+  });
+  const dialog = await openRemovalDialog(screen, "Bob");
+
+  await dialog.getByRole("button", { name: fr.common.remove }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  expect(screen.container.querySelector("details")).toBeNull();
+  const title = screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(title.element());
+  });
+});
+
+test("EventPage — choisir l'épreuve du seul intéressé : la section disparaît, le focus va au titre de l'épreuve", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe]) });
+  await loaded(screen);
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([p1, p2, p3, { ...pZoe, format: "f15", status: "interested" }]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.participation.chooseFormat }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(interestedSection(screen)).not.toBeInTheDocument();
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 15/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
   });
 });
 

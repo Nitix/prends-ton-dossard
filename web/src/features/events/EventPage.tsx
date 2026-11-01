@@ -24,6 +24,47 @@ const SEPARATOR = " · ";
 /** The box of a section of the page: the interested, a format, those who do not start. */
 const SECTION = "rounded-lg border border-neutral-200 bg-white p-3";
 
+// The titles that the focus can be given to, by their `data-focus`: the title of
+// the page, of the section of the interested, of a format, of those who do not
+// start. None is in the tab order: they only receive the focus from the page.
+const PAGE_TITLE = "title";
+const INTERESTED = "interested";
+const NON_STARTERS = "non-starters";
+const formatTitle = (formatId: string) => `format:${formatId}`;
+
+/**
+ * A participation that has just left its row, because it was removed or moved
+ * to another list, or one that has just been created (by "I'm in"). The menu or
+ * the button the user was on went away, and the focus with it: the page gives
+ * it back (see `useFocusAfterDeparture`).
+ */
+type Departure = {
+  participation: string;
+  /**
+   * The title of the section of its row, for when it is not on the page any
+   * more. None for a new participation: it has no row yet.
+   */
+  source?: string;
+  /** Its row, if it was still on the page when the page was told. */
+  row: HTMLElement | null;
+};
+
+/** What a row tells the page when its participation leaves it. */
+type Depart = (participation: string, source: string, row: HTMLElement | null) => void;
+
+/** The title of the section where the participation is on this page, if it is. */
+function titleOfParticipation(view: EventView, id: string): string | undefined {
+  if (view.interested.some(({ participation }) => participation.id === id)) return INTERESTED;
+  for (const { format, participations } of view.formats) {
+    const found = participations.find(({ participation }) => participation.id === id);
+    if (found) {
+      // Those who do not start are in their own list.
+      return found.participation.status === "dns" ? NON_STARTERS : formatTitle(format.id);
+    }
+  }
+  return undefined;
+}
+
 /**
  * The page of an event: what it is, its link to register, who is interested
  * with no format yet, each format with who starts it and in what state, those
@@ -75,12 +116,68 @@ function webAddress(raw: string | undefined): string | undefined {
 
 type Opened = "join" | "add" | "delete";
 
+/**
+ * Where the focus goes (a keyboard or screen reader user must not restart from
+ * the top of the page). A participation that leaves its row (removed, given a
+ * format, moved to or from those who do not start) takes the focus away with
+ * its menu button, and so does a new participation whose "I'm in" button is
+ * gone with the last format to take. The page tells the user where they are:
+ * the title of the section where the participation is now, or, if it is not on
+ * the page any more, of the one it left; and if that section has gone with its
+ * last row, the title of the page.
+ *
+ * It waits for the page to show the change: the request is over before the
+ * page has the new data (the mutations wait for the data, not for the screen).
+ * And it only moves the focus when it has been lost: not when the user has
+ * gone on to something else, nor when the browser has already given it back to
+ * a button that is still there.
+ *
+ * `root` is the element that holds the titles; `setDeparture` tells the page.
+ */
+function useFocusAfterDeparture(view: EventView) {
+  const root = useRef<HTMLElement>(null);
+  const [departure, setDeparture] = useState<Departure | null>(null);
+  const handled = useRef<Departure | null>(null);
+
+  useEffect(() => {
+    if (!departure || handled.current === departure) return;
+    const now = titleOfParticipation(view, departure.participation);
+    // Not shown yet: the participation is still where it was (or, for a new one, not there).
+    if (now === departure.source) return;
+    handled.current = departure;
+
+    const active = document.activeElement;
+    const lost =
+      !active ||
+      active === document.body ||
+      !active.isConnected ||
+      !!departure.row?.contains(active);
+    if (!lost) return;
+
+    const titles = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-focus]") ?? []);
+    for (const key of [now, departure.source, PAGE_TITLE]) {
+      const title = titles.find((element) => element.dataset.focus === key);
+      if (title) {
+        title.focus();
+        return;
+      }
+    }
+  }, [departure, view]);
+
+  return { root, setDeparture };
+}
+
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const { t, f } = useI18n();
   const { event, formats, start, end } = view;
   const [opened, setOpened] = useState<Opened | null>(null);
   const close = () => {
     setOpened(null);
+  };
+
+  const { root, setDeparture } = useFocusAfterDeparture(view);
+  const departed: Depart = (participation, source, row) => {
+    setDeparture({ participation, source, row });
   };
   const severalDays = !start.equals(end);
   const registration = webAddress(event.registration_url);
@@ -91,9 +188,11 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const notStarting = nonStarters(view);
 
   return (
-    <article className="flex flex-col gap-6">
+    <article ref={root} className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">{event.name}</h1>
+        <h1 data-focus={PAGE_TITLE} tabIndex={-1} className="text-2xl font-semibold">
+          {event.name}
+        </h1>
         <p className="text-neutral-600">
           {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
         </p>
@@ -155,7 +254,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        {view.interested.length > 0 && <InterestedSection view={view} me={me} />}
+        {view.interested.length > 0 && (
+          <InterestedSection view={view} me={me} onDeparture={departed} />
+        )}
         {formats.map((formatView) => (
           <FormatSection
             key={formatView.format.id}
@@ -163,14 +264,30 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             formatView={formatView}
             showDate={severalDays}
             me={me}
+            onDeparture={departed}
           />
         ))}
         {notStarting.length > 0 && (
-          <NonStartersSection eventId={event.id} list={notStarting} me={me} />
+          <NonStartersSection
+            eventId={event.id}
+            list={notStarting}
+            me={me}
+            onDeparture={departed}
+          />
         )}
       </div>
 
-      {me && <JoinDialog open={opened === "join"} onClose={close} view={view} me={me} />}
+      {me && (
+        <JoinDialog
+          open={opened === "join"}
+          onClose={close}
+          onJoined={(created) => {
+            setDeparture({ participation: created.id, row: null });
+          }}
+          view={view}
+          me={me}
+        />
+      )}
       <AddSomeoneDialog open={opened === "add"} onClose={close} view={view} />
       {me && canDeleteEvent(event, me) && (
         <DeleteEventDialog open={opened === "delete"} onClose={close} view={view} />
@@ -179,37 +296,22 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   );
 }
 
-/**
- * What a section of the page does with the focus. A participant that has just
- * left it (removed, or moved to another list) takes the focus away with their
- * row, menu button included. The focus goes to the title of the section, which
- * stays and tells the user where they are. The title is not in the tab order:
- * it only receives the focus from this effect. When the section goes with its
- * last row, there is nothing left to focus.
- */
-function useFocusAfterDeparture<E extends HTMLElement>() {
-  const title = useRef<E>(null);
-  const [departures, setDepartures] = useState(0);
-  useEffect(() => {
-    if (departures > 0) title.current?.focus();
-  }, [departures]);
-  return {
-    title,
-    onDeparture: () => {
-      setDepartures((count) => count + 1);
-    },
-  };
-}
-
 /** The participations on the event alone ("interested, format to choose"): before the formats, since there is something to do. */
-function InterestedSection({ view, me }: { view: EventView; me: Me | null }) {
+function InterestedSection({
+  view,
+  me,
+  onDeparture,
+}: {
+  view: EventView;
+  me: Me | null;
+  onDeparture: Depart;
+}) {
   const { t } = useI18n();
   const headingId = useId();
-  const { title, onDeparture } = useFocusAfterDeparture<HTMLHeadingElement>();
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-2 ${SECTION}`}>
-      <h2 ref={title} id={headingId} tabIndex={-1} className="text-lg font-semibold">
+      <h2 id={headingId} data-focus={INTERESTED} tabIndex={-1} className="text-lg font-semibold">
         {t.event.interestedTitle}
       </h2>
       <ul aria-label={t.event.participants} className="flex flex-col gap-2">
@@ -220,8 +322,9 @@ function InterestedSection({ view, me }: { view: EventView; me: Me | null }) {
             participationView={participationView}
             label={view.event.name}
             formatsOf={view}
+            source={INTERESTED}
             me={me}
-            onRemoved={onDeparture}
+            onDeparture={onDeparture}
           />
         ))}
       </ul>
@@ -235,22 +338,28 @@ function FormatSection({
   formatView,
   showDate,
   me,
+  onDeparture,
 }: {
   eventId: string;
   formatView: FormatView;
   showDate: boolean;
   me: Me | null;
+  onDeparture: Depart;
 }) {
   const { t, f } = useI18n();
   const headingId = useId();
   const { format, raceType, date, participations } = formatView;
-  const { title, onDeparture } = useFocusAfterDeparture<HTMLHeadingElement>();
   // Those who do not start are in the list at the bottom of the page.
   const onTheStart = starters(participations);
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-2 ${SECTION}`}>
-      <h2 ref={title} id={headingId} tabIndex={-1} className="text-lg font-semibold">
+      <h2
+        id={headingId}
+        data-focus={formatTitle(format.id)}
+        tabIndex={-1}
+        className="text-lg font-semibold"
+      >
         {formatMeasures(format, raceType.label, f, t).join(SEPARATOR)}
       </h2>
       {showDate && <p className="text-sm text-neutral-600">{f.date(date)}</p>}
@@ -265,8 +374,9 @@ function FormatSection({
               participationView={participationView}
               detail={t.status[participationView.participation.status]}
               label={formatDisplayName(format, raceType.label, f, t)}
+              source={formatTitle(format.id)}
               me={me}
-              onRemoved={onDeparture}
+              onDeparture={onDeparture}
             />
           ))}
         </ul>
@@ -284,17 +394,21 @@ function NonStartersSection({
   eventId,
   list,
   me,
+  onDeparture,
 }: {
   eventId: string;
   list: NonStarter[];
   me: Me | null;
+  onDeparture: Depart;
 }) {
   const { t, f } = useI18n();
-  const { title, onDeparture } = useFocusAfterDeparture<HTMLElement>();
 
   return (
     <details className={SECTION}>
-      <summary ref={title} className="min-h-11 cursor-pointer py-2 text-lg font-semibold">
+      <summary
+        data-focus={NON_STARTERS}
+        className="min-h-11 cursor-pointer py-2 text-lg font-semibold"
+      >
         {t.event.nonStarters(list.length)}
       </summary>
       <ul aria-label={t.event.participants} className="mt-2 flex flex-col gap-2">
@@ -307,8 +421,9 @@ function NonStartersSection({
               participationView={participationView}
               detail={name}
               label={name}
+              source={NON_STARTERS}
               me={me}
-              onRemoved={onDeparture}
+              onDeparture={onDeparture}
             />
           );
         })}
@@ -329,8 +444,9 @@ function ParticipantRow({
   detail,
   label,
   formatsOf,
+  source,
   me,
-  onRemoved,
+  onDeparture,
 }: {
   eventId: string;
   participationView: ParticipationView;
@@ -340,15 +456,19 @@ function ParticipantRow({
   label: string;
   /** Given for a participation on the event alone: see `ParticipationMenu`. */
   formatsOf?: EventView;
+  /** The title of the section of this row: where the focus goes if the participation is removed. */
+  source: string;
   me: Me | null;
-  onRemoved: () => void;
+  onDeparture: Depart;
 }) {
   const { t } = useI18n();
   const { participation, runner, addedBy } = participationView;
   const confirmed = participation.confirmed;
+  const row = useRef<HTMLLIElement>(null);
 
   return (
     <li
+      ref={row}
       className={`flex items-center justify-between gap-2 rounded-lg border-2 py-1 pr-1 pl-3 ${
         confirmed ? "border-neutral-200" : "border-dashed border-neutral-400"
       }`}
@@ -370,7 +490,9 @@ function ParticipantRow({
           label={label}
           formatsOf={formatsOf}
           canConfirm={canConfirm(runner, me)}
-          onRemoved={onRemoved}
+          onRemoved={() => {
+            onDeparture(participation.id, source, row.current);
+          }}
         />
       )}
     </li>

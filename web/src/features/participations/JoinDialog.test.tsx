@@ -53,11 +53,12 @@ async function renderDialog(me: Me, eventView: EventView = view) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onClose = vi.fn<() => void>();
+  const onJoined = vi.fn<(created: unknown) => void>();
   const ui = (open: boolean) => (
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
         <ToastProvider>
-          <JoinDialog open={open} onClose={onClose} view={eventView} me={me} />
+          <JoinDialog open={open} onClose={onClose} onJoined={onJoined} view={eventView} me={me} />
         </ToastProvider>
       </I18nProvider>
     </QueryClientProvider>
@@ -66,7 +67,13 @@ async function renderDialog(me: Me, eventView: EventView = view) {
   await expect
     .element(screen.getByRole("dialog", { name: fr.participation.joinTitle }))
     .toBeVisible();
-  return { screen, onClose, invalidate, setOpen: (open: boolean) => screen.rerender(ui(open)) };
+  return {
+    screen,
+    onClose,
+    onJoined,
+    invalidate,
+    setOpen: (open: boolean) => screen.rerender(ui(open)),
+  };
 }
 
 type Screen = Awaited<ReturnType<typeof renderDialog>>["screen"];
@@ -137,6 +144,32 @@ test('JoinDialog — choisir F42 crée {runner, event, format: "f42", status} et
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["event", "event"]);
   expect(keys).toContainEqual(["pending"]);
+});
+
+test("JoinDialog — dit à la page la participation créée, avant de se fermer, pour qu'elle y place le focus", async () => {
+  mocks.create.mockResolvedValue({ id: "pNew", format: "f42" });
+  const { screen, onClose, onJoined } = await renderDialog(nina);
+  await formatSelect(screen).selectOptions("f42");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(onJoined).toHaveBeenCalledExactlyOnceWith({ id: "pNew", format: "f42" });
+  expect(onJoined.mock.invocationCallOrder[0]).toBeLessThan(
+    onClose.mock.invocationCallOrder[0] ?? 0,
+  );
+});
+
+test("JoinDialog — un refus ne dit rien à la page", async () => {
+  mocks.create.mockRejectedValue(new TypeError("Failed to fetch"));
+  const { screen, onJoined } = await renderDialog(nina);
+
+  await save(screen).click();
+
+  await expect.element(screen.getByRole("alert")).toBeVisible();
+  expect(onJoined).not.toHaveBeenCalled();
 });
 
 test("JoinDialog — Alice crée sa participation à F15 : celle de F42 n'est pas touchée", async () => {

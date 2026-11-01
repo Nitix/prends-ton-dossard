@@ -200,7 +200,7 @@ export function ParticipationMenu({
         <ChooseFormatDialog
           open={opened === "choose"}
           onClose={dismiss}
-          onChosen={onRemoved}
+          onChosen={removed}
           view={formatsOf}
           participationView={{ participation, runner }}
         />

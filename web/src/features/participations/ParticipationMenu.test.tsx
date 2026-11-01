@@ -72,6 +72,8 @@ async function renderMenu(
     canConfirm?: boolean;
     /** Given for a participation on the event alone: the formats to choose from. */
     formatsOf?: EventView;
+    /** What the participation is on: its format, or the event when it has none. */
+    label?: string;
   } = {},
 ) {
   const {
@@ -79,6 +81,7 @@ async function renderMenu(
     runner = bobRunner,
     canConfirm = false,
     formatsOf,
+    label = "Trail 42 km",
   } = options;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -93,7 +96,7 @@ async function renderMenu(
               eventId="event"
               participation={participation}
               runner={runner}
-              label="Trail 42 km"
+              label={label}
               formatsOf={formatsOf}
               canConfirm={canConfirm}
               onRemoved={onRemoved}
@@ -265,6 +268,8 @@ async function renderOnEventAlone(options: { canConfirm?: boolean; confirmed?: b
     participation: confirmed ? ninaConfirmed : ninaParticipation,
     runner: ninaRunner,
     formatsOf: trail,
+    // No format: the participation is on the event.
+    label: "Trail des Crêtes",
     canConfirm,
   });
 }
@@ -320,7 +325,7 @@ test("ParticipationMenu — sans épreuve, Retirer demande confirmation avec le 
     .element(screen.getByRole("dialog", { name: fr.participation.removeTitle }))
     .toBeVisible();
   await expect
-    .element(screen.getByText(fr.participation.removeWarning("Nina", "Trail 42 km")))
+    .element(screen.getByText(fr.participation.removeWarning("Nina", "Trail des Crêtes")))
     .toBeVisible();
 });
 
@@ -359,6 +364,8 @@ test("ParticipationMenu — choisir l'épreuve met la participation à jour, et 
     expect(onRemoved).toHaveBeenCalledOnce();
   });
   await expect.element(dialog).not.toBeInTheDocument();
+  // The row is about to move: the focus is the page's to place, the menu does not take it.
+  expect(document.activeElement).not.toBe(ninaMenu(screen).element());
 });
 
 test("ParticipationMenu — Annuler dans le dialogue des épreuves rend le focus au bouton du menu", async () => {

@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { useI18n } from "../../i18n/I18nProvider";
-import type { Status } from "../../lib/types";
+import type { ParticipationRecord, Status } from "../../lib/types";
 import type { EventView } from "../events/api";
 import { joinOptions, UNDECIDED } from "../events/participants";
 import { useCreateParticipation } from "./api";
@@ -19,27 +19,43 @@ import type { Me } from "./permissions";
  *
  * "Not decided yet" puts the member on the event alone, with no format: the
  * status is then « Intéressé », which the field says.
+ *
+ * Once the participation is saved, `onJoined` is given it, then the dialog
+ * closes: the button that opened it may be gone with the last format to take,
+ * and the page puts the focus where the new participation is.
  */
 export function JoinDialog({
   open,
   onClose,
+  onJoined,
   view,
   me,
 }: {
   open: boolean;
   onClose: () => void;
+  onJoined?: (created: ParticipationRecord) => void;
   view: EventView;
   me: Me;
 }) {
   const { t } = useI18n();
   return (
     <Dialog open={open} onClose={onClose} title={t.participation.joinTitle}>
-      <JoinForm view={view} me={me} onClose={onClose} />
+      <JoinForm view={view} me={me} onClose={onClose} onJoined={onJoined} />
     </Dialog>
   );
 }
 
-function JoinForm({ view, me, onClose }: { view: EventView; me: Me; onClose: () => void }) {
+function JoinForm({
+  view,
+  me,
+  onClose,
+  onJoined,
+}: {
+  view: EventView;
+  me: Me;
+  onClose: () => void;
+  onJoined?: (created: ParticipationRecord) => void;
+}) {
   const { t } = useI18n();
   const create = useCreateParticipation(view.event.id);
 
@@ -58,9 +74,10 @@ function JoinForm({ view, me, onClose }: { view: EventView; me: Me; onClose: () 
     setMessage(null);
     const who = { runner: me.runnerId, event: view.event.id };
     try {
-      await create.mutateAsync(
+      const created = await create.mutateAsync(
         noFormat ? { ...who, status: "interested" } : { ...who, format: formatId, status },
       );
+      onJoined?.(created);
       onClose();
     } catch (err) {
       setMessage(participationError(t, err));

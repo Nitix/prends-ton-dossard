@@ -8,7 +8,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "../events/api";
-import { eventRecord, pNinaUndecided, withParticipations } from "../events/testFixture";
+import { eventRecord, f15, pNinaUndecided, withParticipations } from "../events/testFixture";
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -36,30 +36,41 @@ beforeEach(() => {
   mocks.update.mockReset().mockResolvedValue({ id: "pNinaUndecided" });
 });
 
-async function renderDialog() {
+async function renderDialog(options: { withOnChosen?: boolean } = {}) {
+  const { withOnChosen = false } = options;
   const participationView = view.interested[0];
   if (!participationView) throw new Error("the fixture has no participation on the event alone");
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onClose = vi.fn<() => void>();
-  const screen = await render(
+  const onChosen = vi.fn<() => void>();
+  const ui = (eventView: EventView) => (
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
         <ToastProvider>
           <ChooseFormatDialog
             open
             onClose={onClose}
-            view={view}
+            onChosen={withOnChosen ? onChosen : undefined}
+            view={eventView}
             participationView={participationView}
           />
         </ToastProvider>
       </I18nProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const screen = await render(ui(view));
   await expect
     .element(screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle }))
     .toBeVisible();
-  return { screen, onClose, invalidate };
+  return {
+    screen,
+    onClose,
+    onChosen,
+    invalidate,
+    // The page loads a change while the dialog is open.
+    showView: (eventView: EventView) => screen.rerender(ui(eventView)),
+  };
 }
 
 type Screen = Awaited<ReturnType<typeof renderDialog>>["screen"];
@@ -100,6 +111,53 @@ test('ChooseFormatDialog — propose F15 et F42 ; Enregistrer envoie updateParti
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["event", "event"]);
   expect(keys).toContainEqual(["pending"]);
+});
+
+test("ChooseFormatDialog — si la page recharge l'événement et que l'épreuve choisie n'y est plus, la première est proposée", async () => {
+  const { screen, showView } = await renderDialog();
+  await formatSelect(screen).selectOptions("f42");
+  await expect.element(formatSelect(screen)).toHaveValue("f42");
+
+  // F42 has been deleted meanwhile: only F15 is left on the event.
+  await showView(
+    toEventView({
+      ...eventRecord,
+      expand: { formats_via_event: [f15], participations_via_event: [pNinaUndecided] },
+    }),
+  );
+
+  expect(optionsOf(formatSelect(screen).element()).map((option) => option.value)).toEqual(["f15"]);
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
+  // What is sent is what the select shows (a select shows its first option when its
+  // value has no option: the state itself has to follow).
+  await save(screen).click();
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pNinaUndecided", {
+      format: "f15",
+      status: "interested",
+    });
+  });
+});
+
+test("ChooseFormatDialog — avec onChosen, un enregistrement réussi le dit à sa place : onClose n'est pas appelé", async () => {
+  const { screen, onClose, onChosen } = await renderDialog({ withOnChosen: true });
+  await formatSelect(screen).selectOptions("f42");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onChosen).toHaveBeenCalledOnce();
+  });
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test("ChooseFormatDialog — avec onChosen, Annuler appelle encore onClose", async () => {
+  const { screen, onClose, onChosen } = await renderDialog({ withOnChosen: true });
+
+  await screen.getByRole("button", { name: fr.common.cancel }).click();
+
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(onChosen).not.toHaveBeenCalled();
 });
 
 test("ChooseFormatDialog — dit pour qui l'épreuve se choisit, et ne propose pas « Pas encore décidé »", async () => {

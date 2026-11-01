@@ -25,7 +25,11 @@ export function ChooseFormatDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  /** The format has been given and saved, just before `onClose`: the row is about to move to its format. */
+  /**
+   * The format has been given and saved, the participation is about to move to
+   * its format. Called in place of `onClose` (which is then for the user who
+   * cancels): a caller who has a row to move has more to do than close.
+   */
   onChosen?: () => void;
   view: EventView;
   participationView: ParticipationView;
@@ -58,9 +62,14 @@ function ChooseForm({
   const update = useUpdateParticipation(view.event.id);
   const { participation, runner } = participationView;
 
-  const [formatId, setFormatId] = useState(view.formats[0]?.format.id ?? "");
+  const [chosenFormat, setChosenFormat] = useState("");
   const [status, setStatus] = useState<Status>(participation.status);
   const [message, setMessage] = useState<string | null>(null);
+  // The page may load a change while the dialog is open: a format that is not
+  // on the event any more is not chosen any more, the first one is.
+  const formatId = view.formats.some(({ format }) => format.id === chosenFormat)
+    ? chosenFormat
+    : (view.formats[0]?.format.id ?? "");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,14 +80,13 @@ function ChooseForm({
       setMessage(participationError(t, err));
       return;
     }
-    onChosen?.();
-    onClose();
+    (onChosen ?? onClose)();
   }
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
       <p className="font-medium break-words">{runner.name}</p>
-      <FormatField view={view} formats={view.formats} value={formatId} onChange={setFormatId} />
+      <FormatField view={view} formats={view.formats} value={formatId} onChange={setChosenFormat} />
       <StatusField value={status} onChange={setStatus} />
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
