@@ -7,7 +7,7 @@ import { Field, INPUT } from "../../components/Field";
 import { SECTION } from "../../components/section";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { CommentRecord } from "../../lib/types";
-import { useRestoreFocus } from "../admin/useRestoreFocus";
+import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { canDeleteComment, canEditComment, type Me } from "../participations/permissions";
 import { describeError } from "../profile/forms";
 import {
@@ -41,50 +41,52 @@ export function CommentsSection({ eventId, me }: { eventId: string; me: Me | nul
   const [removing, setRemoving] = useState<string | null>(null);
   useRestoreFocus(removing !== null, () => heading.current);
 
-  // A refresh that fails keeps what the section already shows.
+  // A refresh that fails keeps what the section already shows. While the
+  // comments load, or when they could not, the section is there all the same,
+  // with its title but no count.
   const comments = query.data;
-  if (!comments) {
-    if (!query.isError) return <output>{t.common.loading}</output>;
-    return (
-      <div className="flex flex-col gap-3">
-        <p role="alert" className="text-sm font-medium text-red-700">
-          {t.errors.generic}
-        </p>
-        <button
-          type="button"
-          onClick={() => void query.refetch()}
-          disabled={query.isFetching}
-          className={`${SECONDARY} self-start`}
-        >
-          {t.common.retry}
-        </button>
-      </div>
-    );
-  }
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
       <h2 id={headingId} ref={heading} tabIndex={-1} className="text-lg font-semibold">
-        {t.comments.title(comments.length)}
+        {comments ? t.comments.title(comments.length) : t.comments.heading}
       </h2>
-      {comments.length === 0 ? (
-        <p className="text-sm text-neutral-600">{t.comments.empty}</p>
+      {comments ? (
+        comments.length === 0 ? (
+          <p className="text-sm text-neutral-600">{t.comments.empty}</p>
+        ) : (
+          <ol className="flex flex-col gap-2">
+            {comments.map((view) => (
+              <CommentItem
+                key={view.comment.id}
+                view={view}
+                eventId={eventId}
+                me={me}
+                onRemove={() => {
+                  setRemoving(view.comment.id);
+                }}
+              />
+            ))}
+          </ol>
+        )
+      ) : query.isError ? (
+        <div className="flex flex-col gap-3">
+          <p role="alert" className="text-sm font-medium text-red-700">
+            {t.errors.generic}
+          </p>
+          <button
+            type="button"
+            onClick={() => void query.refetch()}
+            disabled={query.isFetching}
+            className={`${SECONDARY} self-start`}
+          >
+            {t.common.retry}
+          </button>
+        </div>
       ) : (
-        <ol className="flex flex-col gap-2">
-          {comments.map((view) => (
-            <CommentItem
-              key={view.comment.id}
-              view={view}
-              eventId={eventId}
-              me={me}
-              onRemove={() => {
-                setRemoving(view.comment.id);
-              }}
-            />
-          ))}
-        </ol>
+        <output>{t.common.loading}</output>
       )}
-      {me && <NewComment eventId={eventId} />}
+      {me && comments && <NewComment eventId={eventId} />}
       <Dialog
         open={removing !== null}
         onClose={() => {
@@ -239,7 +241,12 @@ function EditForm({
 
   async function save() {
     const text = body.trim();
-    if (text === "" || sending.current) return;
+    if (sending.current) return;
+    // A comment cannot be emptied: say so, instead of doing nothing.
+    if (text === "") {
+      setMessage(t.errors.validation_required);
+      return;
+    }
     // Nothing changed: no request, which would only make the comment « modifié ».
     if (text === comment.body) {
       onClose();
@@ -264,7 +271,7 @@ function EditForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
-      <Field label={t.comments.edit} error={message}>
+      <Field label={t.comments.editLabel} error={message}>
         {(control) => (
           <textarea
             {...control}

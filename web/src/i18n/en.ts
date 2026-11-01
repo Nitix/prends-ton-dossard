@@ -148,11 +148,13 @@ export const en = {
     chooseFormatTitle: "Pick the race",
   },
   comments: {
+    heading: "Comments",
     title: (n: number) => `Comments (${n})`,
     empty: "No comment yet.",
     newLabel: "Your comment",
     send: "Send",
     edit: "Edit",
+    editLabel: "Edit your comment",
     save: "Save",
     cancel: "Cancel",
     remove: "Delete",

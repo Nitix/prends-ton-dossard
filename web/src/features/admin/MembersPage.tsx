@@ -3,11 +3,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
+import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useSession } from "../auth/session";
 import { useMembers } from "./api";
 import { MemberDialogs, runnerIdOf, type MemberDialog } from "./MemberDialogs";
 import { MemberRow, memberHeadingId } from "./MemberRow";
-import { useRestoreFocus } from "./useRestoreFocus";
 
 /**
  * The members page of the admin: every runner with what it is (no account,

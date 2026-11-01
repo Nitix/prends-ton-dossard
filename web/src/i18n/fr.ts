@@ -182,11 +182,15 @@ export const fr = {
   },
   // The comments of an event, at the bottom of its page (see features/comments).
   comments: {
+    // The title while the comments load or fail to load (the count is not known), and with the count.
+    heading: "Commentaires",
     title: (n: number) => `Commentaires (${n})`,
     empty: "Pas encore de commentaire.",
     newLabel: "Ton commentaire",
     send: "Envoyer",
     edit: "Modifier",
+    // The name of the field where a comment is edited: it is not the name of the button that opened it.
+    editLabel: "Modifier ton commentaire",
     save: "Enregistrer",
     cancel: "Annuler",
     remove: "Supprimer",

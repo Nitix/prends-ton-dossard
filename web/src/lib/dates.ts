@@ -156,9 +156,8 @@ const SECOND = 1000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-// A month is 30 days and a year 365: no calendar, so that a day more or less
-// never depends on the zone or the clock changes. A year is not 12 months, so
-// the months stop at 11.
+// A month is 30 days and a year 365, counted on the calendar: a year is not 12
+// months, so the months stop at 11.
 const MONTH_DAYS = 30;
 const YEAR_DAYS = 365;
 const MAX_MONTHS = 11;
@@ -170,7 +169,11 @@ const MAX_MONTHS = 11;
  *
  * - under a minute: 0 seconds, which reads "maintenant" (a comment from the
  *   future, because the clock of the browser is late, counts as now too);
- * - then minutes, hours, days (under 30), months (under a year), years.
+ * - then minutes, then hours up to 24 of them;
+ * - from a day on, days on the calendar of Paris, not spans of 24 hours: what
+ *   happened the day before is "hier" whatever the hour, and 47 hours ago can
+ *   be the day before yesterday. Then months (from 30 days) and years (from
+ *   365 days).
  */
 export function elapsed(
   from: Temporal.Instant,
@@ -180,7 +183,11 @@ export function elapsed(
   if (ms < MINUTE) return { value: 0, unit: "second" };
   if (ms < HOUR) return { value: -Math.trunc(ms / MINUTE), unit: "minute" };
   if (ms < DAY) return { value: -Math.trunc(ms / HOUR), unit: "hour" };
-  const days = Math.trunc(ms / DAY);
+
+  const days = daysBetween(today(from), today(now));
+  // On the day the clocks go back (25 hours long), 24 hours after 00:30 is
+  // still the same day: it is hours, not a day.
+  if (days === 0) return { value: -Math.trunc(ms / HOUR), unit: "hour" };
   if (days < MONTH_DAYS) return { value: -days, unit: "day" };
   if (days < YEAR_DAYS) {
     return { value: -Math.min(MAX_MONTHS, Math.trunc(days / MONTH_DAYS)), unit: "month" };

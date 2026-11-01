@@ -135,6 +135,79 @@ test("useClock — sans horloge donnée, c'est l'instant présent", async () => 
   expect(Temporal.Instant.compare(shown, after)).toBeLessThanOrEqual(0);
 });
 
+// The tick is a timer like the one of midnight: it is faked with the others.
+const FAKE = ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] as const;
+
+test("useClock — une nouvelle horloge chaque minute : ce qui montre l'heure se redessine", async () => {
+  vi.useFakeTimers({ toFake: [...FAKE] });
+  vi.setSystemTime(new Date("2026-11-01T10:00:00Z"));
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const screen = await render(
+    <TodayProvider now={fakeClock}>
+      <ClockProbe />
+    </TodayProvider>,
+  );
+  await expect.element(screen.getByTestId("clock")).toHaveTextContent("2026-11-01T10:00:00Z");
+
+  await vi.advanceTimersByTimeAsync(59_999);
+  expect(screen.getByTestId("clock").element().textContent).toBe("2026-11-01T10:00:00Z");
+
+  // React draws a moment after the timer, and the wait goes by the fake clock: a few ms go by.
+  await vi.advanceTimersByTimeAsync(1);
+  await vi.waitFor(() => {
+    expect(screen.getByTestId("clock").element().textContent).toMatch(/^2026-11-01T10:01:00/);
+  });
+
+  // And the next minute: it goes on.
+  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.waitFor(() => {
+    expect(screen.getByTestId("clock").element().textContent).toMatch(/^2026-11-01T10:02:00/);
+  });
+});
+
+test("useClock — la minute ne tourne pas avec un jour fixé, ni après le démontage", async () => {
+  vi.useFakeTimers({ toFake: [...FAKE] });
+  vi.setSystemTime(new Date("2026-11-01T10:00:00Z"));
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const fixed = await render(
+    <TodayProvider value={Temporal.PlainDate.from("2026-11-01")} now={fakeClock}>
+      <ClockProbe />
+    </TodayProvider>,
+  );
+  await expect.element(fixed.getByTestId("clock")).toHaveTextContent("2026-11-01T10:00:00Z");
+
+  await vi.advanceTimersByTimeAsync(5 * 60_000);
+  expect(fixed.getByTestId("clock").element().textContent).toBe("2026-11-01T10:00:00Z");
+  expect(vi.getTimerCount()).toBe(0);
+  await fixed.unmount();
+
+  const running = await render(
+    <TodayProvider now={fakeClock}>
+      <ClockProbe />
+    </TodayProvider>,
+  );
+  expect(vi.getTimerCount()).toBeGreaterThan(0);
+  await running.unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("useClock — une nouvelle horloge quand l'app revient au premier plan", async () => {
+  let instant = Temporal.Instant.from("2026-11-01T10:00:00Z");
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const screen = await render(
+    <TodayProvider now={() => instant}>
+      <ClockProbe />
+    </TodayProvider>,
+  );
+  await expect.element(screen.getByTestId("clock")).toHaveTextContent("2026-11-01T10:00:00Z");
+
+  // The phone kept the tab for hours, its timers asleep.
+  instant = Temporal.Instant.from("2026-11-01T14:00:00Z");
+  document.dispatchEvent(new Event("visibilitychange"));
+
+  await expect.element(screen.getByTestId("clock")).toHaveTextContent("2026-11-01T14:00:00Z");
+});
+
 test("useClock — hors fournisseur, lève une erreur", async () => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 

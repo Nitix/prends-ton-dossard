@@ -5,10 +5,10 @@ import { Dialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { PasskeyRecord, RunnerRecord, UserRecord } from "../../lib/types";
+import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { day } from "../profile/PasskeyList";
 import { useMemberActions, usePasskeys } from "./api";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { useRestoreFocus } from "./useRestoreFocus";
 
 /** What the dialog is about: the account of a runner. */
 export type UserPasskeysTarget = { runner: RunnerRecord; user: UserRecord };

@@ -4,11 +4,11 @@ import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { RaceTypeRecord } from "../../lib/types";
+import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useRaceTypes } from "../events/api";
 import { useRaceTypeActions } from "./api";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { RaceTypeDialog, type RaceTypeTarget } from "./RaceTypeDialog";
-import { useRestoreFocus } from "./useRestoreFocus";
 
 /** The dialog that is open on the page, and what it is about. At most one is open. */
 type TypeDialog = RaceTypeTarget | { kind: "delete"; raceType: RaceTypeRecord };

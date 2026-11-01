@@ -386,9 +386,11 @@ describe("instantOf", () => {
 });
 
 describe("elapsed", () => {
+  // Noon in Paris on 1 November 2026 (UTC+1).
   const now = Temporal.Instant.from("2026-11-01T11:00:00Z");
   const ago = (spec: Temporal.DurationLike) => elapsed(now.subtract(spec), now);
   const days = (n: number) => ago({ hours: 24 * n });
+  const at = (when: string, from = now) => elapsed(Temporal.Instant.from(when), from);
 
   test("elapsed — choisit l'unité", () => {
     expect(ago({ seconds: 30 })).toEqual({ value: 0, unit: "second" });
@@ -396,15 +398,9 @@ describe("elapsed", () => {
     expect(ago({ hours: 2 })).toEqual({ value: -2, unit: "hour" });
     expect(days(3)).toEqual({ value: -3, unit: "day" });
     // 1 September to 1 November: 61 days.
-    expect(elapsed(Temporal.Instant.from("2026-09-01T11:00:00Z"), now)).toEqual({
-      value: -2,
-      unit: "month",
-    });
+    expect(at("2026-09-01T11:00:00Z")).toEqual({ value: -2, unit: "month" });
     // 1 November 2025 to 1 November 2026: 365 days.
-    expect(elapsed(Temporal.Instant.from("2025-11-01T11:00:00Z"), now)).toEqual({
-      value: -1,
-      unit: "year",
-    });
+    expect(at("2025-11-01T11:00:00Z")).toEqual({ value: -1, unit: "year" });
   });
 
   test("elapsed — les limites entre deux unités", () => {
@@ -423,10 +419,33 @@ describe("elapsed", () => {
 
   test("elapsed — arrondit vers zéro", () => {
     expect(ago({ minutes: 119 })).toEqual({ value: -1, unit: "hour" });
-    expect(ago({ hours: 47 })).toEqual({ value: -1, unit: "day" });
     expect(days(59)).toEqual({ value: -1, unit: "month" });
     expect(days(729)).toEqual({ value: -1, unit: "year" });
     expect(days(730)).toEqual({ value: -2, unit: "year" });
+  });
+
+  test("elapsed — les jours sont ceux du calendrier de Paris : « hier » est la veille, pas les 24 à 47 h passées", () => {
+    // 28 hours ago, on the day before: yesterday.
+    expect(at("2026-10-31T08:00:00Z")).toEqual({ value: -1, unit: "day" });
+    // 36 hours ago, but two days before on the calendar: the day before yesterday.
+    expect(at("2026-10-30T22:30:00Z")).toEqual({ value: -2, unit: "day" });
+    // 47 hours ago is two days before too.
+    expect(ago({ hours: 47 })).toEqual({ value: -2, unit: "day" });
+  });
+
+  test("elapsed — juste après minuit à Paris, la veille reste hier même à 24 h pile", () => {
+    // 00:30 in Paris on 2 November.
+    const justAfterMidnight = Temporal.Instant.from("2026-11-01T23:30:00Z");
+    // Exactly 24 hours: 00:30 on 1 November, yesterday.
+    expect(at("2026-10-31T23:30:00Z", justAfterMidnight)).toEqual({ value: -1, unit: "day" });
+    // 23 hours ago was still the 1st: hours, not a day.
+    expect(at("2026-11-01T00:30:00Z", justAfterMidnight)).toEqual({ value: -23, unit: "hour" });
+  });
+
+  test("elapsed — le jour des 25 heures (retour à l'heure d'hiver) : 24 h plus tard est le même jour", () => {
+    // 00:30 on 25 October in Paris (UTC+2), 24 hours before 23:30 the same day (UTC+1).
+    const from = Temporal.Instant.from("2026-10-24T22:30:00Z");
+    expect(elapsed(from, from.add({ hours: 24 }))).toEqual({ value: -24, unit: "hour" });
   });
 
   test("elapsed — une date dans le futur (horloge en retard) compte pour maintenant", () => {

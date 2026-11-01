@@ -260,20 +260,28 @@ describe("the list", () => {
   });
 
   test("CommentsSection — pendant le chargement elle le dit, et sur une erreur elle le dit et se retente", async () => {
+    // The title is there from the start, with no count (it is not known yet): the section does not appear from nowhere.
     mocks.list.mockReturnValueOnce(new Promise(() => {}));
     const { screen } = await renderSection();
-    await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+    const loadingSection = screen.getByRole("region", { name: fr.comments.heading });
+    await expect.element(loadingSection).toBeVisible();
+    await expect.element(loadingSection.getByText(fr.common.loading)).toBeVisible();
+    await expect.element(screen.getByLabelText(fr.comments.newLabel)).not.toBeInTheDocument();
     await screen.unmount();
 
     mocks.list.mockReset();
     mocks.list.mockRejectedValueOnce(new Error("boom"));
     const retried = await renderSection();
-    await expect.element(retried.screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+    const failedSection = retried.screen.getByRole("region", { name: fr.comments.heading });
+    await expect.element(failedSection).toBeVisible();
+    await expect.element(failedSection.getByRole("alert")).toHaveTextContent(fr.errors.generic);
     mocks.list.mockImplementation(() => Promise.resolve(rows));
 
-    await retried.screen.getByRole("button", { name: fr.common.retry }).click();
+    await failedSection.getByRole("button", { name: fr.common.retry }).click();
 
+    // The same section now has its count.
     await expect.element(heading(retried.screen, 2)).toBeVisible();
+    await expect.element(retried.screen.getByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -476,9 +484,11 @@ describe("editing and deleting", () => {
 
     // Cancelling: the text is a field with the text so far, which has the focus.
     await edit(screen, "Alice").click();
-    const editor = item(screen, "Alice").getByLabelText(fr.comments.edit);
+    const editor = item(screen, "Alice").getByLabelText(fr.comments.editLabel);
     await expect.element(editor).toHaveValue("Je viens avec Paul.");
     await expect.element(editor).toHaveFocus();
+    // Its name is not the one of the button that opened it.
+    await expect.element(editor).toHaveAccessibleName(fr.comments.editLabel);
     await editor.fill("Je ne viens plus.");
     await item(screen, "Alice").getByRole("button", { name: fr.comments.cancel }).click();
 
@@ -489,7 +499,7 @@ describe("editing and deleting", () => {
     // Saving: the new text goes, and is the one that is shown, with « modifié ».
     await edit(screen, "Alice").click();
     await item(screen, "Alice")
-      .getByLabelText(fr.comments.edit)
+      .getByLabelText(fr.comments.editLabel)
       .fill("  Je viens avec Paul et Julie.  ");
     await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
 
@@ -500,7 +510,7 @@ describe("editing and deleting", () => {
     expect(mocks.update).toHaveBeenCalledWith("c1", { body: "Je viens avec Paul et Julie." });
     await expect.element(item(screen, "Alice").getByText(fr.comments.edited)).toBeVisible();
     await expect
-      .element(item(screen, "Alice").getByLabelText(fr.comments.edit))
+      .element(item(screen, "Alice").getByLabelText(fr.comments.editLabel))
       .not.toBeInTheDocument();
     await expect.element(edit(screen, "Alice")).toHaveFocus();
   });
@@ -512,15 +522,18 @@ describe("editing and deleting", () => {
     await edit(screen, "Alice").click();
     await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
     await expect
-      .element(item(screen, "Alice").getByLabelText(fr.comments.edit))
+      .element(item(screen, "Alice").getByLabelText(fr.comments.editLabel))
       .not.toBeInTheDocument();
     expect(mocks.update).not.toHaveBeenCalled();
 
     await edit(screen, "Alice").click();
-    await item(screen, "Alice").getByLabelText(fr.comments.edit).fill("   ");
+    await item(screen, "Alice").getByLabelText(fr.comments.editLabel).fill("   ");
     await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
-    // Still editing: the empty text was not sent.
-    await expect.element(item(screen, "Alice").getByLabelText(fr.comments.edit)).toBeVisible();
+    // Still editing: the empty text was not sent, and the field says why.
+    await expect.element(item(screen, "Alice").getByLabelText(fr.comments.editLabel)).toBeVisible();
+    await expect
+      .element(item(screen, "Alice").getByRole("alert"))
+      .toHaveTextContent(fr.errors.validation_required);
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
@@ -529,7 +542,7 @@ describe("editing and deleting", () => {
     await expect.element(heading(screen, 2)).toBeVisible();
 
     await edit(screen, "Alice").click();
-    await item(screen, "Alice").getByLabelText(fr.comments.edit).fill("Corrigé");
+    await item(screen, "Alice").getByLabelText(fr.comments.editLabel).fill("Corrigé");
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
 
     await expect.element(item(screen, "Alice").getByText("Corrigé")).toBeVisible();
@@ -542,13 +555,13 @@ describe("editing and deleting", () => {
     await expect.element(heading(screen, 2)).toBeVisible();
 
     await edit(screen, "Alice").click();
-    await item(screen, "Alice").getByLabelText(fr.comments.edit).fill("x".repeat(2001));
+    await item(screen, "Alice").getByLabelText(fr.comments.editLabel).fill("x".repeat(2001));
     await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
 
     await expect
       .element(item(screen, "Alice").getByRole("alert"))
       .toHaveTextContent("Ce texte est trop long.");
-    await expect.element(item(screen, "Alice").getByLabelText(fr.comments.edit)).toBeVisible();
+    await expect.element(item(screen, "Alice").getByLabelText(fr.comments.editLabel)).toBeVisible();
   });
 
   test("CommentsSection — supprimer demande confirmation, puis le focus va sur le titre", async () => {

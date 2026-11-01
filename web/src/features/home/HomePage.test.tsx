@@ -1459,6 +1459,11 @@ const answerWith = (items: unknown[]) => ({
 const LONG =
   "Je pars de Lyon à 6h avec ma voiture, il reste deux places. On peut se retrouver au parking du stade et partager l'essence, et je peux aussi ramener quelqu'un le dimanche soir.";
 
+/** Whether `a` is before `b` on the page. */
+const before = (a: Element, b: Element) =>
+  (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ===
+  Node.DOCUMENT_POSITION_FOLLOWING;
+
 /** The first line of an item of the block: who wrote, and on what event. */
 const whoOn = (line: { element(): Element }) =>
   plain(line.element().querySelector("p")?.textContent ?? "");
@@ -1527,6 +1532,28 @@ test("LatestComments — après « Bientôt dans le groupe », en dernier", asyn
     .elements()
     .map((heading) => heading.textContent);
   expect(titles).toEqual([fr.home.upcomingTitle, fr.home.groupTitle, fr.home.latestCommentsTitle]);
+});
+
+test("LatestComments — ne dépend pas des événements : demandés en même temps, affichés même s'ils échouent", async () => {
+  mocks.comments.getList.mockResolvedValue(
+    answerWith([lastComment("c1", bobRunner, eventRecord, "Salut", "2026-04-30 09:00:00.000Z")]),
+  );
+
+  // The events never come: the comments have been asked for, and are shown.
+  mocks.events.mockReturnValue(new Promise(() => {}));
+  const waiting = await renderHome();
+  await expect.element(commentsBlock(waiting.screen)).toBeVisible();
+  await expect.element(waiting.screen.getByText(fr.common.loading)).toBeVisible();
+  await waiting.screen.unmount();
+
+  // The events fail: the page says so, and the comments are still there, last.
+  mocks.events.mockReset();
+  mocks.events.mockRejectedValue(new ClientResponseError({ status: 500 }));
+  const failing = await renderHome();
+  await expect.element(failing.screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expect.element(commentsBlock(failing.screen)).toBeVisible();
+  const retry = failing.screen.getByRole("button", { name: fr.common.retry });
+  expect(before(retry.element(), commentsBlock(failing.screen).element())).toBe(true);
 });
 
 test("LatestComments — absent sans commentaire", async () => {

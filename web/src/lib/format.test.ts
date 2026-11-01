@@ -165,12 +165,23 @@ describe("ago", () => {
     expect(plain(fr.ago(-2, "hour"))).toBe("il y a 2 heures");
     expect(plain(fr.ago(-1, "day"))).toBe("hier");
     expect(plain(fr.ago(-5, "minute"))).toBe("il y a 5 minutes");
+    expect(plain(fr.ago(-2, "day"))).toBe("avant-hier");
     expect(plain(fr.ago(-2, "month"))).toBe("il y a 2 mois");
-    expect(plain(fr.ago(-1, "year"))).toBe("l’année dernière");
     const gb = createFormatters("en-GB");
     expect(plain(gb.ago(0, "second"))).toBe("now");
     expect(plain(gb.ago(-2, "hour"))).toBe("2 hours ago");
     expect(plain(gb.ago(-1, "day"))).toBe("yesterday");
+  });
+
+  // 30 to 59 days is not "last month", and 365 to 729 days is not "last year".
+  test("ago — un mois et un an se comptent, sans « le mois dernier » ni « l'année dernière »", () => {
+    const fr = createFormatters("fr-FR");
+    expect(plain(fr.ago(-1, "month"))).toBe("il y a 1 mois");
+    expect(plain(fr.ago(-1, "year"))).toBe("il y a 1 an");
+    expect(plain(fr.ago(-3, "year"))).toBe("il y a 3 ans");
+    const gb = createFormatters("en-GB");
+    expect(plain(gb.ago(-1, "month"))).toBe("1 month ago");
+    expect(plain(gb.ago(-1, "year"))).toBe("1 year ago");
   });
 });
 

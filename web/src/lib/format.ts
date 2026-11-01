@@ -18,8 +18,10 @@ export type Formatters = {
   /** A number of days from today, in words when there are some: "dans 45 jours", "aujourd’hui". */
   inDays(n: number): string;
   /**
-   * How long ago, in words when there are some: "maintenant", "il y a 2 heures", "hier".
-   * The value is negative for the past (see `elapsed` in ./dates.ts).
+   * How long ago, in words when there are some: "maintenant", "il y a 2 heures",
+   * "hier". Months and years are counted: "il y a 1 mois", never "le mois dernier",
+   * which is not what 30 to 59 days are. The value is negative for the past (see
+   * `elapsed` in ./dates.ts).
    */
   ago(value: number, unit: Intl.RelativeTimeFormatUnit): string;
   /** An instant as a long date and the time, in Paris: "1 novembre 2026 à 05:30". */
@@ -49,6 +51,7 @@ const MONDAY = 1;
 
 export function createFormatters(locale: string): Formatters {
   const relativeTime = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const counted = new Intl.RelativeTimeFormat(locale, { numeric: "always" });
   const kilometers = new Intl.NumberFormat(locale, {
     style: "unit",
     unit: "kilometer",
@@ -80,7 +83,8 @@ export function createFormatters(locale: string): Formatters {
     monthTitle: (m) =>
       m.toPlainDate({ day: 1 }).toLocaleString(locale, { month: "long", year: "numeric" }),
     inDays: (n) => relativeTime.format(n, "day"),
-    ago: (value, unit) => relativeTime.format(value, unit),
+    ago: (value, unit) =>
+      (unit === "month" || unit === "year" ? counted : relativeTime).format(value, unit),
     dateTime: (instant) =>
       instant.toLocaleString(locale, { dateStyle: "long", timeStyle: "short", timeZone: PARIS }),
     km: (n) => kilometers.format(n),

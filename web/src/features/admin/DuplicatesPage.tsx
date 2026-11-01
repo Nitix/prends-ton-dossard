@@ -7,6 +7,7 @@ import { useToast } from "../../components/Toast";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Formatters } from "../../lib/format";
+import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useEvent, type FormatView } from "../events/api";
 import { formatMeasures } from "../events/formatName";
 import { useMergeActions, type MergeKind } from "./api";
@@ -14,7 +15,6 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { adminError } from "./errors";
 import { EventPicker, type Choice } from "./EventPicker";
 import { describeMerge } from "./mergePreview";
-import { useRestoreFocus } from "./useRestoreFocus";
 
 /** What the admin is about to merge, as the confirmation restates it. */
 type Plan = {

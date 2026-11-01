@@ -43,7 +43,6 @@ export function HomePage() {
           <RegistrationTodoBlock views={events.data} runnerId={runner?.id} pageHeading={title} />
           <MyUpcoming views={events.data} runnerId={runner?.id} />
           <GroupSoon views={events.data} />
-          <LatestComments />
         </>
       ) : events.isError ? (
         <div className="flex flex-col gap-3">
@@ -62,6 +61,8 @@ export function HomePage() {
       ) : (
         <output>{t.common.loading}</output>
       )}
+      {/* They are asked for with the events, not after them, and do not wait for them. */}
+      <LatestComments />
     </div>
   );
 }
