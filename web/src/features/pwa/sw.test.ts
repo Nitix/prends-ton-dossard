@@ -16,22 +16,27 @@ type FakeResponse = {
   status: number;
   type: string;
   redirected: boolean;
+  headers: { get(name: string): string | null };
   clone(): FakeResponse;
+};
+
+/** What a test can change in a response. `contentType: null` is a response that does not say. */
+type ReplyInit = Partial<Pick<FakeResponse, "status" | "type" | "redirected">> & {
+  contentType?: string | null;
 };
 
 type FakeRequest = { url: string; method: string; mode: string };
 
-/** A response as the network gives it: a 200 of the same origin, unless the test says otherwise. */
-function reply(
-  label: string,
-  init: Partial<Pick<FakeResponse, "status" | "type" | "redirected">> = {},
-): FakeResponse {
+/** A response as the network gives it: a 200 web page of the same origin, unless the test says otherwise. */
+function reply(label: string, init: ReplyInit = {}): FakeResponse {
+  const { contentType = "text/html; charset=utf-8", ...rest } = init;
   const response: FakeResponse = {
     label,
     status: 200,
     type: "basic",
     redirected: false,
-    ...init,
+    headers: { get: (name) => (name.toLowerCase() === "content-type" ? contentType : null) },
+    ...rest,
     clone: () => ({ ...response }),
   };
   return response;
@@ -239,7 +244,7 @@ test("sw — sans réseau et sans page gardée, l'erreur remonte", async () => {
 });
 
 test("sw — une réponse qui n'est pas un 200 de la même origine n'est jamais gardée", async () => {
-  const rows: [string, Partial<Pick<FakeResponse, "status" | "type" | "redirected">>][] = [
+  const rows: [string, ReplyInit][] = [
     ["a 404", { status: 404 }],
     ["a 500", { status: 500 }],
     ["a redirect that ended on a 200", { redirected: true }],
@@ -266,6 +271,83 @@ test("sw — une réponse qui n'est pas un 200 de la même origine n'est jamais 
     await worker.get("/assets/chunk-1a2b3c.js");
     expect({ what, kept: [...worker.cache().entries.keys()] }).toEqual({ what, kept: ["/"] });
   }
+});
+
+test("sw — seule une page HTML remplace la page gardée", async () => {
+  const rows: [string, ReplyInit][] = [
+    ["a PNG file opened by its address", { contentType: "image/png" }],
+    ["JSON", { contentType: "application/json" }],
+    ["plain text", { contentType: "text/plain" }],
+    ["an answer that does not say what it is", { contentType: null }],
+  ];
+  for (const [what, init] of rows) {
+    const worker = loadWorker();
+    worker.network.mockResolvedValueOnce(reply("good shell"));
+    await worker.get("/liste", { mode: "navigate" });
+
+    worker.network.mockResolvedValueOnce(reply(what, init));
+    const page = await worker.get("/icons/icon-512.png", { mode: "navigate" });
+
+    // The page gets the 200 that the network sent, but it does not become the shell.
+    expect({ what, page: page.label }).toEqual({ what, page: what });
+    expect({ what, shell: worker.cache().entries.get("/")?.label }).toEqual({
+      what,
+      shell: "good shell",
+    });
+  }
+
+  // And without a shell yet, nothing is kept at all.
+  const worker = loadWorker();
+  worker.network.mockResolvedValueOnce(reply("a PNG", { contentType: "image/png" }));
+  await worker.get("/icons/icon-512.png", { mode: "navigate" });
+  expect(worker.cache().entries.size).toBe(0);
+});
+
+test("sw — après un déploiement, la page est la nouvelle, gardée comme telle", async () => {
+  const worker = loadWorker();
+  worker.network.mockResolvedValueOnce(reply("v1"));
+  expect((await worker.get("/liste", { mode: "navigate" })).label).toBe("v1");
+  expect(worker.cache().entries.get("/")?.label).toBe("v1");
+
+  // The deploy: the network now sends another build.
+  worker.network.mockResolvedValueOnce(reply("v2"));
+  const page = await worker.get("/liste", { mode: "navigate" });
+
+  // The page is the new one, never the copy of the last visit...
+  expect(page.label).toBe("v2");
+  expect(worker.cache().entries.get("/")?.label).toBe("v2");
+  // ...and the offline page that follows is the new one too.
+  worker.network.mockRejectedValue(OFFLINE);
+  expect((await worker.get("/evenements/abc123", { mode: "navigate" })).label).toBe("v2");
+});
+
+test("sw — un stockage qui ne s'ouvre pas ne coupe pas le site", async () => {
+  const worker = loadWorker();
+  worker.network.mockResolvedValueOnce(reply("good shell"));
+  await worker.get("/liste", { mode: "navigate" });
+  worker.open.mockRejectedValue(new Error("storage unavailable"));
+
+  // A built file: nothing can be recalled, the network answers.
+  worker.network.mockResolvedValueOnce(reply("asset from the network"));
+  expect((await worker.get("/assets/a.js")).label).toBe("asset from the network");
+  // A page: the network answers, and nothing breaks when the copy cannot be kept.
+  worker.network.mockResolvedValueOnce(reply("page from the network"));
+  expect((await worker.get("/stats", { mode: "navigate" })).label).toBe("page from the network");
+  // Offline, the shell cannot be recalled: the error is the network's, not the storage's.
+  worker.network.mockRejectedValue(OFFLINE);
+  await expect(worker.get("/stats", { mode: "navigate" })).rejects.toBe(OFFLINE);
+});
+
+test("sw — un stockage qui refuse d'écrire ne coupe pas le site", async () => {
+  const worker = loadWorker();
+  vi.spyOn(worker.cache(), "put").mockRejectedValue(new Error("quota exceeded"));
+  worker.network.mockResolvedValueOnce(reply("page from the network"));
+  worker.network.mockResolvedValueOnce(reply("asset from the network"));
+
+  // `get` also waits for what the worker kept: a refusal that escaped would fail here.
+  expect((await worker.get("/liste", { mode: "navigate" })).label).toBe("page from the network");
+  expect((await worker.get("/assets/a.js")).label).toBe("asset from the network");
+  expect(worker.cache().entries.size).toBe(0);
 });
 
 test("sw — les fichiers de /assets/ viennent du cache d'abord", async () => {
@@ -320,35 +402,36 @@ test("sw — seules les requêtes GET de la même origine sont traitées", async
   expect((await worker.get("/liste", { mode: "navigate" })).label).toBe("from the network");
 });
 
-test("sw — l'installation garde la page, le manifeste et les icônes, puis prend la main", async () => {
+test("sw — l'installation garde la page, puis prend la main", async () => {
   const worker = loadWorker();
-  worker.network.mockImplementation((input) => Promise.resolve(reply(`copy of ${String(input)}`)));
+  worker.network.mockResolvedValue(reply("the page"));
 
   await worker.install();
 
   expect(worker.cacheName).toMatch(/^ptd-\d+$/);
-  expect([...worker.cache().entries.keys()].toSorted()).toEqual([
-    "/",
-    "/icons/apple-touch-icon.png",
-    "/icons/icon-192.png",
-    "/icons/icon-512.png",
-    "/icons/icon-maskable-512.png",
-    "/manifest.webmanifest",
-  ]);
-  // The browser's own HTTP cache could hold a shell of an older build: it is asked to go to the server.
-  for (const [, init] of worker.network.mock.calls) expect(init).toEqual({ cache: "reload" });
+  // Only the page: nothing serves the manifest or the icons from the cache.
+  expect([...worker.cache().entries.keys()]).toEqual(["/"]);
+  expect(worker.cache().entries.get("/")?.label).toBe("the page");
+  // The browser's own HTTP cache could hold a page of an older build: it is asked to go to the server.
+  expect(worker.network.mock.calls).toEqual([["/", { cache: "reload" }]]);
   expect(worker.skipWaiting).toHaveBeenCalledTimes(1);
 });
 
-test("sw — une installation dont un fichier manque échoue, sans prendre la main", async () => {
-  const worker = loadWorker();
-  worker.network.mockImplementation((input) =>
-    Promise.resolve(reply(String(input), input === "/icons/icon-512.png" ? { status: 404 } : {})),
-  );
+test("sw — une installation dont la page n'est pas une page échoue, sans prendre la main", async () => {
+  const rows: [string, ReplyInit][] = [
+    ["a 404", { status: 404 }],
+    ["a file that is not HTML", { contentType: "image/png" }],
+    ["a redirect", { redirected: true }],
+  ];
+  for (const [what, init] of rows) {
+    const worker = loadWorker();
+    worker.network.mockResolvedValue(reply(what, init));
 
-  await expect(worker.install()).rejects.toThrow("/icons/icon-512.png");
+    await expect(worker.install()).rejects.toThrow("/:");
 
-  expect(worker.skipWaiting).not.toHaveBeenCalled();
+    expect({ what, skipped: worker.skipWaiting.mock.calls.length }).toEqual({ what, skipped: 0 });
+    expect({ what, kept: worker.cache().entries.size }).toEqual({ what, kept: 0 });
+  }
 });
 
 test("sw — l'activation supprime les autres caches et prend la main", async () => {

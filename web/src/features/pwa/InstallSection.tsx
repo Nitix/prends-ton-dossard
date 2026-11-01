@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 import { PRIMARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -12,8 +12,9 @@ import { installPrompt, subscribeInstallPrompt, takeInstallPrompt } from "./inst
  * - Installed already: nothing, the section is not there.
  * - The browser made its offer (see installPrompt.ts): the button that shows
  *   its install dialog. The offer can be used once, so the button goes with the
- *   tap, and the title of the section takes the focus, which would otherwise
- *   fall to the page.
+ *   tap. It can also go with `appinstalled`, when the site is installed some
+ *   other way. Either way, the title of the section takes the focus, which
+ *   would otherwise fall to the page.
  * - On an iPhone or an iPad, which make no offer: where to tap.
  * - Elsewhere: the menu of the browser.
  *
@@ -29,6 +30,16 @@ export function InstallSection({
   const heading = useRef<HTMLHeadingElement>(null);
   const { standalone, ios } = environment();
 
+  // The ref of the button. Its cleanup runs as the button is removed from the
+  // page, while it is still there: if it has the focus then, the title takes it.
+  // The function must be the same from one render to the next, or React would
+  // run the cleanup each time the page draws again.
+  const giveFocusBack = useCallback((button: HTMLButtonElement) => {
+    return () => {
+      if (document.activeElement === button) heading.current?.focus();
+    };
+  }, []);
+
   if (standalone) return null;
 
   const install = () => {
@@ -42,7 +53,12 @@ export function InstallSection({
   return (
     <Section title={t.install.title} headingRef={heading}>
       {offer !== null ? (
-        <button type="button" onClick={install} className={`${PRIMARY} self-start`}>
+        <button
+          ref={giveFocusBack}
+          type="button"
+          onClick={install}
+          className={`${PRIMARY} self-start`}
+        >
           {t.install.button}
         </button>
       ) : (

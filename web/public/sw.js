@@ -18,16 +18,6 @@ const CACHE = "ptd-1";
 // same index.html: one copy serves them all.
 const SHELL = "/";
 
-// What the installation keeps.
-const PRECACHE = [
-  SHELL,
-  "/manifest.webmanifest",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/icon-maskable-512.png",
-  "/icons/apple-touch-icon.png",
-];
-
 /**
  * How the worker answers a request of its own origin.
  * - "network-first": a page. The network, so that a deploy shows at once; the
@@ -58,6 +48,11 @@ function isPocketBasePath(path) {
 /** Only a complete answer of the site itself is worth keeping: no error, no redirect, no opaque response. */
 function isKeepable(response) {
   return response.status === 200 && response.type === "basic" && !response.redirected;
+}
+
+/** The answer is a web page: only that can be the shell. */
+function isHtml(response) {
+  return (response.headers.get("content-type") ?? "").startsWith("text/html");
 }
 
 /** What the current cache holds for `key`, or undefined. A storage that fails is a cache that is empty. */
@@ -95,7 +90,9 @@ async function networkFirst(event) {
     if (shell !== undefined) return shell;
     throw error;
   }
-  event.waitUntil(keep(SHELL, response));
+  // A 200 that is not a page (a file that somebody opened by its address, JSON)
+  // must not replace the shell: the app could not start from it offline.
+  if (isHtml(response)) event.waitUntil(keep(SHELL, response));
   return response;
 }
 
@@ -107,16 +104,19 @@ async function cacheFirst(event) {
   return response;
 }
 
+/**
+ * The installation keeps the page, so that the app opens without a network
+ * from the first visit on. The manifest and the icons are not kept: nothing
+ * serves them from the cache, the browser reads them when it installs the app.
+ */
 async function precache() {
+  // "reload": the copy that the browser's own cache may hold could be of an older build.
+  const response = await fetch(SHELL, { cache: "reload" });
+  if (!isKeepable(response) || !isHtml(response)) {
+    throw new Error(`${SHELL}: ${response.status} ${response.headers.get("content-type")}`);
+  }
   const cache = await caches.open(CACHE);
-  await Promise.all(
-    PRECACHE.map(async (path) => {
-      // "reload": the copy that the browser's own cache may hold could be of an older build.
-      const response = await fetch(path, { cache: "reload" });
-      if (!isKeepable(response)) throw new Error(`${path}: ${response.status}`);
-      await cache.put(path, response);
-    }),
-  );
+  await cache.put(SHELL, response);
 }
 
 self.addEventListener("install", (event) => {

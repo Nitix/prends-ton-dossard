@@ -20,7 +20,8 @@ import (
 // A missing file under /assets/, where Vite writes the built files, is a 404
 // too. Their names change with every build: after a deploy, a tab opened before
 // asks for chunks that are gone, and index.html in their place would break it
-// without a word. The 404 lets the app notice, and reload.
+// without a word. The 404 lets the app notice, and reload. The icons of the
+// app, under /icons/, are the same: an image is never HTML.
 //
 // The service worker script and the manifest are files of the same kind (see
 // rootFiles): a 404 when they are missing, and the headers that the browser
@@ -46,7 +47,7 @@ func Register(app core.App, fsys fs.FS) {
 				}
 				return files(re)
 			}
-			if strings.HasPrefix(path, assetsDir) {
+			if inFileDir(path) {
 				return files(re)
 			}
 			return spa(re)
@@ -56,9 +57,21 @@ func Register(app core.App, fsys fs.FS) {
 	})
 }
 
-// assetsDir is the directory, without its leading slash, where Vite writes
-// the built files.
-const assetsDir = "assets/"
+// fileDirs are the directories, with their trailing slash and without the
+// leading one, where only files are served: the built files that Vite writes,
+// and the icons (public/icons).
+var fileDirs = []string{"assets/", "icons/"}
+
+// inFileDir reports whether path, without its leading slash, is under one of
+// fileDirs.
+func inFileDir(path string) bool {
+	for _, dir := range fileDirs {
+		if strings.HasPrefix(path, dir) {
+			return true
+		}
+	}
+	return false
+}
 
 // rootFiles are the files at the root that the browser asks for by name, with
 // the headers each one is sent with. Without them, a missing file falls back

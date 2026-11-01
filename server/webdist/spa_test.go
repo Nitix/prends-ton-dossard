@@ -139,6 +139,7 @@ func TestSPA_ServiceWorkerHeaders(t *testing.T) {
 		"index.html":           {Data: index},
 		"sw.js":                {Data: []byte(`self.addEventListener("fetch", () => {});`)},
 		"manifest.webmanifest": {Data: []byte(`{"name":"Prends ton dossard"}`)},
+		"icons/icon-192.png":   {Data: []byte("png-bytes")},
 	}
 
 	// header checks a header of the response.
@@ -211,8 +212,43 @@ func TestSPA_ServiceWorkerHeaders(t *testing.T) {
 			},
 		},
 		{
-			// Only these two files are concerned: the other paths keep the
-			// fallback and their headers.
+			fsys: withFiles,
+			scenario: tests.ApiScenario{
+				Name:               "an icon is served as is",
+				Method:             http.MethodGet,
+				URL:                "/icons/icon-192.png",
+				ExpectedStatus:     http.StatusOK,
+				ExpectedContent:    []string{"png-bytes"},
+				NotExpectedContent: []string{`id="root"`},
+			},
+		},
+		{
+			// An image that is HTML would only show a broken icon, with no
+			// hint of why.
+			fsys: withFiles,
+			scenario: tests.ApiScenario{
+				Name:               "a missing icon is a 404, not index.html",
+				Method:             http.MethodGet,
+				URL:                "/icons/x.png",
+				ExpectedStatus:     http.StatusNotFound,
+				NotExpectedContent: []string{`id="root"`},
+			},
+		},
+		{
+			// Only the directory is reserved: a route that starts like it is
+			// still a route.
+			fsys: withFiles,
+			scenario: tests.ApiScenario{
+				Name:            "a client route that starts with icons falls back to index.html",
+				Method:          http.MethodGet,
+				URL:             "/icons-du-club",
+				ExpectedStatus:  http.StatusOK,
+				ExpectedContent: []string{`id="root"`},
+			},
+		},
+		{
+			// Only these files and directories are concerned: the other paths
+			// keep the fallback and their headers.
 			fsys: withFiles,
 			scenario: tests.ApiScenario{
 				Name:            "a client route is still index.html, without the headers of the files",

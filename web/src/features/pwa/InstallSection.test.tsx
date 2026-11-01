@@ -118,6 +118,37 @@ test("InstallSection — l'appli installée, le bouton disparaît sans prendre l
   elsewhere.remove();
 });
 
+test("InstallSection — l'appli installée pendant que le bouton a le focus, le titre le prend", async () => {
+  listen();
+  offer();
+  const screen = await mount();
+  const button = buttonOf(installButton(screen));
+  button.focus();
+  expect(document.activeElement).toBe(button);
+
+  // Installed some other way (the menu of the browser): the button goes while it has the focus.
+  window.dispatchEvent(new Event("appinstalled"));
+
+  await expect.element(installButton(screen)).not.toBeInTheDocument();
+  await expect.element(title(screen)).toHaveFocus();
+});
+
+test("InstallSection — une nouvelle offre redessine la page sans enlever le focus au bouton", async () => {
+  listen();
+  offer();
+  const screen = await mount();
+  const button = buttonOf(installButton(screen));
+  button.focus();
+
+  // The browser can make its offer again: the page draws again, and the same button stays.
+  offer();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+
+  expect(buttonOf(installButton(screen))).toBe(button);
+  expect(document.activeElement).toBe(button);
+});
+
 test("InstallSection — rien quand le site est installé", async () => {
   listen();
   offer();
