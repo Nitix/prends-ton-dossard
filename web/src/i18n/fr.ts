@@ -103,6 +103,22 @@ export const fr = {
     lastUsed: (date: string) => `Utilisée le ${date}`,
     neverUsed: "Jamais utilisée",
   },
+  // The calendar link of the profile page (see features/calendar): an address that a calendar app subscribes to.
+  calendar: {
+    title: "Agenda",
+    create: "Créer mon lien d'agenda",
+    help: "Ajoute-le comme abonnement dans ton agenda (Google Agenda, Apple Calendrier, Outlook).",
+    // The server keeps the fingerprint of the link only: it is shown when it is made, and no more.
+    shownOnce: "Ce lien ne sera plus affiché : copie-le maintenant.",
+    copy: "Copier",
+    copied: "Lien copié.",
+    // When a link exists and is not on screen.
+    exists: "Ton lien d'agenda est actif.",
+    // The button, and the title and the text of the window that asks first.
+    renew: "Nouveau lien",
+    renewHint: "L'ancien lien cessera de marcher.",
+    remove: "Supprimer le lien",
+  },
   // The labels of the participation statuses.
   status: {
     interested: "Intéressé",
@@ -162,6 +178,10 @@ export const fr = {
     // The box that reminds a runner who is only interested to register, and its text: the date is already formatted.
     reminderTitle: "Rappel",
     reminder: (date: string) => `Pense à t'inscrire avant le ${date}.`,
+    // The button that downloads a calendar file of the event, and the name of that file when the event's own name
+    // has nothing left once the characters a file name cannot have are taken out (the extension is added).
+    addToCalendar: "Ajouter à mon agenda",
+    calendarFileName: "evenement",
   },
   // What a member does with the participations of an event (see features/participations).
   participation: {

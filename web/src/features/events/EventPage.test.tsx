@@ -1051,12 +1051,14 @@ test("EventPage — l'admin peut supprimer l'événement des autres", async () =
   await expect.element(screen.getByRole("button", { name: fr.common.delete })).toBeVisible();
 });
 
-test("EventPage — tant que son coureur n'est pas connu, on ne propose que Modifier", async () => {
+test("EventPage — tant que son coureur n'est pas connu, on ne propose que Modifier et l'agenda", async () => {
   mocks.myRunner.mockReturnValue(new Promise(() => {}));
   const { screen } = await renderPage();
   await loaded(screen);
 
   await expect.element(screen.getByRole("link", { name: fr.common.edit })).toBeVisible();
+  // The file of the event is made of the event alone.
+  await expect.element(screen.getByRole("button", { name: fr.event.addToCalendar })).toBeVisible();
   await expect
     .element(screen.getByRole("button", { name: fr.participation.join }))
     .not.toBeInTheDocument();
@@ -1083,6 +1085,78 @@ test("EventPage — un événement sans épreuve n'a ni J'y vais ni Ajouter quel
   await expect.element(screen.getByRole("link", { name: fr.common.edit })).toBeVisible();
 });
 
+/**
+ * Stands in for the click that makes the browser save a file: nothing is
+ * saved in the test, but the anchor is known (its name and its address, which is
+ * the one of the Blob, still there to be read).
+ */
+function watchDownloads() {
+  const downloads: { name: string; href: string }[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    downloads.push({ name: this.download, href: this.href });
+  });
+  return downloads;
+}
+
+test("EventPage — « Ajouter à mon agenda » télécharge un .ics", async () => {
+  const downloads = watchDownloads();
+  const revoke = vi.spyOn(URL, "revokeObjectURL");
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  await screen.getByRole("button", { name: fr.event.addToCalendar }).click();
+
+  // One file, named after the event.
+  expect(downloads).toHaveLength(1);
+  const [download] = downloads;
+  expect(download?.name).toBe("Trail des Crêtes.ics");
+  expect(download?.href).toMatch(/^blob:/);
+  const response = await fetch(download?.href ?? "");
+  expect(response.headers.get("content-type")).toBe("text/calendar;charset=utf-8");
+  const lines = (await response.text()).split("\r\n");
+  // The days of the event (the 13th and the 14th: the end is the day after), its place and its page.
+  expect(lines).toEqual(
+    expect.arrayContaining([
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT",
+      "UID:event-event@prends-ton-dossard",
+      "DTSTART;VALUE=DATE:20260613",
+      "DTEND;VALUE=DATE:20260615",
+      "SUMMARY:Trail des Crêtes",
+      "LOCATION:Annecy",
+      `URL:${location.origin}/evenements/event`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ]),
+  );
+  expect(lines.find((line) => line.startsWith("DTSTAMP:"))).toMatch(/^DTSTAMP:\d{8}T\d{6}Z$/);
+  // The address of the file is let go a moment later, once the browser has had it.
+  expect(revoke).not.toHaveBeenCalled();
+  await vi.waitFor(
+    () => {
+      expect(revoke).toHaveBeenCalledExactlyOnceWith(download?.href);
+    },
+    { timeout: 3000 },
+  );
+});
+
+test("EventPage — le fichier d'un événement dont le nom n'a rien d'utilisable s'appelle evenement.ics, ou event.ics en anglais", async () => {
+  const downloads = watchDownloads();
+  const nameless = { ...eventRecord, name: "???" };
+  const { screen } = await renderPage({ event: nameless });
+  await loaded(screen, "???");
+  await screen.getByRole("button", { name: fr.event.addToCalendar }).click();
+  expect(downloads.map(({ name }) => name)).toEqual(["evenement.ics"]);
+
+  await screen.unmount();
+  const english = await renderPage({ event: nameless, languages: ["en-GB"] });
+  await loaded(english.screen, "???");
+  await english.screen.getByRole("button", { name: "Add to my calendar" }).click();
+  expect(downloads.map(({ name }) => name)).toEqual(["evenement.ics", "event.ics"]);
+});
+
 test("EventPage — les boutons d'action font au moins 44 px", async () => {
   const { screen } = await renderPage();
   await loaded(screen);
@@ -1090,6 +1164,7 @@ test("EventPage — les boutons d'action font au moins 44 px", async () => {
   for (const element of [
     screen.getByRole("button", { name: fr.participation.join }),
     screen.getByRole("button", { name: fr.participation.addSomeone }),
+    screen.getByRole("button", { name: fr.event.addToCalendar }),
     screen.getByRole("link", { name: fr.common.edit }),
     screen.getByRole("button", { name: fr.common.delete }),
   ]) {

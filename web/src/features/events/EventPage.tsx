@@ -12,6 +12,7 @@ import type { ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
+import { downloadEventIcs } from "../calendar/eventIcs";
 import { useComments } from "../comments/api";
 import { CommentsSection } from "../comments/CommentsSection";
 import { useOffers } from "../offers/api";
@@ -274,6 +275,15 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             {t.participation.addSomeone}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => {
+            downloadEventIcs(view, t.event.calendarFileName);
+          }}
+          className={SECONDARY}
+        >
+          {t.event.addToCalendar}
+        </button>
         <Link
           to="/evenements/$id/modifier"
           params={{ id: event.id }}

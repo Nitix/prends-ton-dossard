@@ -137,6 +137,9 @@ beforeEach(() => {
   mocks.passkeyDelete.mockResolvedValue(true);
   mocks.registerPasskey.mockResolvedValue(true);
   mocks.passkeysSupported.mockReturnValue(true);
+  // The calendar section asks the server whether the account has a link; a test
+  // of another route gives its own answer.
+  mocks.send.mockResolvedValue({ exists: false });
 });
 
 function refusal(status: number, data: unknown) {
@@ -227,6 +230,23 @@ test("ProfilePage — montre le nom, l'email actuel et les sections", async () =
   await expect.element(section(screen, fr.profile.nameTitle)).toBeVisible();
   await expect.element(section(screen, fr.profile.passwordTitle)).toBeVisible();
   await expect.element(section(screen, fr.passkeys.title)).toBeVisible();
+});
+
+/** The second element is after the first in the page. */
+function follows(first: Element, second: Element): boolean {
+  return (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+test("ProfilePage — la section Agenda vient après les clés d'accès, et avant le lien « Statistiques »", async () => {
+  const screen = await renderProfile();
+
+  const calendar = section(screen, fr.calendar.title);
+  await expect.element(calendar.getByRole("button", { name: fr.calendar.create })).toBeVisible();
+  expect(mocks.send).toHaveBeenCalledWith("/api/app/calendar", { method: "GET" });
+  expect(follows(section(screen, fr.passkeys.title).element(), calendar.element())).toBe(true);
+  expect(
+    follows(calendar.element(), screen.getByRole("link", { name: fr.stats.link }).element()),
+  ).toBe(true);
 });
 
 test("ProfilePage — le lien « Statistiques » est avant la déconnexion", async () => {

@@ -94,6 +94,18 @@ export const en = {
     lastUsed: (date: string) => `Used on ${date}`,
     neverUsed: "Never used",
   },
+  calendar: {
+    title: "Calendar",
+    create: "Create my calendar link",
+    help: "Add it as a subscription in your calendar (Google Calendar, Apple Calendar, Outlook).",
+    shownOnce: "This link will not be shown again: copy it now.",
+    copy: "Copy",
+    copied: "Link copied.",
+    exists: "Your calendar link is active.",
+    renew: "New link",
+    renewHint: "The old link will stop working.",
+    remove: "Delete the link",
+  },
   status: {
     interested: "Interested",
     registered: "Registered",
@@ -132,6 +144,8 @@ export const en = {
     daysLeft: (n: number) => (n === 0 ? "last day" : n === 1 ? "1 day left" : `${n} days left`),
     reminderTitle: "Reminder",
     reminder: (date: string) => `Remember to register by ${date}.`,
+    addToCalendar: "Add to my calendar",
+    calendarFileName: "event",
   },
   participation: {
     join: "I'm in",

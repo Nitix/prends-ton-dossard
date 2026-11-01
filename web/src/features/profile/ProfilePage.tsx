@@ -12,6 +12,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
 import { logout, useSession } from "../auth/session";
+import { CalendarSection } from "../calendar/CalendarSection";
 import { failureOf, text, type Failure } from "./forms";
 import { PasskeyList } from "./PasskeyList";
 import { Section } from "./Section";
@@ -21,8 +22,8 @@ const BUTTON =
 
 /**
  * The profile of the signed-in user: the photo and the name the group sees,
- * the email and the password of the account, the passkeys, the link to the
- * statistics, and the sign-out. The app shell around it owns the page's
+ * the email and the password of the account, the passkeys, the calendar link,
+ * the link to the statistics, and the sign-out. The app shell around it owns the page's
  * `<main>`.
  */
 export function ProfilePage() {
@@ -54,6 +55,7 @@ export function ProfilePage() {
         <PasswordForm user={user} />
       </Section>
       <PasskeyList userId={user.id} />
+      <CalendarSection />
       <Link to="/stats" className={`${SECONDARY} inline-flex items-center self-start`}>
         {t.stats.link}
       </Link>
