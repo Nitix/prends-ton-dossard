@@ -10,6 +10,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import type { OfferKind } from "../../lib/types";
+import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
@@ -624,6 +625,7 @@ describe("the dialog", () => {
     await page.viewport(390, 844);
     const { screen } = await openDialog({ kind: "ride" });
     await expect.element(dialogOf(screen, fr.offers.form.titleNew.ride)).toBeVisible();
+    await animationsDone();
 
     const heights = [
       screen.getByLabelText(fr.offers.form.place.ride, { exact: true }),

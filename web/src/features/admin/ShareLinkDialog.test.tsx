@@ -8,6 +8,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { animationsDone } from "../../test/animations";
 import { ShareLinkDialog } from "./ShareLinkDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -295,6 +296,7 @@ test("ShareLinkDialog — les boutons font au moins 44 px", async () => {
   withClipboard();
   withShare();
   const screen = await renderDialog();
+  await animationsDone();
 
   for (const button of [shareButton(screen), copyButton(screen)]) {
     expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

@@ -16,6 +16,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
@@ -379,6 +380,7 @@ test("DeleteEventDialog — Annuler ferme sans rien supprimer", async () => {
 
 test("DeleteEventDialog — le bouton rouge et celui d'annulation font au moins 44 px", async () => {
   const { screen } = await renderDialog();
+  await animationsDone();
 
   for (const button of [confirm(screen), screen.getByRole("button", { name: fr.common.cancel })]) {
     expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

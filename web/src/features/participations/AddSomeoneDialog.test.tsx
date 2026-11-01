@@ -8,6 +8,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { toEventView, type EventView } from "../events/api";
 import { SUPPORT, UNDECIDED } from "../events/participants";
@@ -505,6 +506,7 @@ test("AddSomeoneDialog — les champs et les boutons font au moins 44 px", async
   await loaded(screen);
   await runnerSelect(screen).selectOptions(ninaRunner.id);
   await formatSelect(screen).selectOptions(UNDECIDED);
+  await animationsDone();
 
   for (const element of [
     runnerSelect(screen),

@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import type { ParticipationRecord } from "../../lib/types";
+import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { p1 } from "../events/testFixture";
 import { ResultDialog } from "./ResultDialog";
@@ -495,6 +496,7 @@ test("ResultDialog — le classement et le nombre sont des nombres d'au moins 1,
 
 test("ResultDialog — les champs et les boutons font au moins 44 px", async () => {
   const { screen } = await renderDialog();
+  await animationsDone();
 
   for (const control of [
     status(screen),
