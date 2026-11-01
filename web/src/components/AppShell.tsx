@@ -39,9 +39,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <TabBar isAdmin={isAdmin} />
-      {/* The sheet of the page, over the sky. On a phone, room under the content for the tab bar and the floating button. */}
+      {/* The sheet of the page, over the sky. On a phone, room under the content for the tab bar
+          and the floating button; on a tablet, for the button, which floats over the right of the
+          column (from `lg` the wider screen has it beside the column). */}
       <div className="relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:rounded-t-[2rem]">
-        <main className="mx-auto max-w-3xl px-4 pt-6 pb-44 md:px-5 md:pt-8 md:pb-12 lg:max-w-4xl">
+        <main className="mx-auto max-w-3xl px-4 pt-6 pb-44 md:px-5 md:pt-8 md:pb-28 lg:max-w-4xl lg:pb-12">
           {children}
         </main>
       </div>

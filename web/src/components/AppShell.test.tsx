@@ -79,6 +79,10 @@ function renderShell(content: ReactNode = <p>Contenu de la page</p>) {
 
 const link = (name: string) => ({ name, exact: true });
 
+/** Two boxes that do not cover each other. */
+const apart = (a: DOMRect, b: DOMRect) =>
+  a.bottom <= b.top || b.bottom <= a.top || a.right <= b.left || b.right <= a.left;
+
 test("AppShell — onglet Admin absent pour un membre", async () => {
   const screen = await renderShell();
 
@@ -212,7 +216,7 @@ test("AppShell — le nom du site est dans l'en-tête à toutes les tailles, pas
   expect(name.element().getBoundingClientRect().right).toBeLessThanOrEqual(tabs.left);
 });
 
-test("AppShell — sur un téléphone, la fin de la page remonte au-dessus de la barre d'onglets et du bouton +", async () => {
+test("AppShell — du téléphone au grand écran, la fin de la page ne passe ni sous la barre d'onglets ni sous le bouton +", async () => {
   // Both float over the page: the room under the content must clear them once
   // the page is scrolled to the bottom.
   const screen = await renderShell(
@@ -228,9 +232,16 @@ test("AppShell — sur un téléphone, la fin de la page remonte au-dessus de la
   const plus = screen.getByRole("link", link(fr.nav.createEvent));
   const last = screen.getByText("Élément 30", { exact: true });
 
+  // Phones, where the bar and the + button float over the whole width at the
+  // bottom; tablets, where the + button floats over the right of the column;
+  // wide screens, where it is beside the column.
   for (const [width, height] of [
     [390, 844],
     [320, 568],
+    [768, 1024],
+    [834, 1194],
+    [1024, 768],
+    [1280, 800],
   ] as const) {
     await page.viewport(width, height);
     window.scrollTo(0, document.documentElement.scrollHeight);
@@ -243,7 +254,7 @@ test("AppShell — sur un téléphone, la fin de la page remonte au-dessus de la
     const bar = nav.getByRole("list").element().getBoundingClientRect();
     const button = plus.element().getBoundingClientRect();
     expect(item.top, `${width} px: on the screen`).toBeGreaterThanOrEqual(0);
-    expect(item.bottom, `${width} px: above the tab bar`).toBeLessThanOrEqual(bar.top);
-    expect(item.bottom, `${width} px: above the + button`).toBeLessThanOrEqual(button.top);
+    expect(apart(item, bar), `${width} px: not under the tab bar`).toBe(true);
+    expect(apart(item, button), `${width} px: not under the + button`).toBe(true);
   }
 });
