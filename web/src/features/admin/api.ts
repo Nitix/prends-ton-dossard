@@ -252,7 +252,17 @@ export function useMergeActions() {
       guarded(async () => {
         const result = await mergeRequest(kind, ids, false);
         if (kind === "events") queryClient.removeQueries({ queryKey: ["event", ids.mergeId] });
-        await invalidateEvents(queryClient, eventId);
+        await Promise.all([
+          invalidateEvents(queryClient, eventId),
+          // The comments and the offers of the merged event moved to the one that stays: the
+          // lists, and the latest comments of the home page, still name the one that is gone.
+          ...(kind === "events"
+            ? [
+                queryClient.invalidateQueries({ queryKey: ["comments"] }),
+                queryClient.invalidateQueries({ queryKey: ["offers"] }),
+              ]
+            : []),
+        ]);
         return result;
       }),
   };

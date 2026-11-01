@@ -6,12 +6,18 @@ import { DANGER, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
+import { useComments } from "../comments/api";
+import { useOffers } from "../offers/api";
 import { describeError } from "../profile/forms";
 import { useDeleteEvent, type EventView } from "./api";
 
 /**
  * Asks before deleting an event, and says who is concerned: the server deletes
- * its formats and their participations with it. Once deleted, goes to the list.
+ * its formats and their participations with it, and the comments and offers of
+ * everybody (the places taken in them go too). The warning says so, and the
+ * lines under it count them when the page has them (it asks for them with the
+ * event). A duplicate is better merged, which keeps them. Once deleted, goes to
+ * the list.
  */
 export function DeleteEventDialog({
   open,
@@ -55,8 +61,23 @@ function DeleteForm({ view, onClose }: { view: EventView; onClose: () => void })
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const remove = useDeleteEvent(view.event.id);
+  const comments = useComments(view.event.id);
+  const offers = useOffers(view.event.id);
   const [message, setMessage] = useState<string | null>(null);
   const names = participantNames(view);
+  // What else is lost, when it is known: the comments and the cars and lodgings, the ones that exist.
+  const counts: [number, (n: number) => string][] = [
+    [comments.data?.length ?? 0, t.event.deleteCounts.comments],
+    [
+      offers.data?.filter(({ offer }) => offer.kind === "ride").length ?? 0,
+      t.event.deleteCounts.rides,
+    ],
+    [
+      offers.data?.filter(({ offer }) => offer.kind === "lodging").length ?? 0,
+      t.event.deleteCounts.lodgings,
+    ],
+  ];
+  const lost = counts.filter(([n]) => n > 0).map(([n, say]) => say(n));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,11 +97,17 @@ function DeleteForm({ view, onClose }: { view: EventView; onClose: () => void })
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
       <p>{t.event.deleteWarning(view.event.name)}</p>
+      {lost.length > 0 && (
+        <p>
+          {t.event.deleteContents} <strong>{f.list(lost)}</strong>
+        </p>
+      )}
       {names.length > 0 && (
         <p>
           {t.event.deleteParticipants} <strong>{f.list(names)}</strong>
         </p>
       )}
+      <p>{t.event.deleteDuplicate(`${t.nav.admin} > ${t.admin.duplicatesTitle}`)}</p>
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
           {message}

@@ -12,12 +12,14 @@ import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
 import { ToastProvider } from "../../components/Toast";
+import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import {
+  aliceRunner,
   event2Record,
   eventRecord,
   p1,
@@ -31,13 +33,50 @@ import {
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
 
+type Rec = Record<string, unknown>;
+
 const mocks = vi.hoisted(() => ({
   remove: vi.fn<(id: string) => Promise<unknown>>(),
+  // What goes with the event: its comments, and its offers (cars and lodgings).
+  comments: vi.fn<(options: Rec) => Promise<unknown>>(),
+  offers: vi.fn<(options: Rec) => Promise<unknown>>(),
 }));
 
 vi.mock("../../lib/pb", () => ({
-  pb: { collection: (name: string) => ({ events: { delete: mocks.remove } })[name] },
+  pb: {
+    filter: (raw: string, params: Rec) => `${raw} ${JSON.stringify(params)}`,
+    collection: (name: string) =>
+      ({
+        events: { delete: mocks.remove },
+        comments: { getFullList: mocks.comments },
+        offers: { getFullList: mocks.offers },
+      })[name],
+  },
 }));
+
+const base = { created: "", updated: "", collectionId: "", collectionName: "" };
+
+/** A comment of the event, as the server sends it. */
+const commentRecord = (id: string) => ({
+  ...base,
+  id,
+  event: "event",
+  author: aliceRunner.id,
+  body: "Bonjour",
+  expand: { author: aliceRunner },
+});
+
+/** A car or a lodging of the event, as the server sends it. */
+const offerRecord = (id: string, kind: "ride" | "lodging") => ({
+  ...base,
+  id,
+  event: "event",
+  kind,
+  owner: aliceRunner.id,
+  place: "Lyon",
+  seats: 0,
+  expand: { owner: aliceRunner },
+});
 
 let trail: EventView;
 let lyon: EventView;
@@ -52,6 +91,8 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mocks.remove.mockReset().mockResolvedValue(true);
+  mocks.comments.mockReset().mockResolvedValue([]);
+  mocks.offers.mockReset().mockResolvedValue([]);
 });
 
 async function renderDialog(view: EventView = trail, languages = ["fr-FR"]) {
@@ -170,6 +211,90 @@ test("DeleteEventDialog — dit quel événement est supprimé, avec ses épreuv
   await expect.element(screen.getByText(fr.event.deleteWarning("Trail des Crêtes"))).toBeVisible();
 });
 
+test("DeleteEventDialog — dit que les commentaires, les voitures, les logements et leurs places partent aussi", async () => {
+  const { screen } = await renderDialog();
+
+  const text = screen.getByRole("dialog").element().textContent;
+  for (const word of ["commentaires", "voitures", "logements", "places"]) {
+    expect(text).toContain(word);
+  }
+});
+
+test("DeleteEventDialog — en anglais, le même avertissement", async () => {
+  const { screen } = await renderDialog(trail, ["en-GB"]);
+
+  await expect.element(screen.getByText(en.event.deleteWarning("Trail des Crêtes"))).toBeVisible();
+  const text = screen.getByRole("dialog").element().textContent;
+  for (const word of ["comments", "cars", "lodgings", "places"]) {
+    expect(text).toContain(word);
+  }
+});
+
+test("DeleteEventDialog — pour un doublon, elle renvoie à Admin > Doublons, qui garde les commentaires et les offres", async () => {
+  const { screen } = await renderDialog();
+
+  const hint = fr.event.deleteDuplicate(`${fr.nav.admin} > ${fr.admin.duplicatesTitle}`);
+  await expect.element(screen.getByText(hint)).toBeVisible();
+  expect(hint).toContain("Admin > Doublons");
+});
+
+test("DeleteEventDialog — compte ce qui part avec l'événement : commentaires, voitures, logements", async () => {
+  mocks.comments.mockResolvedValue([commentRecord("c1"), commentRecord("c2"), commentRecord("c3")]);
+  mocks.offers.mockResolvedValue([
+    offerRecord("o1", "ride"),
+    offerRecord("o2", "ride"),
+    offerRecord("o3", "lodging"),
+  ]);
+
+  const { screen } = await renderDialog();
+
+  await expect.element(screen.getByText("3 commentaires, 2 voitures et 1 logement")).toBeVisible();
+  expect(screen.getByRole("dialog").element().textContent).toContain(fr.event.deleteContents);
+});
+
+test("DeleteEventDialog — au singulier, et sans ce qui n'existe pas", async () => {
+  mocks.comments.mockResolvedValue([commentRecord("c1")]);
+  mocks.offers.mockResolvedValue([offerRecord("o1", "lodging")]);
+
+  const { screen } = await renderDialog();
+
+  await expect.element(screen.getByText("1 commentaire et 1 logement")).toBeVisible();
+});
+
+test("DeleteEventDialog — en anglais, les comptes suivent la langue", async () => {
+  mocks.comments.mockResolvedValue([commentRecord("c1"), commentRecord("c2")]);
+  mocks.offers.mockResolvedValue([offerRecord("o1", "ride")]);
+
+  const { screen } = await renderDialog(trail, ["en-GB"]);
+
+  await expect.element(screen.getByText("2 comments and 1 car")).toBeVisible();
+});
+
+test("DeleteEventDialog — sans commentaire ni offre, ou tant qu'on ne les connaît pas, la phrase suffit", async () => {
+  // Nothing goes with it: no line of counts.
+  const empty = await renderDialog();
+  await vi.waitFor(() => {
+    expect(mocks.comments).toHaveBeenCalled();
+    expect(mocks.offers).toHaveBeenCalled();
+  });
+  expect(empty.screen.getByRole("dialog").element().textContent).not.toContain(
+    fr.event.deleteContents,
+  );
+  await empty.screen.unmount();
+
+  // The lists cannot be read: the warning is all there is, and the deletion is not held up.
+  mocks.comments.mockRejectedValue(new Error("offline"));
+  mocks.offers.mockReturnValue(new Promise(() => {}));
+  const unknown = await renderDialog();
+  await expect
+    .element(unknown.screen.getByText(fr.event.deleteWarning("Trail des Crêtes")))
+    .toBeVisible();
+  expect(unknown.screen.getByRole("dialog").element().textContent).not.toContain(
+    fr.event.deleteContents,
+  );
+  await expect.element(confirm(unknown.screen)).toBeEnabled();
+});
+
 test("DeleteEventDialog — sans participant, elle n'en cite aucun", async () => {
   const { screen } = await renderDialog(lyon);
 
@@ -192,6 +317,9 @@ test("DeleteEventDialog — Supprimer efface l'événement, renvoie vers /liste 
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["pending"]);
+  // Its comments and its offers went with it, and the home page lists the latest comments of all the events.
+  expect(keys).toContainEqual(["comments"]);
+  expect(keys).toContainEqual(["offers"]);
   await vi.waitFor(() => {
     expect(queryClient.getQueryData(["event", "event"])).toBeUndefined();
   });

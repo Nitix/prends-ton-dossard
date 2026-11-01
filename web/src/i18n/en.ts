@@ -112,7 +112,15 @@ export const en = {
     addedByUnconfirmed: (name: string) => `added by ${name} · not confirmed`,
     deleteTitle: "Delete the event?",
     deleteWarning: (name: string) =>
-      `“${name}” will be deleted, with its races and their participations.`,
+      `“${name}” will be deleted, with its races and their participations, its comments, the cars and lodgings offered, and the places taken in them.`,
+    deleteDuplicate: (where: string) =>
+      `Is it a duplicate? An admin can merge it (${where}), which keeps the comments, the cars and the lodgings.`,
+    deleteContents: "Also deleted:",
+    deleteCounts: {
+      comments: (n: number) => `${n} ${plural("en", n, { one: "comment", other: "comments" })}`,
+      rides: (n: number) => `${n} ${plural("en", n, { one: "car", other: "cars" })}`,
+      lodgings: (n: number) => `${n} ${plural("en", n, { one: "lodging", other: "lodgings" })}`,
+    },
     deleteParticipants: "Participants concerned:",
     deleted: "Event deleted.",
     interestedTitle: "Interested, race to pick",

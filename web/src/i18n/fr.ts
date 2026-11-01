@@ -127,8 +127,20 @@ export const fr = {
     // Under a participant on the page of an event: who added them, and that they have not agreed yet.
     addedByUnconfirmed: (name: string) => `ajouté par ${name} · non confirmé`,
     deleteTitle: "Supprimer l'événement ?",
+    // Says everything the server deletes with the event: its comments and its offers go too, with the places taken in them.
     deleteWarning: (name: string) =>
-      `« ${name} » sera supprimé, avec ses épreuves et leurs participations.`,
+      `« ${name} » sera supprimé, avec ses épreuves et leurs participations, ses commentaires, les voitures et les logements proposés, et les places prises dedans.`,
+    // For a duplicate, a merge keeps the comments and the offers. `where` is the way to the page of the admin: "Admin > Doublons".
+    deleteDuplicate: (where: string) =>
+      `C'est un doublon ? Un admin peut le fusionner (${where}) : les commentaires, les voitures et les logements sont alors gardés.`,
+    // Followed by what is lost with the event, already joined: "3 commentaires, 2 voitures et 1 logement".
+    deleteContents: "Seront aussi supprimés :",
+    deleteCounts: {
+      comments: (n: number) =>
+        `${n} ${plural("fr", n, { one: "commentaire", other: "commentaires" })}`,
+      rides: (n: number) => `${n} ${plural("fr", n, { one: "voiture", other: "voitures" })}`,
+      lodgings: (n: number) => `${n} ${plural("fr", n, { one: "logement", other: "logements" })}`,
+    },
     // Followed by the names of the participants, already joined: "Alice, Bob et Sam".
     deleteParticipants: "Participants concernés :",
     deleted: "Événement supprimé.",

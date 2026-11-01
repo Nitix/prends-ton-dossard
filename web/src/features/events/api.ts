@@ -300,9 +300,11 @@ export async function invalidateEvents(queryClient: QueryClient, eventId: string
 
 /**
  * Deletes an event; the server deletes its formats and their participations
- * with it. Only the lists are out of date afterwards: the page of the event
- * is not asked for again (it would answer "not found"), whoever calls this
- * leaves it and then `removeQueries` it.
+ * with it, and its comments and offers. Only the lists are out of date
+ * afterwards, the comments and the offers of all the events included (the home
+ * page lists the latest comments): the page of the event is not asked for
+ * again (it would answer "not found"), whoever calls this leaves it and then
+ * `removeQueries` it.
  */
 export function useDeleteEvent(eventId: string): UseMutationResult<void, Error, void> {
   const queryClient = useQueryClient();
@@ -314,6 +316,8 @@ export function useDeleteEvent(eventId: string): UseMutationResult<void, Error, 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["events"] }),
         queryClient.invalidateQueries({ queryKey: ["pending"] }),
+        queryClient.invalidateQueries({ queryKey: ["comments"] }),
+        queryClient.invalidateQueries({ queryKey: ["offers"] }),
       ]);
     },
   });

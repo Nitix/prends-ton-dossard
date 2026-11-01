@@ -342,6 +342,10 @@ test("DuplicatesPage — « Fusionner » désactivé avant l'aperçu, actif apr�
   // The lists and the page of the event that stays ask for what the server holds now.
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ["events"] });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ["event", "event"] });
+  // The comments and the offers of the merged event moved to the one that stays, and the
+  // latest comments of the home page may name the one that is gone.
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["comments"] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["offers"] });
   // The page starts over: nothing is chosen, nothing is previewed.
   await expect.element(picker(screen, t.firstEvent).getByLabelText(t.searchEvent)).toBeVisible();
   await expect.element(previewButton(screen)).not.toBeInTheDocument();
