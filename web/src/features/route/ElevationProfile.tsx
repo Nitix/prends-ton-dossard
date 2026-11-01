@@ -44,7 +44,11 @@ const runCount = (plotWidth: number) =>
 const slopeHalf = (lastKm: number, plotWidth: number) =>
   Math.max((lastKm / runCount(plotWidth)) * 1.5, 0.075);
 
-/** The altitude at a distance, between the two points around it. */
+/**
+ * The altitude at a distance, between the two points around it: a mean of the
+ * two, weighted by the distance, which stays between them (their difference
+ * could overflow, and `Infinity × 0` is no altitude).
+ */
 function altitudeAt(points: WithAltitude[], km: number): number {
   let low = 0;
   let high = points.length - 1;
@@ -57,7 +61,8 @@ function altitudeAt(points: WithAltitude[], km: number): number {
   const b = points[high];
   if (!a || !b) return a?.ele ?? b?.ele ?? 0;
   if (b.km === a.km) return a.ele;
-  return a.ele + ((b.ele - a.ele) * (km - a.km)) / (b.km - a.km);
+  const ratio = Math.min(1, Math.max(0, (km - a.km) / (b.km - a.km)));
+  return a.ele * (1 - ratio) + b.ele * ratio;
 }
 
 /**
