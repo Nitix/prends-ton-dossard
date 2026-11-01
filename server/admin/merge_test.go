@@ -275,6 +275,17 @@ func TestMergeEvents(t *testing.T) {
 		keptUndecided = undecided(t, app, fx.AdminRunner, fx.Event, false)
 		droppedUndecided = undecided(t, app, fx.AdminRunner, fx.Event2, false)
 	}
+	// Admin is interested in Event without a format and has not confirmed it,
+	// and has confirmed being interested in Event2, without a format.
+	adminConfirmedInMergedEvent := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		droppedUndecided = undecided(t, app, fx.AdminRunner, fx.Event, false)
+		movedUndecided = undecided(t, app, fx.AdminRunner, fx.Event2, true)
+	}
+	// The other way round: the confirmed one is in Event.
+	adminConfirmedInKeptEvent := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		keptUndecided = undecided(t, app, fx.AdminRunner, fx.Event, true)
+		droppedUndecided = undecided(t, app, fx.AdminRunner, fx.Event2, false)
+	}
 	// Admin is interested in Event without a format, and is on FLyon: the merge
 	// gives Admin a format of Event.
 	adminUndecidedOnEventAndOnLyon := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -493,6 +504,67 @@ func TestMergeEvents(t *testing.T) {
 			Status:   http.StatusOK,
 			Contains: []string{result(1, 0, 1, 0)},
 		}, adminUndecidedOnBoth),
+		{
+			Name:     "a runner without a format in both events keeps the confirmed participation of the kept event",
+			Before:   adminConfirmedInKeptEvent,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 0, 1, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				got := mustStore(t, app, "participations", keptUndecided.Id)
+				if got.GetString("event") != fx.Event.Id || !got.GetBool("confirmed") {
+					t.Errorf("the participation is in the event %q, confirmed %v, want %q and confirmed",
+						got.GetString("event"), got.GetBool("confirmed"), fx.Event.Id)
+				}
+				gone(t, app, "participations", droppedUndecided)
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the confirmed participation of the kept event that would stay",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 0, 1, 0)},
+		}, adminConfirmedInKeptEvent),
+		{
+			// The runner said it is true: the one of the merged event survives
+			// and moves to the kept event, the one of the kept event goes.
+			Name:     "a runner without a format in both events keeps the confirmed participation of the merged event",
+			Before:   adminConfirmedInMergedEvent,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 1, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				got := mustStore(t, app, "participations", movedUndecided.Id)
+				if got.GetString("event") != fx.Event.Id || got.GetString("format") != "" || !got.GetBool("confirmed") {
+					t.Errorf("the participation is in the event %q on the format %q, confirmed %v, want %q, none and confirmed",
+						got.GetString("event"), got.GetString("format"), got.GetBool("confirmed"), fx.Event.Id)
+				}
+				gone(t, app, "participations", droppedUndecided)
+				if got := undecidedOf(t, app, fx.AdminRunner, fx.Event); got == nil || got.Id != movedUndecided.Id {
+					t.Errorf("Admin must have the confirmed participation in the event only, has %v", got)
+				}
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the confirmed participation of the merged event that would replace the other",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 1, 0)},
+		}, adminConfirmedInMergedEvent),
 		{
 			Name:     "a participation without a format of the kept event is dropped when its runner gets a format by the merge",
 			Before:   adminUndecidedOnEventAndOnLyon,
@@ -913,6 +985,28 @@ func TestMerge_DryRunGivesTheResultOfTheRealRun(t *testing.T) {
 			// Admin is without a format on Event, and on FLyon.
 			undecided(t, app, fx.AdminRunner, fx.Event, false)
 			participate(t, app, fx.AdminRunner, fx.FLyon, "interested", false)
+			got, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, dryRun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			results[i] = got
+		}
+		if results[0] != results[1] {
+			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
+		}
+		if want := (admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1}); results[1] != want {
+			t.Errorf("result = %+v, want %+v", results[1], want)
+		}
+	})
+
+	t.Run("events with a confirmed participation of the merged event that wins", func(t *testing.T) {
+		var results [2]admin.MergeResult
+		for i, dryRun := range []bool{true, false} {
+			app, fx := setup(t)
+			// Admin is without a format on both events, and has confirmed the
+			// one of Event2: it replaces the one of Event.
+			undecided(t, app, fx.AdminRunner, fx.Event, false)
+			undecided(t, app, fx.AdminRunner, fx.Event2, true)
 			got, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, dryRun)
 			if err != nil {
 				t.Fatal(err)

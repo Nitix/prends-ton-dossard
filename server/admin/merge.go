@@ -24,7 +24,9 @@ type MergeResult struct {
 	MovedParticipations int `json:"movedParticipations"`
 	// DroppedParticipations is the number of participations that were deleted
 	// because their runner was already on the kept format, or already in the
-	// kept event for participations that have no format.
+	// kept event for participations that have no format. Of the two
+	// participations of a runner on a format, or in an event with no format,
+	// the one that winner picks stays.
 	DroppedParticipations int `json:"droppedParticipations"`
 	// ClearedFormatDates is the number of formats that lost their date, which
 	// was outside the range of the kept event.
@@ -42,9 +44,12 @@ type MergeResult struct {
 //  2. Those of the kept event that have no format are deleted when their runner
 //     now is on a moved format: the runner has chosen (they count as dropped).
 //  3. Those of the merged event that have no format are deleted when the runner
-//     already is in the kept event, with no format or on a format, kept or
-//     moved (they count as dropped). Otherwise they go to the kept event (they
-//     count as moved).
+//     already is in the kept event on a format, kept or moved (they count as
+//     dropped). When the runner has one with no format in the kept event too,
+//     the one that winner picks stays, as in MergeFormats: the one of the
+//     kept event, which then is the one dropped, or the one of the merged event,
+//     which replaces it and goes to the kept event (one dropped and one moved).
+//     Otherwise they go to the kept event (they count as moved).
 //
 // With dryRun it only computes the result: nothing is written. Otherwise
 // everything is written in one transaction, so a failure leaves the database as
@@ -80,15 +85,19 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 		if err != nil {
 			return err
 		}
-		// The runners that are in the kept event, with or without a format, and
-		// the participations of the kept event that have no format.
-		keptRunners := make(map[string]bool, len(inKeptEvent))
+		// The runners that are on a format of the kept event (a moved format is
+		// added below), and the participations of the kept event that have no
+		// format, in order and by runner: a runner has at most one of them.
+		onFormat := make(map[string]bool, len(inKeptEvent))
 		var keptUndecided []*core.Record
+		keptUndecidedOf := make(map[string]*core.Record)
 		for _, p := range inKeptEvent {
-			keptRunners[p.GetString("runner")] = true
 			if p.GetString("format") == "" {
 				keptUndecided = append(keptUndecided, p)
+				keptUndecidedOf[p.GetString("runner")] = p
+				continue
 			}
+			onFormat[p.GetString("runner")] = true
 		}
 		// The runners that are on a moved format.
 		movedRunners := make(map[string]bool)
@@ -102,7 +111,7 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			result.MovedFormats++
 			result.MovedParticipations += len(carried)
 			for _, p := range carried {
-				keptRunners[p.GetString("runner")] = true
+				onFormat[p.GetString("runner")] = true
 				movedRunners[p.GetString("runner")] = true
 			}
 
@@ -146,13 +155,17 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 		}
 
 		// A participation of the merged event that has no format is dropped when
-		// its runner already is in the kept event: on a format (kept or moved),
-		// or with no format either. The deletions come before the moves: the
-		// unique index on (runner, event) with no format allows one of them in
-		// the kept event.
+		// its runner already is in the kept event on a format (kept or moved):
+		// the runner has chosen. When the runner has one with no format in the
+		// kept event as well, the one that winner picks stays, as in a merge of
+		// formats: the one of the merged event replaces the one of the kept event
+		// when it wins (the two count as one moved and one dropped). The deletions
+		// come before the moves: the unique index on (runner, event) with no
+		// format allows one of them in the kept event.
 		var moving []*core.Record
 		for _, p := range mergedUndecided {
-			if keptRunners[p.GetString("runner")] {
+			runner := p.GetString("runner")
+			if onFormat[runner] {
 				result.DroppedParticipations++
 				if dryRun {
 					continue
@@ -161,6 +174,23 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 					return err
 				}
 				continue
+			}
+			if duplicate := keptUndecidedOf[runner]; duplicate != nil {
+				result.DroppedParticipations++
+				if winner(duplicate, p) != p {
+					// The one of the kept event stays, this one goes.
+					if !dryRun {
+						if err := tx.Delete(p); err != nil {
+							return err
+						}
+					}
+					continue
+				}
+				if !dryRun {
+					if err := tx.Delete(duplicate); err != nil {
+						return err
+					}
+				}
 			}
 			result.MovedParticipations++
 			moving = append(moving, p)
@@ -287,8 +317,9 @@ var statusRank = map[string]int{
 	"dns":        2,
 }
 
-// winner returns the participation of a runner that is kept when the runner is
-// on both formats of a merge. A confirmed participation wins, since the runner
+// winner returns the participation of a runner that is kept when the runner
+// is on both formats of a merge of formats, or in both events with no format
+// in a merge of events. A confirmed participation wins, since the runner
 // said it is true. Otherwise the one that is the furthest along wins, and keep
 // wins a tie.
 func winner(keep, other *core.Record) *core.Record {
