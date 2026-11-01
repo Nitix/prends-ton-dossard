@@ -8,7 +8,6 @@ import { ImageDecodeError, toAvatarBlob } from "../lib/resizeImage";
 import type { RunnerRecord } from "../lib/types";
 import { Avatar } from "./Avatar";
 import { SECONDARY } from "./buttons";
-import { useToast } from "./Toast";
 
 /** What the picker tells: a state (`status`, said politely) or a refusal (`alert`). */
 type Message = { role: "status" | "alert"; text: string };
@@ -29,10 +28,15 @@ type Message = { role: "status" | "alert"; text: string };
  * The field is a label around a file input that is hidden from sight, so that
  * it has the size and the look of a button: the label is what is tapped, and
  * what shows the focus.
+ *
+ * What happens is said in two live regions, a `status` and an `alert`, which
+ * are in the page from the start and empty: one that comes into the page
+ * together with its text is often not announced (VoiceOver, for one). Empty,
+ * they take no room (`empty:sr-only`). There is no toast: the one of a page is
+ * hidden by the window of a dialog, and the picker has to say it in both.
  */
 export function AvatarPicker({ runner }: { runner: RunnerRecord }) {
   const { t } = useI18n();
-  const toast = useToast();
   const queryClient = useQueryClient();
   const field = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -62,8 +66,6 @@ export function AvatarPicker({ runner }: { runner: RunnerRecord }) {
     }
     await queryClient.invalidateQueries();
     setMessage({ role: "status", text: done });
-    // The window of a dialog covers the toasts: the message above is for it.
-    toast.show(done);
     setBusy(false);
     return true;
   }
@@ -124,12 +126,10 @@ export function AvatarPicker({ runner }: { runner: RunnerRecord }) {
           </button>
         )}
       </div>
-      {message?.role === "status" && <output>{message.text}</output>}
-      {message?.role === "alert" && (
-        <p role="alert" className="text-sm font-medium text-red-700">
-          {message.text}
-        </p>
-      )}
+      <output className="empty:sr-only">{message?.role === "status" ? message.text : null}</output>
+      <p role="alert" className="text-sm font-medium text-red-700 empty:sr-only">
+        {message?.role === "alert" ? message.text : null}
+      </p>
     </div>
   );
 }

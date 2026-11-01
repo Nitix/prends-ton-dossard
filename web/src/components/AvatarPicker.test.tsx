@@ -9,7 +9,6 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import type { RunnerRecord } from "../lib/types";
 import { imageFile, pixelURL, sizeOf } from "../test/images";
 import { AvatarPicker } from "./AvatarPicker";
-import { ToastProvider } from "./Toast";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../styles.css";
@@ -54,9 +53,8 @@ async function renderPicker(runner: RunnerRecord = alice, languages = ["fr"]) {
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
-        <ToastProvider>
-          <AvatarPicker runner={runner} />
-        </ToastProvider>
+        {/* No ToastProvider: the picker has no toast, and would throw without one if it had. */}
+        <AvatarPicker runner={runner} />
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -98,9 +96,45 @@ test("AvatarPicker — choisir un fichier le réduit puis l'envoie : update(id, 
   await vi.waitFor(() => {
     expect(invalidate).toHaveBeenCalledWith();
   });
-  await expect.element(screen.getByRole("status").first()).toHaveTextContent(fr.avatar.saved);
-  // And a toast says it too, which the window of a dialog would hide.
-  await expect.element(screen.getByText(fr.avatar.saved).last()).toBeVisible();
+  // The live region says it, and only it: no toast says it a second time.
+  await expect.element(screen.getByRole("status")).toHaveTextContent(fr.avatar.saved);
+  const said = screen.getByText(fr.avatar.saved);
+  await expect.element(said).toBeVisible();
+  expect(said.element().tagName).toBe("OUTPUT");
+});
+
+test("AvatarPicker — la zone d'état et l'alerte existent avant toute action, vides, pour être annoncées", async () => {
+  // A live region that comes into the page together with its text is often not
+  // announced (VoiceOver, for one): both are there from the start, and empty.
+  const { screen } = await renderPicker(withPhoto);
+
+  await expect.element(screen.getByRole("status")).toBeInTheDocument();
+  await expect.element(screen.getByRole("status")).toBeEmptyDOMElement();
+  await expect.element(screen.getByRole("alert")).toBeInTheDocument();
+  await expect.element(screen.getByRole("alert")).toBeEmptyDOMElement();
+  // Empty, they take no room: the buttons are right under the photo.
+  const photo = screen.container.querySelector("img")?.getBoundingClientRect();
+  const buttons = screen.container.querySelector("label")?.getBoundingClientRect();
+  expect((buttons?.top ?? 0) - (photo?.bottom ?? 0)).toBe(12);
+});
+
+test("AvatarPicker — l'alerte et l'état se relaient dans leurs zones, sans se superposer", async () => {
+  mocks.update.mockRejectedValueOnce(
+    refusal(400, { avatar: { code: "validation_file_size_limit", message: "…" } }),
+  );
+  const { screen } = await renderPicker();
+  const file = await imageFile(800, 600);
+
+  await picker(screen).upload(file);
+  await expect
+    .element(screen.getByRole("alert"))
+    .toHaveTextContent(fr.errors.validation_file_size_limit);
+  await expect.element(screen.getByRole("status")).toBeEmptyDOMElement();
+  await picker(screen).upload(file);
+
+  // The refusal goes away when the next try starts, and success takes its place.
+  await expect.element(screen.getByRole("status")).toHaveTextContent(fr.avatar.saved);
+  await expect.element(screen.getByRole("alert")).toBeEmptyDOMElement();
 });
 
 test("AvatarPicker — pendant la préparation, le dit, et un deuxième fichier n'est pas envoyé", async () => {
@@ -109,7 +143,7 @@ test("AvatarPicker — pendant la préparation, le dit, et un deuxième fichier 
 
   await picker(screen).upload(await imageFile(800, 600));
 
-  await expect.element(screen.getByRole("status").first()).toHaveTextContent(fr.avatar.preparing);
+  await expect.element(screen.getByRole("status")).toHaveTextContent(fr.avatar.preparing);
   // Not disabled, which would drop the focus to the page: it ignores the file.
   await expect.element(picker(screen)).toHaveAttribute("aria-disabled", "true");
   await picker(screen).upload(await imageFile(640, 480));
@@ -125,7 +159,9 @@ test("AvatarPicker — le même fichier peut être choisi de nouveau après un r
   const file = await imageFile(800, 600);
 
   await picker(screen).upload(file);
-  await expect.element(screen.getByRole("alert")).toBeVisible();
+  await expect
+    .element(screen.getByRole("alert"))
+    .toHaveTextContent(fr.errors.validation_file_size_limit);
   await picker(screen).upload(file);
 
   await vi.waitFor(() => {
@@ -194,7 +230,9 @@ test("AvatarPicker — « Retirer la photo » n'apparaît qu'avec une photo, et 
   await vi.waitFor(() => {
     expect(invalidate).toHaveBeenCalledWith();
   });
-  await expect.element(screen.getByRole("status").first()).toHaveTextContent(fr.avatar.removed);
+  await expect.element(screen.getByRole("status")).toHaveTextContent(fr.avatar.removed);
+  // Said once, by the live region: no toast.
+  await expect.element(screen.getByText(fr.avatar.removed)).toBeVisible();
   // The button goes away with the photo: the focus goes to the other control, not to the page.
   await vi.waitFor(() => {
     expect(document.activeElement).toBe(picker(screen).element());

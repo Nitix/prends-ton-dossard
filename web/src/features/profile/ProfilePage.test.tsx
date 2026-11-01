@@ -258,6 +258,8 @@ test("ProfilePage — la section Photo vient en premier et propose de changer ma
   expect(headings[0]).toBe(fr.avatar.title);
   const photo = section(screen, fr.avatar.title);
   await expect.element(photo.getByLabelText(fr.avatar.change)).toBeInTheDocument();
+  // The live region is there before anything is said, so that it gets announced.
+  await expect.element(photo.getByRole("status")).toBeEmptyDOMElement();
   // No photo yet: nothing to remove, and the initial stands for it.
   await expect
     .element(photo.getByRole("button", { name: fr.avatar.remove }))
@@ -274,8 +276,12 @@ test("ProfilePage — choisir une photo l'envoie pour mon coureur, et la page li
     .upload(await imageFile(1600, 1200));
 
   await expect
-    .element(section(screen, fr.avatar.title).getByRole("status").first())
+    .element(section(screen, fr.avatar.title).getByRole("status"))
     .toHaveTextContent(fr.avatar.saved);
+  // Said once, in the live region of the section: no toast says it again.
+  const said = screen.getByText(fr.avatar.saved);
+  await expect.element(said).toBeVisible();
+  expect(said.element().tagName).toBe("OUTPUT");
   expect(mocks.runnerUpdate).toHaveBeenCalledOnce();
   const [id, form] = mocks.runnerUpdate.mock.calls[0] ?? [];
   expect(id).toBe("r1");
@@ -306,7 +312,9 @@ test("ProfilePage — avec une photo, elle est montrée en grand, et on peut la 
   );
   await photo.getByRole("button", { name: fr.avatar.remove }).click();
 
-  await expect.element(photo.getByRole("status").first()).toHaveTextContent(fr.avatar.removed);
+  await expect.element(photo.getByRole("status")).toHaveTextContent(fr.avatar.removed);
+  // Said once, in the live region of the section: no toast says it again.
+  await expect.element(screen.getByText(fr.avatar.removed)).toBeVisible();
   expect(mocks.runnerUpdate).toHaveBeenCalledExactlyOnceWith("r1", { avatar: null });
 });
 

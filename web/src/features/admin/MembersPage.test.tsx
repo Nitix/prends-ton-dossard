@@ -928,7 +928,7 @@ test("MembersPage — une photo mise dans la fenêtre y apparaît aussitôt, ave
 
   await dialog.getByLabelText(fr.avatar.change).upload(await imageFile(1200, 900));
 
-  await expect.element(dialog.getByRole("status").first()).toHaveTextContent(fr.avatar.saved);
+  await expect.element(dialog.getByRole("status")).toHaveTextContent(fr.avatar.saved);
   expect(mocks.runnerUpdate).toHaveBeenCalledOnce();
   expect(mocks.runnerUpdate.mock.calls[0]?.[0]).toBe("r-sam");
   // The window follows the list, which was read again.
@@ -951,7 +951,9 @@ test("MembersPage — retirer la photo dans la fenêtre envoie {avatar: null} po
 
   await dialog.getByRole("button", { name: fr.avatar.remove }).click();
 
-  await expect.element(dialog.getByRole("status").first()).toHaveTextContent(fr.avatar.removed);
+  await expect.element(dialog.getByRole("status")).toHaveTextContent(fr.avatar.removed);
+  // Said once, in the window, which covers the toasts: the live region is what says it.
+  await expect.element(screen.getByText(fr.avatar.removed)).toBeVisible();
   expect(mocks.runnerUpdate).toHaveBeenCalledExactlyOnceWith("r-sam", { avatar: null });
   await expect
     .element(dialog.getByRole("button", { name: fr.avatar.remove }))
