@@ -121,7 +121,9 @@ export function CountdownRing({
           cy="28"
           r={RING_RADIUS}
           fill={light ? "rgb(36 27 53 / 0.18)" : "none"}
-          stroke={light ? "rgb(255 255 255 / 0.28)" : "#ece8ff"}
+          // The track: faint white on the sky, the soft violet of the theme on a card.
+          stroke={light ? "rgb(255 255 255 / 0.28)" : undefined}
+          className={light ? undefined : "stroke-iris-100"}
           strokeWidth="5"
         />
         <circle

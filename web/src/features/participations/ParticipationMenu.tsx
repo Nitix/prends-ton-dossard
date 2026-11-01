@@ -137,7 +137,7 @@ export function ParticipationMenu({
         type="button"
         popoverTarget={menuId}
         aria-label={t.participation.actionsFor(runner.name)}
-        className="press flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-neutral-700 hover:bg-white hover:text-iris-700 hover:shadow-card"
+        className="press flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-neutral-700 hover:bg-card hover:text-iris-700 hover:shadow-card"
       >
         <span aria-hidden="true">⋯</span>
       </button>
@@ -145,7 +145,7 @@ export function ParticipationMenu({
       <div
         id={menuId}
         popover="auto"
-        className="menu-popover rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-lift"
+        className="menu-popover rounded-2xl border border-neutral-200 bg-raised p-1.5 text-ink shadow-lift"
       >
         {/* With no format, only two statuses are possible: the participation is on the event alone. */}
         <ul aria-label={t.participation.status}>

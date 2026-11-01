@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* The sheet of the page, over the sky. On a phone, room under the content for the tab bar
           and the floating button; on a tablet, for the button, which floats over the right of the
           column (from `lg` the wider screen has it beside the column). */}
-      <div className="relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:rounded-t-[2rem]">
+      <div className="sheet relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:rounded-t-[2rem]">
         <main className="mx-auto max-w-3xl px-4 pt-6 pb-44 md:px-5 md:pt-8 md:pb-28 lg:max-w-4xl lg:pb-12">
           {children}
         </main>
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Link
         to="/evenements/nouveau"
         aria-label={t.nav.createEvent}
-        className="press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-white/70 hover:brightness-110 md:right-6 md:bottom-6"
+        className="press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-card/70 hover:brightness-110 md:right-6 md:bottom-6"
       >
         <svg
           aria-hidden="true"

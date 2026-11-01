@@ -19,7 +19,7 @@ export function TabBar({ isAdmin }: { isAdmin: boolean }) {
       className="pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 px-3 md:sticky md:top-3 md:bottom-auto md:-mt-[9rem] md:mb-[5.375rem] md:px-5"
     >
       <div className="mx-auto flex max-w-5xl justify-end">
-        <ul className="pointer-events-auto flex w-full gap-1 rounded-[1.75rem] border border-neutral-200/70 bg-white/95 p-1.5 shadow-bar backdrop-blur-md md:w-auto md:rounded-full">
+        <ul className="pointer-events-auto flex w-full gap-1 rounded-[1.75rem] border border-neutral-200/70 bg-raised/95 p-1.5 shadow-bar backdrop-blur-md md:w-auto md:rounded-full">
           <Tab to="/" exact label={t.nav.home} icon={<HomeIcon />} />
           <Tab to="/liste" label={t.nav.list} icon={<ListIcon />} />
           <Tab to="/agenda" label={t.nav.calendar} icon={<CalendarIcon />} />

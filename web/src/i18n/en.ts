@@ -119,6 +119,12 @@ export const en = {
     other: "Your browser offers to install it from its menu.",
     done: "The app is installed.",
   },
+  settings: {
+    appearance: "Appearance",
+    themeAuto: "Auto (like the phone)",
+    themeLight: "Light",
+    themeDark: "Dark",
+  },
   status: {
     interested: "Interested",
     registered: "Registered",

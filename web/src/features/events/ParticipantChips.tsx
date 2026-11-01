@@ -34,10 +34,10 @@ export function ParticipantChips({
           <li
             key={participation.id}
             title={title}
-            className={`-ml-1.5 inline-flex size-9 items-center justify-center rounded-full text-xs font-bold shadow-[0_0_0_2.5px_#fff] ${
+            className={`-ml-1.5 inline-flex size-9 items-center justify-center rounded-full text-xs font-bold shadow-[0_0_0_2.5px_var(--color-card)] ${
               confirmed
                 ? "bg-dawn-deep text-white"
-                : "border-2 border-dashed border-neutral-500 bg-white text-neutral-700"
+                : "border-2 border-dashed border-neutral-500 bg-card text-neutral-700"
             }`}
           >
             <Avatar runner={runner} thumb="96x96" className="size-full" />

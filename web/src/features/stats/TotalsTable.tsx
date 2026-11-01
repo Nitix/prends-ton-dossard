@@ -51,7 +51,7 @@ export function TotalsTable({
   const titles = [t.stats.finished, t.stats.dnf, t.stats.km, t.stats.elevation, t.stats.time];
 
   return (
-    <div className="sm:overflow-hidden sm:rounded-[1.25rem] sm:border sm:border-neutral-200/80 sm:bg-white sm:p-1.5 sm:shadow-card">
+    <div className="sm:overflow-hidden sm:rounded-[1.25rem] sm:border sm:border-neutral-200/80 sm:bg-card sm:p-1.5 sm:shadow-card">
       <table role="table" className="block w-full border-collapse text-left text-sm sm:table">
         <caption className="sr-only">{caption}</caption>
         <thead role="rowgroup" className="max-sm:sr-only">

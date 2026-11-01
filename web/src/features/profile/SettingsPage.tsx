@@ -14,6 +14,7 @@ import type { RunnerRecord, UserRecord } from "../../lib/types";
 import { logout, useSession } from "../auth/session";
 import { CalendarSection } from "../calendar/CalendarSection";
 import { InstallSection } from "../pwa/InstallSection";
+import { AppearanceSection } from "./AppearanceSection";
 import { failureOf, text, type Failure } from "./forms";
 import { PasskeyList } from "./PasskeyList";
 import { Section } from "./Section";
@@ -23,7 +24,8 @@ const BUTTON = `${PRIMARY} self-start`;
 /**
  * The settings of the signed-in user, which the profile leads to: the photo and
  * the name the group sees, the email and the password of the account, the
- * passkeys, the calendar link, how to install the app, and the sign-out. A link
+ * passkeys, the theme of the app on this device, the calendar link, how to
+ * install the app, and the sign-out. A link
  * at the top goes back to the profile. The app shell around it owns the page's
  * `<main>`.
  */
@@ -52,7 +54,7 @@ export function SettingsPage() {
   );
 }
 
-/** What a member sets: their photo and name, their email and password, their passkeys, the calendar and the app. */
+/** What a member sets: their photo and name, their email and password, their passkeys, the look of the app, the calendar and the app. */
 function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRecord | null }) {
   const { t } = useI18n();
 
@@ -76,6 +78,7 @@ function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRec
         <PasswordForm user={user} />
       </Section>
       <PasskeyList userId={user.id} />
+      <AppearanceSection />
       <CalendarSection />
       <InstallSection />
     </>

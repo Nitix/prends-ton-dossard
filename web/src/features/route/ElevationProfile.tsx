@@ -10,7 +10,7 @@ import {
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { simplify, type TrackPoint } from "./gpx";
-import { SLOPE_COLORS, SLOPE_STEPS, SLOPE_ZONES, slopeZone, type SlopeZone } from "./slope";
+import { SLOPE_FILLS, SLOPE_STEPS, SLOPE_ZONES, slopeZone, type SlopeZone } from "./slope";
 import { altitudeScale, distanceTicks } from "./ticks";
 
 // The height of the drawing and the room around the plot for the labels of the
@@ -294,14 +294,14 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
                 y={MARGIN.top}
                 width={Math.max(0.5, x(run.to) - x(run.from)) + 0.4}
                 height={PLOT_HEIGHT}
-                fill={SLOPE_COLORS[run.zone]}
+                style={{ fill: SLOPE_FILLS[run.zone] }}
               />
             ))}
           </g>
           <path
             d={line}
             fill="none"
-            className="stroke-ink"
+            className="stroke-relief"
             strokeWidth={1.75}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -344,12 +344,12 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
               )}
             </g>
           ))}
-          {/* The summit: a dot with a white ring. */}
+          {/* The summit: a dot with a ring of the card around it. */}
           <circle
             cx={x(summit.km)}
             cy={y(summit.ele)}
             r={4}
-            className="fill-ink stroke-white"
+            className="fill-relief stroke-card"
             strokeWidth={2}
           />
           {at && (
@@ -359,7 +359,7 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
                 x2={x(at.km)}
                 y1={MARGIN.top}
                 y2={bottom}
-                className="stroke-ink"
+                className="stroke-relief"
                 strokeWidth={1}
                 strokeOpacity={0.5}
               />
@@ -367,8 +367,8 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
                 cx={x(at.km)}
                 cy={y(at.ele)}
                 r={5.5}
-                fill={SLOPE_COLORS[at.zone]}
-                className="stroke-white"
+                style={{ fill: SLOPE_FILLS[at.zone] }}
+                className="stroke-card"
                 strokeWidth={2}
               />
             </g>
@@ -440,7 +440,7 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
           >
             <span
               className="inline-block h-2.5 w-4 rounded-full"
-              style={{ backgroundColor: SLOPE_COLORS[zone] }}
+              style={{ backgroundColor: SLOPE_FILLS[zone] }}
             />
             {text}
           </span>

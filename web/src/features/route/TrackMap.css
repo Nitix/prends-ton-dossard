@@ -23,8 +23,22 @@
 /* « Aurore »: the map is a little paler, so that the line of the track, in the
    colours of the dawn on a white halo, is what one sees first. */
 .track-map.leaflet-container {
-  background: #f4effa;
+  background: var(--color-neutral-100);
   font-family: var(--font-sans);
+}
+
+/* At night the tiles stay as they are (no filter on them): the map is framed
+   instead, by a dim edge and a soft shade at its border, so that a light map
+   does not glare out of the dark page (see --map-veil in styles.css; none by
+   day). Over the tiles and the track, under the buttons and the attribution. */
+.track-map.leaflet-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  border-radius: inherit;
+  box-shadow: var(--map-veil);
+  pointer-events: none;
 }
 .track-map .leaflet-tile-pane {
   filter: saturate(0.6) brightness(1.04) contrast(0.95);

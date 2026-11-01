@@ -6,7 +6,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ElevationProfile } from "./ElevationProfile";
 import { toTrack, type TrackPoint } from "./gpx";
-import { SLOPE_COLORS, SLOPE_ZONES } from "./slope";
+import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_ZONES } from "./slope";
 
 // The colours are classes of Tailwind, which the styles load.
 import "../../styles.css";
@@ -158,12 +158,13 @@ describe("ElevationProfile", () => {
     );
     await expect.element(screen.getByRole("img", { name: "Profil" })).toBeVisible();
 
-    // Flat, then a wall: the first band is in the gentlest zone, the last in the steepest.
-    const fills = [...screen.container.querySelectorAll("g[clip-path] rect")].map((rect) =>
-      rect.getAttribute("fill"),
+    // Flat, then a wall: the first band is in the gentlest zone, the last in the steepest
+    // (the colour as the band is painted: it comes from the theme).
+    const fills = [...screen.container.querySelectorAll("g[clip-path] rect")].map(
+      (rect) => getComputedStyle(rect).fill,
     );
-    expect(fills.at(0)).toBe(SLOPE_COLORS[1]);
-    expect(fills.at(-1)).toBe(SLOPE_COLORS[5]);
+    expect(fills.at(0)).toBe(rgb(SLOPE_COLORS[1]));
+    expect(fills.at(-1)).toBe(rgb(SLOPE_COLORS[5]));
 
     // The legend: each colour of the bands, in order, with what it means.
     const legend = screen.getByText(fr.route.slope, { exact: true }).element().parentElement;
@@ -178,6 +179,32 @@ describe("ElevationProfile", () => {
     expect(
       entries.map((entry) => getComputedStyle(entry.firstElementChild ?? entry).backgroundColor),
     ).toEqual(SLOPE_ZONES.map((zone) => rgb(SLOPE_COLORS[zone])));
+  });
+
+  test("ElevationProfile — la nuit, les bandes et la légende prennent les couleurs de la nuit, la ligne est blanche", async () => {
+    document.documentElement.dataset.theme = "dark";
+    try {
+      const screen = await render(
+        <I18nProvider languages={["fr"]}>
+          <ElevationProfile points={flatThenWall()} label="Profil" />
+        </I18nProvider>,
+      );
+      await expect.element(screen.getByRole("img", { name: "Profil" })).toBeVisible();
+      const fills = [...screen.container.querySelectorAll("g[clip-path] rect")].map(
+        (rect) => getComputedStyle(rect).fill,
+      );
+      expect(fills.at(0)).toBe(rgb(SLOPE_COLORS_DARK[1]));
+      expect(fills.at(-1)).toBe(rgb(SLOPE_COLORS_DARK[5]));
+      const line = screen.container.querySelector("path[fill=none]");
+      expect(line && getComputedStyle(line).stroke).toBe("rgb(255, 255, 255)");
+      const legend = screen.getByText(fr.route.slope, { exact: true }).element().parentElement;
+      const swatches = [...(legend?.children ?? [])]
+        .slice(1)
+        .map((entry) => getComputedStyle(entry.firstElementChild ?? entry).backgroundColor);
+      expect(swatches).toEqual(SLOPE_ZONES.map((zone) => rgb(SLOPE_COLORS_DARK[zone])));
+    } finally {
+      delete document.documentElement.dataset.theme;
+    }
   });
 
   test("ElevationProfile — les aplats de pente sont pleins : la couleur dessinée est celle qui a 3:1 sur la carte", async () => {

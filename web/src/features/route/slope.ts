@@ -33,6 +33,36 @@ export const SLOPE_COLORS: Record<SlopeZone, string> = {
   5: "#ce0a6d",
 };
 
+/**
+ * The same zones at night (the dark theme), where the profile is drawn on the
+ * dark card with a white line. The colours of the day have 3:1 on the dark card
+ * but only 2.5:1 with the white line, so each zone has its own colour there:
+ * the same hue (within 6 degrees) in the same order, held to the same numbers
+ * (3:1 on the card and with the line, the same distances between zones), and
+ * inside the lightness band of the validator for a dark ground. The blue, the
+ * mustard and the red are the light ones, the green and the orange the dark ones.
+ */
+export const SLOPE_COLORS_DARK: Record<SlopeZone, string> = {
+  1: "#5e76df",
+  2: "#197b5b",
+  3: "#b88c00",
+  4: "#c13c00",
+  5: "#eb3394",
+};
+
+/**
+ * What the drawing paints a zone with: the colour of the theme (styles.css has
+ * both palettes, `--color-slope-1` to `-5`), so that it follows the theme of
+ * the page without being drawn again.
+ */
+export const SLOPE_FILLS: Record<SlopeZone, string> = {
+  1: "var(--color-slope-1)",
+  2: "var(--color-slope-2)",
+  3: "var(--color-slope-3)",
+  4: "var(--color-slope-4)",
+  5: "var(--color-slope-5)",
+};
+
 /** The zone of a gradient, in percent, up or down. */
 export function slopeZone(percent: number): SlopeZone {
   const steep = Math.abs(percent);

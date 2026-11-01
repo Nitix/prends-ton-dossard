@@ -16,7 +16,9 @@ import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
 
 import "../styles.css";
+import { emulateMedia, resetMedia } from "../test/media";
 import { AppShell } from "./AppShell";
+import { DANGER, PRIMARY } from "./buttons";
 
 const session = vi.hoisted(() => ({
   record: null as { id: string; collectionName: string; role: string } | null,
@@ -127,6 +129,84 @@ test("AppShell — le nom de l'appli dans l'en-tête mène à l'accueil, avec un
   await expect.element(name).toHaveAttribute("href", "/");
   const box = name.element().getBoundingClientRect();
   expect(box.height).toBeGreaterThanOrEqual(44);
+});
+
+// --- Forced colours (a high contrast mode of Windows) ---
+//
+// The browser drops what the dawn paints (a gradient is a background image)
+// and puts its own few colours instead: what was a pill of sunrise must still
+// be seen as one, by an edge.
+
+/** The edge of an element, as it is drawn. */
+function edge(element: Element) {
+  const style = getComputedStyle(element);
+  return { style: style.borderTopStyle, width: Number.parseFloat(style.borderTopWidth) };
+}
+
+/** A system colour, as the browser paints it now. */
+function systemColour(name: string) {
+  const probe = document.createElement("span");
+  probe.style.color = name;
+  document.body.append(probe);
+  const colour = getComputedStyle(probe).color;
+  probe.remove();
+  return colour;
+}
+
+test("AppShell — en couleurs forcées, l'onglet courant et le bouton + ont un bord, l'icône du + se voit", async () => {
+  await emulateMedia({ forcedColors: "active" });
+  try {
+    const screen = await renderShell();
+    const home = screen.getByRole("link", link(fr.nav.home));
+    const list = screen.getByRole("link", link(fr.nav.list));
+    const create = screen.getByRole("link", link(fr.nav.createEvent));
+    await expect.element(create).toBeVisible();
+    expect(matchMedia("(forced-colors: active)").matches).toBe(true);
+
+    // The current tab has an edge that the others have not: not its bold text alone.
+    expect(edge(home.element()).style).not.toBe("none");
+    expect(edge(home.element()).width).toBeGreaterThanOrEqual(2);
+    expect(edge(list.element()).width).toBe(0);
+
+    // The « + » is a button with an edge, and its icon is in the colour of a button's text.
+    expect(edge(create.element()).style).not.toBe("none");
+    expect(edge(create.element()).width).toBeGreaterThanOrEqual(1);
+    expect(getComputedStyle(create.element()).color).toBe(systemColour("ButtonText"));
+  } finally {
+    await resetMedia();
+  }
+});
+
+test("AppShell — en couleurs forcées, un bouton principal en dégradé et un bouton qui supprime gardent un bord", async () => {
+  await emulateMedia({ forcedColors: "active" });
+  try {
+    const screen = await renderShell(
+      <>
+        <button type="button" className={PRIMARY}>
+          Enregistrer
+        </button>
+        <button type="button" className={DANGER}>
+          Supprimer
+        </button>
+      </>,
+    );
+    for (const name of ["Enregistrer", "Supprimer"]) {
+      const button = screen.getByRole("button", { name });
+      await expect.element(button).toBeVisible();
+      expect(edge(button.element()).style, `${name}: its edge`).not.toBe("none");
+      expect(edge(button.element()).width, `${name}: its edge`).toBeGreaterThanOrEqual(1);
+    }
+  } finally {
+    await resetMedia();
+  }
+});
+
+test("AppShell — sans couleurs forcées, rien ne change : pas de bord au + ni à l'onglet courant", async () => {
+  const screen = await renderShell();
+  const create = screen.getByRole("link", link(fr.nav.createEvent));
+  await expect.element(create).toBeVisible();
+  expect(edge(create.element()).width).toBe(0);
+  expect(edge(screen.getByRole("link", link(fr.nav.home)).element()).width).toBe(0);
 });
 
 test("AppShell — la page courante est marquée aria-current", async () => {

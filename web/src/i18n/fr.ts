@@ -139,6 +139,13 @@ export const fr = {
     // Once the site has been installed, in the page that was open at the time.
     done: "L'appli est installée.",
   },
+  // The appearance of the app on this device (see lib/theme.ts): the dark theme, chosen or following the phone.
+  settings: {
+    appearance: "Apparence",
+    themeAuto: "Auto (comme le téléphone)",
+    themeLight: "Clair",
+    themeDark: "Sombre",
+  },
   // The labels of the participation statuses.
   status: {
     interested: "Intéressé",

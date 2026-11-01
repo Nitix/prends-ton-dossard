@@ -45,7 +45,7 @@ export function Dialog({
         if (event.target === event.currentTarget && open) onClose();
       }}
       // Tailwind's reset zeroes the margin that centres a dialog.
-      className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-[1.75rem] border border-white bg-white p-0 text-ink shadow-[0_30px_80px_-20px_rgb(42_32_112/0.55)] backdrop:bg-[rgb(36_27_53/0.5)] backdrop:backdrop-blur-[3px]"
+      className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-[1.75rem] border border-rim bg-raised p-0 text-ink shadow-[0_30px_80px_-20px_rgb(42_32_112/0.55)] backdrop:bg-scrim backdrop:backdrop-blur-[3px]"
     >
       {open && (
         <div className="relative p-5">
@@ -66,7 +66,7 @@ export function Dialog({
               type="button"
               onClick={onClose}
               aria-label={t.common.close}
-              className="press -mt-1 -mr-1 flex size-11 shrink-0 items-center justify-center rounded-full bg-white/80 text-2xl leading-none text-neutral-700 shadow-[0_1px_3px_rgb(36_27_53/0.12)] hover:bg-iris-50 hover:text-ink"
+              className="press -mt-1 -mr-1 flex size-11 shrink-0 items-center justify-center rounded-full bg-raised/80 text-2xl leading-none text-neutral-700 shadow-[0_1px_3px_rgb(36_27_53/0.12)] hover:bg-iris-50 hover:text-ink"
             >
               <span aria-hidden="true">×</span>
             </button>

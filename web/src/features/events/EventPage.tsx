@@ -702,14 +702,14 @@ function ParticipantRow({
     <li
       ref={row}
       className={`flex items-center justify-between gap-2 rounded-2xl border-2 py-1 pr-1 pl-2 ${
-        confirmed ? "border-transparent bg-neutral-50" : "border-dashed border-neutral-500 bg-white"
+        confirmed ? "border-transparent bg-neutral-50" : "border-dashed border-neutral-500 bg-card"
       }`}
     >
       <div className="flex min-w-0 items-center gap-3 py-1">
         <Avatar
           runner={runner}
           thumb="96x96"
-          className="size-11 shrink-0 bg-gradient-to-br from-peach-100 via-blush-100 to-iris-100 text-sm font-bold text-iris-800 ring-2 ring-white"
+          className="size-11 shrink-0 bg-gradient-to-br from-peach-100 via-blush-100 to-iris-100 text-sm font-bold text-iris-800 ring-2 ring-card"
         />
         <div className="min-w-0">
           {/* The name leads to the page of the runner, with their results. */}

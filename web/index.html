@@ -5,7 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Prends ton dossard</title>
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- The header is the violet sky of the dawn in both themes: so is the bar of the browser. -->
     <meta name="theme-color" content="#5e4ae3" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- A theme chosen in the settings (lib/theme.ts), on <html> before the page is drawn:
+         no flash of the other one. Auto is left to the phone, through the stylesheet. -->
+    <script>
+      try {
+        const theme = localStorage.getItem("ptd-theme");
+        if (theme === "light" || theme === "dark") {
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        }
+      } catch (error) {}
+    </script>
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />

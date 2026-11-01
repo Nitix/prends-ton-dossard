@@ -145,7 +145,7 @@ function MonthLink({
       to="."
       search={(previous) => ({ ...previous, mois: target.toString(), jour: undefined })}
       aria-label={label}
-      className="press flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
+      className="press flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-card text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </Link>

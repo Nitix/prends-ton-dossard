@@ -8,13 +8,15 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { userEvent } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { imageFile, pixelURL, sizeOf } from "../../test/images";
+import { emulateMedia, resetMedia } from "../../test/media";
 import { SettingsPage } from "./SettingsPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -273,6 +275,111 @@ test("SettingsPage — la section Application vient après l'Agenda, et avant «
   expect(
     follows(install.element(), screen.getByRole("button", { name: fr.profile.logout }).element()),
   ).toBe(true);
+});
+
+// --- The appearance ---
+
+/** The theme of the page, as <html> carries it, and what the device keeps. */
+function pageTheme() {
+  const root = document.documentElement;
+  return {
+    theme: root.dataset.theme,
+    colorScheme: getComputedStyle(root).colorScheme,
+    kept: localStorage.getItem("ptd-theme"),
+  };
+}
+
+afterEach(() => {
+  // The theme belongs to the page and to the device: a test leaves neither to the next.
+  localStorage.removeItem("ptd-theme");
+  delete document.documentElement.dataset.theme;
+  document.documentElement.style.colorScheme = "";
+});
+
+test("SettingsPage — Apparence : Auto, Clair, Sombre", async () => {
+  const screen = await renderSettings();
+
+  const appearance = section(screen, fr.settings.appearance);
+  const group = appearance.getByRole("group", { name: fr.settings.appearance });
+  const auto = group.getByRole("radio", { name: fr.settings.themeAuto });
+  const light = group.getByRole("radio", { name: fr.settings.themeLight });
+  const dark = group.getByRole("radio", { name: fr.settings.themeDark });
+  // Nothing chosen yet: the page follows the phone.
+  await expect.element(auto).toBeChecked();
+  await expect.element(light).not.toBeChecked();
+  await expect.element(dark).not.toBeChecked();
+  // Each choice is a tap target of 44 px at least.
+  for (const radio of [auto, light, dark]) {
+    expect(radio.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+
+  // A choice applies at once, and is kept on the device.
+  await dark.click();
+  await expect.element(dark).toBeChecked();
+  expect(pageTheme()).toEqual({ theme: "dark", colorScheme: "dark", kept: "dark" });
+
+  await light.click();
+  await expect.element(light).toBeChecked();
+  expect(pageTheme()).toEqual({ theme: "light", colorScheme: "light", kept: "light" });
+
+  // Auto gives the page back to the phone, and keeps nothing.
+  await auto.click();
+  await expect.element(auto).toBeChecked();
+  expect(pageTheme()).toEqual({ theme: undefined, colorScheme: "light dark", kept: null });
+});
+
+test("SettingsPage — Apparence : le choix gardé sur l'appareil est coché en arrivant", async () => {
+  localStorage.setItem("ptd-theme", "dark");
+  const screen = await renderSettings();
+
+  const group = section(screen, fr.settings.appearance).getByRole("group");
+  await expect.element(group.getByRole("radio", { name: fr.settings.themeDark })).toBeChecked();
+});
+
+test("SettingsPage — Apparence : au clavier, les flèches passent d'un choix à l'autre", async () => {
+  const screen = await renderSettings();
+
+  const group = section(screen, fr.settings.appearance).getByRole("group");
+  group.getByRole("radio", { name: fr.settings.themeAuto }).element().focus();
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.element(group.getByRole("radio", { name: fr.settings.themeLight })).toBeChecked();
+  expect(pageTheme().theme).toBe("light");
+  // The ring of the focus is drawn around the choice.
+  expect(getComputedStyle(document.activeElement ?? document.body).outlineStyle).not.toBe("none");
+});
+
+test("SettingsPage — Apparence : en couleurs forcées, le choix coché se voit encore", async () => {
+  await emulateMedia({ forcedColors: "active" });
+  try {
+    const screen = await renderSettings();
+    const group = section(screen, fr.settings.appearance).getByRole("group");
+    await expect.element(group.getByRole("radio", { name: fr.settings.themeAuto })).toBeChecked();
+
+    // The dot of each choice: drawn for the checked one only, in a colour the system keeps.
+    const dots = [...group.element().querySelectorAll("[data-dot]")].map((dot) => {
+      const style = getComputedStyle(dot);
+      // A dot not drawn is scaled to nothing (`scale: 0`).
+      return { shown: !/^0(s|$)/.test(style.scale), colour: style.backgroundColor };
+    });
+    expect(dots.map((dot) => dot.shown)).toEqual([true, false, false]);
+    const probe = document.createElement("span");
+    probe.style.color = "CanvasText";
+    document.body.append(probe);
+    const text = getComputedStyle(probe).color;
+    probe.remove();
+    expect(dots[0]?.colour).toBe(text);
+  } finally {
+    await resetMedia();
+  }
+});
+
+test("SettingsPage — la section Apparence vient après les clés d'accès, et avant l'Agenda", async () => {
+  const screen = await renderSettings();
+
+  const appearance = section(screen, fr.settings.appearance);
+  await expect.element(appearance).toBeVisible();
+  expect(follows(section(screen, fr.passkeys.title).element(), appearance.element())).toBe(true);
+  expect(follows(appearance.element(), section(screen, fr.calendar.title).element())).toBe(true);
 });
 
 test("SettingsPage — « Se déconnecter » est tout en bas : le dernier bouton de la page", async () => {

@@ -86,7 +86,7 @@ function YearLink({ year, label, glyph }: { year: number; label: string; glyph: 
       to="."
       search={{ annee: year }}
       aria-label={label}
-      className="press flex size-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
+      className="press flex size-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-card text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </Link>

@@ -180,7 +180,7 @@ export function UpcomingRow({
   return (
     <li
       className={`flex items-center gap-3.5 p-3.5 pr-4 ${
-        confirmed ? "card" : "rounded-[1.25rem] border-2 border-dashed border-neutral-500 bg-white"
+        confirmed ? "card" : "rounded-[1.25rem] border-2 border-dashed border-neutral-500 bg-card"
       }`}
     >
       {/* The ring shows the days left; the words under the date say them. */}

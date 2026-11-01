@@ -62,7 +62,8 @@
    coral pink, violet) for the header, the heroes, the main buttons and a few
    accents, with the contour lines of a map and the mountains at the foot of the
    sky (see components/Alpenglow.tsx); the content sits on white and on a very
-   light lilac, in a deep plum ink. */
+   light lilac, in a deep plum ink. These are the colours of the day; at night
+   (the dark theme, further down) the sky stays and the content goes dark. */
 @theme {
   --font-sans:
     "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -117,15 +118,45 @@
   --color-iris-800: #3a2b99;
   --color-iris-900: #2a2070;
 
+  /* The reds of Tailwind that the app uses (an error, a delete), written out
+     so that the dark theme can give them their night. */
+  --color-red-50: #fef2f2;
+  --color-red-200: #ffc9c9;
+  --color-red-700: #c10007;
+  --color-red-800: #9f0712;
+
+  /* The grounds of the content, from the lowest: the sheet of the page is
+     `neutral-50`; on it a card; over a card, what floats (a window, a menu,
+     the tab bar); in it, a field. All white by day. */
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  /* The edge of a window and the frame of the map: white on white by day. */
+  --color-rim: #ffffff;
+  /* The pill of a message (a toast, the offline band), white text on it. */
+  --color-toast: #241b35;
+  /* The veil behind a window. */
+  --color-scrim: rgb(36 27 53 / 0.5);
+  /* The line of the elevation profile, over its zones. */
+  --color-relief: #241b35;
+  /* The five zones of the slope, from gentle to steep (see features/route/slope.ts). */
+  --color-slope-1: #7c8dd6;
+  --color-slope-2: #4ca378;
+  --color-slope-3: #ba8907;
+  --color-slope-4: #b74802;
+  --color-slope-5: #ce0a6d;
+
   --radius-lg: 0.875rem;
   --radius-xl: 1.25rem;
   --radius-2xl: 1.5rem;
   --radius-card: 1.25rem;
 
-  --shadow-card: 0 1px 2px rgb(36 27 53 / 0.04), 0 10px 28px -16px rgb(94 74 227 / 0.28);
-  --shadow-lift: 0 2px 4px rgb(36 27 53 / 0.05), 0 18px 40px -18px rgb(94 74 227 / 0.4);
+  /* The shadows of the day are tinted violet; their colour is a variable (see
+     `:root`) so that the night can make them dark. */
+  --shadow-card: 0 1px 2px rgb(36 27 53 / 0.04), 0 10px 28px -16px var(--shade-card);
+  --shadow-lift: 0 2px 4px rgb(36 27 53 / 0.05), 0 18px 40px -18px var(--shade-lift);
   --shadow-glow: 0 10px 28px -10px rgb(214 51 111 / 0.55), 0 4px 12px -6px rgb(94 74 227 / 0.45);
-  --shadow-bar: 0 -1px 0 rgb(36 27 53 / 0.04), 0 12px 40px -10px rgb(58 43 153 / 0.28);
+  --shadow-bar: 0 -1px 0 rgb(36 27 53 / 0.04), 0 12px 40px -10px var(--shade-bar);
 
   --animate-rise: rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-glow: glow 9s ease-in-out infinite alternate;
@@ -206,22 +237,218 @@
   color: transparent;
 }
 
-/* A frosted card over the gradient: white enough for plum ink to stay 13:1. */
+/* A frosted card over the gradient: white enough for plum ink to stay 13:1 by
+   day, the night of a card at night (the ink 12:1 on it, over the sky). */
 @utility glass {
-  background-color: rgb(255 255 255 / 0.95);
+  background-color: color-mix(in srgb, var(--color-card) 95%, transparent);
   @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-    background-color: rgb(255 255 255 / 0.82);
+    background-color: color-mix(in srgb, var(--color-card) 82%, transparent);
     -webkit-backdrop-filter: blur(14px) saturate(1.4);
     backdrop-filter: blur(14px) saturate(1.4);
   }
 }
 
 @layer base {
-  /* The app has a single, light theme. Saying so keeps browsers from darkening
-     it on their own, and every page gets the same background and text colour. */
+  /* The light theme is the theme when nothing says otherwise. Saying so keeps
+     browsers from darkening the page on their own. Besides the colours of
+     `@theme`, a few values that the night changes: the colour of the shadows,
+     the frame of the map, the glow at the top of the sheet. */
   :root {
     color-scheme: light;
     -webkit-tap-highlight-color: transparent;
+    --shade-card: rgb(94 74 227 / 0.28);
+    --shade-lift: rgb(94 74 227 / 0.4);
+    --shade-bar: rgb(58 43 153 / 0.28);
+    --map-frame:
+      0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
+      0 6px 24px -12px rgb(94 74 227 / 0.45);
+    --map-veil: none;
+    --sheet-glow: none;
+  }
+
+  /* « Crête » at night: the dark theme. The sky of the header and of the
+     heroes is the same (it is painted in its own colours, and `.on-dawn` puts
+     back the colours of the day under it); what is under the sky turns to the
+     night of the valley: a deep indigo sheet, cards a little lighter, what
+     floats lighter still, the text in a lilac white, the accents in the light
+     steps of the dawn. Each step keeps its role: the 50–200 steps stay the soft
+     grounds behind a text and become deep, the 600–800 steps stay the colours
+     of a text and become light. src/dark.test.ts measures every pair.
+
+     It is chosen in the settings (`data-theme="dark"` on <html>, see
+     lib/theme.ts), or follows the phone when nothing is chosen. The two blocks
+     are the same, value for value (the test says so): change one, change both. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-neutral-50: #120f25;
+    --color-neutral-100: #27233e;
+    --color-neutral-200: #36314d;
+    --color-neutral-300: #57506e;
+    --color-neutral-400: #726986;
+    --color-neutral-500: #847b98;
+    --color-neutral-600: #b1a9c4;
+    --color-neutral-700: #c7bfd8;
+    --color-neutral-800: #dad4e8;
+    --color-neutral-900: #e6e2f1;
+    --color-neutral-950: #f3f0f9;
+    --color-ink: #eae5f4;
+    --color-peach-50: #361a18;
+    --color-peach-100: #4f1e24;
+    --color-peach-200: #693326;
+    --color-peach-700: #f7a97c;
+    --color-peach-800: #fdccac;
+    --color-blush-100: #48193b;
+    --color-blush-200: #652547;
+    --color-blush-500: #f98cb9;
+    --color-blush-600: #f26ea1;
+    --color-iris-50: #25224c;
+    --color-iris-100: #312d61;
+    --color-iris-200: #47408b;
+    --color-iris-300: #6c64c8;
+    --color-iris-500: #8e87f6;
+    --color-iris-600: #a4a2fd;
+    --color-iris-700: #b9b8ff;
+    --color-iris-800: #d1d2ff;
+    --color-red-50: #3c1616;
+    --color-red-200: #852e30;
+    --color-red-700: #fa8785;
+    --color-red-800: #ffa4a1;
+    --color-card: #1c1834;
+    --color-raised: #24203f;
+    --color-field: #151229;
+    --color-rim: #3e3a5e;
+    --color-toast: #36315a;
+    --color-scrim: rgb(6 4 16 / 0.66);
+    --color-relief: #ffffff;
+    --color-slope-1: #5e76df;
+    --color-slope-2: #197b5b;
+    --color-slope-3: #b88c00;
+    --color-slope-4: #c13c00;
+    --color-slope-5: #eb3394;
+    --shade-card: rgb(3 1 12 / 0.7);
+    --shade-lift: rgb(3 1 12 / 0.85);
+    --shade-bar: rgb(3 1 12 / 0.75);
+    --map-frame: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(3 1 12 / 0.85);
+    --map-veil: inset 0 0 0 1px rgb(18 15 37 / 0.4), inset 0 0 36px 2px rgb(18 15 37 / 0.45);
+    --sheet-glow: radial-gradient(120% 20rem at 50% 0, rgb(94 74 227 / 0.16), transparent 75%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --color-neutral-50: #120f25;
+      --color-neutral-100: #27233e;
+      --color-neutral-200: #36314d;
+      --color-neutral-300: #57506e;
+      --color-neutral-400: #726986;
+      --color-neutral-500: #847b98;
+      --color-neutral-600: #b1a9c4;
+      --color-neutral-700: #c7bfd8;
+      --color-neutral-800: #dad4e8;
+      --color-neutral-900: #e6e2f1;
+      --color-neutral-950: #f3f0f9;
+      --color-ink: #eae5f4;
+      --color-peach-50: #361a18;
+      --color-peach-100: #4f1e24;
+      --color-peach-200: #693326;
+      --color-peach-700: #f7a97c;
+      --color-peach-800: #fdccac;
+      --color-blush-100: #48193b;
+      --color-blush-200: #652547;
+      --color-blush-500: #f98cb9;
+      --color-blush-600: #f26ea1;
+      --color-iris-50: #25224c;
+      --color-iris-100: #312d61;
+      --color-iris-200: #47408b;
+      --color-iris-300: #6c64c8;
+      --color-iris-500: #8e87f6;
+      --color-iris-600: #a4a2fd;
+      --color-iris-700: #b9b8ff;
+      --color-iris-800: #d1d2ff;
+      --color-red-50: #3c1616;
+      --color-red-200: #852e30;
+      --color-red-700: #fa8785;
+      --color-red-800: #ffa4a1;
+      --color-card: #1c1834;
+      --color-raised: #24203f;
+      --color-field: #151229;
+      --color-rim: #3e3a5e;
+      --color-toast: #36315a;
+      --color-scrim: rgb(6 4 16 / 0.66);
+      --color-relief: #ffffff;
+      --color-slope-1: #5e76df;
+      --color-slope-2: #197b5b;
+      --color-slope-3: #b88c00;
+      --color-slope-4: #c13c00;
+      --color-slope-5: #eb3394;
+      --shade-card: rgb(3 1 12 / 0.7);
+      --shade-lift: rgb(3 1 12 / 0.85);
+      --shade-bar: rgb(3 1 12 / 0.75);
+      --map-frame: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(3 1 12 / 0.85);
+      --map-veil: inset 0 0 0 1px rgb(18 15 37 / 0.4), inset 0 0 36px 2px rgb(18 15 37 / 0.45);
+      --sheet-glow: radial-gradient(120% 20rem at 50% 0, rgb(94 74 227 / 0.16), transparent 75%);
+    }
+  }
+
+  /* The sky is the dawn in both themes: under it (the header, the hero of an
+     event or of a runner, the name of the app on the login page), the colours
+     of the day are back, every one that the night changes. A white pill on a
+     hero stays white with its violet text, the notes of an event stay a
+     frosted white. */
+  .on-dawn {
+    color-scheme: light;
+    --color-neutral-50: #fbf8ff;
+    --color-neutral-100: #f4effa;
+    --color-neutral-200: #e9e2f2;
+    --color-neutral-300: #d8cfe5;
+    --color-neutral-400: #b4a9c4;
+    --color-neutral-500: #8e829f;
+    --color-neutral-600: #6b6080;
+    --color-neutral-700: #4f4563;
+    --color-neutral-800: #362d49;
+    --color-neutral-900: #241b35;
+    --color-neutral-950: #170f24;
+    --color-ink: #241b35;
+    --color-peach-50: #fff6f0;
+    --color-peach-100: #ffeadd;
+    --color-peach-200: #ffd5bc;
+    --color-peach-700: #b04a22;
+    --color-peach-800: #86391c;
+    --color-blush-100: #ffe4f0;
+    --color-blush-200: #ffc9e0;
+    --color-blush-500: #f0579a;
+    --color-blush-600: #d6336f;
+    --color-iris-50: #f5f3ff;
+    --color-iris-100: #ece8ff;
+    --color-iris-200: #dad3ff;
+    --color-iris-300: #bdb2ff;
+    --color-iris-500: #7462f7;
+    --color-iris-600: #5e4ae3;
+    --color-iris-700: #4b37c4;
+    --color-iris-800: #3a2b99;
+    --color-red-50: #fef2f2;
+    --color-red-200: #ffc9c9;
+    --color-red-700: #c10007;
+    --color-red-800: #9f0712;
+    --color-card: #ffffff;
+    --color-raised: #ffffff;
+    --color-field: #ffffff;
+    --color-rim: #ffffff;
+    --color-toast: #241b35;
+    --color-scrim: rgb(36 27 53 / 0.5);
+    --color-relief: #241b35;
+    --color-slope-1: #7c8dd6;
+    --color-slope-2: #4ca378;
+    --color-slope-3: #ba8907;
+    --color-slope-4: #b74802;
+    --color-slope-5: #ce0a6d;
+    --shade-card: rgb(94 74 227 / 0.28);
+    --shade-lift: rgb(94 74 227 / 0.4);
+    --shade-bar: rgb(58 43 153 / 0.28);
+    --map-frame:
+      0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
+      0 6px 24px -12px rgb(94 74 227 / 0.45);
+    --map-veil: none;
+    --sheet-glow: none;
   }
 
   body {
@@ -340,11 +567,17 @@
     background-image: linear-gradient(90deg, #ffa3c9, rgb(189 178 255 / 0.5) 45%, transparent);
   }
 
-  /* The initials of a runner who has no photo: a pastel of the dawn. */
+  /* The initials of a runner who has no photo: a pastel of the dawn (its deep
+     tints at night), cut out of the card by a ring of its colour. */
   .avatar-soft {
-    background-image: linear-gradient(135deg, #ffeadd, #ffe4f0 50%, #ece8ff);
+    background-image: linear-gradient(
+      135deg,
+      var(--color-peach-100),
+      var(--color-blush-100) 50%,
+      var(--color-iris-100)
+    );
     color: var(--color-iris-800);
-    box-shadow: 0 0 0 2px #fff;
+    box-shadow: 0 0 0 2px var(--color-card);
   }
 
   /* A small label in capitals, over a value or a group. */
@@ -358,12 +591,19 @@
     color: var(--color-neutral-600);
   }
 
-  /* A white card. */
+  /* A card: white by day, a little lighter than the sheet at night. */
   .card {
     border-radius: var(--radius-card);
-    border: 1px solid rgb(233 226 242 / 0.8);
-    background-color: #fff;
+    border: 1px solid color-mix(in srgb, var(--color-neutral-200) 80%, transparent);
+    background-color: var(--color-card);
     box-shadow: var(--shadow-card);
+  }
+
+  /* The sheet of the page, over the sky (see AppShell): at night, the violet of
+     the sky glows a little at its top, as the valley under the alpenglow. */
+  .sheet {
+    background-image: var(--sheet-glow);
+    background-repeat: no-repeat;
   }
 
   /* A card that lifts a little under the pointer. */
@@ -500,4 +740,24 @@
   height: 100%;
   border: 0;
   background: transparent;
+}
+
+/* Forced colours (a high contrast mode, on Windows): the browser keeps its own
+   few colours and drops what the dawn paints, a gradient being a background
+   image, and a plain background too. What was a pill of sunrise (or the red
+   of a delete) would be bare words: a button, the « + », a chosen day, the
+   current status of a menu get an edge in the colour of a button's text, and
+   the current tab a thicker one in the colour of what is selected, not its
+   bold text alone. Outside the layers, so that it wins over the utilities. */
+@media (forced-colors: active) {
+  .bg-dawn-deep,
+  .bg-red-700 {
+    border: 1px solid ButtonText;
+  }
+  a.bg-dawn-deep {
+    color: ButtonText;
+  }
+  nav a[aria-current="page"] {
+    border: 2px solid Highlight;
+  }
 }

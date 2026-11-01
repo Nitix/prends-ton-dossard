@@ -46,7 +46,7 @@ export function MonthGrid({
   // has no room at its sides there (312 px for seven, 44.5 px each), only
   // above and below. From `md` it is back between them.
   return (
-    <div className="-mx-4 bg-white px-1 py-2 shadow-card md:mx-0 md:overflow-hidden md:rounded-[1.25rem] md:p-2">
+    <div className="-mx-4 bg-card px-1 py-2 shadow-card md:mx-0 md:overflow-hidden md:rounded-[1.25rem] md:p-2">
       <table
         aria-labelledby={labelledBy}
         aria-busy={busy}
@@ -112,7 +112,7 @@ function DayCell({
   const number = `flex size-7 items-center justify-center rounded-full border-2 text-sm tabular-nums ${ring}`;
   // On the sunrise of the selected day, the ring of today is white.
   const numberOnPhone = `${number} ${isToday ? (isSelected ? "border-white" : "border-iris-600 text-iris-700") : ""}`;
-  const numberOnDesktop = `${number} ${isToday ? "border-iris-600 bg-iris-600 text-white" : ""}`;
+  const numberOnDesktop = `${number} ${isToday ? "border-iris-600 bg-iris-600 text-card" : ""}`;
 
   return (
     <td

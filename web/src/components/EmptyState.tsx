@@ -57,7 +57,7 @@ function SummitDawn({ className = "" }: { className?: string }) {
       <circle cx="94" cy="50" r="15" fill={`url(#${sun})`} />
       <path
         d="M0 76V58l14-7 9 4 17-19 11 10 8-5 14 14 8-3 12 6 14-20 10 9 7-4 13 10 9-2 14 9v24z"
-        fill="#dad3ff"
+        className="fill-iris-200"
       />
       <path
         d="M0 76V66l18-6 12 3 17-9 13 7 14-2 14 5 13-7 15 8 13-4 31 9v6z"

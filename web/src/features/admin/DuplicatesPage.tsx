@@ -112,7 +112,7 @@ function RadioLine({ checked, children }: { checked: boolean; children: ReactNod
   return (
     <label
       className={`flex min-h-11 items-start gap-3 rounded-2xl border-2 px-3 py-2.5 ${
-        checked ? "border-iris-500 bg-iris-50" : "border-neutral-200 bg-white"
+        checked ? "border-iris-500 bg-iris-50" : "border-neutral-200 bg-card"
       }`}
     >
       {children}

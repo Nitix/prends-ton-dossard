@@ -3,6 +3,18 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
+import type { BrowserCommand } from "vitest/node";
+
+/**
+ * A command of the browser tests: the media features of the page, as a phone
+ * or a computer would set them (a dark setting, the forced colours of a high
+ * contrast mode), through src/test/media.ts, which puts them back after a test.
+ */
+const emulateMedia: BrowserCommand<
+  [options: { colorScheme?: "light" | "dark" | null; forcedColors?: "active" | "none" | null }]
+> = async ({ page }, options) => {
+  await page.emulateMedia(options);
+};
 
 export default defineConfig({
   plugins: [
@@ -59,6 +71,7 @@ export default defineConfig({
             // A click or a fill on a missing element fails after 2 s, not at
             // the 15 s test timeout. Below 2 s, passing tests failed at times.
             provider: playwright({ actionTimeout: 2000 }),
+            commands: { emulateMedia },
             instances: [{ browser: "chromium" }],
           },
         },
