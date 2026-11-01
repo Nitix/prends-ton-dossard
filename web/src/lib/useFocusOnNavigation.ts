@@ -18,9 +18,15 @@ const TITLE_WAIT_MS = 1000;
  *
  * The title is the first `<h1>` of `<main>`. A page that loads shows a
  * loading state first, so the hook waits for the title to be there, for a
- * second; after that, `<main>` itself takes the focus. It never takes the
- * focus from the user who has already put it in the page, though (a field
- * they started to fill while the page was loading).
+ * second; after that, `<main>` itself takes the focus.
+ *
+ * It never takes the focus from the user who has already put it in the page
+ * (a field they started to fill while the page was loading). Focus is the
+ * user's when it is inside `<main>`, is not `<main>` itself (which only this
+ * hook focuses), and is not what had it when the navigation started: a link
+ * of the page that stays on screen, like the menu of the admin pages, keeps
+ * the focus it got from the tap that went to the other page, and that is not
+ * a choice of the user in the new page.
  *
  * The router already scrolls a new page to its top, so the focus does not
  * scroll: it would only pull back a reader who went down while the title was
@@ -33,17 +39,27 @@ export function useFocusOnNavigation(): void {
   const router = useRouter();
 
   useEffect(() => {
+    let focusedBefore: Element | null = null;
     let stopWaiting: (() => void) | undefined;
-    const unsubscribe = router.subscribe("onResolved", ({ fromLocation, pathChanged }) => {
-      // Without a `fromLocation`, this is the first page of the app.
+
+    // Without a `fromLocation`, this is the first page of the app.
+    const unsubscribeStart = router.subscribe(
+      "onBeforeNavigate",
+      ({ fromLocation, pathChanged }) => {
+        if (fromLocation === undefined || !pathChanged) return;
+        focusedBefore = document.activeElement;
+      },
+    );
+    const unsubscribeEnd = router.subscribe("onResolved", ({ fromLocation, pathChanged }) => {
       if (fromLocation === undefined || !pathChanged) return;
       // A navigation that follows another one while the page was still
       // loading: the page that counts is the last.
       stopWaiting?.();
-      stopWaiting = focusPage();
+      stopWaiting = focusPage(focusedBefore);
     });
     return () => {
-      unsubscribe();
+      unsubscribeStart();
+      unsubscribeEnd();
       stopWaiting?.();
     };
   }, [router]);
@@ -51,9 +67,10 @@ export function useFocusOnNavigation(): void {
 
 /**
  * Gives the focus to the title of the page, as soon as it is there. Returns
- * the function that stops waiting for it.
+ * the function that stops waiting for it. `focusedBefore` is what had the
+ * focus when the navigation started.
  */
-function focusPage(): () => void {
+function focusPage(focusedBefore: Element | null): () => void {
   let observer: MutationObserver | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -62,17 +79,17 @@ function focusPage(): () => void {
     clearTimeout(timer);
   };
 
-  if (focusTitle()) return stop;
+  if (focusTitle(focusedBefore)) return stop;
 
   // A title that comes with the data of the page: look again at each change of the page.
   observer = new MutationObserver(() => {
-    if (focusTitle()) stop();
+    if (focusTitle(focusedBefore)) stop();
   });
   observer.observe(document.body, { childList: true, subtree: true });
   timer = setTimeout(() => {
     stop();
     const main = document.querySelector("main");
-    if (main !== null && !userIsIn(main)) focus(main);
+    if (main !== null && !userIsIn(main, focusedBefore)) focus(main);
   }, TITLE_WAIT_MS);
   return stop;
 }
@@ -80,27 +97,44 @@ function focusPage(): () => void {
 /**
  * Focuses the title of the page if it is there. `true` when there is nothing
  * more to wait for: the title has the focus, or the user has put it elsewhere
- * in the page.
+ * in the page. `false` when there is no title yet, or when it did not take the
+ * focus (it is not shown yet): the next change of the page is another try.
  */
-function focusTitle(): boolean {
+function focusTitle(focusedBefore: Element | null): boolean {
   const main = document.querySelector("main");
   if (main === null) return false;
-  if (userIsIn(main)) return true;
+  if (userIsIn(main, focusedBefore)) return true;
   const title = main.querySelector<HTMLElement>("h1");
-  if (title === null) return false;
-  focus(title);
-  return true;
+  return title !== null && focus(title);
 }
 
-/** The user has already put the focus in the page: on a field, a button, anything but the `<body>`. */
-function userIsIn(main: HTMLElement): boolean {
+/**
+ * The user has put the focus in the page: on a field, a button, anything inside
+ * `<main>` but `<main>` itself, and not what had it before the navigation.
+ */
+function userIsIn(main: HTMLElement, focusedBefore: Element | null): boolean {
   const active = document.activeElement;
-  return active !== null && active !== document.body && main.contains(active);
+  return active !== null && active !== main && active !== focusedBefore && main.contains(active);
 }
 
-function focus(element: HTMLElement): void {
-  // Only an element with a `tabindex` can take the focus when it is not a
-  // control: a title, `<main>`. `-1` keeps it out of the order of the Tab key.
-  if (!element.hasAttribute("tabindex")) element.tabIndex = -1;
+/**
+ * Gives the focus to `element`, and says whether it landed. Only an element
+ * with a `tabindex` can take the focus when it is not a control, as a title or
+ * `<main>`: `-1` keeps it out of the order of the Tab key. A `tabindex` that
+ * this adds is removed when the element loses the focus, so that `<main>`
+ * does not stay a stop of the page for the rest of the session.
+ */
+function focus(element: HTMLElement): boolean {
+  const added = !element.hasAttribute("tabindex");
+  if (added) element.tabIndex = -1;
   element.focus({ preventScroll: true });
+  const landed = document.activeElement === element;
+  if (added) {
+    if (landed) {
+      element.addEventListener("blur", () => element.removeAttribute("tabindex"), { once: true });
+    } else {
+      element.removeAttribute("tabindex");
+    }
+  }
+  return landed;
 }

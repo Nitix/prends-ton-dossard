@@ -67,6 +67,8 @@ async function openApp(path: string) {
   return { router, screen };
 }
 
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const heading = (name: string) => ({ level: 1, name, exact: true }) as const;
 
 test("root — un onglet mène au titre de la page, d'une page à l'autre", async () => {
@@ -87,15 +89,16 @@ test("root — le premier affichage d'une page ne déplace pas le focus", async 
   const { screen } = await openApp("/liste");
   await expect.element(screen.getByRole("heading", heading(fr.nav.list))).toBeVisible();
 
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await pause(250);
 
   expect(document.activeElement).toBe(document.body);
 });
 
-test("root — un filtre de la liste garde le focus, la recherche de l'adresse change", async () => {
+test("root — un filtre de la liste garde le focus, d'un champ de la page comme de la barre d'onglets", async () => {
   const { router, screen } = await openApp("/liste");
   await expect.element(screen.getByRole("heading", heading(fr.nav.list))).toBeVisible();
 
+  // The real filter, in the page: the search of the address changes, the user keeps it.
   const period = screen.getByRole("combobox", { name: fr.filters.period, exact: true });
   // The user is on the filter: a script only chooses the option, it does not focus the field.
   period.element().focus();
@@ -103,8 +106,36 @@ test("root — un filtre de la liste garde le focus, la recherche de l'adresse c
   await vi.waitFor(() =>
     expect(router.state.location.search).toMatchObject({ periode: "passees" }),
   );
-  await new Promise((resolve) => setTimeout(resolve, 250));
-
+  await pause(250);
   expect(router.state.location.pathname).toBe("/liste");
   await expect.element(period).toHaveFocus();
+
+  // The same change of search with the focus outside of `<main>`, where nothing but the
+  // change of the pathname could be told from it: on a tab of the bar.
+  const tab = screen
+    .getByRole("navigation", { name: fr.nav.main })
+    .getByRole("link", { name: fr.nav.list, exact: true });
+  tab.element().focus();
+  await router.navigate({ to: "/liste", search: { periode: undefined }, replace: true });
+  await vi.waitFor(() => expect(router.state.location.search).not.toHaveProperty("periode"));
+  await pause(250);
+  await expect.element(tab).toHaveFocus();
+});
+
+test("root — le menu de l'admin, qui reste affiché, mène au titre de la sous-page", async () => {
+  session.record = { id: "u1", collectionName: "users", role: "admin" };
+  const { router, screen } = await openApp("/admin/membres");
+  await expect.element(screen.getByRole("heading", heading(fr.admin.membersTitle))).toBeVisible();
+  const menu = screen.getByRole("navigation", { name: fr.admin.adminNav, exact: true });
+
+  // The menu is in `<main>` and stays there: the tap leaves the focus on the link.
+  await menu.getByRole("link", { name: fr.admin.typesTitle, exact: true }).click();
+  await expect.element(screen.getByRole("heading", heading(fr.admin.typesTitle))).toHaveFocus();
+  expect(router.state.location.pathname).toBe("/admin/types");
+
+  await menu.getByRole("link", { name: fr.admin.duplicatesTitle, exact: true }).click();
+  await expect
+    .element(screen.getByRole("heading", heading(fr.admin.duplicatesTitle)))
+    .toHaveFocus();
+  expect(router.state.location.pathname).toBe("/admin/doublons");
 });
