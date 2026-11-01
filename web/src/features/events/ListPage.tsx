@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { SECONDARY } from "../../components/buttons";
-import { SunArc } from "../../components/Dawn";
+import { EmptyState } from "../../components/EmptyState";
 import { useI18n } from "../../i18n/I18nProvider";
 import { groupByMonth } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
@@ -74,13 +74,7 @@ function Months({
   const sorted = sortEvents(applyFilters(views, criteria), period === "a-venir" ? "asc" : "desc");
 
   if (sorted.length === 0) {
-    return (
-      <div className="card flex flex-col items-center gap-1 px-6 pt-4 pb-6 text-center">
-        <SunArc tone="color" className="mb-2 w-44" />
-        <p className="card-title">{t.list.empty}</p>
-        <p className="text-sm text-neutral-600">{t.list.emptyHint}</p>
-      </div>
-    );
+    return <EmptyState title={t.list.empty} hint={t.list.emptyHint} />;
   }
   return (
     <div className="flex flex-col gap-6">

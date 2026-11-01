@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { SECONDARY } from "../../components/buttons";
-import { SunArc } from "../../components/Dawn";
+import { EmptyState } from "../../components/EmptyState";
 import { useI18n } from "../../i18n/I18nProvider";
 import { monthGrid } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
@@ -100,11 +100,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
       ) : !loaded ? (
         <output>{t.common.loading}</output>
       ) : views.length === 0 ? (
-        <div className="card flex flex-col items-center gap-1 px-6 pt-4 pb-6 text-center">
-          <SunArc tone="color" className="mb-2 w-44" />
-          <p className="card-title">{t.list.empty}</p>
-          <p className="text-sm text-neutral-600">{t.list.emptyHint}</p>
-        </div>
+        <EmptyState title={t.list.empty} hint={t.list.emptyHint} />
       ) : (
         <DayList
           day={selected === undefined ? undefined : Temporal.PlainDate.from(selected)}

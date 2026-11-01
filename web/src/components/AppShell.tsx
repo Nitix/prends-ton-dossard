@@ -9,30 +9,32 @@ import { TabBar } from "./TabBar";
 
 /**
  * The frame of every signed-in page: the offline banner, the sky of the header
- * with the name of the app, the tabs, the page itself on a sheet that rises
- * over the sky, and the floating button that creates an event. It owns the
+ * with the name of the app, its map and its mountains, the tabs, the page
+ * itself on a sheet that rises over the ridges, and the floating button that
+ * creates an event. It owns the
  * page's `<main>`, so the pages inside must not render another one.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const { isAdmin } = useSession();
-  const onEvent = useLocation({
-    select: ({ pathname }) => /^\/evenements\/(?!nouveau)[^/]+\/?$/.test(pathname),
+  // The page of an event, the profile and the page of a runner have a hero, with its own sun.
+  const withHero = useLocation({
+    select: ({ pathname }) =>
+      /^\/(?:evenements\/(?!nouveau)[^/]+|profil|coureurs\/[^/]+)\/?$/.test(pathname),
   });
 
   return (
     <div className="min-h-dvh">
       <OfflineBanner />
       <header className="on-dawn relative overflow-hidden bg-dawn-sky text-white">
-        {/* The page of an event has its own sun, in its hero. */}
-        <DawnSky sun={!onEvent} />
-        <div className="relative mx-auto flex max-w-5xl items-center px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-12 md:h-28 md:pt-0 md:pb-6">
+        <DawnSky sun={!withHero} />
+        <div className="relative mx-auto flex max-w-5xl items-center px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-16 md:h-40 md:items-start md:pt-[1.625rem] md:pb-0">
           <BrandMark />
         </div>
       </header>
       <TabBar isAdmin={isAdmin} />
       {/* The sheet of the page, over the sky. On a phone, room under the content for the tab bar and the floating button. */}
-      <div className="relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:mt-0 md:rounded-t-[2rem]">
+      <div className="relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:rounded-t-[2rem]">
         <main className="mx-auto max-w-3xl px-4 pt-6 pb-44 md:px-5 md:pt-8 md:pb-12 lg:max-w-4xl">
           {children}
         </main>

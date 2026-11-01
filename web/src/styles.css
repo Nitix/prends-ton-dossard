@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
-/* « Aurore »: a run at dawn. A soft sunrise (peach, coral pink, violet) for the
-   header, the heroes, the main buttons and a few accents; the content sits on
-   white and on a very light lilac, in a deep plum ink. */
+/* « Crête »: the dawn over the ridges, drawn like a map. A soft sunrise (peach,
+   coral pink, violet) for the header, the heroes, the main buttons and a few
+   accents, with the contour lines of a map and the mountains at the foot of the
+   sky (see components/Alpenglow.tsx); the content sits on white and on a very
+   light lilac, in a deep plum ink. */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display:
@@ -201,7 +203,7 @@
     outline-color: #fff;
   }
 
-  /* The title of a page, and under it a short line of sunrise. */
+  /* The title of a page, and under it a short crest line, in the colours of the sunrise. */
   .page-title {
     font-family: var(--font-display);
     font-size: 1.75rem;
@@ -213,11 +215,12 @@
   .page-title::after {
     content: "";
     display: block;
-    width: 2.75rem;
-    height: 0.3rem;
-    margin-top: 0.5rem;
-    border-radius: 999px;
+    width: 3.25rem;
+    height: 0.5625rem;
+    margin-top: 0.45rem;
     background-image: linear-gradient(90deg, #ffb38a, #ff7eb3 55%, #8b7cff);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 52 9'%3E%3Cpath d='M1.5 7.5 8 4.5l3.5 2L19 1.5l6 5 3.5-2.5 5 3.5 4-3 5 2.5 8-3' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 100% 100% no-repeat;
   }
 
   /* The title of a block: a small sun on the horizon before it. */
