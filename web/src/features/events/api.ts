@@ -16,6 +16,7 @@ import type {
   RaceTypeRecord,
   RunnerRecord,
 } from "../../lib/types";
+import { RESULTS_TO_ENTER_KEY } from "../results/resultsToEnter";
 import { isOnEvent } from "./participants";
 
 export type { ListSearch } from "./search";
@@ -286,15 +287,16 @@ export function useRaceTypes(): UseQueryResult<RaceTypeRecord[]> {
 /**
  * Makes everything that shows an event ask for it again, after a change of the
  * event, of its formats or of its participations: the lists (`["events"]`),
- * the page of the event, and the participations the user has to confirm
- * (`["pending"]`). It resolves once the queries that are on screen have their
- * new data.
+ * the page of the event, the participations the user has to confirm
+ * (`["pending"]`) and the races whose result is to enter. It resolves once the
+ * queries that are on screen have their new data.
  */
 export async function invalidateEvents(queryClient: QueryClient, eventId: string): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["events"] }),
     queryClient.invalidateQueries({ queryKey: ["event", eventId] }),
     queryClient.invalidateQueries({ queryKey: ["pending"] }),
+    queryClient.invalidateQueries({ queryKey: RESULTS_TO_ENTER_KEY }),
   ]);
 }
 
@@ -316,6 +318,7 @@ export function useDeleteEvent(eventId: string): UseMutationResult<void, Error, 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["events"] }),
         queryClient.invalidateQueries({ queryKey: ["pending"] }),
+        queryClient.invalidateQueries({ queryKey: RESULTS_TO_ENTER_KEY }),
         queryClient.invalidateQueries({ queryKey: ["comments"] }),
         queryClient.invalidateQueries({ queryKey: ["offers"] }),
       ]);

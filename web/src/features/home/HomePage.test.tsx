@@ -18,6 +18,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import {
   aliceRunner,
   bobRunner,
@@ -47,6 +48,8 @@ type Rec = Record<string, unknown>;
 const mocks = vi.hoisted(() => ({
   user: null as Rec | null,
   pending: vi.fn<(options: Rec) => Promise<unknown>>(),
+  // The registered participations of the user, whose result may be to enter.
+  toEnter: vi.fn<(options: Rec) => Promise<unknown>>(),
   update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   remove: vi.fn<(id: string) => Promise<unknown>>(),
   events: vi.fn<(options: Rec) => Promise<unknown>>(),
@@ -74,7 +77,15 @@ vi.mock("../../lib/pb", () => ({
     filter: (raw: string, params: Rec) => `${raw} ${JSON.stringify(params)}`,
     collection: (name: string) =>
       ({
-        participations: { getFullList: mocks.pending, update: mocks.update, delete: mocks.remove },
+        participations: {
+          // Two blocks ask for participations: the ones to confirm, and the registered ones.
+          getFullList: (options: Rec) =>
+            String(options.filter).includes('status = "registered"')
+              ? mocks.toEnter(options)
+              : mocks.pending(options),
+          update: mocks.update,
+          delete: mocks.remove,
+        },
         events: { getFullList: mocks.events },
         runners: { getFirstListItem: mocks.myRunner },
         passkeys: { getList: mocks.passkeys },
@@ -139,6 +150,7 @@ beforeAll(async () => {
 beforeEach(() => {
   for (const fn of [
     mocks.pending,
+    mocks.toEnter,
     mocks.update,
     mocks.remove,
     mocks.events,
@@ -150,6 +162,7 @@ beforeEach(() => {
   }
   mocks.comments.getList.mockResolvedValue(noComments);
   mocks.pending.mockResolvedValue([]);
+  mocks.toEnter.mockResolvedValue([]);
   mocks.update.mockResolvedValue({});
   mocks.remove.mockResolvedValue(true);
   mocks.events.mockResolvedValue([eventRecord, event2Record]);
@@ -1039,6 +1052,446 @@ test("Inscriptions à faire — zones tactiles d'au moins 44 px", async () => {
     todoBlock(screen).getByRole("link", { name: "Trail des Crêtes" }),
     todoBlock(screen).getByRole("link", { name: fr.home.todoRegister }),
     doneButton(todoRows(screen)),
+  ];
+  for (const target of targets) {
+    const { width, height } = target.element().getBoundingClientRect();
+    expect(width).toBeGreaterThanOrEqual(44);
+    expect(height).toBeGreaterThanOrEqual(44);
+  }
+  await page.viewport(414, 896);
+});
+
+// ---- Résultats à saisir
+
+const resultsBlock = (screen: Screen) =>
+  screen.getByRole("region", { name: fr.results.toEnterTitle });
+const resultRows = (screen: Screen) => resultsBlock(screen).getByRole("listitem");
+const finishedButton = (row: ReturnType<typeof resultRows>) =>
+  row.getByRole("button", { name: fr.results.finished });
+const dnfButton = (row: ReturnType<typeof resultRows>) =>
+  row.getByRole("button", { name: fr.results.dnf });
+const dnsButton = (row: ReturnType<typeof resultRows>) =>
+  row.getByRole("button", { name: fr.results.dns });
+const resultsTitle = (screen: Screen) =>
+  resultsBlock(screen).getByRole("heading", { level: 2, name: fr.results.toEnterTitle });
+const pageTitle = (screen: Screen) => screen.getByRole("heading", { level: 1, name: fr.nav.home });
+
+// Races that are over, with the day they were run (it is the 30 April): a trail
+// 18 days ago, a road race 46 days ago, and one 88 days ago, which is too old.
+const spring = {
+  ...eventRecord,
+  id: "spring",
+  name: "Trail du Printemps",
+  start_date: "2026-04-12",
+  end_date: "",
+};
+const springFormat = {
+  ...f42,
+  id: "fSpring",
+  event: "spring",
+  date: "",
+  expand: f42Expanded.expand,
+};
+const winter = {
+  ...event2Record,
+  id: "winter",
+  name: "Marathon d'hiver",
+  start_date: "2026-03-15",
+};
+const winterFormat = {
+  ...fLyon,
+  id: "fWinter",
+  event: "winter",
+  distance_km: 42.2,
+  expand: fLyonExpanded.expand,
+};
+const ancient = { ...event2Record, id: "ancient", name: "Cross d'antan", start_date: "2026-02-01" };
+const ancientFormat = { ...fLyon, id: "fAncient", event: "ancient", expand: fLyonExpanded.expand };
+
+/** Bob, registered on this format of this event: what the server sends for the block, with the event and the format (and its race type). */
+function registeredFor(id: string, event: object, format: { id: string; event: string }) {
+  return {
+    ...p2,
+    id,
+    event: format.event,
+    format: format.id,
+    status: "registered",
+    confirmed: true,
+    added_by: bobRunner.id,
+    expand: { event, format },
+  };
+}
+
+const springRegistered = registeredFor("p-spring", spring, springFormat);
+const winterRegistered = registeredFor("p-winter", winter, winterFormat);
+const ancientRegistered = registeredFor("p-ancient", ancient, ancientFormat);
+/** The trail of 14 June: to come, so nothing to enter yet. */
+const juneRegistered = registeredFor("p-june", eventRecord, f42Expanded);
+
+/** A server whose registered participations are gone from the list once their status has changed. */
+function serveRegistered(rows: Rec[]) {
+  let current = rows;
+  mocks.toEnter.mockImplementation(() => Promise.resolve(current));
+  mocks.update.mockImplementation((id) => {
+    current = current.filter((row) => row.id !== id);
+    return Promise.resolve({});
+  });
+}
+
+/** The requests have all been answered. */
+async function settled(queryClient: { isFetching(): number }) {
+  await vi.waitFor(() => {
+    expect(queryClient.isFetching()).toBe(0);
+  });
+}
+
+test("Résultats à saisir — mes inscriptions passées, avec J'ai fini, Abandon et Pas parti", async () => {
+  // The order of the server is nobody's; one race is to come, one is too old.
+  mocks.toEnter.mockResolvedValue([
+    winterRegistered,
+    juneRegistered,
+    springRegistered,
+    ancientRegistered,
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  // The runner of the user, registered, with the event and the format with its race type.
+  expect(mocks.toEnter).toHaveBeenCalledOnce();
+  const options = mocks.toEnter.mock.calls[0]?.[0];
+  expect(options?.expand).toBe("event,format.race_type");
+  expect(options?.filter).toContain('runner.user = {:me} && status = "registered"');
+  expect(options?.filter).toContain('"me":"u-bob"');
+
+  // The latest race first: each row has its event (a link), its race and its day.
+  const rows = resultRows(screen);
+  await expect.element(rows.first()).toBeVisible();
+  expect(rows.elements().map((row) => row.querySelector("h3")?.textContent)).toEqual([
+    "Trail du Printemps",
+    "Marathon d'hiver",
+  ]);
+  const [first, second] = rows.elements().map((row) => plain(row.textContent));
+  expect(first).toContain("Trail 42 km");
+  expect(first).toContain("dim. 12 avr.");
+  expect(second).toContain("Route 42,2 km");
+  expect(second).toContain("dim. 15 mars");
+  const link = resultsBlock(screen).getByRole("link", { name: "Trail du Printemps" });
+  expect(link.element().getAttribute("href")).toBe("/evenements/spring");
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Cross d'antan" }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Trail des Crêtes" }))
+    .not.toBeInTheDocument();
+
+  // Three buttons on each row.
+  expect(finishedButton(rows).elements()).toHaveLength(2);
+  expect(dnfButton(rows).elements()).toHaveLength(2);
+  expect(dnsButton(rows).elements()).toHaveLength(2);
+});
+
+test("Résultats à saisir — le bloc est entre « À confirmer » et « Inscriptions à faire »", async () => {
+  mocks.pending.mockResolvedValue([pendingP2]);
+  mocks.toEnter.mockResolvedValue([springRegistered]);
+  mocks.events.mockResolvedValue(trailAndLyon());
+
+  const { screen } = await renderHome();
+
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  await expect.element(todoBlock(screen)).toBeVisible();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  const titles = screen
+    .getByRole("heading", { level: 2 })
+    .elements()
+    .map((heading) => heading.textContent);
+  expect(titles).toEqual([
+    fr.home.pendingTitle,
+    fr.results.toEnterTitle,
+    fr.home.todoTitle,
+    fr.home.upcomingTitle,
+    fr.home.groupTitle,
+  ]);
+});
+
+test("Résultats à saisir — Abandon passe la participation en dnf, la ligne disparaît et le focus va sur un titre", async () => {
+  serveRegistered([springRegistered, winterRegistered]);
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  const asked = mocks.toEnter.mock.calls.length;
+
+  // The trail of the spring is the first row.
+  await dnfButton(resultRows(screen).first()).click();
+
+  expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-spring", { status: "dnf" });
+  // The block asks for its rows again, and the row is gone.
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Trail du Printemps" }))
+    .not.toBeInTheDocument();
+  expect(mocks.toEnter.mock.calls.length).toBeGreaterThan(asked);
+  // The other row is still there, and the title of the block has the focus.
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Marathon d'hiver" }))
+    .toBeVisible();
+  await expect.element(resultsTitle(screen)).toHaveFocus();
+
+  // The last row takes the block with it: the focus goes to the title of the page.
+  await dnfButton(resultRows(screen)).click();
+
+  expect(mocks.update).toHaveBeenLastCalledWith("p-winter", { status: "dnf" });
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+  await expect.element(pageTitle(screen)).toHaveFocus();
+  expect(document.activeElement).not.toBe(document.body);
+});
+
+test("Résultats à saisir — Pas parti passe la participation en dns, la ligne disparaît et le focus va sur un titre", async () => {
+  serveRegistered([springRegistered, winterRegistered]);
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  // The road race of the winter is the second row.
+  await dnsButton(resultRows(screen).last()).click();
+
+  expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-winter", { status: "dns" });
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Marathon d'hiver" }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Trail du Printemps" }))
+    .toBeVisible();
+  await expect.element(resultsTitle(screen)).toHaveFocus();
+});
+
+test("Résultats à saisir — J'ai fini ouvre le résultat en Terminé", async () => {
+  serveRegistered([springRegistered, winterRegistered]);
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  await finishedButton(resultRows(screen).first()).click();
+
+  // The window of the result, on « Terminé »: nothing is sent yet.
+  const dialog = screen.getByRole("dialog", { name: fr.results.title });
+  await expect.element(dialog).toBeVisible();
+  await expect.element(dialog.getByLabelText(fr.participation.status)).toHaveValue("finished");
+  expect(mocks.update).not.toHaveBeenCalled();
+
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.hoursName}`).fill("4");
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.minutesName}`).fill("12");
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.secondsName}`).fill("30");
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-spring", {
+      status: "finished",
+      finish_time_s: 15150,
+      rank: 0,
+      rank_of: 0,
+      result_note: "",
+    });
+  });
+  // Saved: the window is closed, the row is gone, and the title of the block has the focus.
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Trail du Printemps" }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Marathon d'hiver" }))
+    .toBeVisible();
+  await expect.element(resultsTitle(screen)).toHaveFocus();
+});
+
+test("Résultats à saisir — dans la fenêtre du résultat, on peut encore choisir Abandon", async () => {
+  serveRegistered([springRegistered]);
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  await finishedButton(resultRows(screen)).click();
+  const dialog = screen.getByRole("dialog", { name: fr.results.title });
+  await dialog.getByLabelText(fr.participation.status).selectOptions("dnf");
+  await dialog.getByLabelText(fr.results.note, { exact: true }).fill("Genou");
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-spring", {
+      status: "dnf",
+      finish_time_s: 0,
+      rank: 0,
+      rank_of: 0,
+      result_note: "Genou",
+    });
+  });
+  // It was the only row: the block goes, and the focus goes to the title of the page.
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+  await expect.element(pageTitle(screen)).toHaveFocus();
+});
+
+test("Résultats à saisir — Annuler ferme la fenêtre, la ligne reste et J'ai fini reprend le focus", async () => {
+  serveRegistered([springRegistered]);
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  await finishedButton(resultRows(screen)).click();
+  const dialog = screen.getByRole("dialog", { name: fr.results.title });
+  await expect.element(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: fr.common.cancel }).click();
+
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  expect(mocks.update).not.toHaveBeenCalled();
+  await expect.element(finishedButton(resultRows(screen))).toHaveFocus();
+});
+
+test("Résultats à saisir — J'ai fini sur une participation supprimée (404) : « Introuvable », la fenêtre se ferme, la ligne part et le focus va au titre de la page", async () => {
+  let rows = [springRegistered];
+  mocks.toEnter.mockImplementation(() => Promise.resolve(rows));
+  mocks.update.mockImplementation(() => {
+    // Somebody deleted it meanwhile.
+    rows = [];
+    return Promise.reject(notFound());
+  });
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  await finishedButton(resultRows(screen)).click();
+  const dialog = screen.getByRole("dialog", { name: fr.results.title });
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+  await expect.element(pageTitle(screen)).toHaveFocus();
+});
+
+test("Résultats à saisir — Abandon refusé : message, liste redemandée, la ligne reste et le bouton garde le focus", async () => {
+  mocks.toEnter.mockResolvedValue([springRegistered]);
+  // A real request takes longer than a frame.
+  mocks.update.mockImplementation(
+    () => new Promise((_, reject) => setTimeout(() => reject(new Error("network")), 150)),
+  );
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  const asked = mocks.toEnter.mock.calls.length;
+  const abandon = dnfButton(resultRows(screen));
+
+  await abandon.click();
+
+  // Never disabled: it keeps the focus while it waits, and after the refusal.
+  const button = buttonOf(abandon);
+  await expect.element(screen.getByText(fr.errors.generic)).toBeVisible();
+  await expectAvailable(button);
+  // What the screen shows may be what is wrong: the rows are asked for again.
+  expect(mocks.toEnter.mock.calls.length).toBeGreaterThan(asked);
+  await expect
+    .element(resultsBlock(screen).getByRole("link", { name: "Trail du Printemps" }))
+    .toBeVisible();
+});
+
+test("Résultats à saisir — Pas parti sur une participation supprimée (404) : « Introuvable », la ligne part et le focus va au titre de la page", async () => {
+  let rows = [springRegistered];
+  mocks.toEnter.mockImplementation(() => Promise.resolve(rows));
+  mocks.update.mockImplementation(() => {
+    rows = [];
+    return Promise.reject(notFound());
+  });
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  await dnsButton(resultRows(screen)).click();
+
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+  await expect.element(pageTitle(screen)).toHaveFocus();
+});
+
+test("Résultats à saisir — un double appui n'envoie qu'une fois : le bouton dit qu'il est occupé, sans perdre le focus", async () => {
+  mocks.toEnter.mockResolvedValue([springRegistered]);
+  mocks.update.mockImplementation(
+    () => new Promise((resolve) => setTimeout(() => resolve({}), 150)),
+  );
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  const button = buttonOf(dnfButton(resultRows(screen)));
+
+  clickTwice(button);
+
+  await expectBusy(button);
+  // One request for the row: the other buttons are busy too, and « J'ai fini » opens nothing.
+  expect(buttonOf(dnsButton(resultRows(screen))).getAttribute("aria-disabled")).toBe("true");
+  buttonOf(finishedButton(resultRows(screen))).click();
+  buttonOf(dnsButton(resultRows(screen))).click();
+  expect(mocks.update).toHaveBeenCalledOnce();
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  // The request is over (the row is still there in this server's answer): the buttons are back.
+  await expectAvailable(button);
+  expect(mocks.update).toHaveBeenCalledOnce();
+});
+
+test("Résultats à saisir — pas de bloc sans rien à saisir", async () => {
+  // Registered, but the race is to come, or the race is too old.
+  mocks.toEnter.mockResolvedValue([juneRegistered, ancientRegistered]);
+
+  const { screen, queryClient } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  await settled(queryClient);
+  expect(mocks.toEnter).toHaveBeenCalled();
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+});
+
+test("Résultats à saisir — pas de bloc quand il n'y a aucune inscription", async () => {
+  const { screen, queryClient } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  await settled(queryClient);
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+});
+
+test("Résultats à saisir — pas de bloc pendant le chargement", async () => {
+  mocks.toEnter.mockReturnValue(new Promise(() => {}));
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+});
+
+test("Résultats à saisir — pas de bloc quand la requête échoue, ni d'alerte", async () => {
+  mocks.toEnter.mockRejectedValue(new Error("network"));
+
+  const { screen, queryClient } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  await settled(queryClient);
+  expect(mocks.toEnter).toHaveBeenCalled();
+  await expect.element(screen.getByText(fr.results.toEnterTitle)).not.toBeInTheDocument();
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+});
+
+test("Résultats à saisir — en anglais, les textes suivent la langue", async () => {
+  mocks.toEnter.mockResolvedValue([springRegistered]);
+
+  const { screen } = await renderHome({ languages: ["en-GB"] });
+
+  const block = screen.getByRole("region", { name: "Results to enter" });
+  await expect.element(block).toBeVisible();
+  const row = block.getByRole("listitem");
+  await expect.element(row.getByRole("button", { name: "I finished" })).toBeVisible();
+  await expect.element(row.getByRole("button", { name: "Did not finish" })).toBeVisible();
+  await expect.element(row.getByRole("button", { name: "Did not start" })).toBeVisible();
+  expect(plain(row.element().textContent)).toContain("Sun 12 Apr");
+});
+
+test("Résultats à saisir — zones tactiles d'au moins 44 px", async () => {
+  await page.viewport(390, 844);
+  mocks.toEnter.mockResolvedValue([springRegistered]);
+  const { screen } = await renderHome();
+  await expect.element(resultsBlock(screen)).toBeVisible();
+
+  const row = resultRows(screen);
+  const targets = [
+    resultsBlock(screen).getByRole("link", { name: "Trail du Printemps" }),
+    finishedButton(row),
+    dnfButton(row),
+    dnsButton(row),
   ];
   for (const target of targets) {
     const { width, height } = target.element().getBoundingClientRect();

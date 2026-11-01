@@ -173,6 +173,10 @@ export const en = {
     noteHint: "Category, number of laps, why you stopped…",
     rankText: (rank: string, of?: string) => (of === undefined ? rank : `${rank} out of ${of}`),
     save: "Save",
+    toEnterTitle: "Results to enter",
+    finished: "I finished",
+    dnf: "Did not finish",
+    dns: "Did not start",
   },
   comments: {
     heading: "Comments",

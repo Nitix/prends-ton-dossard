@@ -216,6 +216,12 @@ export const fr = {
     // On the row: the rank is already an ordinal ("12e"); the number of people ranked is not always known.
     rankText: (rank: string, of?: string) => (of === undefined ? rank : `${rank} sur ${of}`),
     save: "Enregistrer",
+    // The block of the home page: the races the user is registered for and that are over, whose result is to enter.
+    toEnterTitle: "Résultats à saisir",
+    // Its three buttons: the first opens the window of the result, the other two change the status at once.
+    finished: "J'ai fini",
+    dnf: "Abandon",
+    dns: "Pas parti",
   },
   // The comments of an event, at the bottom of its page (see features/comments).
   comments: {

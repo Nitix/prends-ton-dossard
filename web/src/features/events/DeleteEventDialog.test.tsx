@@ -318,6 +318,8 @@ test("DeleteEventDialog — Supprimer efface l'événement, renvoie vers /liste 
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["pending"]);
+  // Its participations went with it, the ones whose result was to enter too.
+  expect(keys).toContainEqual(["results-to-enter"]);
   // Its comments and its offers went with it, and the home page lists the latest comments of all the events.
   expect(keys).toContainEqual(["comments"]);
   expect(keys).toContainEqual(["offers"]);
