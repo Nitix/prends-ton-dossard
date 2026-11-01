@@ -404,7 +404,34 @@
 
 /* A text field that has the focus: a violet border and a soft halo. Outside the
    layers, so that it wins over the border colour of the field's classes. */
-:where(input:not([type="checkbox"], [type="radio"], [type="file"]), select, textarea):focus {
+:where(
+  input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"]),
+  select,
+  textarea
+):focus {
   border-color: var(--color-iris-500);
   box-shadow: 0 0 0 4px rgb(139 124 255 / 0.18);
+}
+
+/* The cursor of the elevation profile: a range with no track and no thumb to
+   see, since the profile draws it (see ElevationProfile). The focus ring stays. */
+.profile-cursor::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+.profile-cursor::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1px;
+  height: 100%;
+  background: transparent;
+}
+.profile-cursor::-moz-range-track {
+  background: transparent;
+}
+.profile-cursor::-moz-range-thumb {
+  width: 1px;
+  height: 100%;
+  border: 0;
+  background: transparent;
 }

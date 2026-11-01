@@ -400,6 +400,12 @@ export const fr = {
     zoomOut: "Zoom arrière",
     // The accessible name of the profile, which the page completes with the numbers.
     profileLabel: "Profil de dénivelé",
+    // The legend of the colours of the profile, which are the steepness of the slope.
+    slope: "Pente",
+    // The cursor that runs along the profile (by finger, pointer or arrow keys), and what it reads, already formatted: "2,4 km, altitude 812 m, pente 12 %".
+    profileCursor: "Position sur le profil",
+    profileReading: (km: string, altitude: string, slope: string) =>
+      `${km}, altitude ${altitude}, pente ${slope}`,
     // What the two marks of the map stand for.
     start: "Départ",
     finish: "Arrivée",

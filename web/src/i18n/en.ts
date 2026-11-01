@@ -301,6 +301,10 @@ export const en = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     profileLabel: "Elevation profile",
+    slope: "Slope",
+    profileCursor: "Position on the profile",
+    profileReading: (km: string, altitude: string, slope: string) =>
+      `${km}, altitude ${altitude}, slope ${slope}`,
     start: "Start",
     finish: "Finish",
     unreadable: "This track could not be read.",
