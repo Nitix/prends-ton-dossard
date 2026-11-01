@@ -180,6 +180,29 @@ describe("ElevationProfile", () => {
     ).toEqual(SLOPE_ZONES.map((zone) => rgb(SLOPE_COLORS[zone])));
   });
 
+  test("ElevationProfile — les aplats de pente sont pleins : la couleur dessinée est celle qui a 3:1 sur la carte", async () => {
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </I18nProvider>,
+    );
+    // A band drawn at 85 % would be paler than the colour of its zone, and the
+    // 3:1 measured on that colour would not be the one the eye gets.
+    const bands = [...screen.container.querySelectorAll("g[clip-path] rect")];
+    expect(bands.length).toBeGreaterThan(0);
+    for (const band of bands) {
+      for (
+        let node: Element | null = band;
+        node && node !== screen.container;
+        node = node.parentElement
+      ) {
+        const style = getComputedStyle(node);
+        expect(style.opacity).toBe("1");
+        expect(style.fillOpacity).toBe("1");
+      }
+    }
+  });
+
   test("ElevationProfile — au clavier, le curseur dit la distance, l'altitude et la pente", async () => {
     const screen = await render(
       <I18nProvider languages={["fr"]}>

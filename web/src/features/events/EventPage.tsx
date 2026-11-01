@@ -702,7 +702,7 @@ function ParticipantRow({
     <li
       ref={row}
       className={`flex items-center justify-between gap-2 rounded-2xl border-2 py-1 pr-1 pl-2 ${
-        confirmed ? "border-transparent bg-neutral-50" : "border-dashed border-neutral-400 bg-white"
+        confirmed ? "border-transparent bg-neutral-50" : "border-dashed border-neutral-500 bg-white"
       }`}
     >
       <div className="flex min-w-0 items-center gap-3 py-1">

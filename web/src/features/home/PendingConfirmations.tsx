@@ -178,7 +178,7 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-[1.25rem] border-2 border-dashed border-blush-300 bg-white p-4 shadow-card">
+    <li className="flex flex-col gap-3 rounded-[1.25rem] border-2 border-dashed border-blush-600 bg-white p-4 shadow-card">
       <div className="flex flex-col">
         <h3 className="card-title">
           <Link

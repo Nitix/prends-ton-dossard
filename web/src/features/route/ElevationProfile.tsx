@@ -295,7 +295,6 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
                 width={Math.max(0.5, x(run.to) - x(run.from)) + 0.4}
                 height={PLOT_HEIGHT}
                 fill={SLOPE_COLORS[run.zone]}
-                fillOpacity={0.85}
               />
             ))}
           </g>
