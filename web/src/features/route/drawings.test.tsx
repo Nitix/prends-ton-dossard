@@ -4,7 +4,6 @@ import { render } from "vitest-browser-react";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ElevationProfile } from "./ElevationProfile";
 import { toTrack, type TrackPoint } from "./gpx";
-import { TrackShape } from "./TrackShape";
 
 // The colours are classes of Tailwind, which the styles load.
 import "../../styles.css";
@@ -29,102 +28,6 @@ function flatMap(): TrackPoint[] {
 }
 
 const COUNT = (texts: string[], unit: RegExp) => texts.filter((text) => unit.test(text)).length;
-
-describe("TrackShape", () => {
-  test("TrackShape — un chemin, départ et arrivée, aria-label", async () => {
-    const label = "Tracé du parcours : 42,2 km";
-    const screen = await render(
-      <I18nProvider languages={["fr"]}>
-        <TrackShape points={mountain()} label={label} />
-      </I18nProvider>,
-    );
-
-    // One drawing, named for a screen reader.
-    const drawing = screen.getByRole("img", { name: label });
-    await expect.element(drawing).toBeVisible();
-    await expect.element(drawing).toHaveAttribute("viewBox");
-
-    // One path: the track.
-    const paths = screen.container.querySelectorAll("path");
-    expect(paths).toHaveLength(1);
-    const d = paths[0]?.getAttribute("d") ?? "";
-    expect(d).toMatch(/^M[\d.]+ [\d.]+( L[\d.]+ [\d.]+)+$/);
-    expect(d).not.toContain("NaN");
-
-    // The start and the finish are marked, and said in words: the two marks
-    // differ by their shape, not by their colour.
-    await expect.element(screen.getByText("Départ")).toBeVisible();
-    await expect.element(screen.getByText("Arrivée")).toBeVisible();
-    const marks = drawing.element().querySelectorAll("circle");
-    expect(marks).toHaveLength(2);
-    expect(marks[0]?.getAttribute("fill")).not.toBe(marks[1]?.getAttribute("fill"));
-  });
-
-  test("TrackShape — tout reste dans le cadre, le nord en haut, sans déformer", async () => {
-    // A track that goes north and a little east: the north is up (a smaller y).
-    const points = toTrack([
-      { lat: 45.0, lon: 6.0 },
-      { lat: 45.1, lon: 6.0 },
-      { lat: 45.2, lon: 6.05 },
-    ]);
-    const screen = await render(
-      <I18nProvider languages={["fr"]}>
-        <TrackShape points={points} label="Tracé" />
-      </I18nProvider>,
-    );
-    const svg = screen.container.querySelector("svg");
-    const [x0, y0, width, height] = (svg?.getAttribute("viewBox") ?? "").split(" ").map(Number);
-    const coordinates = [
-      ...(screen.container.querySelector("path")?.getAttribute("d") ?? "").matchAll(
-        /[ML]([\d.-]+) ([\d.-]+)/g,
-      ),
-    ].map(([, x, y]) => [Number(x), Number(y)] as const);
-    expect(coordinates).toHaveLength(3);
-    for (const [x, y] of coordinates) {
-      expect(x).toBeGreaterThan(x0 ?? 0);
-      expect(x).toBeLessThan((x0 ?? 0) + (width ?? 0));
-      expect(y).toBeGreaterThan(y0 ?? 0);
-      expect(y).toBeLessThan((y0 ?? 0) + (height ?? 0));
-    }
-    expect(coordinates[2]?.[1]).toBeLessThan(coordinates[0]?.[1] ?? 0);
-    // A degree of longitude at 45° is cos(45°) = 0.71 of one of latitude: the
-    // east-west spread (0.05° of longitude) is 0.05 × 0.71 / 0.2 = 18 % of the
-    // north-south one.
-    const spreadX = Math.abs((coordinates[2]?.[0] ?? 0) - (coordinates[0]?.[0] ?? 0));
-    const spreadY = Math.abs((coordinates[2]?.[1] ?? 0) - (coordinates[0]?.[1] ?? 0));
-    expect(spreadX / spreadY).toBeGreaterThan(0.15);
-    expect(spreadX / spreadY).toBeLessThan(0.2);
-  });
-
-  test("TrackShape — une trace d'un point ou sans étendue se dessine quand même", async () => {
-    for (const points of [
-      toTrack([{ lat: 45, lon: 6 }]),
-      toTrack([
-        { lat: 45, lon: 6 },
-        { lat: 45, lon: 6 },
-      ]),
-    ]) {
-      const screen = await render(
-        <I18nProvider languages={["fr"]}>
-          <TrackShape points={points} label="Tracé" />
-        </I18nProvider>,
-      );
-      expect(screen.container.innerHTML).not.toContain("NaN");
-      expect(screen.container.querySelectorAll("path")).toHaveLength(1);
-      await screen.unmount();
-    }
-  });
-
-  test("TrackShape — réduit à 1 000 points un tracé de 20 000", async () => {
-    const screen = await render(
-      <I18nProvider languages={["fr"]}>
-        <TrackShape points={mountain(20_000)} label="Tracé" />
-      </I18nProvider>,
-    );
-    const d = screen.container.querySelector("path")?.getAttribute("d") ?? "";
-    expect(d.match(/[ML]/g)?.length).toBeLessThanOrEqual(1000);
-  });
-});
 
 describe("ElevationProfile", () => {
   test("ElevationProfile — graduations et aria-label", async () => {

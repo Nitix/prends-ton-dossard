@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+
 import { SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
@@ -5,9 +7,24 @@ import { webAddress } from "../../lib/url";
 import { trackURL, useTrack } from "./api";
 import { ElevationProfile } from "./ElevationProfile";
 import { gpxStats, type TrackPoint } from "./gpx";
-import { TrackShape } from "./TrackShape";
+import { MAP_BOX } from "./mapBox";
 
-/** The numbers of a track, then its two drawings. A track without altitudes has its length, and no profile. */
+// The map brings Leaflet along: it is loaded when a track is shown, not with the page.
+const TrackMap = lazy(() => import("./TrackMap"));
+
+/** What stands in the place of the map while it loads: a box of its size, so that the page does not jump. */
+function MapLoading() {
+  const { t } = useI18n();
+  return (
+    <output
+      className={`${MAP_BOX} flex items-center justify-center bg-neutral-100 text-sm text-neutral-600`}
+    >
+      {t.common.loading}
+    </output>
+  );
+}
+
+/** The numbers of a track, then its map and its profile. A track without altitudes has its length, and no profile. */
 function Track({ points }: { points: TrackPoint[] }) {
   const { t, f } = useI18n();
   const stats = gpxStats(points);
@@ -24,7 +41,9 @@ function Track({ points }: { points: TrackPoint[] }) {
     <>
       <p>{summary}</p>
       {altitude !== null && <p className="text-sm text-neutral-600">{altitude}</p>}
-      <TrackShape points={points} label={`${t.route.trackLabel}, ${summary}`} />
+      <Suspense fallback={<MapLoading />}>
+        <TrackMap points={points} />
+      </Suspense>
       <ElevationProfile
         points={points}
         label={altitude === null ? t.route.profileLabel : `${t.route.profileLabel}, ${altitude}`}
@@ -35,10 +54,10 @@ function Track({ points }: { points: TrackPoint[] }) {
 
 /**
  * The course of a format, on the page of its event: the numbers of its GPX
- * track and the two drawings read from the file, a link to download the file,
- * and the link to the course on a website. Nothing for a format with neither (a
- * link that is not a web address is not one). A track that cannot be read is
- * said, and the links stay.
+ * track, its map and its elevation profile, read from the file, a link to
+ * download the file, and the link to the course on a website. Nothing for a
+ * format with neither (a link that is not a web address is not one). A track
+ * that cannot be read is said, and the links stay.
  */
 export function RouteSection({ format }: { format: FormatRecord }) {
   const { t } = useI18n();

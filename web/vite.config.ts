@@ -45,8 +45,10 @@ export default defineConfig({
         test: {
           name: "browser",
           include: ["src/**/*.test.tsx"],
-          // Makes any real WebAuthn call fail: it would open a dialog of the OS.
-          setupFiles: ["./src/test/blockWebAuthn.ts"],
+          // The first makes any real WebAuthn call fail: it would open a dialog
+          // of the OS. The second does the same for a map tile request: no test
+          // goes on the network.
+          setupFiles: ["./src/test/blockWebAuthn.ts", "./src/test/blockTiles.ts"],
           browser: {
             enabled: true,
             headless: true,

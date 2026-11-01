@@ -1,0 +1,21 @@
+/* The map of a track (see TrackMap.tsx). They come after the styles of Leaflet,
+   and `.leaflet-container` in the selectors makes them win over its rules for a
+   touch screen. */
+
+/* The zoom buttons are 26 px (30 px on a touch screen) in Leaflet: a tap target
+   is 44 px at least. */
+.track-map.leaflet-container .leaflet-bar a {
+  width: 2.75rem;
+  height: 2.75rem;
+  line-height: 2.75rem;
+}
+
+/* The words beside the start and the finish: a little bigger than the 12 px of
+   Leaflet, and tighter, so that two of them fit one above the other when the
+   race ends where it starts. */
+.track-map.leaflet-container .leaflet-tooltip {
+  padding: 2px 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+}

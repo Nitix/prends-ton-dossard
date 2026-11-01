@@ -383,10 +383,13 @@ export const fr = {
     summary: (km: string, gain: string, loss: string) => `${km} · ${gain} D+ · ${loss} D−`,
     // The lowest and the highest altitudes, already formatted: "altitude 450 m à 1 200 m".
     altitude: (min: string, max: string) => `altitude ${min} à ${max}`,
-    // The accessible names of the drawings, which the page completes with the numbers.
-    trackLabel: "Tracé du parcours",
+    // The accessible name of the map of the track (the numbers are written beside it), and its two zoom buttons.
+    map: "Carte du parcours",
+    zoomIn: "Zoom avant",
+    zoomOut: "Zoom arrière",
+    // The accessible name of the profile, which the page completes with the numbers.
     profileLabel: "Profil de dénivelé",
-    // What the two marks of the drawing of the track stand for.
+    // What the two marks of the map stand for.
     start: "Départ",
     finish: "Arrivée",
     unreadable: "Cette trace n'a pas pu être lue.",

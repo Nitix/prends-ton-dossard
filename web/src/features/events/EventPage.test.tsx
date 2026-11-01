@@ -95,6 +95,13 @@ vi.mock("../../lib/pb", () => ({
   },
 }));
 
+// The map of a track is the real one, with blank tiles: no test asks a tile server for a tile.
+vi.mock("../route/TrackMap", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../route/TrackMap")>();
+  const { withBlankTiles } = await import("../../test/tiles");
+  return { ...actual, default: withBlankTiles(actual.default) };
+});
+
 const base = { created: "", updated: "", collectionId: "", collectionName: "" };
 
 // Alice wrote the event; Bob is a member; the admin is a runner of the group too.
@@ -2450,9 +2457,7 @@ test("EventPage — la partie Parcours est dans l'épreuve qui a une trace, apr�
 
   const trail42 = format(screen, /^Trail 42/);
   await expect.element(trail42.getByRole("heading", { name: fr.route.title })).toBeVisible();
-  await expect
-    .element(trail42.getByRole("img", { name: new RegExp(`^${fr.route.trackLabel}`) }))
-    .toBeVisible();
+  await expect.element(trail42.getByRole("region", { name: fr.route.map })).toBeVisible();
   await expect
     .element(trail42.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) }))
     .toBeVisible();

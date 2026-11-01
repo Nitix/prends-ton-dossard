@@ -309,9 +309,11 @@ describe("offers texts", () => {
 describe("route texts", () => {
   test("French", () => {
     const r = fr.route;
-    expect([r.title, r.trackLabel, r.profileLabel, r.start, r.finish]).toEqual([
+    expect([r.title, r.map, r.zoomIn, r.zoomOut, r.profileLabel, r.start, r.finish]).toEqual([
       "Parcours",
-      "Tracé du parcours",
+      "Carte du parcours",
+      "Zoom avant",
+      "Zoom arrière",
       "Profil de dénivelé",
       "Départ",
       "Arrivée",
@@ -323,9 +325,11 @@ describe("route texts", () => {
 
   test("English", () => {
     const r = en.route;
-    expect([r.title, r.trackLabel, r.profileLabel, r.start, r.finish]).toEqual([
+    expect([r.title, r.map, r.zoomIn, r.zoomOut, r.profileLabel, r.start, r.finish]).toEqual([
       "Course",
-      "Course map",
+      "Route map",
+      "Zoom in",
+      "Zoom out",
       "Elevation profile",
       "Start",
       "Finish",

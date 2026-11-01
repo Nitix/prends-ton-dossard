@@ -18,6 +18,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../lib/pb", () => ({ pb: { files: { getURL: mocks.getURL } } }));
 
+// The map of a track is the real one, with blank tiles: no test asks a tile server for a tile.
+vi.mock("./TrackMap", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./TrackMap")>();
+  const { withBlankTiles } = await import("../../test/tiles");
+  return { ...actual, default: withBlankTiles(actual.default) };
+});
+
 const TRACK_URL = "https://pb.example.test/api/files/formats/f42/trace_ab12cd.gpx";
 const COURSE_URL = "https://www.openrunner.com/route-details/123";
 
@@ -87,12 +94,12 @@ async function renderSection(format: FormatRecord, languages = ["fr"]) {
 // text as it looks.
 const plain = (s: string | null) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
-const trackDrawing = (screen: Awaited<ReturnType<typeof renderSection>>) =>
-  screen.getByRole("img", { name: new RegExp(`^${fr.route.trackLabel}`) });
+const trackMap = (screen: Awaited<ReturnType<typeof renderSection>>) =>
+  screen.getByRole("region", { name: fr.route.map });
 const profileDrawing = (screen: Awaited<ReturnType<typeof renderSection>>) =>
   screen.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) });
 
-test("RouteSection — chiffres, tracé, profil et liens", async () => {
+test("RouteSection — chiffres, carte, profil et liens", async () => {
   const fetching = serve(CLIMB);
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx", route_url: COURSE_URL }));
 
@@ -104,12 +111,9 @@ test("RouteSection — chiffres, tracé, profil et liens", async () => {
   const altitudes = screen.getByText(/^altitude/);
   await expect.element(altitudes).toBeVisible();
   expect(plain(altitudes.element().textContent)).toBe("altitude 450 m à 650 m");
-  // The two drawings, each named with its numbers.
-  await expect.element(trackDrawing(screen)).toBeVisible();
+  // The map, and the profile, which is named with its numbers.
+  await expect.element(trackMap(screen)).toBeVisible();
   await expect.element(profileDrawing(screen)).toBeVisible();
-  expect(plain(trackDrawing(screen).element().getAttribute("aria-label"))).toContain(
-    "2,2 km · 200 m D+ · 50 m D−",
-  );
   expect(plain(profileDrawing(screen).element().getAttribute("aria-label"))).toContain(
     "altitude 450 m à 650 m",
   );
@@ -135,6 +139,29 @@ test("RouteSection — chiffres, tracé, profil et liens", async () => {
   }
 });
 
+test("RouteSection — the map replaces the outline, profile and numbers unchanged", async () => {
+  serve(CLIMB);
+  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+
+  // The map is there, and the outline of the track that it replaces is not.
+  await expect.element(trackMap(screen)).toBeVisible();
+  await expect
+    .element(screen.getByRole("img", { name: /^Tracé du parcours/ }))
+    .not.toBeInTheDocument();
+  // The numbers are written outside of the map, as they were; so is the profile, which is the same.
+  const figures = screen.getByText(/D\+/);
+  expect(plain(figures.element().textContent)).toBe("2,2 km · 200 m D+ · 50 m D−");
+  expect(trackMap(screen).element().contains(figures.element())).toBe(false);
+  expect(plain(screen.getByText(/^altitude/).element().textContent)).toBe("altitude 450 m à 650 m");
+  await expect.element(profileDrawing(screen)).toBeVisible();
+  expect(trackMap(screen).element().contains(profileDrawing(screen).element())).toBe(false);
+  // The map comes before the profile.
+  expect(
+    trackMap(screen).element().compareDocumentPosition(profileDrawing(screen).element()) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
 test("RouteSection — un lien sans trace", async () => {
   const fetching = serve(CLIMB);
   const screen = await renderSection(formatOf({ route_url: COURSE_URL }));
@@ -157,7 +184,7 @@ test("RouteSection — une trace sans altitude n'a pas de profil", async () => {
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
 
   // The track is drawn, with its length: the gain, the loss and the altitudes are not made up.
-  await expect.element(trackDrawing(screen)).toBeVisible();
+  await expect.element(trackMap(screen)).toBeVisible();
   await expect.element(screen.getByText("2,2 km", { exact: true }).first()).toBeVisible();
   await expect.element(profileDrawing(screen)).not.toBeInTheDocument();
   expect(screen.container.textContent).not.toContain("D+");
@@ -210,7 +237,7 @@ test("RouteSection — pendant la lecture, la page dit qu'elle charge", async ()
   await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
 
   answer.resolve(new Response(CLIMB));
-  await expect.element(trackDrawing(screen)).toBeVisible();
+  await expect.element(trackMap(screen)).toBeVisible();
   await expect.element(screen.getByText(fr.common.loading)).not.toBeInTheDocument();
 });
 
@@ -221,6 +248,7 @@ test("RouteSection — en anglais, les textes sont anglais", async () => {
   ]);
 
   await expect.element(screen.getByRole("heading", { name: "Course" })).toBeVisible();
+  await expect.element(screen.getByRole("region", { name: "Route map" })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: "Download the track" })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: "See the course" })).toBeVisible();
   await expect.element(screen.getByText(/^altitude 450 m to 650 m$/)).toBeVisible();

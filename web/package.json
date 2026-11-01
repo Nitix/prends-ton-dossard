@@ -14,6 +14,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.105.0",
     "@tanstack/react-router": "^1.170.46",
+    "leaflet": "1.9.4",
     "pocketbase": "^0.28.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-plugin": "^1.168.48",
+    "@types/leaflet": "1.9.22",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
