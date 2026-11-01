@@ -68,6 +68,21 @@ func result(want admin.MergeResult) string {
 	return string(body)
 }
 
+// The front reads these keys: the rows below build their expectation with the
+// tags of MergeResult, so a renamed tag would go through them unnoticed.
+func TestMergeResult_JSONKeys(t *testing.T) {
+	got, err := json.Marshal(admin.MergeResult{
+		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, MovedComments: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"movedComments":5}`
+	if string(got) != want {
+		t.Errorf("MergeResult as JSON = %s, want %s", got, want)
+	}
+}
+
 // stored returns the record as it is in the database, or nil when it is not.
 func stored(t testing.TB, app core.App, collection, id string) *core.Record {
 	t.Helper()
@@ -664,7 +679,9 @@ func TestMergeEvents(t *testing.T) {
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				for _, moved := range movedComments {
 					got := mustStore(t, app, "comments", moved.Id)
-					// Only the event changes: who wrote it, what, and when.
+					// Only the event changes: who wrote it, what, and when. The date
+					// of the last change stays too: the front shows a comment whose
+					// two dates differ as edited, and a merge is not an edit.
 					if got.GetString("event") != fx.Event.Id {
 						t.Errorf("the comment %q is in the event %q, want the kept one %q", moved.GetString("body"), got.GetString("event"), fx.Event.Id)
 					}
@@ -675,6 +692,10 @@ func TestMergeEvents(t *testing.T) {
 					if got.GetDateTime("created").String() != moved.GetDateTime("created").String() {
 						t.Errorf("the comment %q was created %s, now %s", moved.GetString("body"),
 							moved.GetDateTime("created"), got.GetDateTime("created"))
+					}
+					if got.GetDateTime("updated").String() != moved.GetDateTime("updated").String() {
+						t.Errorf("the comment %q was updated %s, now %s: a merge must not make it look edited", moved.GetString("body"),
+							moved.GetDateTime("updated"), got.GetDateTime("updated"))
 					}
 				}
 				if got := mustStore(t, app, "comments", keptComment.Id).GetString("event"); got != fx.Event.Id {
@@ -1040,12 +1061,18 @@ func TestMerge_RollsBackWhenAWriteFails(t *testing.T) {
 	t.Run("merge-events with comments", func(t *testing.T) {
 		app := testutil.NewApp(t)
 		fx := testutil.Seed(t, app)
-		// Event2 holds two comments: the second move fails, after the first and
-		// after the formats have moved.
+		// The comments move with one statement of SQL, which no hook of a record
+		// sees: the failure is the last write, the deletion of the merged event,
+		// after the formats and the comments have moved.
 		first := comment(t, app, fx.Event2, fx.BobRunner, "Qui part de Lyon ?")
-		comment(t, app, fx.Event2, fx.AliceRunner, "Moi !")
+		second := comment(t, app, fx.Event2, fx.AliceRunner, "Moi !")
 		before := snapshot(t, app)
-		failOn(app, "comments", 2)
+		app.OnRecordDelete("events").BindFunc(func(e *core.RecordEvent) error {
+			if e.Record.Id == fx.Event2.Id {
+				return boom
+			}
+			return e.Next()
+		})
 
 		_, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, false)
 		if !errors.Is(err, boom) {
@@ -1056,8 +1083,10 @@ func TestMerge_RollsBackWhenAWriteFails(t *testing.T) {
 			t.Errorf("the database changed:\nbefore:\n%s\nafter:\n%s", before, got)
 		}
 		mustStore(t, app, "events", fx.Event2.Id)
-		if got := mustStore(t, app, "comments", first.Id).GetString("event"); got != fx.Event2.Id {
-			t.Errorf("the first comment is in the event %q, want Event2 %q", got, fx.Event2.Id)
+		for _, c := range []*core.Record{first, second} {
+			if got := mustStore(t, app, "comments", c.Id).GetString("event"); got != fx.Event2.Id {
+				t.Errorf("the comment %q is in the event %q, want Event2 %q", c.GetString("body"), got, fx.Event2.Id)
+			}
 		}
 	})
 

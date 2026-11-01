@@ -56,7 +56,8 @@ type MergeResult struct {
 //     Otherwise they go to the kept event (they count as moved).
 //
 // The comments of the merged event all go to the kept event, as they are: only
-// their event changes, so they keep their author, their text and their date.
+// their event changes, so they keep their author, their text and their dates,
+// the one of their last change included (they are not shown as edited).
 //
 // With dryRun it only computes the result: nothing is written. Otherwise
 // everything is written in one transaction, so a failure leaves the database as
@@ -84,11 +85,11 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 		// The comments move as they are, and none is dropped: counting them
 		// does not depend on what is written below, so a dry run counts them
 		// too.
-		comments, err := tx.FindAllRecords("comments", dbx.HashExp{"event": merged.Id})
+		commentCount, err := tx.CountRecords("comments", dbx.HashExp{"event": merged.Id})
 		if err != nil {
 			return err
 		}
-		result.MovedComments = len(comments)
+		result.MovedComments = int(commentCount)
 
 		// What decides which participations stay is read before anything is
 		// written, so that a dry run and a real run count the same.
@@ -222,12 +223,13 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 		}
 
 		// The comments move before the event is deleted: deleting it would
-		// delete them with it.
-		for _, c := range comments {
-			c.Set("event", keep.Id)
-			if err := tx.Save(c); err != nil {
-				return err
-			}
+		// delete them with it. One statement, not a save of each: a save sets
+		// the date of the last change, and the front shows a comment whose
+		// "created" and "updated" differ as edited, which a merge is not. Only
+		// the event changes, so nothing of a comment needs validating again.
+		if _, err := tx.DB().NewQuery("UPDATE comments SET event = {:keep} WHERE event = {:merged}").
+			Bind(dbx.Params{"keep": keep.Id, "merged": merged.Id}).Execute(); err != nil {
+			return err
 		}
 
 		// Nothing is left to cascade to: the formats and the comments have

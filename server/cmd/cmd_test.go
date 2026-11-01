@@ -469,6 +469,11 @@ func checkComments(t *testing.T, app core.App, today time.Time) {
 		if created := c.GetDateTime("created").Time(); !created.Before(today) {
 			t.Errorf("the comment %d was written on %s, want before today %s", i+1, created, today)
 		}
+		// The front shows "edited" when the two dates differ: a comment that
+		// was never changed must not.
+		if created, updated := c.GetDateTime("created"), c.GetDateTime("updated"); !created.Time().Equal(updated.Time()) {
+			t.Errorf("the comment %d was created at %s and updated at %s, want the same date (it was never edited)", i+1, created, updated)
+		}
 	}
 	if first, second := comments[0].GetDateTime("created"), comments[1].GetDateTime("created"); !first.Time().Before(second.Time()) {
 		t.Errorf("the comments were written at %s then %s, want the first before the second", first, second)

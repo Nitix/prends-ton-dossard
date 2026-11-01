@@ -277,8 +277,10 @@ func seedComment(app core.App, event, author *core.Record, entry commentSpec) er
 	comment.Set("author", author.Id)
 	comment.Set("body", entry.body)
 	// Set does nothing on a date that PocketBase fills, and the save keeps a
-	// value that was given with SetRaw.
+	// value that was given with SetRaw. "updated" gets the same one: a comment
+	// whose two dates differ is shown as edited, and this one never was.
 	comment.SetRaw("created", written)
+	comment.SetRaw("updated", written)
 	return app.Save(comment)
 }
 

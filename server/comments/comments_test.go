@@ -21,7 +21,14 @@ func aliceRunner(fx testutil.Fixture) *core.Record { return fx.AliceRunner }
 func bobRunner(fx testutil.Fixture) *core.Record   { return fx.BobRunner }
 
 // bobsComment is the comment that Before sets up: Bob wrote it on Event.
-var bobsComment *core.Record
+// samsComment is the one that samWrote sets up: Sam, who has no account, wrote
+// it on Event.
+var bobsComment, samsComment *core.Record
+
+// samsCommentURL builds the URL of the comment that samWrote saved.
+func samsCommentURL(testutil.Fixture) string {
+	return "/api/collections/comments/records/" + samsComment.Id
+}
 
 // commentURL builds the URL of the comments, or of the one that Before saved.
 func commentURL(one bool) func(testutil.Fixture) string {
@@ -81,6 +88,23 @@ func bobWrote(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 	bobsComment = comment(t, app, fx.Event, fx.BobRunner, "Qui part de Lyon ?")
 }
 
+// samWrote is the Before of the rows that act on a comment whose author has no
+// account: the relation to the account is empty, as @request.auth.id is for an
+// anonymous caller.
+func samWrote(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+	t.Helper()
+	samsComment = comment(t, app, fx.Event, fx.SamRunner, "Je serai à l'arrivée")
+}
+
+// batchPatch builds the body of a batch request that sets the field of the
+// comment of Bob to the id of a record.
+func batchPatch(field string, to record) func(testutil.Fixture) string {
+	return func(fx testutil.Fixture) string {
+		return fmt.Sprintf(`{"requests":[{"method":"PATCH","url":"/api/collections/comments/records/%s","body":{%q:%q}}]}`,
+			bobsComment.Id, field, to(fx).Id)
+	}
+}
+
 type check = func(testing.TB, *tests.TestApp, testutil.Fixture)
 
 // storedComments returns every comment in the database.
@@ -127,6 +151,20 @@ func noComment(t testing.TB, app *tests.TestApp, _ testutil.Fixture) {
 	t.Helper()
 	if got := len(storedComments(t, app)); got != 0 {
 		t.Errorf("%d comments in the database, want none", got)
+	}
+}
+
+// samsCommentIsUnchanged asserts that the comment of Sam is as samWrote saved it.
+func samsCommentIsUnchanged(t testing.TB, app *tests.TestApp, _ testutil.Fixture) {
+	t.Helper()
+	c, err := app.FindRecordById("comments", samsComment.Id)
+	if err != nil {
+		t.Fatalf("the comment of Sam is not in the database: %v", err)
+	}
+	for _, field := range []string{"event", "author", "body"} {
+		if got, want := c.GetString(field), samsComment.GetString(field); got != want {
+			t.Errorf("%s = %q, want %q", field, got, want)
+		}
 	}
 }
 
@@ -392,6 +430,51 @@ func TestComments(t *testing.T) {
 			Status: http.StatusNotFound,
 			After:  commentIs(event, bobsText),
 		},
+		{
+			// The account of the author is empty, and so is the one of an
+			// anonymous caller: only the signed-in guard tells them apart.
+			Name:   "an anonymous caller edits no comment of a runner without account",
+			Before: samWrote,
+			Method: http.MethodPatch,
+			URL:    samsCommentURL,
+			Body:   body(`{"body":"y"}`),
+			Status: http.StatusNotFound,
+			After:  samsCommentIsUnchanged,
+		},
+		{
+			Name:   "a member edits no comment of a runner without account",
+			Before: samWrote,
+			As:     "bob",
+			Method: http.MethodPatch,
+			URL:    samsCommentURL,
+			Body:   body(`{"body":"y"}`),
+			Status: http.StatusNotFound,
+			After:  samsCommentIsUnchanged,
+		},
+		{
+			// The batch route runs the same rules: the sub-request is refused,
+			// and so is the batch.
+			Name:     "a batch cannot move a comment to another event",
+			Before:   bobWrote,
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      func(testutil.Fixture) string { return "/api/batch" },
+			Body:     batchPatch("event", event2),
+			Status:   http.StatusBadRequest,
+			Contains: []string{`"code":"batch_request_failed"`},
+			After:    commentIs(event, bobsText),
+		},
+		{
+			Name:     "a batch cannot change the author of a comment",
+			Before:   bobWrote,
+			As:       "bob",
+			Method:   http.MethodPost,
+			URL:      func(testutil.Fixture) string { return "/api/batch" },
+			Body:     batchPatch("author", aliceRunner),
+			Status:   http.StatusBadRequest,
+			Contains: []string{`"code":"batch_request_failed"`},
+			After:    commentIs(event, bobsText),
+		},
 
 		// Deleting: the author, and the admins.
 		{
@@ -428,6 +511,14 @@ func TestComments(t *testing.T) {
 			URL:    commentURL(true),
 			Status: http.StatusNotFound,
 			After:  commentIs(event, bobsText),
+		},
+		{
+			Name:   "an anonymous caller deletes no comment of a runner without account",
+			Before: samWrote,
+			Method: http.MethodDelete,
+			URL:    samsCommentURL,
+			Status: http.StatusNotFound,
+			After:  samsCommentIsUnchanged,
 		},
 
 		// The event.
@@ -483,7 +574,8 @@ func TestComments_AccountWithoutRunner(t *testing.T) {
 }
 
 // The text is trimmed by a model hook: it also holds for what the code of the
-// application writes, and in a batch request.
+// application writes, without a request. (The batch route is covered by a row of
+// TestComments.)
 func TestComments_ModelHook(t *testing.T) {
 	t.Run("a text is trimmed when saved from Go", func(t *testing.T) {
 		app := testutil.NewApp(t)
