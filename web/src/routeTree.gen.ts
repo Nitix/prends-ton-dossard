@@ -15,7 +15,6 @@ import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as ConnexionRouteImport } from './routes/connexion'
 import { Route as InvitationRouteImport } from './routes/invitation'
 import { Route as ListeRouteImport } from './routes/liste'
-import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminDoublonsRouteImport } from './routes/admin/doublons'
@@ -23,6 +22,8 @@ import { Route as AdminMembresRouteImport } from './routes/admin/membres'
 import { Route as AdminTypesRouteImport } from './routes/admin/types'
 import { Route as CoureursIdRouteImport } from './routes/coureurs/$id'
 import { Route as EvenementsNouveauRouteImport } from './routes/evenements/nouveau'
+import { Route as ProfilIndexRouteImport } from './routes/profil/index'
+import { Route as ProfilReglagesRouteImport } from './routes/profil/reglages'
 import { Route as EvenementsIdIndexRouteImport } from './routes/evenements/$id/index'
 import { Route as EvenementsIdModifierRouteImport } from './routes/evenements/$id/modifier'
 
@@ -54,11 +55,6 @@ const InvitationRoute = InvitationRouteImport.update({
 const ListeRoute = ListeRouteImport.update({
   id: '/liste',
   path: '/liste',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProfilRoute = ProfilRouteImport.update({
-  id: '/profil',
-  path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StatsRoute = StatsRouteImport.update({
@@ -96,6 +92,16 @@ const EvenementsNouveauRoute = EvenementsNouveauRouteImport.update({
   path: '/evenements/nouveau',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfilIndexRoute = ProfilIndexRouteImport.update({
+  id: '/profil/',
+  path: '/profil/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilReglagesRoute = ProfilReglagesRouteImport.update({
+  id: '/profil/reglages',
+  path: '/profil/reglages',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EvenementsIdIndexRoute = EvenementsIdIndexRouteImport.update({
   id: '/evenements/$id/',
   path: '/evenements/$id/',
@@ -114,14 +120,15 @@ export interface FileRoutesByFullPath {
   '/connexion': typeof ConnexionRoute
   '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
-  '/profil': typeof ProfilRoute
   '/stats': typeof StatsRoute
   '/admin/doublons': typeof AdminDoublonsRoute
   '/admin/membres': typeof AdminMembresRoute
   '/admin/types': typeof AdminTypesRoute
   '/coureurs/$id': typeof CoureursIdRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
+  '/profil/reglages': typeof ProfilReglagesRoute
   '/admin/': typeof AdminIndexRoute
+  '/profil/': typeof ProfilIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
   '/evenements/$id/': typeof EvenementsIdIndexRoute
 }
@@ -131,14 +138,15 @@ export interface FileRoutesByTo {
   '/connexion': typeof ConnexionRoute
   '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
-  '/profil': typeof ProfilRoute
   '/stats': typeof StatsRoute
   '/admin/doublons': typeof AdminDoublonsRoute
   '/admin/membres': typeof AdminMembresRoute
   '/admin/types': typeof AdminTypesRoute
   '/coureurs/$id': typeof CoureursIdRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
+  '/profil/reglages': typeof ProfilReglagesRoute
   '/admin': typeof AdminIndexRoute
+  '/profil': typeof ProfilIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
   '/evenements/$id': typeof EvenementsIdIndexRoute
 }
@@ -150,14 +158,15 @@ export interface FileRoutesById {
   '/connexion': typeof ConnexionRoute
   '/invitation': typeof InvitationRoute
   '/liste': typeof ListeRoute
-  '/profil': typeof ProfilRoute
   '/stats': typeof StatsRoute
   '/admin/doublons': typeof AdminDoublonsRoute
   '/admin/membres': typeof AdminMembresRoute
   '/admin/types': typeof AdminTypesRoute
   '/coureurs/$id': typeof CoureursIdRoute
   '/evenements/nouveau': typeof EvenementsNouveauRoute
+  '/profil/reglages': typeof ProfilReglagesRoute
   '/admin/': typeof AdminIndexRoute
+  '/profil/': typeof ProfilIndexRoute
   '/evenements/$id/modifier': typeof EvenementsIdModifierRoute
   '/evenements/$id/': typeof EvenementsIdIndexRoute
 }
@@ -170,14 +179,15 @@ export interface FileRouteTypes {
     | '/connexion'
     | '/invitation'
     | '/liste'
-    | '/profil'
     | '/stats'
     | '/admin/doublons'
     | '/admin/membres'
     | '/admin/types'
     | '/coureurs/$id'
     | '/evenements/nouveau'
+    | '/profil/reglages'
     | '/admin/'
+    | '/profil/'
     | '/evenements/$id/modifier'
     | '/evenements/$id/'
   fileRoutesByTo: FileRoutesByTo
@@ -187,14 +197,15 @@ export interface FileRouteTypes {
     | '/connexion'
     | '/invitation'
     | '/liste'
-    | '/profil'
     | '/stats'
     | '/admin/doublons'
     | '/admin/membres'
     | '/admin/types'
     | '/coureurs/$id'
     | '/evenements/nouveau'
+    | '/profil/reglages'
     | '/admin'
+    | '/profil'
     | '/evenements/$id/modifier'
     | '/evenements/$id'
   id:
@@ -205,14 +216,15 @@ export interface FileRouteTypes {
     | '/connexion'
     | '/invitation'
     | '/liste'
-    | '/profil'
     | '/stats'
     | '/admin/doublons'
     | '/admin/membres'
     | '/admin/types'
     | '/coureurs/$id'
     | '/evenements/nouveau'
+    | '/profil/reglages'
     | '/admin/'
+    | '/profil/'
     | '/evenements/$id/modifier'
     | '/evenements/$id/'
   fileRoutesById: FileRoutesById
@@ -224,10 +236,11 @@ export interface RootRouteChildren {
   ConnexionRoute: typeof ConnexionRoute
   InvitationRoute: typeof InvitationRoute
   ListeRoute: typeof ListeRoute
-  ProfilRoute: typeof ProfilRoute
   StatsRoute: typeof StatsRoute
   CoureursIdRoute: typeof CoureursIdRoute
   EvenementsNouveauRoute: typeof EvenementsNouveauRoute
+  ProfilReglagesRoute: typeof ProfilReglagesRoute
+  ProfilIndexRoute: typeof ProfilIndexRoute
   EvenementsIdModifierRoute: typeof EvenementsIdModifierRoute
   EvenementsIdIndexRoute: typeof EvenementsIdIndexRoute
 }
@@ -274,13 +287,6 @@ declare module '@tanstack/react-router' {
       path: '/liste'
       fullPath: '/liste'
       preLoaderRoute: typeof ListeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profil': {
-      id: '/profil'
-      path: '/profil'
-      fullPath: '/profil'
-      preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stats': {
@@ -332,6 +338,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EvenementsNouveauRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profil/': {
+      id: '/profil/'
+      path: '/profil'
+      fullPath: '/profil/'
+      preLoaderRoute: typeof ProfilIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profil/reglages': {
+      id: '/profil/reglages'
+      path: '/profil/reglages'
+      fullPath: '/profil/reglages'
+      preLoaderRoute: typeof ProfilReglagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/evenements/$id/': {
       id: '/evenements/$id/'
       path: '/evenements/$id'
@@ -374,10 +394,11 @@ const rootRouteChildren: RootRouteChildren = {
   ConnexionRoute: ConnexionRoute,
   InvitationRoute: InvitationRoute,
   ListeRoute: ListeRoute,
-  ProfilRoute: ProfilRoute,
   StatsRoute: StatsRoute,
   CoureursIdRoute: CoureursIdRoute,
   EvenementsNouveauRoute: EvenementsNouveauRoute,
+  ProfilReglagesRoute: ProfilReglagesRoute,
+  ProfilIndexRoute: ProfilIndexRoute,
   EvenementsIdModifierRoute: EvenementsIdModifierRoute,
   EvenementsIdIndexRoute: EvenementsIdIndexRoute,
 }

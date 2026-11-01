@@ -192,8 +192,8 @@ async function renderHome(options: { languages?: string[]; today?: string } = {}
   });
   const profile = createRoute({
     getParentRoute: () => root,
-    path: "/profil",
-    component: () => <p>Profil</p>,
+    path: "/profil/reglages",
+    component: () => <p>Réglages</p>,
   });
   const router = createRouter({
     routeTree: root.addChildren([home, eventPage, profile]),
@@ -2170,14 +2170,14 @@ test("HomePage — en attendant les événements, « Chargement… »", async ()
 
 // ---- Bandeau « Ajoute une clé d'accès »
 
-test("PasskeyBanner — propose d'ajouter une clé quand je n'en ai aucune, avec un lien vers le profil", async () => {
+test("PasskeyBanner — propose d'ajouter une clé quand je n'en ai aucune, avec un lien vers les réglages", async () => {
   mocks.passkeys.mockResolvedValue(noPasskey);
 
   const { screen } = await renderHome();
 
   await expect.element(banner(screen)).toBeVisible();
   const link = banner(screen).getByRole("link", { name: fr.home.passkeyLink });
-  expect(link.element().getAttribute("href")).toBe("/profil");
+  expect(link.element().getAttribute("href")).toBe("/profil/reglages");
   // Only my own keys count, one is enough to know: an admin sees them all.
   expect(mocks.passkeys).toHaveBeenCalledOnce();
   const [pageNumber, perPage, options] = mocks.passkeys.mock.calls[0] ?? [];

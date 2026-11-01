@@ -45,6 +45,11 @@ export const en = {
     passkeyWaiting: "Checking the passkey…",
   },
   profile: {
+    settings: "Settings",
+    backToProfile: "Back to the profile",
+    upcoming: "My upcoming races",
+    noUpcoming: "No race planned.",
+    noRunner: "This account has no runner.",
     nameTitle: "Display name",
     name: "Name",
     nameHint: "The name the group sees next to your races.",
@@ -387,7 +392,7 @@ export const en = {
     commentOn: (name: ReactNode, event: ReactNode): ReactNode =>
       createElement(Fragment, null, name, " on ", event),
     passkeyTitle: "Add a passkey",
-    passkeyLink: "Add it in my profile",
+    passkeyLink: "Add it in my settings",
     passkeyDismiss: "Hide",
   },
   admin: {

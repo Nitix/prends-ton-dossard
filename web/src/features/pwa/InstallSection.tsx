@@ -12,7 +12,7 @@ import {
 } from "./installPrompt";
 
 /**
- * "App" on the profile page: how to put the site on the home screen.
+ * "App" on the settings page: how to put the site on the home screen.
  *
  * - Running installed already: nothing, the section is not there.
  * - Installed since the page was opened (`appinstalled`): the section stays,

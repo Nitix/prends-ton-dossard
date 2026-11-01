@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ClientResponseError } from "pocketbase";
 import { beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
@@ -117,4 +118,86 @@ test("useSession — ignore un enregistrement qui n'est pas d'un utilisateur", a
   await expect
     .element(screen.getByTestId("session"))
     .toHaveTextContent("nobody / no runner / member");
+});
+
+function StateProbe() {
+  const { runner, signedIn, runnerMissing } = useSession();
+  return (
+    <p data-testid="state">
+      {signedIn ? "signed in" : "signed out"} / {runnerMissing ? "missing" : "not missing"} /{" "}
+      {runner ? "runner" : "no runner"}
+    </p>
+  );
+}
+
+function renderState() {
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <StateProbe />
+    </QueryClientProvider>,
+  );
+}
+
+const notFound = () => new ClientResponseError({ status: 404, response: {} });
+
+test("useSession — personne n'est connecté : pas de session, et pas de coureur manquant", async () => {
+  const screen = await renderState();
+
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed out / not missing / no runner");
+});
+
+test("useSession — le coureur n'est pas manquant tant que sa requête est en cours, ni une fois trouvé", async () => {
+  store.record = alice;
+  const answer = Promise.withResolvers<unknown>();
+  store.getFirstListItem.mockReturnValue(answer.promise);
+
+  const screen = await renderState();
+
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed in / not missing / no runner");
+  answer.resolve({ id: "r1", name: "Alice", user: "u1" });
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed in / not missing / runner");
+});
+
+test("useSession — un membre dont le serveur dit qu'il n'a pas de coureur (404) : connecté, coureur manquant", async () => {
+  store.record = alice;
+  store.getFirstListItem.mockRejectedValue(notFound());
+
+  const screen = await renderState();
+
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed in / missing / no runner");
+});
+
+test("useSession — une panne en cherchant le coureur n'est pas une absence", async () => {
+  store.record = alice;
+  store.getFirstListItem.mockRejectedValue(new TypeError("Failed to fetch"));
+
+  const screen = await renderState();
+
+  await vi.waitFor(() => {
+    expect(store.getFirstListItem).toHaveBeenCalledOnce();
+  });
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed in / not missing / no runner");
+});
+
+test("useSession — un compte qui n'est pas un membre est connecté, sans coureur, et on n'en cherche pas", async () => {
+  store.record = { ...alice, collectionName: "_superusers" };
+
+  const screen = await renderState();
+
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed in / missing / no runner");
+  expect(store.getFirstListItem).not.toHaveBeenCalled();
 });

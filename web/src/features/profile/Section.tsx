@@ -1,7 +1,7 @@
 import { useId, type ReactNode, type Ref } from "react";
 
 /**
- * A part of the profile page: a heading, and a region named by it.
+ * A part of the profile or of the settings page: a heading, and a region named by it.
  *
  * A section that takes the focus away from what had it (a button that goes with
  * the action) gives a `headingRef`: the heading can then be focused, and only

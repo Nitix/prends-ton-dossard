@@ -35,7 +35,7 @@ if (!rootElement) {
 reloadOnStaleChunks();
 
 // The site can be installed: the service worker is what makes it so, and the
-// browser makes its offer once, early, which the profile page shows later.
+// browser makes its offer once, early, which the settings page shows later.
 registerServiceWorker();
 captureInstallPrompt();
 

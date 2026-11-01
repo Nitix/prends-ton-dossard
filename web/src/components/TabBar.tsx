@@ -21,6 +21,7 @@ export function TabBar({ isAdmin }: { isAdmin: boolean }) {
           <Tab to="/" exact label={t.nav.home} />
           <Tab to="/liste" label={t.nav.list} />
           <Tab to="/agenda" label={t.nav.calendar} />
+          {/* Not `exact`: it is also the current page for the settings, under it. */}
           <Tab to="/profil" label={t.nav.profile} />
           {isAdmin && <Tab to="/admin/membres" label={t.nav.admin} />}
         </ul>

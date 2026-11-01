@@ -14,7 +14,7 @@ import { useCalendarStatus, useCreateCalendar, useDeleteCalendar } from "./api";
 type Asking = "renew" | "remove";
 
 /**
- * "Calendar" on the profile page: the link that a calendar app subscribes to.
+ * "Calendar" on the settings page: the link that a calendar app subscribes to.
  * Without a link, a button makes one, and the link is shown at once, in a field
  * to copy it from. With a link, the page says so and offers to show it again
  * (the server keeps it, and the status carries its address), a new one (the old

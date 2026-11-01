@@ -176,17 +176,26 @@ const RUNNER_STALE_MS = 5 * 60_000;
  * The signed-in user and their runner. `user` is null when nobody is signed
  * in, `runner` while it is loading. Both follow the auth store, so a sign-in,
  * a sign-out or a renewal re-renders the components that read them.
+ *
+ * `runner` is also null when there is none to find: `runnerMissing` tells that
+ * from the wait (and from a failure to ask, which leaves it open). It is true
+ * for an account of another kind than the members (the super-admin of
+ * PocketBase), and for a member whose runner the server says is not there.
+ * `signedIn` is true for any account, that one included: `user` is null for it,
+ * as it is for nobody.
  */
 export function useSession(): {
   user: UserRecord | null;
   runner: RunnerRecord | null;
+  runnerMissing: boolean;
+  signedIn: boolean;
   isAdmin: boolean;
 } {
   const record = useSyncExternalStore(subscribe, currentRecord);
   const user = isUser(record) ? record : null;
   const userId = user?.id ?? "";
 
-  const { data: runner } = useQuery({
+  const { data: runner, error: runnerError } = useQuery({
     queryKey: ["runner", userId],
     queryFn: () =>
       pb
@@ -196,5 +205,13 @@ export function useSession(): {
     staleTime: RUNNER_STALE_MS,
   });
 
-  return { user, runner: runner ?? null, isAdmin: user?.role === "admin" };
+  return {
+    user,
+    runner: runner ?? null,
+    runnerMissing:
+      record !== null &&
+      (user === null || (runnerError instanceof ClientResponseError && runnerError.status === 404)),
+    signedIn: record !== null,
+    isAdmin: user?.role === "admin",
+  };
 }

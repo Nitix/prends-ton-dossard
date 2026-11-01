@@ -36,7 +36,7 @@ function rememberDismissal(): void {
 
 /**
  * The invitation to add a passkey, until the user has one or hides it. It
- * only sends to the profile, where passkeys are made: it never calls WebAuthn
+ * only sends to the settings, where passkeys are made: it never calls WebAuthn
  * itself (a prompt out of nowhere on the home page would be a surprise).
  *
  * Nothing is shown, and nothing asked of the server, in a browser that has no
@@ -59,7 +59,7 @@ export function PasskeyBanner({
   const enabled = passkeysSupported() && !dismissed && userId !== "";
 
   const hasPasskey = useQuery({
-    // Under the key of the list of the profile, which refreshes it when a key
+    // Under the key of the list of the settings, which refreshes it when a key
     // is added or deleted.
     queryKey: ["passkeys", userId, "any"],
     queryFn: async () => {
@@ -93,7 +93,7 @@ export function PasskeyBanner({
       </h2>
       <p className="text-sm">{t.passkeys.intro}</p>
       <div className="flex flex-wrap gap-2">
-        <Link to="/profil" className={`${PRIMARY} inline-flex items-center`}>
+        <Link to="/profil/reglages" className={`${PRIMARY} inline-flex items-center`}>
           {t.home.passkeyLink}
         </Link>
         <button type="button" onClick={dismiss} className={SECONDARY}>

@@ -47,9 +47,17 @@ export const fr = {
     passkeyLogin: "Se connecter avec une clé d'accès",
     passkeyWaiting: "Vérification de la clé d'accès…",
   },
-  // The profile page: the name, the email and the password of the account,
-  // then the passkeys (see `passkeys`).
+  // The profile page (the runner of the user, as the others see them) and the
+  // settings page it leads to: the name, the email and the password of the
+  // account, then the passkeys (see `passkeys`).
   profile: {
+    settings: "Réglages",
+    backToProfile: "Retour au profil",
+    // « Mes prochaines courses »: the races of the runner that are to come.
+    upcoming: "Mes prochaines courses",
+    noUpcoming: "Aucune course prévue.",
+    // An account that has no runner (the super-admin of PocketBase): nothing to show of one.
+    noRunner: "Ce compte n'a pas de coureur.",
     nameTitle: "Nom affiché",
     name: "Nom",
     nameHint: "C'est le nom que le groupe voit à côté de tes courses.",
@@ -67,7 +75,7 @@ export const fr = {
     passwordSignInAgain: "Mot de passe modifié. Reconnecte-toi.",
     logout: "Se déconnecter",
   },
-  // The photo of a runner: the section of the profile, the window of the admin, and what the picker says (see components/AvatarPicker.tsx).
+  // The photo of a runner: the section of the settings, the window of the admin, and what the picker says (see components/AvatarPicker.tsx).
   avatar: {
     title: "Photo",
     titleFor: (name: string) => `Photo de ${name}`,
@@ -103,7 +111,7 @@ export const fr = {
     lastUsed: (date: string) => `Utilisée le ${date}`,
     neverUsed: "Jamais utilisée",
   },
-  // The calendar link of the profile page (see features/calendar): an address that a calendar app subscribes to.
+  // The calendar link of the settings page (see features/calendar): an address that a calendar app subscribes to.
   calendar: {
     title: "Agenda",
     create: "Créer mon lien d'agenda",
@@ -120,7 +128,7 @@ export const fr = {
     renewHint: "L'ancien lien cessera de marcher.",
     remove: "Supprimer le lien",
   },
-  // The "App" section of the profile page (see features/pwa): putting the site on the home screen.
+  // The "App" section of the settings page (see features/pwa): putting the site on the home screen.
   install: {
     title: "Application",
     button: "Installer",
@@ -505,7 +513,7 @@ export const fr = {
       createElement(Fragment, null, name, " sur ", event),
     // The banner that suggests a passkey (the text under it is `passkeys.intro`).
     passkeyTitle: "Ajoute une clé d'accès",
-    passkeyLink: "Ajouter dans mon profil",
+    passkeyLink: "Ajouter dans mes réglages",
     passkeyDismiss: "Masquer",
   },
   // The admin pages (see features/admin).

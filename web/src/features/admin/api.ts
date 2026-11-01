@@ -42,7 +42,7 @@ export function useMembers(): UseQueryResult<Member[]> {
 }
 
 /**
- * The passkeys of an account. The key is the one of the profile page, which
+ * The passkeys of an account. The key is the one of the settings page, which
  * lists the passkeys of the signed-in user: the two share what they know when
  * an admin looks at their own.
  */
