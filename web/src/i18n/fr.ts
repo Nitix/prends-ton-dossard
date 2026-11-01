@@ -327,6 +327,21 @@ export const fr = {
     // The label of the field of the price of a format, in the form.
     price: "Prix (€)",
   },
+  // The track of a race: its numbers, and the two drawings (see features/route).
+  route: {
+    title: "Parcours",
+    // The distance, the elevation gain and loss, already formatted: "42,2 km · 2 400 m D+ · 2 380 m D−".
+    summary: (km: string, gain: string, loss: string) => `${km} · ${gain} D+ · ${loss} D−`,
+    // The lowest and the highest altitudes, already formatted: "altitude 450 m à 1 200 m".
+    altitude: (min: string, max: string) => `altitude ${min} à ${max}`,
+    // The accessible names of the drawings, which the page completes with the numbers.
+    trackLabel: "Tracé du parcours",
+    profileLabel: "Profil de dénivelé",
+    // What the two marks of the drawing of the track stand for.
+    start: "Départ",
+    finish: "Arrivée",
+    unreadable: "Cette trace n'a pas pu être lue.",
+  },
   // The form that creates or edits an event and its formats (see features/events/EventForm.tsx).
   form: {
     createTitle: "Créer un événement",

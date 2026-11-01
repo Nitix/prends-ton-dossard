@@ -263,3 +263,33 @@ describe("offers texts", () => {
     });
   });
 });
+
+describe("route texts", () => {
+  test("French", () => {
+    const r = fr.route;
+    expect([r.title, r.trackLabel, r.profileLabel, r.start, r.finish]).toEqual([
+      "Parcours",
+      "Tracé du parcours",
+      "Profil de dénivelé",
+      "Départ",
+      "Arrivée",
+    ]);
+    expect(r.summary("42,2 km", "2 400 m", "2 380 m")).toBe("42,2 km · 2 400 m D+ · 2 380 m D−");
+    expect(r.altitude("450 m", "1 200 m")).toBe("altitude 450 m à 1 200 m");
+    expect(r.unreadable).toBe("Cette trace n'a pas pu être lue.");
+  });
+
+  test("English", () => {
+    const r = en.route;
+    expect([r.title, r.trackLabel, r.profileLabel, r.start, r.finish]).toEqual([
+      "Course",
+      "Course map",
+      "Elevation profile",
+      "Start",
+      "Finish",
+    ]);
+    expect(r.summary("42.2 km", "2,400 m", "2,380 m")).toBe("42.2 km · 2,400 m D+ · 2,380 m D−");
+    expect(r.altitude("450 m", "1,200 m")).toBe("altitude 450 m to 1,200 m");
+    expect(r.unreadable).toBe("This track could not be read.");
+  });
+});

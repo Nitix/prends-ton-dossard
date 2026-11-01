@@ -254,6 +254,16 @@ export const en = {
     elevation: (height: string) => `${height} gain`,
     price: "Price (€)",
   },
+  route: {
+    title: "Course",
+    summary: (km: string, gain: string, loss: string) => `${km} · ${gain} D+ · ${loss} D−`,
+    altitude: (min: string, max: string) => `altitude ${min} to ${max}`,
+    trackLabel: "Course map",
+    profileLabel: "Elevation profile",
+    start: "Start",
+    finish: "Finish",
+    unreadable: "This track could not be read.",
+  },
   form: {
     createTitle: "Create an event",
     editTitle: "Edit the event",
