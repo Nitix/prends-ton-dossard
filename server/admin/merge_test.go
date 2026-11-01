@@ -1,16 +1,20 @@
 package admin_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"regexp"
 	"sort"
 	"testing"
 
 	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 
 	"courses/server/admin"
 	"courses/server/apperr"
@@ -289,6 +293,56 @@ func storedOffers(t testing.TB, app core.App) []*core.Record {
 		t.Fatalf("listing the offers: %v", err)
 	}
 	return offers
+}
+
+// withRoute is a hook that gives the format a GPX track of that many points
+// (none for 0) and a link to its route (none for ""). Two tracks differ by their
+// number of points, and two links by their text.
+func withRoute(format func(testutil.Fixture) *core.Record, points int, link string) hook {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		record := mustStore(t, app, "formats", format(fx).Id)
+		if link != "" {
+			record.Set("route_url", link)
+		}
+		if points > 0 {
+			file, err := filesystem.NewFileFromBytes(testutil.GPX(t, points), "trace.gpx")
+			if err != nil {
+				t.Fatal(err)
+			}
+			record.Set("gpx", file)
+		}
+		if err := app.Save(record); err != nil {
+			t.Fatalf("saving the route of the format %s: %v", record.Id, err)
+		}
+	}
+}
+
+// trackOf returns the content of the track of the format, as it is read from the
+// storage of the application. It fails the test when the format has no track or
+// when the file is not there.
+func trackOf(t testing.TB, app core.App, id string) []byte {
+	t.Helper()
+	format := mustStore(t, app, "formats", id)
+	name := format.GetString("gpx")
+	if name == "" {
+		t.Fatalf("the format %s has no track", id)
+	}
+	fsys, err := app.NewFilesystem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fsys.Close()
+	reader, err := fsys.GetReader(format.BaseFilesPath() + "/" + name)
+	if err != nil {
+		t.Fatalf("reading the track %s of the format %s: %v", name, id, err)
+	}
+	defer reader.Close()
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content
 }
 
 // setFields saves values on the record that has that id.
@@ -1147,6 +1201,149 @@ func TestMergeFormats(t *testing.T) {
 				gone(t, app, "formats", fx.F15)
 			},
 		},
+		{
+			// Deleting the format would delete its link: an admin cleaning up the
+			// duplicates of an event must not lose what a member added.
+			Name:     "the route link of the merged format goes to the kept one when it has none",
+			Before:   withRoute(f15, 0, "https://www.komoot.com/tour/15"),
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("route_url"); got != "https://www.komoot.com/tour/15" {
+					t.Errorf("route_url of F42 = %q, want the link of F15", got)
+				}
+				gone(t, app, "formats", fx.F15)
+			},
+		},
+		{
+			// The file goes with the record that holds it: it has to be copied,
+			// and the copy has to be readable once the merged format is gone.
+			Name:     "the track of the merged format goes to the kept one when it has none",
+			Before:   withRoute(f15, 30, ""),
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				gone(t, app, "formats", fx.F15)
+				kept := mustStore(t, app, "formats", fx.F42.Id)
+				if got := trackOf(t, app, fx.F42.Id); !bytes.Equal(got, testutil.GPX(t, 30)) {
+					t.Errorf("the track of F42 is not the one of F15:\n%s", got)
+				}
+				// The name keeps its shape: a random part was added once, not twice.
+				if name := kept.GetString("gpx"); !regexp.MustCompile(`^trace_[a-z0-9]{10}\.gpx$`).MatchString(name) {
+					t.Errorf("the track of F42 is named %q, want trace_<10 characters>.gpx", name)
+				}
+				if got := kept.GetString("route_url"); got != "" {
+					t.Errorf("route_url of F42 = %q, want none: F15 had no link", got)
+				}
+			},
+		},
+		{
+			Name: "the track and the link of the kept format stay when the merged one has its own",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				withRoute(f42, 20, "https://www.komoot.com/tour/42")(t, app, fx)
+				withRoute(f15, 30, "https://www.komoot.com/tour/15")(t, app, fx)
+			},
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := trackOf(t, app, fx.F42.Id); !bytes.Equal(got, testutil.GPX(t, 20)) {
+					t.Errorf("the track of F42 changed:\n%s", got)
+				}
+				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("route_url"); got != "https://www.komoot.com/tour/42" {
+					t.Errorf("route_url of F42 = %q, want its own link", got)
+				}
+				gone(t, app, "formats", fx.F15)
+			},
+		},
+		{
+			Name:     "the track and the link of the kept format stay when the merged one has none",
+			Before:   withRoute(f42, 20, "https://www.komoot.com/tour/42"),
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := trackOf(t, app, fx.F42.Id); !bytes.Equal(got, testutil.GPX(t, 20)) {
+					t.Errorf("the track of F42 changed:\n%s", got)
+				}
+				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("route_url"); got != "https://www.komoot.com/tour/42" {
+					t.Errorf("route_url of F42 = %q, want its own link", got)
+				}
+			},
+		},
+		{
+			// The other way round: F15 is kept and F42, the merged one, holds
+			// the track and the link.
+			Name:     "the route of the merged format goes to the kept one: the other way round",
+			Before:   withRoute(f42, 20, "https://www.komoot.com/tour/42"),
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f15), id(f42), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 2})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := trackOf(t, app, fx.F15.Id); !bytes.Equal(got, testutil.GPX(t, 20)) {
+					t.Errorf("the track of F15 is not the one of F42:\n%s", got)
+				}
+				if got := mustStore(t, app, "formats", fx.F15.Id).GetString("route_url"); got != "https://www.komoot.com/tour/42" {
+					t.Errorf("route_url of F15 = %q, want the link of F42", got)
+				}
+				gone(t, app, "formats", fx.F42)
+			},
+		},
+		{
+			// A format whose track is in no file any more still merges: there is
+			// nothing to carry, and the admin has no other way to clean up.
+			Name: "a track that is missing from the storage does not stop the merge",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				withRoute(f15, 30, "")(t, app, fx)
+				record := mustStore(t, app, "formats", fx.F15.Id)
+				fsys, err := app.NewFilesystem()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer fsys.Close()
+				if err := fsys.Delete(record.BaseFilesPath() + "/" + record.GetString("gpx")); err != nil {
+					t.Fatal(err)
+				}
+			},
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("gpx"); got != "" {
+					t.Errorf("the track of F42 is %q, want none", got)
+				}
+				gone(t, app, "formats", fx.F15)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run writes no route either",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+		}, withRoute(f15, 30, "https://www.komoot.com/tour/15")),
 		unchanged(testutil.Row{
 			Name:     "a dry run counts what would move and drop and writes nothing",
 			As:       "admin",
@@ -1270,6 +1467,46 @@ func TestMerge_RollsBackWhenAWriteFails(t *testing.T) {
 		mustStore(t, app, "formats", fx.F15.Id)
 		if got := mustStore(t, app, "participations", fx.P3.Id).GetString("format"); got != fx.F15.Id {
 			t.Errorf("Sam is on the format %q, want F15 %q", got, fx.F15.Id)
+		}
+	})
+
+	t.Run("merge-formats with a track", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		// The track of F15 is copied to F42, then the deletion of F15, which is
+		// the last write, fails: F42 must not keep the copy, in the database or
+		// in the storage, and F15 keeps its own file.
+		withRoute(f15, 30, "https://www.komoot.com/tour/15")(t, app, fx)
+		before := snapshot(t, app)
+		app.OnRecordDelete("formats").BindFunc(func(e *core.RecordEvent) error {
+			if e.Record.Id == fx.F15.Id {
+				return boom
+			}
+			return e.Next()
+		})
+
+		_, err := admin.MergeFormats(app, fx.F42.Id, fx.F15.Id, false)
+		if !errors.Is(err, boom) {
+			t.Fatalf("error = %v, want the failure of the write", err)
+		}
+
+		if got := snapshot(t, app); got != before {
+			t.Errorf("the database changed:\nbefore:\n%s\nafter:\n%s", before, got)
+		}
+		if got := trackOf(t, app, fx.F15.Id); !bytes.Equal(got, testutil.GPX(t, 30)) {
+			t.Errorf("the track of F15 changed:\n%s", got)
+		}
+		fsys, err := app.NewFilesystem()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer fsys.Close()
+		files, err := fsys.List(mustStore(t, app, "formats", fx.F42.Id).BaseFilesPath() + "/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(files) != 0 {
+			t.Errorf("%d files are left in the storage of F42 after the rollback, want none", len(files))
 		}
 	})
 

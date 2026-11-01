@@ -5,10 +5,13 @@ package admin
 import (
 	"database/sql"
 	"errors"
+	"io"
 	"net/http"
+	"regexp"
 
 	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 
 	"courses/server/apperr"
 	"courses/server/events"
@@ -277,6 +280,9 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 // and the one that was on keepID is the one dropped. A participation keeps its
 // own values (status, confirmed, added_by) whichever way it goes.
 //
+// The route of mergeID (its link and its GPX track) goes to keepID where keepID
+// has none (see carryRoute). Its price and its other fields are not carried.
+//
 // With dryRun it only computes the result: nothing is written. Otherwise
 // everything is written in one transaction, so a failure leaves the database as
 // it was.
@@ -348,6 +354,9 @@ func MergeFormats(app core.App, keepID, mergeID string, dryRun bool) (MergeResul
 		if dryRun {
 			return nil
 		}
+		if err := carryRoute(tx, keep, merged); err != nil {
+			return err
+		}
 		// Nothing is left to cascade to: every participation has moved or gone.
 		return tx.Delete(merged)
 	})
@@ -356,6 +365,71 @@ func MergeFormats(app core.App, keepID, mergeID string, dryRun bool) (MergeResul
 		return MergeResult{}, err
 	}
 	return result, nil
+}
+
+// carryRoute gives keep the route of merged, which is deleted with its record
+// otherwise: the link (route_url) and the GPX track, each one only when keep has
+// none. Two members adding the same event is the usual reason for a merge of
+// formats, and the one who sent the track must not have to look for the file
+// again. When both have a track, or a link, keep's stays: nothing tells which
+// one is better.
+//
+// The track is a file in the storage, which goes with the record that holds it:
+// it is copied under keep. It is read now, before the transaction ends and the
+// files of merged are deleted. A track that is not in the storage any more is
+// left out, so that the admin can still merge.
+func carryRoute(app core.App, keep, merged *core.Record) error {
+	changed := false
+	if link := merged.GetString("route_url"); link != "" && keep.GetString("route_url") == "" {
+		keep.Set("route_url", link)
+		changed = true
+	}
+	if name := merged.GetString("gpx"); name != "" && keep.GetString("gpx") == "" {
+		file, err := copyOfFile(app, merged, name)
+		if err != nil {
+			return err
+		}
+		if file != nil {
+			keep.Set("gpx", file)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return app.Save(keep)
+}
+
+// storedNameSuffix is the random part that PocketBase adds before the extension
+// of a file it stores: ten characters of lowercase letters and digits.
+var storedNameSuffix = regexp.MustCompile(`_[a-z0-9]{10}(\.[^.]*)?$`)
+
+// copyOfFile returns a new file, ready to be set on another record, with the
+// content of the file called name that record holds. It returns nil when the
+// file is not in the storage.
+func copyOfFile(app core.App, record *core.Record, name string) (*filesystem.File, error) {
+	fsys, err := app.NewFilesystem()
+	if err != nil {
+		return nil, err
+	}
+	defer fsys.Close()
+
+	reader, err := fsys.GetReader(record.BaseFilesPath() + "/" + name)
+	if errors.Is(err, filesystem.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	// PocketBase adds a random part to the name of a file: without cutting the
+	// one that is there, the copy would carry two of them.
+	return filesystem.NewFileFromBytes(content, storedNameSuffix.ReplaceAllString(name, "$1"))
 }
 
 // statusRank orders the statuses of a participation by how far the runner got:
