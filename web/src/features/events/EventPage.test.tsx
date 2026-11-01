@@ -1201,6 +1201,8 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       await page.viewport(width, 844);
       const { screen } = await renderPage();
       await loaded(screen);
+      // Measured in the fonts of the site, not in those that stand in while they load.
+      await document.fonts.ready;
 
       const actions = [
         screen.getByRole("button", { name: fr.participation.join }),
@@ -1223,6 +1225,53 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
       expect(edit.top).toBe(remove.top);
       expect(edit.right).toBeLessThan(remove.left);
+      // Each one a tap target, its words whole, and nothing that scrolls sideways.
+      for (const action of actions) {
+        const { width: w, height: h } = action.getBoundingClientRect();
+        expect(w, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(h, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(action.scrollWidth, `${action.textContent} at ${width} px`).toBeLessThanOrEqual(
+          action.clientWidth,
+        );
+      }
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+      await screen.unmount();
+    }
+  } finally {
+    await page.viewport(414, 896);
+  }
+});
+
+test("EventPage — sur un téléphone, une action seule au bout prend toute la ligne", async () => {
+  // Bob did not create the event: no "Delete", three actions after "I'm in".
+  signIn("bob");
+  try {
+    // The room the page has between the gutters of the app shell (2 × 16 px) on a phone of 320 and of 390 px.
+    for (const width of [288, 358]) {
+      await page.viewport(width, 844);
+      const { screen } = await renderPage();
+      await loaded(screen);
+      // Measured in the fonts of the site, not in those that stand in while they load.
+      await document.fonts.ready;
+      await expect.element(screen.getByRole("link", { name: fr.common.edit })).toBeVisible();
+      await expect
+        .element(screen.getByRole("button", { name: fr.common.delete }))
+        .not.toBeInTheDocument();
+
+      const actions = [
+        screen.getByRole("button", { name: fr.participation.addSomeone }),
+        screen.getByRole("button", { name: fr.event.addToCalendar }),
+        screen.getByRole("link", { name: fr.common.edit }),
+      ].map((action) => action.element());
+      const [add, calendar, edit] = actions.map((action) => action.getBoundingClientRect());
+      if (!add || !calendar || !edit) throw new Error("an action is missing");
+
+      // Two side by side, then the last one alone, across both columns.
+      expect(add.top).toBe(calendar.top);
+      expect(add.right).toBeLessThan(calendar.left);
+      expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
+      expect(edit.left).toBe(add.left);
+      expect(edit.right).toBe(calendar.right);
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();

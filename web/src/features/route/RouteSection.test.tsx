@@ -118,8 +118,13 @@ test("RouteSection — chiffres, carte, profil et liens", async () => {
 
   await expect.element(screen.getByRole("heading", { name: fr.route.title })).toBeVisible();
   // The numbers: the distance, the gain and the loss, then the lowest and the highest altitudes.
-  await expect.element(screen.getByText(/D\+/)).toBeVisible();
+  await expect.element(screen.getByText(/D\+/)).toBeInTheDocument();
+  expect(figures(screen)).toBeVisible();
   expect(plain(figures(screen).textContent)).toBe("2,2 km · 200 m D+ · 50 m D−");
+  // Each one shows, in its tile.
+  for (const value of ["2,2 km", "200 m", "50 m", "D+", "D−"]) {
+    await expect.element(screen.getByText(value, { exact: true })).toBeVisible();
+  }
   const altitudes = screen.getByText(/^altitude/);
   await expect.element(altitudes).toBeVisible();
   expect(plain(altitudes.element().textContent)).toBe("altitude 450 m à 650 m");
