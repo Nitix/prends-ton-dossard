@@ -248,7 +248,7 @@ test("EventCard — le temps max d'une épreuve qui n'a que lui n'est dit qu'une
     ...fLyon,
     distance_km: 0,
     time_limit_min: 2880,
-    expand: { race_type: { ...roadType, label: "Backyard" }, participations_via_format: [] },
+    expand: { race_type: { ...roadType, label: "Backyard" } },
   };
   mocks.events.mockResolvedValue([{ ...event2Record, expand: { formats_via_event: [backyard] } }]);
 
@@ -317,16 +317,9 @@ test("ParticipantChips — les initiales d'un nom composé", async () => {
   const record = {
     ...event2Record,
     expand: {
-      formats_via_event: [
-        {
-          ...fLyon,
-          expand: {
-            ...fLyon.expand,
-            participations_via_format: [
-              { ...eventParticipation(marie.id), expand: { runner: marie, added_by: marie } },
-            ],
-          },
-        },
+      ...event2Record.expand,
+      participations_via_event: [
+        { ...eventParticipation(marie.id), expand: { runner: marie, added_by: marie } },
       ],
     },
   };
@@ -345,6 +338,7 @@ function eventParticipation(runner: string) {
     collectionId: "",
     collectionName: "",
     runner,
+    event: "event2",
     format: "fLyon",
     status: "registered",
     confirmed: true,

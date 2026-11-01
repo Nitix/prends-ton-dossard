@@ -54,7 +54,7 @@ const dupFormat = {
   event: "event3",
   date: "",
   distance_km: 42.2,
-  expand: { race_type: trailType, participations_via_format: [] },
+  expand: { race_type: trailType },
 };
 const dupEvent = {
   ...eventRecord,

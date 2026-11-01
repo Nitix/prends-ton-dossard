@@ -16,12 +16,15 @@ import type {
   RaceTypeRecord,
   RunnerRecord,
 } from "../../lib/types";
+import { isOnEvent } from "./participants";
 
 export type { ListSearch } from "./search";
 
 // Events, with everything the screens show of them, in a single request: the
-// formats (back-relation of `formats.event`), their race type, and their
-// participations with the runner and who added them.
+// formats (back-relation of `formats.event`) with their race type, and all the
+// participations of the event (back-relation of `participations.event`) with
+// the runner and who added them. `toEventView` ranges the participations: by
+// format, or, for those with no format, in `interested`.
 
 export type ParticipationView = {
   participation: ParticipationRecord;
@@ -42,6 +45,8 @@ export type EventView = {
   event: EventRecord;
   /** In the order of their days, then of their distances. */
   formats: FormatView[];
+  /** The participations without a format ("interested, format to choose"), by runner name. */
+  interested: ParticipationView[];
   start: Temporal.PlainDate;
   /** The last day: the same as `start` when the event has no end date. */
   end: Temporal.PlainDate;
@@ -54,7 +59,7 @@ export type EventsQuery =
 
 /** The `expand` that gives `toEventViews` everything it needs. */
 export const EVENT_EXPAND =
-  "formats_via_event.race_type,formats_via_event.participations_via_format.runner,formats_via_event.participations_via_format.added_by";
+  "formats_via_event.race_type,participations_via_event.runner,participations_via_event.added_by";
 
 /**
  * The filter and the sort to give the server for a query. The dates are bound
@@ -91,10 +96,13 @@ type ExpandedParticipation = ParticipationRecord & {
   expand?: { runner?: RunnerRecord; added_by?: RunnerRecord };
 };
 type ExpandedFormat = FormatRecord & {
-  expand?: { race_type?: RaceTypeRecord; participations_via_format?: ExpandedParticipation[] };
+  expand?: { race_type?: RaceTypeRecord };
 };
 type ExpandedEvent = EventRecord & {
-  expand?: { formats_via_event?: ExpandedFormat[] };
+  expand?: {
+    formats_via_event?: ExpandedFormat[];
+    participations_via_event?: ExpandedParticipation[];
+  };
 };
 
 /** A participation with its `runner` and `added_by` expanded: the runner has to be there. */
@@ -104,16 +112,22 @@ export function toParticipationView(record: ExpandedParticipation): Participatio
   return { participation: record, runner, addedBy: record.expand?.added_by };
 }
 
-function toFormatView(record: ExpandedFormat, event: EventRecord): FormatView {
+function byRunnerName(a: ParticipationView, b: ParticipationView): number {
+  return a.runner.name.localeCompare(b.runner.name);
+}
+
+function toFormatView(
+  record: ExpandedFormat,
+  event: EventRecord,
+  participations: ExpandedParticipation[],
+): FormatView {
   const raceType = record.expand?.race_type;
   if (!raceType) throw new Error(`format ${record.id}: its race_type is missing from the answer`);
   return {
     format: record,
     raceType,
     date: effectiveDate(record, event),
-    participations: (record.expand?.participations_via_format ?? [])
-      .map(toParticipationView)
-      .toSorted((a, b) => a.runner.name.localeCompare(b.runner.name)),
+    participations: participations.map(toParticipationView).toSorted(byRunnerName),
   };
 }
 
@@ -141,15 +155,39 @@ function isEvent(record: unknown): record is ExpandedEvent {
 /**
  * One event of the answer to a request made with `EVENT_EXPAND`. The shape
  * is the server's contract: a record without something that has to be there
- * (the race type of a format, the runner of a participation) throws.
+ * (the race type of a format, the runner of a participation) throws, and so
+ * does a participation on a format that is not one of the event's.
  */
 export function toEventView(event: unknown): EventView {
   if (!isEvent(event)) throw new TypeError("not an event record");
+  const formatRecords = event.expand?.formats_via_event ?? [];
+
+  // The participations come in a single list: each goes to its format, or to
+  // the event alone when it has none.
+  const onFormat = new Map<string, ExpandedParticipation[]>(
+    formatRecords.map(({ id }) => [id, []]),
+  );
+  const interested: ExpandedParticipation[] = [];
+  for (const record of event.expand?.participations_via_event ?? []) {
+    if (!record.format) {
+      interested.push(record);
+      continue;
+    }
+    const list = onFormat.get(record.format);
+    if (!list) {
+      throw new Error(
+        `participation ${record.id}: its format ${record.format} is not one of the formats of the event`,
+      );
+    }
+    list.push(record);
+  }
+
   return {
     event,
-    formats: (event.expand?.formats_via_event ?? [])
-      .map((format) => toFormatView(format, event))
+    formats: formatRecords
+      .map((format) => toFormatView(format, event, onFormat.get(format.id) ?? []))
       .toSorted(compareFormats),
+    interested: interested.map(toParticipationView).toSorted(byRunnerName),
     ...eventRange(event),
   };
 }
@@ -176,7 +214,8 @@ export function sortEvents(views: EventView[], direction: "asc" | "desc"): Event
 /**
  * Keeps the events the criteria let through; an empty criterion lets
  * everything through.
- * - `personne`: a runner id; the event has a participation of this runner;
+ * - `personne`: a runner id; the event has a participation of this runner that
+ *   is not "not starting" (`isOnEvent`), on a format or on the event alone;
  * - `type`: a race type id; the event has a format of this type.
  *
  * `moi` is not understood here: whoever reads it from the URL resolves it to
@@ -188,12 +227,9 @@ export function applyFilters(
 ): EventView[] {
   const { personne, type } = criteria;
   return views.filter(
-    ({ formats }) =>
-      (!personne ||
-        formats.some(({ participations }) =>
-          participations.some(({ runner }) => runner.id === personne),
-        )) &&
-      (!type || formats.some(({ raceType }) => raceType.id === type)),
+    (view) =>
+      (!personne || isOnEvent(view, personne)) &&
+      (!type || view.formats.some(({ raceType }) => raceType.id === type)),
   );
 }
 

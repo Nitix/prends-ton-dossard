@@ -17,7 +17,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
-import { event2Record, eventRecord, f15, f42, p1 } from "./testFixture";
+import { event2Record, eventRecord, p1, withParticipations } from "./testFixture";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
@@ -97,25 +97,14 @@ test("DeleteEventDialog — en anglais britannique : « Alice, Bob and Sam »", 
 });
 
 test("DeleteEventDialog — un coureur sur deux épreuves n'est cité qu'une fois", async () => {
-  const twice = toEventView({
-    ...eventRecord,
-    expand: {
-      formats_via_event: [
-        {
-          ...f15,
-          expand: {
-            ...f15.expand,
-            participations_via_format: [{ ...p1, id: "p1b", format: "f15", expand: p1.expand }],
-          },
-        },
-        f42,
-      ],
-    },
-  });
+  // Alice is on F42, and on F15 too: she is named once, with Bob and Sam.
+  const twice = toEventView(
+    withParticipations(eventRecord, [{ ...p1, id: "p1b", format: "f15", expand: p1.expand }]),
+  );
 
   const { screen } = await renderDialog(twice);
 
-  await expect.element(screen.getByText("Alice et Bob")).toBeVisible();
+  await expect.element(screen.getByText("Alice, Bob et Sam")).toBeVisible();
 });
 
 test("DeleteEventDialog — dit quel événement est supprimé, avec ses épreuves et leurs participations", async () => {

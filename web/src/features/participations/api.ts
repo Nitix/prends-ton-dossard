@@ -8,16 +8,25 @@ import { invalidateEvents } from "../events/api";
 export const STATUSES: readonly Status[] = ["interested", "registered", "finished", "dnf", "dns"];
 
 /**
- * Adds a runner to a format. Anybody may, for any runner: the server tells who
- * added it (`added_by`) and whether it is confirmed (it is when the runner is
- * the one who adds it), so neither is sent.
+ * Adds a runner to an event: to one of its formats, or, with no `format`, to
+ * the event alone ("interested, format to choose": the server accepts no
+ * other status for that, and refuses it for a runner who is on a format of
+ * the event already). A participation on a format takes the place of the one
+ * on the event alone, which the server removes. Anybody may, for any runner:
+ * the server tells who added it (`added_by`) and whether it is confirmed (it
+ * is when the runner is the one who adds it), so neither is sent. Nor is an
+ * absent `format`.
  */
 export function createParticipation(input: {
   runner: string;
-  format: string;
+  event: string;
+  format?: string;
   status: Status;
 }): Promise<ParticipationRecord> {
-  return pb.collection("participations").create<ParticipationRecord>(input);
+  const { format, ...rest } = input;
+  return pb
+    .collection("participations")
+    .create<ParticipationRecord>(format === undefined ? rest : { ...rest, format });
 }
 
 /**

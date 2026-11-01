@@ -141,6 +141,7 @@ test("AddSomeoneDialog — ajoute Sam sur F42 avec le statut choisi, puis se fer
   expect(mocks.create).toHaveBeenCalledOnce();
   expect(mocks.create).toHaveBeenCalledWith({
     runner: samRunner.id,
+    event: "event",
     format: "f42",
     status: "registered",
   });

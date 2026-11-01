@@ -28,17 +28,39 @@ beforeEach(() => {
 });
 
 describe("createParticipation", () => {
-  test("creates in `participations` with the runner, the format and the status, and gives the record back", async () => {
-    const created = await createParticipation({ runner: "r1", format: "f1", status: "registered" });
+  test("creates in `participations` with the runner, the event, the format and the status, and gives the record back", async () => {
+    const created = await createParticipation({
+      runner: "r1",
+      event: "e1",
+      format: "f1",
+      status: "registered",
+    });
 
     expect(mocks.collection).toHaveBeenCalledWith("participations");
     // `added_by` and `confirmed` are the server's: they are never sent.
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
       runner: "r1",
+      event: "e1",
       format: "f1",
       status: "registered",
     });
     expect(created).toEqual({ id: "p9" });
+  });
+
+  test("createParticipation sends {runner, event, status} without a format for an undecided one", async () => {
+    await createParticipation({ runner: "r1", event: "e1", status: "interested" });
+
+    const [body] = mocks.create.mock.calls[0] ?? [];
+    expect(body).toEqual({ runner: "r1", event: "e1", status: "interested" });
+    // Not `format: undefined`: the key is not there.
+    expect(Object.keys(body ?? {})).not.toContain("format");
+  });
+
+  test("createParticipation sends the format when there is one", async () => {
+    await createParticipation({ runner: "r1", event: "e1", format: "f1", status: "interested" });
+
+    const [body] = mocks.create.mock.calls[0] ?? [];
+    expect(body).toEqual({ runner: "r1", event: "e1", format: "f1", status: "interested" });
   });
 
   test("lets the error of the server through", async () => {
@@ -46,7 +68,7 @@ describe("createParticipation", () => {
     mocks.create.mockRejectedValue(refusal);
 
     await expect(
-      createParticipation({ runner: "r1", format: "f1", status: "interested" }),
+      createParticipation({ runner: "r1", event: "e1", format: "f1", status: "interested" }),
     ).rejects.toBe(refusal);
   });
 });

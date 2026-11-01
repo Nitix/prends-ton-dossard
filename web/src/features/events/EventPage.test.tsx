@@ -24,8 +24,10 @@ import {
   eventRecord,
   f42,
   p1,
+  p2,
+  p3,
   samRunner,
-  trailType,
+  withParticipations,
 } from "./testFixture";
 
 // The tap targets and the dashes are a matter of the styles, which are not
@@ -295,21 +297,13 @@ test("EventPage — une participation non confirmée dit « ajouté par X · non
 });
 
 test("EventPage — la mention porte le nom de qui a ajouté, et « non confirmé » seul si on ne le sait plus", async () => {
-  const orphan = {
-    ...f42,
-    expand: {
-      ...f42.expand,
-      participations_via_format: [
-        {
-          ...f42.expand.participations_via_format[0],
-          id: "pOrphan",
-          expand: { runner: bobRunner },
-        },
-      ],
-    },
-  };
+  // Bob, whose adder is not there any more.
+  const orphan = { ...p2, id: "pOrphan", expand: { runner: bobRunner } };
   const { screen } = await renderPage({
-    event: { ...eventRecord, expand: { formats_via_event: [orphan] } },
+    event: {
+      ...eventRecord,
+      expand: { formats_via_event: [f42], participations_via_event: [orphan] },
+    },
   });
 
   await loaded(screen);
@@ -536,27 +530,14 @@ test("EventPage — après J'y vais, la page recharge l'événement et montre la
     ...base,
     id: "pNina",
     runner: newRunner.id,
+    event: "event",
     format: "f42",
     status: "registered",
     confirmed: true,
     added_by: newRunner.id,
     expand: { runner: newRunner, added_by: newRunner },
   };
-  mocks.getOne.mockResolvedValue({
-    ...eventRecord,
-    expand: {
-      formats_via_event: [
-        {
-          ...f42,
-          expand: {
-            race_type: trailType,
-            participations_via_format: [...f42.expand.participations_via_format, nina],
-          },
-        },
-        eventRecord.expand.formats_via_event[1],
-      ],
-    },
-  });
+  mocks.getOne.mockResolvedValue(withParticipations(eventRecord, [nina]));
 
   await screen.getByRole("button", { name: fr.participation.join }).click();
   const dialog = screen.getByRole("dialog", { name: fr.participation.joinTitle });
@@ -567,6 +548,7 @@ test("EventPage — après J'y vais, la page recharge l'événement et montre la
   await expect.element(row(screen, "Nina")).toBeVisible();
   expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
     runner: newRunner.id,
+    event: "event",
     format: "f42",
     status: "registered",
   });
@@ -606,12 +588,7 @@ test("EventPage — après un retrait réussi, la ligne disparaît et le focus v
   mocks.remove.mockImplementation(() => {
     mocks.getOne.mockResolvedValue({
       ...eventRecord,
-      expand: {
-        formats_via_event: [
-          { ...f42, expand: { ...f42.expand, participations_via_format: [p1] } },
-          eventRecord.expand.formats_via_event[1],
-        ],
-      },
+      expand: { ...eventRecord.expand, participations_via_event: [p1, p3] },
     });
     return Promise.resolve(true);
   });

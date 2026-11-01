@@ -70,7 +70,12 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
     event.preventDefault();
     setMessage(null);
     try {
-      await create.mutateAsync({ runner: runnerId, format: formatId, status });
+      await create.mutateAsync({
+        runner: runnerId,
+        event: view.event.id,
+        format: formatId,
+        status,
+      });
       onClose();
     } catch (err) {
       setMessage(participationError(t, err));

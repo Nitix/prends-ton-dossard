@@ -434,6 +434,7 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
   expect(participation?.body).toEqual({
     id: expect.stringMatching(/^[a-z0-9]{15}$/),
     runner: aliceRunner.id,
+    event: eventId,
     format: one?.body?.id,
     status: "registered",
   });
@@ -1005,7 +1006,7 @@ test("EventForm — une épreuve ajoutée par quelqu'un d'autre pendant la modif
   const added = {
     ...eventRecord.expand.formats_via_event[1],
     id: "fnew",
-    expand: { race_type: trailType, participations_via_format: [] },
+    expand: { race_type: trailType },
   };
   mocks.getOne.mockResolvedValue({
     ...eventRecord,

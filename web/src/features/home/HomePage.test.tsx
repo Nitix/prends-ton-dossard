@@ -22,7 +22,6 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
-  f15,
   f42,
   fLyon,
   p1,
@@ -30,6 +29,7 @@ import {
   p3,
   roadType,
   trailType,
+  withParticipations,
 } from "../events/testFixture";
 import { HomePage } from "./HomePage";
 
@@ -86,6 +86,7 @@ const pendingP2 = {
 const pendingLyon = {
   ...p2,
   id: "p-lyon",
+  event: "event2",
   format: "fLyon",
   expand: { runner: bobRunner, added_by: aliceRunner, format: fLyonExpanded },
 };
@@ -647,42 +648,19 @@ test("MyUpcoming — ne garde que mes participations, triées par date effective
   signIn("alice");
   // Alice is on F42 (the 14th) and on F15 (no date of its own: the 13th), and
   // on the 10 km of Lyon (the 22nd), which the server may give first.
-  const lyonWithAlice = {
-    ...event2Record,
-    expand: {
-      formats_via_event: [
-        {
-          ...fLyon,
-          expand: {
-            ...fLyon.expand,
-            participations_via_format: [
-              { ...p1, id: "p-lyon", format: "fLyon", expand: { runner: aliceRunner } },
-            ],
-          },
-        },
-      ],
-    },
-  };
-  const f15WithAlice = {
-    ...f15,
-    expand: {
-      ...f15.expand,
-      participations_via_format: [
-        {
-          ...p3,
-          id: "p-15",
-          runner: aliceRunner.id,
-          confirmed: true,
-          expand: { runner: aliceRunner },
-        },
-        p3,
-      ],
-    },
-  };
-  mocks.events.mockResolvedValue([
-    lyonWithAlice,
-    { ...eventRecord, expand: { formats_via_event: [f42, f15WithAlice] } },
+  const lyonWithAlice = withParticipations(event2Record, [
+    { ...p1, id: "p-lyon", event: "event2", format: "fLyon", expand: { runner: aliceRunner } },
   ]);
+  const trailWithAlice = withParticipations(eventRecord, [
+    {
+      ...p3,
+      id: "p-15",
+      runner: aliceRunner.id,
+      confirmed: true,
+      expand: { runner: aliceRunner },
+    },
+  ]);
+  mocks.events.mockResolvedValue([lyonWithAlice, trailWithAlice]);
 
   const { screen } = await renderHome();
 
@@ -712,23 +690,9 @@ test("MyUpcoming — « aujourd’hui » le jour de l'épreuve, et pas les épre
   signIn("alice");
   // The event lasts from the 13th to the 14th of June: on the 14th, F15 (the
   // 13th) is behind, F42 is today.
-  const aliceOnBoth = {
-    ...eventRecord,
-    expand: {
-      formats_via_event: [
-        {
-          ...f15,
-          expand: {
-            ...f15.expand,
-            participations_via_format: [
-              { ...p1, id: "p-15", format: "f15", expand: { runner: aliceRunner } },
-            ],
-          },
-        },
-        f42,
-      ],
-    },
-  };
+  const aliceOnBoth = withParticipations(eventRecord, [
+    { ...p1, id: "p-15", format: "f15", expand: { runner: aliceRunner } },
+  ]);
   mocks.events.mockResolvedValue([aliceOnBoth]);
 
   const { screen } = await renderHome({ today: "2026-06-14" });
@@ -775,17 +739,8 @@ test("GroupSoon — les 5 prochains, du plus proche au plus lointain", async () 
       name: `Course ${day}`,
       start_date: `2026-06-${day}`,
       expand: {
-        formats_via_event: [
-          {
-            ...fLyon,
-            id: `fv${i}`,
-            event: `ev${i}`,
-            expand: {
-              ...fLyon.expand,
-              participations_via_format: [{ ...p1, id: `pv${i}`, format: `fv${i}` }],
-            },
-          },
-        ],
+        formats_via_event: [{ ...fLyon, id: `fv${i}`, event: `ev${i}` }],
+        participations_via_event: [{ ...p1, id: `pv${i}`, event: `ev${i}`, format: `fv${i}` }],
       },
     };
   });

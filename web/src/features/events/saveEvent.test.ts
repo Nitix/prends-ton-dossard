@@ -121,7 +121,23 @@ describe("buildBatch, creation", () => {
       ME,
     );
 
-    expect(ops[3]?.body).toEqual({ runner: ME, format: ops[1]?.id, status: "registered" });
+    expect(ops[3]?.body).toEqual({
+      runner: ME,
+      event: ops[0]?.id,
+      format: ops[1]?.id,
+      status: "registered",
+    });
+  });
+
+  test("my participation says which event it is on, the one the same batch creates", () => {
+    const { ops, eventId } = buildBatch(
+      newDraft({ join: { formatIndex: 1, status: "registered" } }),
+      undefined,
+      ME,
+    );
+
+    expect(ops[3]?.collection).toBe("participations");
+    expect(ops[3]?.body?.event).toBe(eventId);
   });
 
   test("it can be on the other format", () => {
@@ -131,7 +147,12 @@ describe("buildBatch, creation", () => {
       ME,
     );
 
-    expect(ops[3]?.body).toEqual({ runner: ME, format: ops[2]?.id, status: "interested" });
+    expect(ops[3]?.body).toEqual({
+      runner: ME,
+      event: ops[0]?.id,
+      format: ops[2]?.id,
+      status: "interested",
+    });
   });
 
   test("without a choice to join, there is no participation", () => {
@@ -452,7 +473,11 @@ describe("saveEvent", () => {
     ]);
     expect(mocks.calls[0]?.body?.id).toBe(id);
     expect(mocks.calls[1]?.body).toMatchObject({ event: id, distance_km: 42 });
-    expect(mocks.calls[3]?.body).toMatchObject({ runner: ME, format: mocks.calls[1]?.body?.id });
+    expect(mocks.calls[3]?.body).toMatchObject({
+      runner: ME,
+      event: id,
+      format: mocks.calls[1]?.body?.id,
+    });
   });
 
   test("a modification updates by id, with no event in the formats, and deletes the removed ones", async () => {

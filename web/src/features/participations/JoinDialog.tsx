@@ -79,7 +79,12 @@ function JoinForm({ view, me, onClose }: { view: EventView; me: Me; onClose: () 
         const confirm = mine.confirmed ? {} : { confirmed: true as const };
         await update.mutateAsync({ id: mine.id, patch: { status, format: formatId, ...confirm } });
       } else {
-        await create.mutateAsync({ runner: me.runnerId, format: formatId, status });
+        await create.mutateAsync({
+          runner: me.runnerId,
+          event: view.event.id,
+          format: formatId,
+          status,
+        });
       }
       onClose();
     } catch (err) {

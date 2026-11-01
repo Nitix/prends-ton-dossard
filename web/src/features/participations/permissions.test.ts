@@ -19,6 +19,7 @@ function participation(runner: RunnerRecord, confirmed: boolean): ParticipationR
     ...base,
     id: `p-${runner.id}`,
     runner: runner.id,
+    event: "event",
     format: "f42",
     status: "interested",
     added_by: alice.id,

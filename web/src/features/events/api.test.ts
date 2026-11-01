@@ -7,10 +7,15 @@ import {
   eventRecord as event,
   f15,
   fLyon,
+  ninaRunner as nina,
+  p1,
+  p2,
   p3,
+  pNinaUndecided,
   roadType as road,
   samRunner as sam,
   trailType as trail,
+  withParticipations,
 } from "./testFixture";
 
 const date = (s: string) => Temporal.PlainDate.from(s);
@@ -19,6 +24,15 @@ const ids = (list: EventView[]) => list.map((view) => view.event.id);
 
 function views(): EventView[] {
   return toEventViews([event, event2]);
+}
+
+/** The two events, where Bob (on F42) and Alice have the status given to Bob. */
+function bobAs(status: string): EventView[] {
+  const participations = [{ ...p2, status }, p1];
+  return toEventViews([
+    { ...event, expand: { ...event.expand, participations_via_event: participations } },
+    event2,
+  ]);
 }
 
 describe("eventsFilter", () => {
@@ -108,15 +122,58 @@ describe("toEventViews", () => {
     expect(toEventViews([bare])[0]?.formats).toEqual([]);
   });
 
+  test("groups participations_via_event by format: F42 has Alice and Bob, F15 has Sam", () => {
+    const [view] = views();
+    const names = (formatId: string) =>
+      view?.formats
+        .find(({ format }) => format.id === formatId)
+        ?.participations.map(({ runner }) => runner.name);
+
+    // The server gave Bob, Alice, Sam, in a single list.
+    expect(names("f42")).toEqual(["Alice", "Bob"]);
+    expect(names("f15")).toEqual(["Sam"]);
+    expect(view?.interested).toEqual([]);
+  });
+
+  test("a participation without a format goes to interested, sorted by runner name", () => {
+    const admin = { ...nina, id: "adminRunner0000", name: "Admin" };
+    const pAdmin = {
+      ...pNinaUndecided,
+      id: "pAdmin",
+      runner: admin.id,
+      added_by: admin.id,
+      expand: { runner: admin, added_by: admin },
+    };
+    // Nina comes before Admin in the answer.
+    const record = withParticipations(event, [pNinaUndecided, pAdmin]);
+
+    const [view] = toEventViews([record]);
+
+    expect(view?.interested.map(({ runner }) => runner.name)).toEqual(["Admin", "Nina"]);
+    expect(view?.interested[1]?.participation.id).toBe("pNinaUndecided");
+    // The ones on a format are where they were.
+    expect(view?.formats.map(({ participations }) => participations.length)).toEqual([1, 2]);
+  });
+
+  test("an event without participations_via_event has no participants and an empty interested", () => {
+    const [view] = toEventViews([event2]);
+
+    expect(view?.interested).toEqual([]);
+    expect(view?.formats.map(({ participations }) => participations)).toEqual([[]]);
+  });
+
+  test("a participation whose format is not one of the event's is a malformed answer", () => {
+    const record = withParticipations(event, [{ ...p1, id: "pElsewhere", format: fLyon.id }]);
+
+    expect(() => toEventViews([record])).toThrow(/pElsewhere/);
+    expect(() => toEventViews([record])).toThrow(/fLyon/);
+  });
+
   test("a participation whose adder is not there still has its runner", () => {
     const orphan = { ...p3, expand: { runner: sam } };
     const record = {
       ...event,
-      expand: {
-        formats_via_event: [
-          { ...f15, expand: { ...f15.expand, participations_via_format: [orphan] } },
-        ],
-      },
+      expand: { formats_via_event: [f15], participations_via_event: [orphan] },
     };
 
     const participation = toEventViews([record])[0]?.formats[0]?.participations[0];
@@ -131,7 +188,7 @@ describe("toEventViews", () => {
   });
 
   test("a format without its race type is a malformed answer", () => {
-    const broken = { ...f15, expand: { participations_via_format: [] } };
+    const broken = { ...f15, expand: {} };
     const record = { ...event, expand: { formats_via_event: [broken] } };
 
     expect(() => toEventViews([record])).toThrow(/race_type/);
@@ -168,6 +225,17 @@ describe("applyFilters", () => {
   test("personne: keeps the events where this runner has a participation", () => {
     expect(ids(applyFilters(views(), { personne: bob.id }))).toEqual(["event"]);
     expect(ids(applyFilters(views(), { personne: sam.id }))).toEqual(["event"]);
+  });
+
+  test("personne: an event-level participation counts", () => {
+    const withNina = toEventViews([withParticipations(event, [pNinaUndecided]), event2]);
+
+    expect(ids(applyFilters(withNina, { personne: nina.id }))).toEqual(["event"]);
+  });
+
+  test("personne: a dns participation does not count, a dnf one does", () => {
+    expect(applyFilters(bobAs("dns"), { personne: bob.id })).toEqual([]);
+    expect(ids(applyFilters(bobAs("dnf"), { personne: bob.id }))).toEqual(["event"]);
   });
 
   test("personne: a runner with no participation keeps nothing", () => {

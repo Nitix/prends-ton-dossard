@@ -64,7 +64,10 @@ export type FormatRecord = BaseRecord & {
 
 export type ParticipationRecord = BaseRecord & {
   runner: string;
-  format: string;
+  /** The event: always set, also when the participation is on a format. */
+  event: string;
+  /** Empty for an "interested, format to choose" participation. */
+  format?: string;
   status: Status;
   /** The runner of the user who added the participation (a `runners` id). */
   added_by: string;

@@ -8,7 +8,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "../events/api";
-import { aliceRunner, bobRunner, eventRecord, f15, f42, p1, p3 } from "../events/testFixture";
+import { aliceRunner, bobRunner, eventRecord, p1, withParticipations } from "../events/testFixture";
 import { JoinDialog } from "./JoinDialog";
 import type { Me } from "./permissions";
 
@@ -91,6 +91,7 @@ test("JoinDialog — sans participation, elle en crée une : mon coureur, l'épr
   });
   expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
     runner: newcomer.runnerId,
+    event: "event",
     format: "f42",
     status: "registered",
   });
@@ -166,21 +167,9 @@ test("JoinDialog — la participation de Bob, ajoutée par Alice et non confirm�
 
 test("JoinDialog — une épreuve où j'ai déjà une autre participation n'est pas proposée", async () => {
   // Alice is on both F15 and F42: moving her F42 participation to F15 would be refused.
-  const twice = toEventView({
-    ...eventRecord,
-    expand: {
-      formats_via_event: [
-        f42,
-        {
-          ...f15,
-          expand: {
-            ...f15.expand,
-            participations_via_format: [p3, { ...p1, id: "p1b", format: "f15", expand: p1.expand }],
-          },
-        },
-      ],
-    },
-  });
+  const twice = toEventView(
+    withParticipations(eventRecord, [{ ...p1, id: "p1b", format: "f15", expand: p1.expand }]),
+  );
 
   const { screen } = await renderDialog(alice, twice);
 

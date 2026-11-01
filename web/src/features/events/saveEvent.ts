@@ -163,7 +163,7 @@ export function buildBatch(
       action: "create",
       collection: "participations",
       id: newId(),
-      body: { runner: myRunnerId, format, status: draft.join.status },
+      body: { runner: myRunnerId, event: eventId, format, status: draft.join.status },
     });
   }
 
