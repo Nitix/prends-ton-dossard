@@ -15,8 +15,8 @@ test("shows the app name in a heading", async () => {
 
   const heading = screen.getByRole("heading", { name: "Prends ton dossard" });
   await expect.element(heading).toBeVisible();
-  // Tailwind is compiled for the browser tests (font-semibold).
-  expect(getComputedStyle(heading.element()).fontWeight).toBe("600");
+  // The styles are compiled for the browser tests (the `page-title` of styles.css: extra bold).
+  expect(getComputedStyle(heading.element()).fontWeight).toBe("800");
 });
 
 test("shows the same app name in English", async () => {

@@ -314,7 +314,8 @@ test("EventCard — une épreuve nommée garde son nom et montre sa mesure", asy
   const { screen } = await renderList();
 
   await expect.element(screen.getByText("10 km de Lyon")).toBeVisible();
-  const measures = screen.getByText(/^Foulées de Lyon/);
+  // The whole line: its first measure (here the name) is set apart in a span of its own.
+  const measures = screen.getByText(/^Foulées de Lyon · /);
   expect(plain(measures.element().textContent)).toBe("Foulées de Lyon · Route 10 km");
 });
 
@@ -338,10 +339,13 @@ test("EventCard — le prix suit les caractéristiques de l'épreuve", async () 
 
   await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
   // At the end of the line, after the elevation gain and the time limit; a round price has no cents.
-  expect(plain(screen.getByText(/^Trail 42/).element().textContent)).toBe(
+  // (The whole line: its first measure is set apart in a span of its own.)
+  expect(plain(screen.getByText(/^Trail 42\s+km · /).element().textContent)).toBe(
     "Trail 42 km · 2 400 m D+ · max 10h · 65 €",
   );
-  expect(plain(screen.getByText(/^Route 10/).element().textContent)).toBe("Route 10 km · 42,50 €");
+  expect(plain(screen.getByText(/^Route 10\s+km · /).element().textContent)).toBe(
+    "Route 10 km · 42,50 €",
+  );
 });
 
 test("EventCard — une épreuve sans prix (0) n'en montre pas", async () => {
@@ -609,7 +613,7 @@ test("ParticipantChips — avec une photo, l'image remplace les initiales ; la p
   expect(alice.element().querySelector("img")).toBeNull();
 });
 
-test("ParticipantChips — la photo remplit le rond de 32 px, sans le déformer", async () => {
+test("ParticipantChips — la photo remplit le rond de 36 px, sans le déformer", async () => {
   mocks.getURL.mockImplementation(() => pixelURL());
   const bob = { ...bobRunner, avatar: "bob_x1y2z3.webp" };
   mocks.events.mockResolvedValue([
@@ -635,11 +639,11 @@ test("ParticipantChips — la photo remplit le rond de 32 px, sans le déformer"
     .filter({ hasText: "Bob" })
     .element();
   const image = chip.querySelector("img");
-  expect(chip.getBoundingClientRect().width).toBe(32);
-  expect(chip.getBoundingClientRect().height).toBe(32);
-  // Inside the 2 px border: the whole round, and it is a round.
-  expect(image?.getBoundingClientRect().width).toBe(28);
-  expect(image?.getBoundingClientRect().height).toBe(28);
+  expect(chip.getBoundingClientRect().width).toBe(36);
+  expect(chip.getBoundingClientRect().height).toBe(36);
+  // Inside the 2 px border (dashed: Bob has not confirmed): the whole round, and it is a round.
+  expect(image?.getBoundingClientRect().width).toBe(32);
+  expect(image?.getBoundingClientRect().height).toBe(32);
   expect(getComputedStyle(image ?? chip).objectFit).toBe("cover");
   expect(getComputedStyle(image ?? chip).borderRadius).not.toBe("0px");
 });

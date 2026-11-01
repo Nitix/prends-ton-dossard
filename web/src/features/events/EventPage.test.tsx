@@ -1194,6 +1194,52 @@ test("EventPage — les boutons d'action font au moins 44 px", async () => {
   }
 });
 
+test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autres actions vont deux par deux, sans rien couper", async () => {
+  try {
+    // The room the page has between the gutters of the app shell (2 × 16 px) on a phone of 320 and of 390 px.
+    for (const width of [288, 358]) {
+      await page.viewport(width, 844);
+      const { screen } = await renderPage();
+      await loaded(screen);
+
+      const actions = [
+        screen.getByRole("button", { name: fr.participation.join }),
+        screen.getByRole("button", { name: fr.participation.addSomeone }),
+        screen.getByRole("button", { name: fr.event.addToCalendar }),
+        screen.getByRole("link", { name: fr.common.edit }),
+        screen.getByRole("button", { name: fr.common.delete }),
+      ].map((action) => action.element());
+      const [join, add, calendar, edit, remove] = actions.map((action) =>
+        action.getBoundingClientRect(),
+      );
+      if (!join || !add || !calendar || !edit || !remove) throw new Error("an action is missing");
+
+      // The main one across, then the others two by two, side by side.
+      expect(join.left).toBe(add.left);
+      expect(join.right).toBe(calendar.right);
+      expect(join.bottom).toBeLessThanOrEqual(add.top);
+      expect(add.top).toBe(calendar.top);
+      expect(add.right).toBeLessThan(calendar.left);
+      expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
+      expect(edit.top).toBe(remove.top);
+      expect(edit.right).toBeLessThan(remove.left);
+      // Each one a tap target, its words whole, and nothing that scrolls sideways.
+      for (const action of actions) {
+        const { width: w, height: h } = action.getBoundingClientRect();
+        expect(w, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(h, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(action.scrollWidth, `${action.textContent} at ${width} px`).toBeLessThanOrEqual(
+          action.clientWidth,
+        );
+      }
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+      await screen.unmount();
+    }
+  } finally {
+    await page.viewport(414, 896);
+  }
+});
+
 // --- Who gets a menu on a participation ---
 
 test("EventPage — Alice : un menu sur sa participation et sur celles, non confirmées, de Bob et de Sam", async () => {
@@ -2488,8 +2534,10 @@ test("EventPage — une trace illisible affiche un message, pas d'erreur", async
 
   const trail42 = format(screen, /^Trail 42/);
   await expect.element(trail42.getByText(fr.route.unreadable)).toBeVisible();
-  // No drawing, but the links stay.
-  expect(trail42.element().querySelector("svg")).toBeNull();
+  // No drawing (the icons of the links are not one), but the links stay.
+  expect([...trail42.element().querySelectorAll("svg")].filter((svg) => !svg.closest("a"))).toEqual(
+    [],
+  );
   await expect.element(trail42.getByRole("link", { name: fr.route.download })).toBeVisible();
   await expect.element(trail42.getByRole("link", { name: fr.route.open })).toBeVisible();
   // The rest of the page is there, and says nothing went wrong.

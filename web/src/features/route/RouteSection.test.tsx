@@ -98,15 +98,28 @@ const trackMap = (screen: Awaited<ReturnType<typeof renderSection>>) =>
 const profileDrawing = (screen: Awaited<ReturnType<typeof renderSection>>) =>
   screen.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) });
 
+/**
+ * The line of the numbers of the track: tiles on the page, one line of text
+ * (separators and spaces included) for a screen reader.
+ */
+function figures(screen: Awaited<ReturnType<typeof renderSection>>): HTMLElement {
+  const line = screen.getByText(/D\+/).element().closest("p");
+  if (!line) throw new Error("no line of numbers");
+  return line;
+}
+
+/** What the section draws: its SVG, but for the icons of its links, which are words already. */
+const drawings = (screen: Awaited<ReturnType<typeof renderSection>>) =>
+  [...screen.container.querySelectorAll("svg")].filter((svg) => !svg.closest("a"));
+
 test("RouteSection — chiffres, carte, profil et liens", async () => {
   const fetching = serve(CLIMB);
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx", route_url: COURSE_URL }));
 
   await expect.element(screen.getByRole("heading", { name: fr.route.title })).toBeVisible();
   // The numbers: the distance, the gain and the loss, then the lowest and the highest altitudes.
-  const figures = screen.getByText(/D\+/);
-  await expect.element(figures).toBeVisible();
-  expect(plain(figures.element().textContent)).toBe("2,2 km · 200 m D+ · 50 m D−");
+  await expect.element(screen.getByText(/D\+/)).toBeVisible();
+  expect(plain(figures(screen).textContent)).toBe("2,2 km · 200 m D+ · 50 m D−");
   const altitudes = screen.getByText(/^altitude/);
   await expect.element(altitudes).toBeVisible();
   expect(plain(altitudes.element().textContent)).toBe("altitude 450 m à 650 m");
@@ -148,9 +161,8 @@ test("RouteSection — the map replaces the outline, profile and numbers unchang
     .element(screen.getByRole("img", { name: /^Tracé du parcours/ }))
     .not.toBeInTheDocument();
   // The numbers are written outside of the map, as they were; so is the profile, which is the same.
-  const figures = screen.getByText(/D\+/);
-  expect(plain(figures.element().textContent)).toBe("2,2 km · 200 m D+ · 50 m D−");
-  expect(trackMap(screen).element().contains(figures.element())).toBe(false);
+  expect(plain(figures(screen).textContent)).toBe("2,2 km · 200 m D+ · 50 m D−");
+  expect(trackMap(screen).element().contains(figures(screen))).toBe(false);
   expect(plain(screen.getByText(/^altitude/).element().textContent)).toBe("altitude 450 m à 650 m");
   await expect.element(profileDrawing(screen)).toBeVisible();
   expect(trackMap(screen).element().contains(profileDrawing(screen).element())).toBe(false);
@@ -173,7 +185,7 @@ test("RouteSection — un lien sans trace", async () => {
   await expect
     .element(screen.getByRole("link", { name: fr.route.download }))
     .not.toBeInTheDocument();
-  expect(screen.container.querySelector("svg")).toBeNull();
+  expect(drawings(screen)).toEqual([]);
   expect(fetching).not.toHaveBeenCalled();
   expect(mocks.getURL).not.toHaveBeenCalled();
 });
@@ -216,7 +228,7 @@ test("RouteSection — une trace illisible est dite, ses liens restent", async (
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx", route_url: COURSE_URL }));
 
   await expect.element(screen.getByText(fr.route.unreadable)).toBeVisible();
-  expect(screen.container.querySelector("svg")).toBeNull();
+  expect(drawings(screen)).toEqual([]);
   await expect.element(screen.getByRole("link", { name: fr.route.download })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.route.open })).toBeVisible();
 });

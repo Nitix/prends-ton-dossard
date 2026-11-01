@@ -17,6 +17,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice } from "../../test/busyButton";
 import { pixelURL } from "../../test/images";
+import { spokenText } from "../../test/spoken";
 import { EVENT_EXPAND } from "../events/api";
 import {
   aliceRunner,
@@ -213,11 +214,12 @@ test("RunnerPage — nom, à venir, bilan par année et historique", async () =>
     fr.stats.elevation,
     fr.stats.time,
   ]);
+  // The cells, as a screen reader says them.
   const rows = years
     .getByRole("row")
     .elements()
     .slice(1)
-    .map((row) => [...row.querySelectorAll("th, td")].map((cell) => plain(cell.textContent)));
+    .map((row) => [...row.querySelectorAll("th, td")].map((cell) => plain(spokenText(cell))));
   expect(rows).toEqual([
     ["2026", "2", "1", "52 km", "2 400 m", "4h 57min 30s"],
     ["2025", "1", "0", "42 km", "2 400 m", "4h 26min 40s"],

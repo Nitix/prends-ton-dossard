@@ -10,12 +10,14 @@ import {
 import { ClientResponseError } from "pocketbase";
 import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { page } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice } from "../../test/busyButton";
+import { spokenText } from "../../test/spoken";
 import {
   aliceRunner,
   bobRunner,
@@ -125,14 +127,26 @@ const plain = (s: string | null) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
 type Screen = Awaited<ReturnType<typeof renderStats>>["screen"];
 
-/** The cells of the rows of the table, as the text a reader sees: the name first. */
+/**
+ * The cells of the rows of the table, as a screen reader says them (the title of
+ * its column that a tile repeats on a phone is hidden from it): the name first.
+ */
 function rowsOf(screen: Screen): string[][] {
   return screen
     .getByRole("row")
     .elements()
     .slice(1)
-    .map((row) => [...row.querySelectorAll("th, td")].map((cell) => plain(cell.textContent)));
+    .map((row) => [...row.querySelectorAll("th, td")].map((cell) => plain(spokenText(cell))));
 }
+
+/** The tiles of the first runner: the cells of their row, but its head. */
+const tilesOf = (screen: Screen) => [
+  ...(screen.getByRole("row").elements()[1]?.querySelectorAll("td") ?? []),
+];
+
+/** The title of its column that each tile repeats, hidden from a screen reader. */
+const tileTitles = (screen: Screen) =>
+  tilesOf(screen).map((tile) => tile.querySelector('[aria-hidden="true"]'));
 
 test("StatsPage — le tableau de l'année, avec un lien par coureur", async () => {
   const { screen } = await renderStats();
@@ -171,6 +185,47 @@ test("StatsPage — le tableau de l'année, avec un lien par coureur", async () 
   );
   // The link is a tap target.
   expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+});
+
+test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans défilement de côté ; dès sm, un tableau", async () => {
+  const titles = [fr.stats.finished, fr.stats.dnf, fr.stats.km, fr.stats.elevation, fr.stats.time];
+  try {
+    for (const width of [320, 390]) {
+      await page.viewport(width, 844);
+      const { screen } = await renderStats();
+      await expect.element(screen.getByRole("table")).toBeVisible();
+
+      // Still a table for a screen reader: the titles of its columns, a row for each runner.
+      expect(screen.getByRole("columnheader").elements()).toHaveLength(6);
+      expect(rowsOf(screen)).toHaveLength(2);
+      // The header of the table is not shown: each tile shows the title of its column.
+      expect(screen.getByRole("rowgroup").first().element().getBoundingClientRect().height).toBe(1);
+      expect(tileTitles(screen).map((title) => title?.textContent)).toEqual(titles);
+      for (const title of tileTitles(screen)) {
+        expect(title?.getBoundingClientRect().height).toBeGreaterThan(0);
+      }
+      // Every number whole, on the screen, and nothing that scrolls sideways.
+      for (const tile of tilesOf(screen)) {
+        expect(tile.scrollWidth).toBeLessThanOrEqual(tile.clientWidth);
+        expect(tile.getBoundingClientRect().right).toBeLessThanOrEqual(width);
+      }
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+      await screen.unmount();
+    }
+
+    // From sm, a table as usual: the header is shown, the tiles do not repeat it.
+    await page.viewport(1024, 768);
+    const { screen } = await renderStats();
+    await expect.element(screen.getByRole("columnheader", { name: fr.stats.time })).toBeVisible();
+    expect(
+      screen.getByRole("rowgroup").first().element().getBoundingClientRect().height,
+    ).toBeGreaterThan(1);
+    for (const title of tileTitles(screen)) {
+      expect(title?.getBoundingClientRect().height).toBe(0);
+    }
+  } finally {
+    await page.viewport(414, 896);
+  }
 });
 
 test("StatsPage — demande au serveur les participations terminées ou abandonnées, avec leur expand", async () => {

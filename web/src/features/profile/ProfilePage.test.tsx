@@ -16,6 +16,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { pixelURL } from "../../test/images";
+import { spokenText } from "../../test/spoken";
 import {
   aliceRunner,
   bobRunner,
@@ -284,14 +285,14 @@ test("ProfilePage — montre son coureur : photo, nom, bilan, historique", async
   expect(image?.getAttribute("alt")).toBe("");
   expect(mocks.getURL.mock.calls[0]?.[2]).toEqual({ thumb: "256x256" });
 
-  // The year by year, the latest year first.
+  // The year by year, the latest year first, as a screen reader says the cells.
   const years = section(screen, fr.runner.years);
   await expect.element(years.getByRole("table", { name: fr.runner.years })).toBeVisible();
   const rows = years
     .getByRole("row")
     .elements()
     .slice(1)
-    .map((row) => [...row.querySelectorAll("th, td")].map((cell) => plain(cell.textContent)));
+    .map((row) => [...row.querySelectorAll("th, td")].map((cell) => plain(spokenText(cell))));
   expect(rows).toEqual([
     ["2026", "1", "0", "42 km", "2 400 m", "4h 12min 30s"],
     ["2025", "1", "0", "42 km", "2 400 m", "4h 26min 40s"],

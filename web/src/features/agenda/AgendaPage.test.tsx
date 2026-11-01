@@ -421,8 +421,12 @@ test("AgendaPage — le jour choisi est marqué par aria-pressed, et lui seul", 
     (button) => button.getAttribute("aria-pressed") === "true",
   );
   expect(pressed).toHaveLength(1);
-  // Not by colour alone: the day is filled in (white on black), and a day that is not is not.
-  const filled = (date: string) => getComputedStyle(day(screen, date).element()).backgroundColor;
+  // Not by colour alone: the day is filled in (white on sunrise, a gradient: a
+  // background image), and a day that is not is not.
+  const filled = (date: string) => {
+    const style = getComputedStyle(day(screen, date).element());
+    return `${style.backgroundColor} ${style.backgroundImage}`;
+  };
   expect(filled("dim. 14 juin")).not.toBe(filled("sam. 13 juin"));
 });
 
