@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
+import { Figure } from "../../components/Figure";
 import { DownloadIcon, ExternalIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
@@ -82,9 +83,9 @@ function Track({ points }: { points: TrackPoint[] }) {
               className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-2xl bg-neutral-50 px-2 py-2.5 text-center ring-1 ring-neutral-100"
             >
               {i > 0 && <span className="sr-only">{SEPARATOR}</span>}
-              <span className="font-display text-[1.0625rem] leading-tight font-extrabold tracking-tight text-ink">
-                {value}
-              </span>
+              <Figure className="font-display text-[1.0625rem] leading-tight font-extrabold tracking-tight text-ink">
+                {value ?? part}
+              </Figure>
               {suffix !== undefined && (
                 <span className="text-xs font-bold text-iris-700">{suffix}</span>
               )}

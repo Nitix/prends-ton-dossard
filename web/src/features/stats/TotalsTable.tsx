@@ -4,6 +4,7 @@
 /* oxlint-disable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */
 import type { ReactNode } from "react";
 
+import { Figure } from "../../components/Figure";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Totals } from "./stats";
 
@@ -20,7 +21,8 @@ const NONE = "–";
 // each with the title of its column (which a screen reader has from the
 // header of the column already: the title in the tile is hidden from it). From
 // `sm`, a table as usual. Under 360 px a tile is 84 px wide: its sides are
-// narrower there, for « 45 230 m » (67 px) and « ABANDONS » (65 px) to fit.
+// narrower there, for « 45 230 m » (70 px, its spaces widened by `Figure`) and
+// « ABANDONS » (65 px) to fit.
 const CELL =
   "flex flex-col-reverse rounded-xl bg-neutral-50 px-1.5 py-2 text-left tabular-nums min-[22.5rem]:px-2.5 sm:table-cell sm:rounded-none sm:bg-transparent sm:px-2 sm:py-2.5 sm:text-right";
 const VALUE =
@@ -99,7 +101,7 @@ export function TotalsTable({
                     role="cell"
                     className={`${CELL} ${i === values.length - 1 ? "col-span-2" : ""}`}
                   >
-                    <span className={VALUE}>{value}</span>
+                    <Figure className={VALUE}>{String(value)}</Figure>
                     <span aria-hidden="true" className={TILE_TITLE}>
                       {titles[i]}
                     </span>

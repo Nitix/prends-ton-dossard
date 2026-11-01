@@ -17,6 +17,8 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice } from "../../test/busyButton";
+import { fontsReady } from "../../test/fontsReady";
+import { spaceGaps } from "../../test/gaps";
 import { spokenText } from "../../test/spoken";
 import {
   aliceRunner,
@@ -217,7 +219,7 @@ test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans d�
       const { screen } = await renderStats();
       await expect.element(screen.getByRole("table")).toBeVisible();
       // Measured in the fonts of the site, not in those that stand in while they load.
-      await document.fonts.ready;
+      await fontsReady();
 
       // Still a table for a screen reader: the titles of its columns, a row for each runner.
       expect(screen.getByRole("columnheader").elements()).toHaveLength(6);
@@ -231,6 +233,12 @@ test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans d�
       expect(tileTitles(screen).map((title) => title?.textContent)).toEqual(titles);
       for (const title of tileTitles(screen)) {
         expect(title?.getBoundingClientRect().height).toBeGreaterThan(0);
+      }
+      // « 45 230 m », not « 45230m »: each space of a figure leaves a fifth of the size of its letters at least.
+      const figures = [...screen.container.querySelectorAll("td > span:first-child")];
+      expect(figures.map((figure) => plain(figure.textContent))).toContain("45 230 m");
+      for (const gap of figures.flatMap(spaceGaps)) {
+        expect(gap.em, `${plain(gap.text)} at ${width} px`).toBeGreaterThanOrEqual(0.2);
       }
       // Every name and every number whole, on the screen, and nothing that scrolls sideways.
       const cells = screen

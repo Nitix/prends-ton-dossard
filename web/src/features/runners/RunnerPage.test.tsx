@@ -10,12 +10,14 @@ import {
 import { ClientResponseError } from "pocketbase";
 import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { page } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice } from "../../test/busyButton";
+import { fontsReady } from "../../test/fontsReady";
 import { pixelURL } from "../../test/images";
 import { spokenText } from "../../test/spoken";
 import { EVENT_EXPAND } from "../events/api";
@@ -139,12 +141,27 @@ beforeEach(() => {
 /**
  * `kept` is the list of the runners that an earlier page left in the cache of
  * the app (it is good for 5 minutes): the page does not ask for it again, unless
- * the runner it is about is not in it.
+ * the runner it is about is not in it. `gutters` puts the page between the
+ * gutters that the app shell gives it on a phone (16 px on each side).
  */
-async function renderRunner(id: string = aliceRunner.id, kept?: Rec[], ageMs = 0) {
+async function renderRunner(
+  id: string = aliceRunner.id,
+  kept?: Rec[],
+  ageMs = 0,
+  { gutters = false } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (kept) queryClient.setQueryData(["runners"], kept, { updatedAt: Date.now() - ageMs });
-  const root = createRootRoute({ component: Outlet });
+  const root = createRootRoute({
+    component: () =>
+      gutters ? (
+        <div className="px-4">
+          <Outlet />
+        </div>
+      ) : (
+        <Outlet />
+      ),
+  });
   const runner = createRoute({
     getParentRoute: () => root,
     path: "/coureurs/$id",
@@ -249,6 +266,50 @@ test("RunnerPage — nom, à venir, bilan par année et historique", async () =>
   const link = history.getByRole("link", { name: "Cross de Mai" });
   await expect.element(link).toHaveAttribute("href", "/evenements/event0");
   expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+});
+
+test("RunnerPage — sur un téléphone de 320 px, le nom passe à la ligne entre ses mots, jamais au milieu d'un mot", async () => {
+  // Names whose first word did not fit beside the photo at 320 px.
+  const names = [
+    "Guillaume Pierson",
+    "Christophe Martin",
+    "Alexandre Dupont",
+    "Stéphanie Leroy",
+    "Maximilien Durand",
+  ];
+  await page.viewport(320, 700);
+  try {
+    for (const name of names) {
+      mocks.runners.mockResolvedValue([{ ...aliceRunner, name }]);
+      const { screen } = await renderRunner(aliceRunner.id, undefined, 0, { gutters: true });
+      const title = screen.getByRole("heading", { level: 1, name });
+      await expect.element(title).toBeVisible();
+      // Measured in the fonts of the site, not in those that stand in while they load.
+      await fontsReady();
+
+      // Each word on a single line: its letters sit on one line box.
+      const text = title.element().firstChild;
+      if (text?.nodeType !== Node.TEXT_NODE) throw new Error("the title is not a text");
+      for (const word of name.matchAll(/\S+/g)) {
+        const range = document.createRange();
+        range.setStart(text, word.index);
+        range.setEnd(text, word.index + word[0].length);
+        const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+        expect(lines.size, `« ${word[0]} » of « ${name} »`).toBe(1);
+      }
+      // Nothing goes past the title, nor into the padding of the sky around it.
+      const box = title.element().getBoundingClientRect();
+      const sky = title.element().closest("header")?.getBoundingClientRect();
+      expect(title.element().scrollWidth, `width of ${name}`).toBeLessThanOrEqual(
+        title.element().clientWidth,
+      );
+      expect(box.right, `right of ${name}`).toBeLessThanOrEqual((sky?.right ?? 0) - 20);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
+      await screen.unmount();
+    }
+  } finally {
+    await page.viewport(414, 896);
+  }
 });
 
 test("RunnerPage — demande les résultats de ce coureur, et les événements à venir", async () => {

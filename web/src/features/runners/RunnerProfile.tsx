@@ -48,17 +48,21 @@ export function RunnerProfile({ runnerId, extra }: { runnerId: string; extra?: R
             steep={1.15}
           />
         </span>
+        {/* On the narrowest phones (under 360 px) the photo is smaller and the name scales down
+            with the screen, so that a first name such as « Guillaume » or « Maximilien » fits
+            beside the photo: the name wraps between its words, never inside one. Only a word
+            that could not fit on a line of its own would still be broken (`break-words`). */}
         {runner && (
           <Avatar
             runner={runner}
             thumb="256x256"
-            className="avatar-soft relative size-24 shrink-0 text-3xl font-extrabold shadow-[0_0_0_4px_rgb(255_255_255/0.85),0_12px_30px_-10px_rgb(36_27_53/0.6)] md:size-28"
+            className="avatar-soft relative size-20 shrink-0 text-2xl font-extrabold shadow-[0_0_0_4px_rgb(255_255_255/0.85),0_12px_30px_-10px_rgb(36_27_53/0.6)] min-[22.5rem]:size-24 min-[22.5rem]:text-3xl md:size-28"
           />
         )}
         <h1
           ref={heading}
           tabIndex={-1}
-          className="relative min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.25rem]"
+          className="relative min-w-0 font-display text-[clamp(1.5rem,8vw,1.875rem)] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.25rem]"
         >
           {runner ? runner.name : t.runner.title}
         </h1>

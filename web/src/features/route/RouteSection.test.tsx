@@ -1,10 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { page } from "vitest/browser";
 
+import { SECTION } from "../../components/section";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
+import { fontsReady } from "../../test/fontsReady";
+import { spaceGaps } from "../../test/gaps";
 import { RouteSection } from "./RouteSection";
 
 // The colours and the sizes of the drawings are a matter of the styles.
@@ -78,12 +82,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function renderSection(format: FormatRecord, languages = ["fr"]) {
+/**
+ * The section, alone, or `inCard`: where the page of an event puts it on a
+ * phone, in the card of its format, between the gutters of the app shell.
+ */
+async function renderSection(format: FormatRecord, languages = ["fr"], { inCard = false } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const section = <RouteSection format={format} />;
   return render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
-        <RouteSection format={format} />
+        {inCard ? (
+          <div className="px-4">
+            <div className={SECTION}>{section}</div>
+          </div>
+        ) : (
+          section
+        )}
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -153,6 +168,60 @@ test("RouteSection — chiffres, carte, profil et liens", async () => {
   // They are tap targets.
   for (const link of [download, open]) {
     expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+/** An ultra: 171.5 km due north, 10 040 m up to the middle, then 9 000 m down. */
+const ULTRA = gpx(
+  Array.from({ length: 301 }, (_, i) => ({
+    lat: 45 + (1.5423 * i) / 300,
+    ele: i <= 150 ? 500 + (10_040 * i) / 150 : 10_540 - (9_000 * (i - 150)) / 150,
+  })),
+);
+
+test("RouteSection — sur un téléphone de 320 px, les grands chiffres gardent un vrai blanc entre les milliers et avant l'unité, dans leur tuile", async () => {
+  serve(ULTRA);
+  await page.viewport(320, 700);
+  try {
+    const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }), ["fr"], {
+      inCard: true,
+    });
+    await expect.element(screen.getByText(/D\+/)).toBeInTheDocument();
+    // The map is loaded on its own: the page is whole once it is there.
+    await expect.element(trackMap(screen)).toBeVisible();
+    // Measured in the fonts of the site, not in those that stand in while they load.
+    await fontsReady();
+
+    const tiles = [...figures(screen).children];
+    const values = tiles.map((tile) => {
+      const value = tile.querySelector(":scope > span:not(.sr-only)");
+      if (value === null) throw new Error("a tile has no figure");
+      return value;
+    });
+    expect(values.map((value) => plain(value.textContent))).toEqual([
+      "171,5 km",
+      "10 040 m",
+      "9 000 m",
+    ]);
+    for (const [i, value] of values.entries()) {
+      // « 10 040 m », not « 10040m »: each space leaves a fifth of the size of the letters at least.
+      const what = plain(value.textContent);
+      const gaps = spaceGaps(value);
+      expect(gaps.length, `spaces of ${what}`).toBeGreaterThan(0);
+      for (const gap of gaps) expect(gap.em, `a space of ${what}`).toBeGreaterThanOrEqual(0.2);
+      // On one line, inside its tile.
+      const range = document.createRange();
+      range.selectNodeContents(value);
+      const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+      expect(lines.size, `lines of ${what}`).toBe(1);
+      const box = value.getBoundingClientRect();
+      const tile = tiles[i]?.getBoundingClientRect();
+      expect(box.left, `left of ${what}`).toBeGreaterThanOrEqual(tile?.left ?? Infinity);
+      expect(box.right, `right of ${what}`).toBeLessThanOrEqual(tile?.right ?? -Infinity);
+    }
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
+  } finally {
+    await page.viewport(414, 896);
   }
 });
 
