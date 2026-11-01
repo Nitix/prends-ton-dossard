@@ -16,17 +16,43 @@ import "../../styles.css";
 type Rec = Record<string, unknown>;
 
 const mocks = vi.hoisted(() => ({
+  store: { record: null as Rec | null, listeners: new Set<() => void>() },
   send: vi.fn<(path: string, options: Rec) => Promise<unknown>>(),
 }));
 
-vi.mock("../../lib/pb", () => ({ pb: { send: mocks.send } }));
+/** Replaces the signed-in record and tells the listeners, as the auth store of the SDK does. */
+function setRecord(record: Rec | null) {
+  mocks.store.record = record;
+  for (const listener of mocks.store.listeners) listener();
+}
+
+vi.mock("../../lib/pb", () => ({
+  pb: {
+    authStore: {
+      // A new object on every read, like the SDK's LocalAuthStore.
+      get record() {
+        return mocks.store.record && { ...mocks.store.record };
+      },
+      onChange(listener: () => void) {
+        mocks.store.listeners.add(listener);
+        return () => mocks.store.listeners.delete(listener);
+      },
+    },
+    send: mocks.send,
+  },
+}));
 
 const PATH = "/api/app/calendar";
 const link = (n: number) => `https://courses.example.test/api/app/calendar/token-${n}.ics`;
 
+const ALICE = { id: "u1", collectionName: "users", role: "member" };
+const BOB = { id: "u2", collectionName: "users", role: "member" };
+
 beforeEach(() => {
   mocks.send.mockReset();
   vi.restoreAllMocks();
+  mocks.store.listeners.clear();
+  mocks.store.record = ALICE;
 });
 
 afterEach(() => {
@@ -83,11 +109,13 @@ function changes(): [unknown, unknown][] {
     .map(([, request]) => [request.method, request.body]);
 }
 
-function mount(languages: string[] = ["fr"]) {
+function newClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function mount(languages: string[] = ["fr"], client = newClient()) {
   return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <I18nProvider languages={languages}>
         <ToastProvider>
           <CalendarSection />
@@ -341,7 +369,8 @@ test("CalendarSection — Nouveau lien confirmé remplace le lien et le montre, 
   // It is the new link that is on the page, and it is the one there is: the
   // old one is not shown any more, and there is nothing to ask for.
   await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
-  expect(section(screen).element().textContent).not.toContain(link(0));
+  // A field's value is not part of the text of the page (textContent): it is read from the input.
+  expect(inputOf(field(screen)).value).toBe(link(1));
   await expect.element(button(screen, fr.calendar.renew)).toBeVisible();
   await expect.element(button(screen, fr.calendar.remove)).toBeVisible();
   expect(changes()).toEqual([["POST", { lang: "fr" }]]);
@@ -399,6 +428,118 @@ test("CalendarSection — un lien affiché puis supprimé ne reste pas à l'écr
     ["DELETE", undefined],
     ["POST", { lang: "fr" }],
   ]);
+});
+
+// --- A read that is on its way while the link changes ---
+
+/**
+ * Makes the next read of the status slow: it asks the server now, so it comes
+ * back with what the server says now, and it is let through when `release` is
+ * called. A read that was started before a change, and comes back after it.
+ */
+function holdNextRead() {
+  const real = mocks.send.getMockImplementation();
+  if (real === undefined) throw new Error("serve() first");
+  const gate = Promise.withResolvers<void>();
+  let held = false;
+  mocks.send.mockImplementation(async (path, request) => {
+    if (request.method !== "GET" || held) return real(path, request);
+    held = true;
+    const answer = await real(path, request);
+    await gate.promise;
+    return answer;
+  });
+  return gate.resolve;
+}
+
+/** Lets a late answer reach the page, if it is going to. */
+const settle = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 50);
+  });
+
+test("CalendarSection — un nouveau lien n'est pas remplacé par la lecture de l'ancien, arrivée en retard", async () => {
+  serve(KEPT);
+  const client = newClient();
+  const screen = await mount(["fr"], client);
+  await expect.element(button(screen, fr.calendar.renew)).toBeVisible();
+
+  // The window gets the focus back, and the status is read again: it is on its
+  // way, with the old address, when the member asks for a new link.
+  const release = holdNextRead();
+  void client.invalidateQueries({ queryKey: ["calendar"] });
+  await vi.waitFor(() => {
+    expect(client.isFetching()).toBe(1);
+  });
+  await button(screen, fr.calendar.renew).click();
+  await inDialog(screen, fr.calendar.renew).click();
+  await expectSelected(screen, link(1));
+
+  // The old read comes back now: what it says is not the link any more.
+  release();
+  await settle();
+  expect(inputOf(field(screen)).value).toBe(link(1));
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
+});
+
+test("CalendarSection — un lien supprimé ne revient pas avec la lecture de l'ancien, arrivée en retard", async () => {
+  serve(KEPT);
+  const client = newClient();
+  const screen = await mount(["fr"], client);
+  await expect.element(button(screen, fr.calendar.remove)).toBeVisible();
+
+  const release = holdNextRead();
+  void client.invalidateQueries({ queryKey: ["calendar"] });
+  await vi.waitFor(() => {
+    expect(client.isFetching()).toBe(1);
+  });
+  await button(screen, fr.calendar.remove).click();
+  await inDialog(screen, fr.calendar.remove).click();
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+
+  // The old read says there is a link: there is none.
+  release();
+  await settle();
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  await expect.element(section(screen).getByText(fr.calendar.exists)).not.toBeInTheDocument();
+});
+
+// --- The account ---
+
+test("CalendarSection — le statut d'un compte n'est pas montré à celui qui se connecte ensuite", async () => {
+  serve(KEPT);
+  const screen = await mount();
+  await button(screen, fr.calendar.show).click();
+  await expectSelected(screen, link(0));
+
+  // Another account signs in, over this session (the login page can be opened
+  // while signed in), and its status is slow to come: nothing of Alice's, her
+  // address included, is in the section meanwhile.
+  const bobs = Promise.withResolvers<unknown>();
+  mocks.send.mockReturnValue(bobs.promise);
+  setRecord(BOB);
+
+  await expect.element(section(screen).getByText(fr.common.loading)).toBeVisible();
+  await expect.element(field(screen)).not.toBeInTheDocument();
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
+  await expect.element(section(screen).getByText(fr.calendar.exists)).not.toBeInTheDocument();
+  expect(section(screen).element().innerHTML).not.toContain(link(0));
+
+  bobs.resolve(NONE);
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+});
+
+test("CalendarSection — le statut d'un compte, lu hors ligne par le suivant, reste illisible, sans reprendre l'ancien", async () => {
+  serve(KEPT);
+  const screen = await mount();
+  await expect.element(button(screen, fr.calendar.show)).toBeVisible();
+
+  mocks.send.mockRejectedValue(new TypeError("network"));
+  setRecord(BOB);
+
+  await expect.element(section(screen).getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expect.element(button(screen, fr.calendar.show)).not.toBeInTheDocument();
+  await expect.element(section(screen).getByText(fr.calendar.exists)).not.toBeInTheDocument();
 });
 
 // --- The language ---

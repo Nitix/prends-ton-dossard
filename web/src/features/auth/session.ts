@@ -169,6 +169,18 @@ export function isAdminSession(): boolean {
   return isUser(record) && record.role === "admin";
 }
 
+/**
+ * The id of the signed-in user, empty when nobody is (or when the account is not
+ * a member's). It follows the auth store, like `useSession`, without reading the
+ * runner: for the data that is the user's own, which a query keeps under a key
+ * with that id, so that it is not shown to the next account to sign in over
+ * this session.
+ */
+export function useUserId(): string {
+  const record = useSyncExternalStore(subscribe, currentRecord);
+  return isUser(record) ? record.id : "";
+}
+
 /** How long the runner of the user is kept: it only changes when an admin renames it. */
 const RUNNER_STALE_MS = 5 * 60_000;
 
