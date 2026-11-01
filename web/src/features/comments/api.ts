@@ -32,6 +32,14 @@ export const LATEST_COMMENTS_KEY = ["comments", "latest"] as const;
 const LATEST_COUNT = 5;
 
 /**
+ * The page of an event asks for its comments together with the event, and the
+ * section that shows them reads the same query when it appears, possibly
+ * after the event: a list that has just arrived is not asked for again then.
+ * A change always asks for it again (it invalidates the query).
+ */
+const JUST_FETCHED_MS = 10_000;
+
+/**
  * PocketBase sets `created` and `updated` of a new record with two reads of the
  * clock, which can be a millisecond apart: a comment is only called edited
  * when it was changed more than this long after it was written.
@@ -76,6 +84,7 @@ export function useComments(eventId: string): UseQueryResult<CommentView[]> {
       });
       return records.map(toCommentView);
     },
+    staleTime: JUST_FETCHED_MS,
   });
 }
 

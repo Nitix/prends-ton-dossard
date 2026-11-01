@@ -158,8 +158,8 @@ function Routed() {
 async function renderPage(
   options: {
     event?: Rec;
-    /** The answer of the server to the request of the event, when it is an error, or none. */
-    answer?: "pending" | Error;
+    /** The answer of the server to the request of the event, when it is an error or a pending one, or none. */
+    answer?: "pending" | Error | Promise<unknown>;
     languages?: string[];
     id?: string;
     /** The `YYYY-MM-DD` day it is: the event of the fixture is on 13 and 14 June. */
@@ -174,6 +174,7 @@ async function renderPage(
     today = TODAY,
   } = options;
   if (answer === "pending") mocks.getOne.mockReturnValue(new Promise(() => {}));
+  else if (answer instanceof Promise) mocks.getOne.mockReturnValue(answer);
   else if (answer) mocks.getOne.mockRejectedValue(answer);
   else mocks.getOne.mockResolvedValue(event);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -1915,6 +1916,30 @@ test("EventPage — pendant le chargement, elle le dit", async () => {
   const { screen } = await renderPage({ answer: "pending" });
 
   await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+});
+
+test("EventPage — les commentaires et les offres sont demandés en même temps que l'événement, pas une fois qu'il est arrivé", async () => {
+  const event = Promise.withResolvers<unknown>();
+  const { screen } = await renderPage({ answer: event.promise });
+
+  // The event has not answered, and both lists are on their way already.
+  await vi.waitFor(() => {
+    expect(mocks.comments.getFullList).toHaveBeenCalledTimes(1);
+    expect(mocks.offers.getFullList).toHaveBeenCalledTimes(1);
+  });
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  for (const list of [mocks.comments.getFullList, mocks.offers.getFullList]) {
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: expect.stringContaining("event") }),
+    );
+  }
+
+  // The sections read what the page already has: nothing is asked a second time.
+  event.resolve(eventRecord);
+  await loaded(screen);
+  await expect.element(screen.getByRole("region", { name: fr.comments.title(0) })).toBeVisible();
+  expect(mocks.comments.getFullList).toHaveBeenCalledTimes(1);
+  expect(mocks.offers.getFullList).toHaveBeenCalledTimes(1);
 });
 
 test("EventPage — un événement introuvable (404) le dit", async () => {

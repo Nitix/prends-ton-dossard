@@ -23,6 +23,14 @@ export type OfferView = { offer: OfferRecord; owner: RunnerRecord; members: Offe
 /** The offers of an event, of both kinds: one list that every change refreshes. */
 export const offersKey = (eventId: string) => ["offers", eventId] as const;
 
+/**
+ * The page of an event asks for its offers together with the event, and the
+ * sections that show them read the same query when they appear, possibly after
+ * the event: a list that has just arrived is not asked for again then. A change
+ * always asks for it again (it invalidates the query).
+ */
+const JUST_FETCHED_MS = 10_000;
+
 // What the server sends for `expand`. An expand that is empty is left out of
 // the record, hence the `?`: an offer where nobody has a place has no list of
 // them. But an offer cannot lose its owner (a runner who offers is never
@@ -63,6 +71,7 @@ export function useOffers(eventId: string): UseQueryResult<OfferView[]> {
       });
       return records.map(toOfferView);
     },
+    staleTime: JUST_FETCHED_MS,
   });
 }
 

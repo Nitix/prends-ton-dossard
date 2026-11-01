@@ -9,7 +9,9 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
+import { useComments } from "../comments/api";
 import { CommentsSection } from "../comments/CommentsSection";
+import { useOffers } from "../offers/api";
 import { OffersSection } from "../offers/OffersSection";
 import { AddSomeoneDialog } from "../participations/AddSomeoneDialog";
 import { JoinDialog } from "../participations/JoinDialog";
@@ -85,6 +87,11 @@ function titleOfParticipation(view: EventView, id: string): string | undefined {
 export function EventPage({ id }: { id: string }) {
   const { t } = useI18n();
   const query = useEvent(id);
+  // The comments and the offers are asked for with the event, not once it has arrived: the
+  // sections at the bottom of the page read these same queries (same keys), which are there
+  // by the time they appear, and the page makes one round trip instead of two.
+  useComments(id);
+  useOffers(id);
   const { user, runner, isAdmin } = useSession();
   // The actions need to know who the member is: no `me` while their runner loads.
   const me: Me | null = user && runner ? { userId: user.id, runnerId: runner.id, isAdmin } : null;
