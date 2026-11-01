@@ -347,7 +347,16 @@ func MergeFormats(app core.App, keepID, mergeID string, dryRun bool) (MergeResul
 				continue
 			}
 			p.Set("format", keep.Id)
-			if err := tx.Save(p); err != nil {
+			// Not validated: merging two copies of one race moves what the
+			// runners have acquired, and the status "finished" or "dnf" on a
+			// race that has not started (its day moved later since, or the kept
+			// copy has a later day) would be refused by validateStarted, after
+			// a dry run that said it works. Nothing else that the validation
+			// guards changes here: the status and the result stay, both formats
+			// are of the same event (checked above), and the runner is on the
+			// kept format once, which the unique index of the database enforces,
+			// not the validation.
+			if err := tx.SaveNoValidate(p); err != nil {
 				return err
 			}
 		}

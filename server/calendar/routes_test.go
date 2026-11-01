@@ -292,8 +292,9 @@ func request(t *testing.T, app *tests.TestApp, method, url string, user *core.Re
 	return header, text
 }
 
-// parseURL reads the address of a feed from the JSON answer of the calendar
-// routes, whose "url" it is, and checks it is the address of a feed.
+// parseURL reads the "url" of the JSON answer of the calendar routes. It does
+// not check what it is: pathOf checks that it is the address of a feed, and the
+// url is empty when there is none to show.
 func parseURL(t *testing.T, body string) string {
 	t.Helper()
 	var response struct {
@@ -435,6 +436,24 @@ func TestCalendarRoutes_Show(t *testing.T) {
 			t.Errorf("after a new link, the answer is exists %v, url %q, want true and %q", exists, url, appURL+made)
 		}
 		request(t, app, http.MethodGet, calendarURL+"/old.ics", nil, "", http.StatusNotFound)
+	})
+
+	t.Run("a token that is not the one of the hash is not shown", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		// What a renewal by an older version of the site leaves: it replaced
+		// the hash, which opens the feed, and not the token next to it. The
+		// address that the token makes opens nothing.
+		save(t, app, "calendar_feeds", map[string]any{
+			"user": fx.Alice.Id, "token": "stale", "token_hash": hashOf("fresh"), "lang": "fr",
+		})
+
+		if exists, url := shown(t, app, fx.Alice); !exists || url != "" {
+			t.Errorf("the answer is exists %v, url %q, want true and empty", exists, url)
+		}
+		// The link goes on working with the hash, as for a link without a token.
+		request(t, app, http.MethodGet, calendarURL+"/fresh.ics", nil, "", http.StatusOK)
+		request(t, app, http.MethodGet, calendarURL+"/stale.ics", nil, "", http.StatusNotFound)
 	})
 
 	t.Run("a deleted link has no address", func(t *testing.T) {

@@ -19,8 +19,8 @@ func init() {
 //   - The field is hidden, like the hash, and not required: the links made
 //     before the migration have no token, only a hash, and cannot be shown. The
 //     member makes a new one. The rules stay null: only the routes of the
-//     calendar package read and write the table, so the collection API never
-//     shows a token.
+//     calendar package read and write the table, so no API response to a member
+//     shows a token (a superuser sees the hidden fields).
 //   - A copy of the database now holds working links. The table is read by the
 //     routes only, and the token only opens the races and the deadlines of its
 //     owner (see calendar.Register).

@@ -246,7 +246,8 @@ func validate(app core.App, p *core.Record) error {
 // to "dnf" is a new status, which is checked.
 //
 // It runs once validate has found the format and the event, and has refused a
-// status of a race when there is no format: they are not looked for again.
+// status of a race when there is no format: they exist, and the participation
+// has a format. raceDay reads them again for their days.
 func validateStarted(app core.App, p *core.Record) error {
 	status := p.GetString("status")
 	if status != statusFinished && status != statusDNF {

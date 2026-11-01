@@ -26,8 +26,9 @@ func init() {
 //     the routes of the calendar package get its validation, and its error
 //     codes, by saving a record.
 //   - All the rules are null (the collection is created with them): only the
-//     routes of the calendar package read and write the table, so that the
-//     collection API never shows the hash of a token.
+//     routes of the calendar package read and write the table, so that no API
+//     response to a member shows the hash of a token (a superuser sees the
+//     hidden fields).
 func upCalendarFeeds(app core.App) error {
 	users, err := app.FindCollectionByNameOrId("users")
 	if err != nil {

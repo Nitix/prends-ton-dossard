@@ -68,8 +68,10 @@ func feedURL(cfg config.Config, token string) string {
 }
 
 // existsRoute says whether the account has a link, and its address. The address
-// is empty when there is no link, and when the link was made before the token
-// was kept: only its hash exists, which is no address.
+// is empty when there is no link, when the link was made before the token was
+// kept (only its hash exists, which is no address), and when the token is not
+// the one of the hash: the feed is found by the hash, so an address made of
+// another token would open nothing.
 func existsRoute(cfg config.Config) func(*core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		link, err := e.App.FindFirstRecordByData("calendar_feeds", "user", e.Auth.Id)
@@ -80,7 +82,7 @@ func existsRoute(cfg config.Config) func(*core.RequestEvent) error {
 			return e.InternalServerError("", err)
 		}
 		url := ""
-		if token := link.GetString("token"); token != "" {
+		if token := link.GetString("token"); token != "" && invitations.Hash(token) == link.GetString("token_hash") {
 			url = feedURL(cfg, token)
 		}
 		return e.JSON(http.StatusOK, map[string]any{"exists": true, "url": url})

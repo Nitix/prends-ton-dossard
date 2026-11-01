@@ -295,6 +295,20 @@ func storedOffers(t testing.TB, app core.App) []*core.Record {
 	return offers
 }
 
+// finishedSamOnAFormatToCome is a hook that leaves Sam a finisher of F15, and
+// then moves the event and F42 to a day far in the future: the race of F42 has
+// not been run, and the one of F15 (no day of its own, so the first day of the
+// event) neither. Sam finished F15 when it had been run, and the event moved
+// later since. The days move in an order that keeps every save valid: F42 gives
+// up its day, the event moves, F42 takes the new day.
+func finishedSamOnAFormatToCome(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+	t.Helper()
+	setFields(t, app, "participations", fx.P3.Id, map[string]any{"status": "finished"})
+	setFields(t, app, "formats", fx.F42.Id, map[string]any{"date": ""})
+	setFields(t, app, "events", fx.Event.Id, map[string]any{"start_date": "2099-06-13", "end_date": "2099-06-14"})
+	setFields(t, app, "formats", fx.F42.Id, map[string]any{"date": "2099-06-14"})
+}
+
 // withRoute is a hook that gives the format a GPX track of that many points
 // (none for 0) and a link to its route (none for ""). Two tracks differ by their
 // number of points, and two links by their text.
@@ -1102,6 +1116,56 @@ func TestMergeFormats(t *testing.T) {
 			},
 		},
 		{
+			// Merging two copies of one race moves the participations to the copy
+			// that is kept: what a runner has acquired goes along (the spec of
+			// the statuses leaves a participation that already has its status
+			// alone when its race moves). The preview said it would work.
+			Name:     "a finisher moves onto a kept format that has not been run: still finished",
+			Before:   finishedSamOnAFormatToCome,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				sam := mustStore(t, app, "participations", fx.P3.Id)
+				if sam.GetString("format") != fx.F42.Id || sam.GetString("status") != "finished" {
+					t.Errorf("Sam is %q on the format %q, want finished on F42 %q", sam.GetString("status"), sam.GetString("format"), fx.F42.Id)
+				}
+				gone(t, app, "formats", fx.F15)
+			},
+		},
+		{
+			// Whatever a merge saves is validated, and a record that does not hold
+			// together is the caller's problem to fix, not a server error. Here
+			// the kept format has a day outside of its event (a write that went
+			// round the validation), and the track of the other one is carried
+			// to it.
+			Name: "a record that the merge saves and that does not validate is a 400",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				withRoute(f15, 0, "https://www.komoot.com/tour/15")(t, app, fx)
+				f42 := mustStore(t, app, "formats", fx.F42.Id)
+				f42.Set("date", "2026-07-01")
+				if err := app.SaveNoValidate(f42); err != nil {
+					t.Fatal(err)
+				}
+			},
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeFormats),
+			Body:     merge(id(f42), id(f15), false),
+			Status:   http.StatusBadRequest,
+			Contains: []string{`"date":{"code":"format_date_out_of_range"`},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				// Undone: F15 is still there, with its participation.
+				mustStore(t, app, "formats", fx.F15.Id)
+				if got := mustStore(t, app, "participations", fx.P3.Id).GetString("format"); got != fx.F15.Id {
+					t.Errorf("Sam is on the format %q, want F15 %q", got, fx.F15.Id)
+				}
+			},
+		},
+		{
 			Name:     "a runner on both formats keeps the winning participation: the kept one",
 			Before:   aliceOnF15("finished", false),
 			As:       "admin",
@@ -1751,6 +1815,25 @@ func TestMerge_DryRunGivesTheResultOfTheRealRun(t *testing.T) {
 			got, err := admin.MergeFormats(app, fx.F42.Id, fx.F15.Id, dryRun)
 			if err != nil {
 				t.Fatal(err)
+			}
+			results[i] = got
+		}
+		if results[0] != results[1] {
+			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
+		}
+		if want := (admin.MergeResult{MovedParticipations: 1, DroppedParticipations: 1}); results[1] != want {
+			t.Errorf("result = %+v, want %+v", results[1], want)
+		}
+	})
+
+	t.Run("formats with a finisher moving onto a format that has not been run", func(t *testing.T) {
+		var results [2]admin.MergeResult
+		for i, dryRun := range []bool{true, false} {
+			app, fx := setup(t)
+			finishedSamOnAFormatToCome(t, app, fx)
+			got, err := admin.MergeFormats(app, fx.F42.Id, fx.F15.Id, dryRun)
+			if err != nil {
+				t.Fatalf("dry run = %v: %v", dryRun, err)
 			}
 			results[i] = got
 		}

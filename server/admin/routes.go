@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	validation "ganigeorgiev.com/pocketbase/ozzo-validation/v4"
 	"ganigeorgiev.com/pocketbase/pocketbase/apis"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/router"
@@ -49,6 +50,13 @@ func mergeRoute(merge func(app core.App, keepID, mergeID string, dryRun bool) (M
 			// other one is the server's.
 			var apiErr *router.ApiError
 			if errors.As(err, &apiErr) {
+				return err
+			}
+			// A record that the merge saves and that does not validate: the data
+			// is what is wrong, and the admin can fix it, so it is a 400 with the
+			// code of the field, not a server error.
+			var invalid validation.Errors
+			if errors.As(err, &invalid) {
 				return err
 			}
 			return e.InternalServerError("", err)
