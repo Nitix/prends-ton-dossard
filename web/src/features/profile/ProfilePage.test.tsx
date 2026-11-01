@@ -199,6 +199,9 @@ beforeEach(() => {
 /** The page, in a router that knows the pages it links to. */
 async function renderProfile() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The runner of the session is asked again before it is given up (see
+  // useSession), and the tests do not wait for the delays.
+  queryClient.setQueryDefaults(["runner"], { retryDelay: 0 });
   const root = createRootRoute({ component: Outlet });
   const profile = createRoute({
     getParentRoute: () => root,
@@ -247,12 +250,16 @@ function section(screen: Screen, title: string) {
   return screen.getByRole("region", { name: title, exact: true });
 }
 
-/** The lines of each race of « Mes prochaines courses », as they look. */
+/**
+ * The lines of each race of « Mes prochaines courses », as they look: the
+ * event, the race and the status, the day (the long one: there is no countdown
+ * on the profile), and what is not confirmed.
+ */
 function upcomingRows(screen: Screen): string[][] {
   return section(screen, fr.profile.upcoming)
     .getByRole("listitem")
     .elements()
-    .map((item) => [...item.children].map((line) => plain(line.textContent)));
+    .map((item) => [...item.querySelectorAll("h3, p")].map((line) => plain(line.textContent)));
 }
 
 /** The second element is after the first in the page. */
@@ -539,11 +546,45 @@ test("ProfilePage — une panne en cherchant le coureur de la session n'est pas 
 
   const { screen } = await renderProfile();
 
-  await vi.waitFor(() => {
-    expect(mocks.sessionRunner).toHaveBeenCalledOnce();
-  });
+  // Not before the request has failed for good: the page says so, and only then
+  // is it known that it does not say « Ce compte n'a pas de coureur » either.
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
   await expect.element(screen.getByRole("link", { name: fr.profile.settings })).toBeVisible();
   await expect.element(screen.getByText(fr.profile.noRunner)).not.toBeInTheDocument();
+});
+
+test("ProfilePage — une panne en cherchant le coureur de la session se dit, se redemande, et le focus va au titre", async () => {
+  mocks.sessionRunner.mockRejectedValue(new TypeError("Failed to fetch"));
+  const { screen } = await renderProfile();
+
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  // Asked again, three times, before it is given up: not a « Chargement… » for ever.
+  expect(mocks.sessionRunner).toHaveBeenCalledTimes(4);
+  await expect.element(screen.getByText(fr.common.loading)).not.toBeInTheDocument();
+  const answer = Promise.withResolvers<unknown>();
+  mocks.sessionRunner.mockReturnValue(answer.promise);
+
+  await screen.getByRole("button", { name: fr.common.retry }).click();
+
+  // The button goes with the request: the title has the focus, not the page.
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  const title = screen.getByRole("heading", { level: 1, name: fr.nav.profile });
+  await expect.element(title).toHaveFocus();
+  expect(title.element().getAttribute("tabindex")).toBe("-1");
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+  answer.resolve(aliceRunner);
+  await expect.element(screen.getByRole("heading", { level: 1, name: "Alice" })).toBeVisible();
+});
+
+test("ProfilePage — « Ce compte n'a pas de coureur » (404) se dit tout de suite : la demande n'est pas répétée", async () => {
+  mocks.sessionRunner.mockRejectedValue(new ClientResponseError({ status: 404, response: {} }));
+
+  const { screen } = await renderProfile();
+
+  await expect.element(screen.getByText(fr.profile.noRunner)).toBeVisible();
+  // A runner that is not there will not be there the next time: once.
+  expect(mocks.sessionRunner).toHaveBeenCalledOnce();
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
 });
 
 test("ProfilePage — pendant que le coureur de la session charge : le titre et le lien « Réglages » sont là, sans « Ce compte n'a pas de coureur »", async () => {

@@ -184,22 +184,34 @@ export function useUserId(): string {
 /** How long the runner of the user is kept: it only changes when an admin renames it. */
 const RUNNER_STALE_MS = 5 * 60_000;
 
+/** How many times the runner of the user is asked for again after a failure. */
+const RUNNER_RETRIES = 3;
+
+/** Whether the server says there is no such record: the answer of a runner that is not there. */
+function isNotFound(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404;
+}
+
 /**
  * The signed-in user and their runner. `user` is null when nobody is signed
  * in, `runner` while it is loading. Both follow the auth store, so a sign-in,
  * a sign-out or a renewal re-renders the components that read them.
  *
  * `runner` is also null when there is none to find: `runnerMissing` tells that
- * from the wait (and from a failure to ask, which leaves it open). It is true
- * for an account of another kind than the members (the super-admin of
- * PocketBase), and for a member whose runner the server says is not there.
- * `signedIn` is true for any account, that one included: `user` is null for it,
- * as it is for nobody.
+ * from the wait and from a failure to ask. It is true for an account of another
+ * kind than the members (the super-admin of PocketBase), and for a member whose
+ * runner the server says is not there (404, which is not asked again: it is
+ * the answer). A failure for any other reason is asked again a few times, then
+ * said by `runnerFailed` (not a runner that is missing, and not a wait either),
+ * and `refetchRunner` asks once more. `signedIn` is true for any account, that
+ * one included: `user` is null for it, as it is for nobody.
  */
 export function useSession(): {
   user: UserRecord | null;
   runner: RunnerRecord | null;
   runnerMissing: boolean;
+  runnerFailed: boolean;
+  refetchRunner: () => Promise<unknown>;
   signedIn: boolean;
   isAdmin: boolean;
 } {
@@ -207,7 +219,11 @@ export function useSession(): {
   const user = isUser(record) ? record : null;
   const userId = user?.id ?? "";
 
-  const { data: runner, error: runnerError } = useQuery({
+  const {
+    data: runner,
+    error: runnerError,
+    refetch,
+  } = useQuery({
     queryKey: ["runner", userId],
     queryFn: () =>
       pb
@@ -215,14 +231,18 @@ export function useSession(): {
         .getFirstListItem<RunnerRecord>(pb.filter("user = {:id}", { id: userId })),
     enabled: userId !== "",
     staleTime: RUNNER_STALE_MS,
+    // A 404 is the answer (there is no runner), and waiting for three more of
+    // them would keep the page loading for several seconds.
+    retry: (failureCount, error) => !isNotFound(error) && failureCount < RUNNER_RETRIES,
   });
 
   return {
     user,
     runner: runner ?? null,
-    runnerMissing:
-      record !== null &&
-      (user === null || (runnerError instanceof ClientResponseError && runnerError.status === 404)),
+    runnerMissing: record !== null && (user === null || isNotFound(runnerError)),
+    // A refresh that fails keeps the runner that is there: nothing failed to show.
+    runnerFailed: runner === undefined && runnerError !== null && !isNotFound(runnerError),
+    refetchRunner: refetch,
     signedIn: record !== null,
     isAdmin: user?.role === "admin",
   };

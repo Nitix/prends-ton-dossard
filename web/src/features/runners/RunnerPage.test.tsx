@@ -277,6 +277,34 @@ test("RunnerPage — la page d'un autre coureur montre ses participations à lui
   await expect.element(upcoming.getByText(fr.event.unconfirmed)).toBeVisible();
 });
 
+test("RunnerPage — une participation sans épreuve d'un événement en cours y reste jusqu'à son dernier jour", async () => {
+  mocks.results.mockResolvedValue([]);
+  // From yesterday to today: the event has started, and it is its last day.
+  const underway = {
+    ...eventRecord,
+    id: "eventUnderway",
+    name: "Week-end du Vercors",
+    start_date: "2026-10-31",
+    end_date: TODAY,
+    expand: {
+      formats_via_event: [],
+      participations_via_event: [
+        { ...p2, id: "pUnderwayBob", event: "eventUnderway", format: "", status: "interested" },
+      ],
+    },
+  };
+  mocks.events.mockResolvedValue([underway]);
+
+  const { screen } = await renderRunner(bobRunner.id);
+
+  const upcoming = section(screen, fr.runner.upcoming);
+  await expect.element(upcoming.getByRole("link", { name: "Week-end du Vercors" })).toBeVisible();
+  await expect.element(upcoming.getByText(fr.event.formatToChoose, { exact: false })).toBeVisible();
+  // Dated by its first day, and on today.
+  await expect.element(upcoming.getByText("sam. 31 oct.")).toBeVisible();
+  await expect.element(upcoming.getByText("aujourd’hui")).toBeVisible();
+});
+
 test("RunnerPage — un coureur sans résultat", async () => {
   mocks.results.mockResolvedValue([]);
   // Sam is on nothing to come either.

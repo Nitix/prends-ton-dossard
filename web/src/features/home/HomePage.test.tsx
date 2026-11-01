@@ -1715,12 +1715,30 @@ test("MyUpcoming — les épreuves et les événements sans épreuve sont triés
   ]);
 });
 
-test("MyUpcoming — une participation sans épreuve d'un événement déjà commencé n'y est plus", async () => {
+test("MyUpcoming — une participation sans épreuve d'un événement en cours y reste jusqu'à son dernier jour, datée du premier", async () => {
   signIn("nina");
-  // The event runs from the 13th to the 14th of June: on the 14th it has started.
+  // The event runs from the 13th to the 14th of June: on the 14th, its last
+  // day, it is still on (as it is on the profile and on the page of a runner).
   mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
 
   const { screen } = await renderHome({ today: "2026-06-14" });
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  const row = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  // Dated by the first day, which is behind: nothing to count, it is on today.
+  await expect.element(row.getByText("sam. 13 juin", { exact: true })).toBeVisible();
+  await expect.element(row.getByText("aujourd’hui")).toBeVisible();
+  expect(plain(row.element().textContent)).toContain(
+    `${fr.event.formatToChoose} · ${fr.status.interested}`,
+  );
+});
+
+test("MyUpcoming — une participation sans épreuve d'un événement n'y est plus le lendemain de son dernier jour", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
+
+  const { screen } = await renderHome({ today: "2026-06-15" });
 
   await expect.element(upcomingBlock(screen).getByText(fr.home.upcomingEmpty)).toBeVisible();
 });
@@ -1801,12 +1819,24 @@ test("MyUpcoming — un supporteur est trié avec les épreuves, à la date de d
   expect(plain(rows.elements()[1]?.textContent ?? "")).toContain("dans 51 jours");
 });
 
-test("MyUpcoming — un supporteur d'un événement déjà commencé n'y est plus", async () => {
+test("MyUpcoming — un supporteur d'un événement en cours y reste jusqu'à son dernier jour", async () => {
   signIn("nina");
-  // The event runs from the 13th to the 14th of June: on the 14th it has started.
+  // The event runs from the 13th to the 14th of June: on the 14th, its last day, one still comes to cheer.
   mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
 
   const { screen } = await renderHome({ today: "2026-06-14" });
+
+  const row = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  await expect.element(row.getByText(fr.status.supporter, { exact: true })).toBeVisible();
+  await expect.element(row.getByText("aujourd’hui")).toBeVisible();
+});
+
+test("MyUpcoming — un supporteur d'un événement n'y est plus le lendemain de son dernier jour", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+
+  const { screen } = await renderHome({ today: "2026-06-15" });
 
   await expect.element(upcomingBlock(screen).getByText(fr.home.upcomingEmpty)).toBeVisible();
 });

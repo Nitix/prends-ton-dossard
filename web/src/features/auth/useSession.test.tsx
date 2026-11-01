@@ -121,23 +121,43 @@ test("useSession — ignore un enregistrement qui n'est pas d'un utilisateur", a
 });
 
 function StateProbe() {
-  const { runner, signedIn, runnerMissing } = useSession();
+  const { runner, signedIn, runnerMissing, runnerFailed, refetchRunner } = useSession();
   return (
-    <p data-testid="state">
-      {signedIn ? "signed in" : "signed out"} / {runnerMissing ? "missing" : "not missing"} /{" "}
-      {runner ? "runner" : "no runner"}
-    </p>
+    <>
+      <p data-testid="state">
+        {signedIn ? "signed in" : "signed out"} / {runnerMissing ? "missing" : "not missing"} /{" "}
+        {runner ? "runner" : "no runner"}
+        {runnerFailed ? " / failed" : ""}
+      </p>
+      <button type="button" onClick={() => void refetchRunner()}>
+        Retry
+      </button>
+    </>
   );
 }
 
-function renderState() {
+/** The client of a test, which holds the state of the queries for it to read. */
+function newClient() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The runner is asked again before it is given up (see useSession), and the
+  // tests do not wait for the delays.
+  client.setQueryDefaults(["runner"], { retryDelay: 0 });
+  return client;
+}
+
+function renderState(client = newClient()) {
   return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <StateProbe />
     </QueryClientProvider>,
   );
+}
+
+/** Waits until the request for the runner of the user has failed for good. */
+async function settledInError(client: QueryClient, userId = "u1") {
+  await vi.waitFor(() => {
+    expect(client.getQueryState(["runner", userId])?.status).toBe("error");
+  });
 }
 
 const notFound = () => new ClientResponseError({ status: 404, response: {} });
@@ -166,29 +186,54 @@ test("useSession — le coureur n'est pas manquant tant que sa requête est en c
     .toHaveTextContent("signed in / not missing / runner");
 });
 
-test("useSession — un membre dont le serveur dit qu'il n'a pas de coureur (404) : connecté, coureur manquant", async () => {
+test("useSession — un membre dont le serveur dit qu'il n'a pas de coureur (404) : connecté, coureur manquant, et la demande n'est pas répétée", async () => {
   store.record = alice;
   store.getFirstListItem.mockRejectedValue(notFound());
+  const client = newClient();
 
-  const screen = await renderState();
+  const screen = await renderState(client);
 
   await expect
     .element(screen.getByTestId("state"))
     .toHaveTextContent("signed in / missing / no runner");
+  await settledInError(client);
+  // A runner that is not there will not be there the next time: asked once, and
+  // it is not a failure to ask again for.
+  expect(store.getFirstListItem).toHaveBeenCalledOnce();
+  await expect.element(screen.getByTestId("state")).not.toMatchTextContent("failed");
 });
 
-test("useSession — une panne en cherchant le coureur n'est pas une absence", async () => {
+test("useSession — une panne en cherchant le coureur n'est pas une absence : redemandée trois fois, puis dite", async () => {
   store.record = alice;
   store.getFirstListItem.mockRejectedValue(new TypeError("Failed to fetch"));
+  const client = newClient();
 
-  const screen = await renderState();
+  const screen = await renderState(client);
 
-  await vi.waitFor(() => {
-    expect(store.getFirstListItem).toHaveBeenCalledOnce();
-  });
+  // Not before the request has settled in error: until then the state is the
+  // one of the wait, which would pass for « not missing » all the same.
+  await settledInError(client);
   await expect
     .element(screen.getByTestId("state"))
-    .toHaveTextContent("signed in / not missing / no runner");
+    .toHaveTextContent("signed in / not missing / no runner / failed");
+  expect(store.getFirstListItem).toHaveBeenCalledTimes(4);
+});
+
+test("useSession — « refetchRunner » redemande le coureur après une panne", async () => {
+  store.record = alice;
+  store.getFirstListItem.mockRejectedValue(new TypeError("Failed to fetch"));
+  const client = newClient();
+  const screen = await renderState(client);
+  await settledInError(client);
+  await expect.element(screen.getByTestId("state")).toMatchTextContent("failed");
+
+  store.getFirstListItem.mockResolvedValue({ id: "r1", name: "Alice", user: "u1" });
+  await screen.getByRole("button", { name: "Retry" }).click();
+
+  await expect
+    .element(screen.getByTestId("state"))
+    .toHaveTextContent("signed in / not missing / runner");
+  await expect.element(screen.getByTestId("state")).not.toMatchTextContent("failed");
 });
 
 test("useSession — un compte qui n'est pas un membre est connecté, sans coureur, et on n'en cherche pas", async () => {

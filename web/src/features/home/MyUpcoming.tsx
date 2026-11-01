@@ -11,7 +11,7 @@ import { starters } from "../events/participants";
 
 const SEPARATOR = " · ";
 
-type Upcoming = {
+export type Upcoming = {
   event: EventView["event"];
   /** Absent for a participation on the event alone ("format to choose", or supporter). */
   formatView?: FormatView;
@@ -28,18 +28,26 @@ function mine(list: ParticipationView[], runnerId: string): ParticipationRecord[
 }
 
 /**
- * The participations of a runner (but the "not starting" ones) on a day that
- * is today or later, the nearest first. The day is the one of the format: on
- * an event of several days, a format that has been run is behind, whatever the
- * end of its event. A participation with no format (interested, or supporter)
- * is on the start of its event: it is behind once the event has started.
+ * The participations of a runner (but the "not starting" ones) that are not
+ * behind, the nearest first: the one list of « Mes prochaines courses », on the
+ * home page, on the profile and on the page of a runner.
+ *
+ * On a format, it is the day of the format that counts: on an event of several
+ * days, a format that has been run is behind, whatever the end of its event. A
+ * participation on the event alone (interested with no format yet, or
+ * supporter) has no day of its own: it is there until the last day of its
+ * event, and sorted on the first.
  */
-function upcomingOf(views: EventView[], runnerId: string, today: Temporal.PlainDate): Upcoming[] {
-  const upcoming = (date: Temporal.PlainDate) => Temporal.PlainDate.compare(date, today) >= 0;
+export function upcomingOf(
+  views: EventView[],
+  runnerId: string,
+  today: Temporal.PlainDate,
+): Upcoming[] {
+  const notBehind = (day: Temporal.PlainDate) => Temporal.PlainDate.compare(day, today) >= 0;
   return views
-    .flatMap(({ event, formats, interested, supporters, start }) => [
+    .flatMap(({ event, formats, interested, supporters, start, end }) => [
       ...formats
-        .filter(({ date }) => upcoming(date))
+        .filter(({ date }) => notBehind(date))
         .flatMap((formatView) =>
           mine(formatView.participations, runnerId).map((participation) => ({
             event,
@@ -49,7 +57,7 @@ function upcomingOf(views: EventView[], runnerId: string, today: Temporal.PlainD
           })),
         ),
       // On the event alone: the interested with no format, and the supporters.
-      ...(upcoming(start)
+      ...(notBehind(end)
         ? [...mine(interested, runnerId), ...mine(supporters, runnerId)].map((participation) => ({
             event,
             participation,
@@ -90,10 +98,10 @@ export function MyUpcoming({
 }
 
 /**
- * The races a runner is down for in the events that are to come, with the days
- * left, under `title`. `empty` is what is said when there are none: without
- * it, a runner who has none has no section (the page of another runner has
- * nothing to tell the user to do about it).
+ * The races a runner is down for in the events that are to come (see
+ * `upcomingOf`), with the days left, under `title`. `empty` is what is said when
+ * there are none: without it, a runner who has none has no section (the page of
+ * another runner has nothing to tell the user to do about it).
  *
  * A participation the runner has not confirmed is here too, dashed and said in
  * words: it is part of their plans until they refuse it. So is one with no
@@ -129,7 +137,7 @@ export function UpcomingSection({
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (
-            <UpcomingRow key={row.participation.id} row={row} today={today} />
+            <UpcomingRow key={row.participation.id} row={row} today={today} dateStyle="countdown" />
           ))}
         </ul>
       )}
@@ -137,7 +145,26 @@ export function UpcomingSection({
   );
 }
 
-function UpcomingRow({ row, today }: { row: Upcoming; today: Temporal.PlainDate }) {
+/** How a row says its day: the date and the days left, or the long date alone. */
+export type DateStyle = "countdown" | "long";
+
+/**
+ * A race a runner is down for: its event (a link to its page), the format and
+ * the status, in words, and its day: the short date and the days left
+ * (`countdown`), or the long date alone (`long`). A participation the runner has
+ * not confirmed is dashed and says so in words. The days left are not counted
+ * from a day that is behind: an event that is under way, for a participation on
+ * the event alone, is on today.
+ */
+export function UpcomingRow({
+  row,
+  today,
+  dateStyle,
+}: {
+  row: Upcoming;
+  today: Temporal.PlainDate;
+  dateStyle: DateStyle;
+}) {
   const { t, f } = useI18n();
   const { event, formatView, participation, date } = row;
   const confirmed = participation.confirmed;
@@ -167,11 +194,17 @@ function UpcomingRow({ row, today }: { row: Upcoming; today: Temporal.PlainDate 
           {what !== undefined && `${what}${SEPARATOR}`}
           {t.status[participation.status]}
         </p>
-        <p className="text-sm text-neutral-600">{f.date(date)}</p>
+        <p className="text-sm text-neutral-600">
+          {dateStyle === "long" ? f.dateLong(date) : f.date(date)}
+        </p>
         {!confirmed && <p className="text-sm text-neutral-600">{t.event.unconfirmed}</p>}
       </div>
       {/* The words are the countdown: nothing here is told by a colour. */}
-      <p className="shrink-0 pt-3 text-sm font-medium">{f.inDays(daysBetween(today, date))}</p>
+      {dateStyle === "countdown" && (
+        <p className="shrink-0 pt-3 text-sm font-medium">
+          {f.inDays(Math.max(0, daysBetween(today, date)))}
+        </p>
+      )}
     </li>
   );
 }
