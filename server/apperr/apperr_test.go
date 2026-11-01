@@ -71,9 +71,11 @@ func TestCodes_FrontEndContract(t *testing.T) {
 		"forbidden", "format_date_out_of_range", "format_measure_required", "format_other_event",
 		"format_required", "invitation_invalid", "invitation_kind_mismatch", "last_admin",
 		"merge_formats_different_events", "merge_same_record", "not_found",
+		"offer_already_member", "offer_full", "offer_owner_member", "offer_seats_below_members",
+		"offer_seats_required",
 		"passkey_failed", "passkey_session_expired", "password_mismatch", "password_too_short", "price_invalid",
 		"race_type_in_use", "registration_deadline_after_start", "runner_has_account",
-		"runner_has_participations", "supporter_with_format", "wrong_password",
+		"runner_has_participations", "supporter_with_format", "time_invalid", "wrong_password",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("codes in codes.go:\n got %v\nwant %v", got, want)

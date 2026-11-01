@@ -117,7 +117,8 @@ func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
 // one runner who is interested in an event without having chosen a race, and
 // one supporter.
 // Two of the events to come have a registration deadline, and three of their
-// races have a price. The first of them has two comments, Alice's then Bob's.
+// races have a price. The first of them has two comments, Alice's then Bob's,
+// a car of Bob with Alice in it and a lodging of Alice with Bob in it.
 //
 // Every date comes from today, so the same day gives the same data. It refuses
 // when an account exists, and writes nothing when it fails.
@@ -259,6 +260,41 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			return fmt.Errorf("the comment of %s: %w", entry.author, err)
 		}
 	}
+
+	// The cars and the lodgings, and the people in them. The request hooks do
+	// not run here, so the owner and who added a place are set by hand.
+	for _, entry := range event.offers {
+		if err := seedOffer(app, saved, runners, entry); err != nil {
+			return fmt.Errorf("the offer of %s: %w", entry.owner, err)
+		}
+	}
+	return nil
+}
+
+// seedOffer saves an offer on event, and the places that entry puts people in.
+func seedOffer(app core.App, event *core.Record, runners map[string]*core.Record, entry offerSpec) error {
+	offer, err := create(app, "offers", map[string]any{
+		"event":    event.Id,
+		"kind":     entry.kind,
+		"owner":    runners[entry.owner].Id,
+		"place":    entry.place,
+		"seats":    entry.seats,
+		"date":     entry.date,
+		"time":     entry.time,
+		"end_date": entry.endDate,
+	})
+	if err != nil {
+		return err
+	}
+	for _, place := range entry.places {
+		if _, err := create(app, "offer_members", map[string]any{
+			"offer":    offer.Id,
+			"runner":   runners[place.runner].Id,
+			"added_by": runners[place.addedBy].Id,
+		}); err != nil {
+			return fmt.Errorf("the place of %s: %w", place.runner, err)
+		}
+	}
 	return nil
 }
 
@@ -299,6 +335,25 @@ type eventSpec struct {
 	undecided []entrySpec
 	// comments are written by runners who have an account, oldest first.
 	comments []commentSpec
+	// offers are the cars and the lodgings for the event, with their places.
+	offers []offerSpec
+}
+
+// offerSpec describes an offer of the demo: a car (ride) or a lodging that its
+// owner proposes for the event, and who has a place in it. The days are
+// YYYY-MM-DD; the time is HH:MM, for a car; the end date is for a lodging.
+type offerSpec struct {
+	kind, owner, place string
+	seats              int // 0 for a lodging without a limit
+	date, time         string
+	endDate            string
+	places             []placeSpec
+}
+
+// placeSpec describes who has a place in an offer, and who put them there: the
+// runner themselves, or the owner of the offer.
+type placeSpec struct {
+	runner, addedBy string
 }
 
 // commentSpec describes a comment of the demo: who wrote it, what it says, and
@@ -374,6 +429,19 @@ func demoEvents(today time.Time) []eventSpec {
 			comments: []commentSpec{
 				{runnerAlice, "La navette part de la gare à 6 h 30. On se retrouve devant à 6 h 15 ?", at(-2, 19, 5)},
 				{runnerBob, "Parfait pour moi.\nJ'apporte des gels pour le long.", at(-1, 8, 20)},
+			},
+			offers: []offerSpec{
+				// Bob drives from Lyon the evening before, and Alice takes a seat.
+				{
+					kind: "ride", owner: runnerBob, place: "Lyon, Part-Dieu", seats: 3, date: in(8), time: "18:00",
+					places: []placeSpec{{runnerAlice, runnerAlice}},
+				},
+				// Alice has booked a lodging for the night before and the night
+				// after, and puts Bob in it.
+				{
+					kind: "lodging", owner: runnerAlice, place: "Gîte des Crêtes", seats: 4, date: in(8), endDate: in(10),
+					places: []placeSpec{{runnerBob, runnerAlice}},
+				},
 			},
 		},
 		{

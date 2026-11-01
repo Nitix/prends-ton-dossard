@@ -86,8 +86,10 @@ func RunnerOf(app core.App, userID string) (*core.Record, error) {
 	return runner, nil
 }
 
-// parseDay reports whether s is a real calendar day written YYYY-MM-DD.
-func parseDay(s string) (time.Time, bool) {
+// ParseDay reports whether s is a real calendar day written YYYY-MM-DD, and
+// returns that day. The packages that keep a day as text, such as the offers,
+// check it with this one.
+func ParseDay(s string) (time.Time, bool) {
 	if !dayPattern.MatchString(s) {
 		return time.Time{}, false
 	}
@@ -104,11 +106,11 @@ func InRange(day, start, end string) bool {
 
 func validateEvent(app core.App, event *core.Record) error {
 	start, end := event.GetString("start_date"), event.GetString("end_date")
-	if _, ok := parseDay(start); !ok {
+	if _, ok := ParseDay(start); !ok {
 		return apperr.Field("start_date", apperr.CodeDateInvalid)
 	}
 	if end != "" {
-		if _, ok := parseDay(end); !ok {
+		if _, ok := ParseDay(end); !ok {
 			return apperr.Field("end_date", apperr.CodeDateInvalid)
 		}
 		if end < start {
@@ -121,7 +123,7 @@ func validateEvent(app core.App, event *core.Record) error {
 	// deadline is refused on the deadline, even when the formats are fine with
 	// it, and an edit that leaves the dates alone still checks the deadline.
 	if deadline := event.GetString("registration_deadline"); deadline != "" {
-		if _, ok := parseDay(deadline); !ok {
+		if _, ok := ParseDay(deadline); !ok {
 			return apperr.Field("registration_deadline", apperr.CodeDateInvalid)
 		}
 		if deadline > start {
@@ -155,7 +157,7 @@ var measures = []string{"distance_km", "duration_min", "time_limit_min"}
 
 func validateFormat(app core.App, format *core.Record) error {
 	if day := format.GetString("date"); day != "" {
-		if _, ok := parseDay(day); !ok {
+		if _, ok := ParseDay(day); !ok {
 			return apperr.Field("date", apperr.CodeDateInvalid)
 		}
 		event, err := app.FindRecordById("events", format.GetString("event"))

@@ -14,6 +14,7 @@ import (
 	"courses/server/config"
 	"courses/server/events"
 	"courses/server/invitations"
+	"courses/server/offers"
 	"courses/server/participations"
 	"courses/server/passkeys"
 
@@ -37,6 +38,7 @@ func Register(app core.App, cfg config.Config) error {
 	events.Register(app)
 	participations.Register(app)
 	comments.Register(app)
+	offers.Register(app)
 	invitations.Register(app, cfg)
 	admin.Register(app)
 	if err := passkeys.Register(app, cfg); err != nil {

@@ -41,7 +41,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
-		"participations", "invitations", "passkeys", "comments",
+		"participations", "invitations", "passkeys", "comments", "offers", "offer_members",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -821,7 +821,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 	}
 
 	for _, name := range []string{
-		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments",
+		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -1096,4 +1096,181 @@ func TestMigrations_CommentsDownThenUp(t *testing.T) {
 		t.Errorf("after applying again, %d comments (error %v), want an empty table", got, err)
 	}
 	mustSave(t, app, "comments", map[string]any{"event": fx.Event.Id, "author": fx.BobRunner.Id, "body": "Salut"})
+}
+
+// The migration 9d creates the offers of an event (a car or a lodging) and the
+// places that people take in them: the two tables, their indexes and their
+// rules. Its rollback drops the places, then the offers, and applying it again
+// gives them back.
+func TestMigrations_OffersDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9d_offers.go")
+
+	collection := func(name string) *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId(name)
+		if err != nil {
+			t.Fatalf("the collection %s is missing: %v", name, err)
+		}
+		return c
+	}
+	// relationTo checks a relation of a collection.
+	relationTo := func(when string, c *core.Collection, name, to string, required, cascade bool) {
+		t.Helper()
+		f, ok := c.Fields.GetByName(name).(*core.RelationField)
+		if !ok {
+			t.Fatalf("%s: %s.%s must be a relation field, got %T", when, c.Name, name, c.Fields.GetByName(name))
+		}
+		target := collection(to)
+		if f.CollectionId != target.Id || f.MaxSelect != 1 || f.Required != required || f.CascadeDelete != cascade {
+			t.Errorf("%s: %s.%s = collection %q, maxSelect %d, required %v, cascade %v; want %s, 1, %v, %v",
+				when, c.Name, name, f.CollectionId, f.MaxSelect, f.Required, f.CascadeDelete, to, required, cascade)
+		}
+	}
+	timestamps := func(when string, c *core.Collection) {
+		t.Helper()
+		for _, name := range []string{"created", "updated"} {
+			if _, ok := c.Fields.GetByName(name).(*core.AutodateField); !ok {
+				t.Errorf("%s: %s.%s must be a date field that PocketBase fills, got %T", when, c.Name, name, c.Fields.GetByName(name))
+			}
+		}
+	}
+	rules := func(when string, c *core.Collection, want [5]string) {
+		t.Helper()
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			switch {
+			case want[i] == "" && got != nil:
+				t.Errorf("%s: %s rule %d = %q, want null (superusers only)", when, c.Name, i, *got)
+			case want[i] != "" && (got == nil || *got != want[i]):
+				t.Errorf("%s: %s rule %d = %v, want %q", when, c.Name, i, got, want[i])
+			}
+		}
+	}
+
+	const (
+		signedIn = `@request.auth.id != ""`
+		admin    = `@request.auth.role = "admin"`
+		owner    = `owner.user = @request.auth.id`
+	)
+	// checkTables checks the fields, the indexes and the rules of both tables.
+	checkTables := func(when string) {
+		t.Helper()
+
+		offers := collection("offers")
+		// An offer goes with its event, and its owner is never deleted from
+		// under it: a runner who offers one cannot be deleted.
+		relationTo(when, offers, "event", "events", true, true)
+		relationTo(when, offers, "owner", "runners", true, false)
+		kind, ok := offers.Fields.GetByName("kind").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: offers.kind must be a select field, got %T", when, offers.Fields.GetByName("kind"))
+		}
+		if !slices.Equal(kind.Values, []string{"ride", "lodging"}) || kind.MaxSelect != 1 || !kind.Required {
+			t.Errorf("%s: offers.kind = values %q, maxSelect %d, required %v; want ride and lodging, 1, true",
+				when, kind.Values, kind.MaxSelect, kind.Required)
+		}
+		place, ok := offers.Fields.GetByName("place").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: offers.place must be a text field, got %T", when, offers.Fields.GetByName("place"))
+		}
+		if !place.Required || place.Max != 120 {
+			t.Errorf("%s: offers.place = required %v, max %d; want required, 120", when, place.Required, place.Max)
+		}
+		seats, ok := offers.Fields.GetByName("seats").(*core.NumberField)
+		if !ok {
+			t.Fatalf("%s: offers.seats must be a number field, got %T", when, offers.Fields.GetByName("seats"))
+		}
+		if !seats.OnlyInt || seats.Required || seats.Min == nil || *seats.Min != 0 || seats.Max == nil || *seats.Max != 30 {
+			t.Errorf("%s: offers.seats = onlyInt %v, required %v, min %v, max %v; want an optional integer from 0 to 30",
+				when, seats.OnlyInt, seats.Required, seats.Min, seats.Max)
+		}
+		for _, name := range []string{"date", "time", "end_date"} {
+			if f, ok := offers.Fields.GetByName(name).(*core.TextField); !ok || f.Required {
+				t.Errorf("%s: offers.%s must be an optional text field, got %T", when, name, offers.Fields.GetByName(name))
+			}
+		}
+		if f, ok := offers.Fields.GetByName("url").(*core.URLField); !ok || f.Required {
+			t.Errorf("%s: offers.url must be an optional URL field, got %T", when, offers.Fields.GetByName("url"))
+		}
+		notes, ok := offers.Fields.GetByName("notes").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: offers.notes must be a text field, got %T", when, offers.Fields.GetByName("notes"))
+		}
+		if notes.Required || notes.Max != 1000 {
+			t.Errorf("%s: offers.notes = required %v, max %d; want optional, 1000", when, notes.Required, notes.Max)
+		}
+		timestamps(when, offers)
+		const offerIndex = "CREATE INDEX idx_offers_event_kind ON offers (event, kind)"
+		if len(offers.Indexes) != 1 || offers.Indexes[0] != offerIndex {
+			t.Errorf("%s: offers.indexes = %q, want [%q]", when, offers.Indexes, offerIndex)
+		}
+		rules(when, offers, [5]string{
+			signedIn,
+			signedIn,
+			signedIn,
+			signedIn + ` && (` + owner + ` || ` + admin + `)` +
+				` && @request.body.owner:isset = false && @request.body.event:isset = false && @request.body.kind:isset = false`,
+			signedIn + ` && (` + owner + ` || ` + admin + `)`,
+		})
+
+		members := collection("offer_members")
+		// A place goes with its offer and with its runner. Who added it is only
+		// a mark: it is not required, and it holds nobody back.
+		relationTo(when, members, "offer", "offers", true, true)
+		relationTo(when, members, "runner", "runners", true, true)
+		relationTo(when, members, "added_by", "runners", false, false)
+		timestamps(when, members)
+		const memberIndex = "CREATE UNIQUE INDEX idx_offer_members_offer_runner ON offer_members (offer, runner)"
+		if len(members.Indexes) != 1 || members.Indexes[0] != memberIndex {
+			t.Errorf("%s: offer_members.indexes = %q, want [%q]", when, members.Indexes, memberIndex)
+		}
+		placeRule := signedIn + ` && (runner.user = @request.auth.id || offer.owner.user = @request.auth.id || ` + admin + `)`
+		// Nobody changes a place: its update rule is null.
+		rules(when, members, [5]string{signedIn, signedIn, placeRule, "", placeRule})
+	}
+
+	// saveBoth saves a car and a place in it.
+	saveBoth := func() {
+		t.Helper()
+		car := mustSave(t, app, "offers", map[string]any{
+			"event": fx.Event.Id, "kind": "ride", "owner": fx.BobRunner.Id, "place": "Lyon", "seats": 3,
+		})
+		mustSave(t, app, "offer_members", map[string]any{"offer": car.Id, "runner": fx.AliceRunner.Id})
+	}
+
+	checkTables("as created")
+	saveBoth()
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with an offer and a place: %v", err)
+	}
+	for _, name := range []string{"offer_members", "offers"} {
+		if _, err := app.FindCollectionByNameOrId(name); err == nil {
+			t.Errorf("the collection %s must be gone after the rollback", name)
+		}
+	}
+	// What the tables held went with them, and nothing else did.
+	for name, id := range map[string]string{
+		"events": fx.Event.Id, "runners": fx.AliceRunner.Id, "participations": fx.P1.Id,
+	} {
+		if _, err := app.FindRecordById(name, id); err != nil {
+			t.Errorf("after the rollback, the %s %s is gone: %v", name, id, err)
+		}
+	}
+	// Rolling back again, with nothing left to drop, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTables("after applying again")
+	for _, name := range []string{"offers", "offer_members"} {
+		if got, err := app.CountRecords(name); err != nil || got != 0 {
+			t.Errorf("after applying again, %d records in %s (error %v), want an empty table", got, name, err)
+		}
+	}
+	saveBoth()
 }

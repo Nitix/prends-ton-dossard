@@ -34,12 +34,16 @@ type MergeResult struct {
 	// MovedComments is the number of comments of the merged event that went to
 	// the kept event. A merge of formats moves none.
 	MovedComments int `json:"movedComments"`
+	// MovedOffers is the number of offers (cars and lodgings) of the merged
+	// event that went to the kept event, the places that people took in them
+	// following. A merge of formats moves none.
+	MovedOffers int `json:"movedOffers"`
 }
 
-// MergeEvents moves the formats and the comments of the event mergeID to the
-// event keepID, then deletes the event mergeID. A moved format whose date is
-// outside the range of the kept event loses its date, since a format stays
-// inside its event.
+// MergeEvents moves the formats, the comments and the offers of the event
+// mergeID to the event keepID, then deletes the event mergeID. A moved format
+// whose date is outside the range of the kept event loses its date, since a
+// format stays inside its event.
 //
 // The participations follow, in this order:
 //
@@ -58,6 +62,11 @@ type MergeResult struct {
 // The comments of the merged event all go to the kept event, as they are: only
 // their event changes, so they keep their author, their text and their dates,
 // the one of their last change included (they are not shown as edited).
+//
+// The offers of the merged event go to the kept event as they are too, and the
+// places in them follow, since a place points at its offer. The rule that a
+// runner has one offer of each kind per event is for the writes: after a merge a
+// runner may be in two cars of the kept event, and an admin cleans up.
 //
 // With dryRun it only computes the result: nothing is written. Otherwise
 // everything is written in one transaction, so a failure leaves the database as
@@ -90,6 +99,12 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			return err
 		}
 		result.MovedComments = int(commentCount)
+		// The offers too, and for the same reason.
+		offerCount, err := tx.CountRecords("offers", dbx.HashExp{"event": merged.Id})
+		if err != nil {
+			return err
+		}
+		result.MovedOffers = int(offerCount)
 
 		// What decides which participations stay is read before anything is
 		// written, so that a dry run and a real run count the same.
@@ -232,9 +247,17 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			return err
 		}
 
-		// Nothing is left to cascade to: the formats and the comments have
-		// moved, and the participations of the event are in the kept event or
-		// deleted.
+		// The offers move the same way, for the same reason: the dates of their
+		// last change stay. The places are not touched: they point at their
+		// offer, which stays the same.
+		if _, err := tx.DB().NewQuery("UPDATE offers SET event = {:keep} WHERE event = {:merged}").
+			Bind(dbx.Params{"keep": keep.Id, "merged": merged.Id}).Execute(); err != nil {
+			return err
+		}
+
+		// Nothing is left to cascade to: the formats, the comments and the
+		// offers have moved, and the participations of the event are in the kept
+		// event or deleted.
 		return tx.Delete(merged)
 	})
 	if err != nil {

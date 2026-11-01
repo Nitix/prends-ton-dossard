@@ -72,12 +72,12 @@ func result(want admin.MergeResult) string {
 // tags of MergeResult, so a renamed tag would go through them unnoticed.
 func TestMergeResult_JSONKeys(t *testing.T) {
 	got, err := json.Marshal(admin.MergeResult{
-		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, MovedComments: 5,
+		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, MovedComments: 5, MovedOffers: 6,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"movedComments":5}`
+	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"movedComments":5,"movedOffers":6}`
 	if string(got) != want {
 		t.Errorf("MergeResult as JSON = %s, want %s", got, want)
 	}
@@ -133,7 +133,7 @@ func storedComments(t testing.TB, app core.App) []*core.Record {
 func snapshot(t testing.TB, app core.App) string {
 	t.Helper()
 	var out []byte
-	for _, collection := range []string{"events", "formats", "participations", "runners", "comments"} {
+	for _, collection := range []string{"events", "formats", "participations", "runners", "comments", "offers", "offer_members"} {
 		records, err := app.FindAllRecords(collection)
 		if err != nil {
 			t.Fatalf("listing %s: %v", collection, err)
@@ -240,6 +240,55 @@ func comment(t testing.TB, app core.App, event, author *core.Record, text string
 		t.Fatalf("adding a comment: %v", err)
 	}
 	return c
+}
+
+// offer adds an offer of owner on event: a car of three seats, or a lodging
+// without a limit.
+func offer(t testing.TB, app core.App, event, owner *core.Record, kind string) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId("offers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := core.NewRecord(collection)
+	o.Set("event", event.Id)
+	o.Set("kind", kind)
+	o.Set("owner", owner.Id)
+	o.Set("place", "Lyon, Part-Dieu")
+	if kind == "ride" {
+		o.Set("seats", 3)
+	}
+	if err := app.Save(o); err != nil {
+		t.Fatalf("adding an offer: %v", err)
+	}
+	return o
+}
+
+// takePlace puts runner in the offer, added by the runner.
+func takePlace(t testing.TB, app core.App, offer, runner *core.Record) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId("offer_members")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := core.NewRecord(collection)
+	p.Set("offer", offer.Id)
+	p.Set("runner", runner.Id)
+	p.Set("added_by", runner.Id)
+	if err := app.Save(p); err != nil {
+		t.Fatalf("adding a place: %v", err)
+	}
+	return p
+}
+
+// storedOffers returns every offer in the database.
+func storedOffers(t testing.TB, app core.App) []*core.Record {
+	t.Helper()
+	offers, err := app.FindAllRecords("offers")
+	if err != nil {
+		t.Fatalf("listing the offers: %v", err)
+	}
+	return offers
 }
 
 // setFields saves values on the record that has that id.
@@ -362,6 +411,31 @@ func TestMergeEvents(t *testing.T) {
 	// Alice comments on the kept event only.
 	commentOnKeptEventOnly := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 		keptComment = comment(t, app, fx.Event, fx.AliceRunner, "Je prends la voiture")
+	}
+
+	// The offers that the rows below set up: the one of the kept event, and the
+	// ones of the merged event, which move with their places.
+	var keptOffer *core.Record
+	var movedOffers, movedPlaces []*core.Record
+	// Alice has a car on Event; Bob has a car on Event2 with Alice and Sam in it,
+	// and Admin a lodging on Event2 with Bob in it. Once merged, Alice has a car
+	// and a place in another one for the same event: the rule of one car per
+	// runner and per event is for the writes, and the admin cleans up.
+	offersOnBothEvents := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		keptOffer = offer(t, app, fx.Event, fx.AliceRunner, "ride")
+		bobsCar := offer(t, app, fx.Event2, fx.BobRunner, "ride")
+		adminsLodging := offer(t, app, fx.Event2, fx.AdminRunner, "lodging")
+		movedOffers = []*core.Record{bobsCar, adminsLodging}
+		movedPlaces = []*core.Record{
+			takePlace(t, app, bobsCar, fx.AliceRunner),
+			takePlace(t, app, bobsCar, fx.SamRunner),
+			takePlace(t, app, adminsLodging, fx.BobRunner),
+		}
+	}
+	// Alice has a car on the kept event only, with Sam in it.
+	offerOnKeptEventOnly := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		keptOffer = offer(t, app, fx.Event, fx.AliceRunner, "ride")
+		takePlace(t, app, keptOffer, fx.SamRunner)
 	}
 
 	testutil.RunRows(t, []testutil.Row{
@@ -732,6 +806,87 @@ func TestMergeEvents(t *testing.T) {
 			},
 		},
 		{
+			Name:     "the offers of the merged event move to the kept one, with their members",
+			Before:   offersOnBothEvents,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedOffers: 2})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				for _, moved := range movedOffers {
+					got := mustStore(t, app, "offers", moved.Id)
+					// Only the event changes: who offers it, what, and when. The date
+					// of the last change stays too, as it does for a comment.
+					if got.GetString("event") != fx.Event.Id {
+						t.Errorf("the offer of %q is in the event %q, want the kept one %q", moved.GetString("owner"), got.GetString("event"), fx.Event.Id)
+					}
+					for _, field := range []string{"kind", "owner", "place", "seats"} {
+						if got.GetString(field) != moved.GetString(field) {
+							t.Errorf("the offer %s changed beyond its event: %s = %q, was %q",
+								moved.Id, field, got.GetString(field), moved.GetString(field))
+						}
+					}
+					if got.GetDateTime("created").String() != moved.GetDateTime("created").String() ||
+						got.GetDateTime("updated").String() != moved.GetDateTime("updated").String() {
+						t.Errorf("the offer %s was created %s and updated %s, now %s and %s: a merge only changes its event",
+							moved.Id, moved.GetDateTime("created"), moved.GetDateTime("updated"),
+							got.GetDateTime("created"), got.GetDateTime("updated"))
+					}
+				}
+				// The places follow their offer, as they are.
+				for _, place := range movedPlaces {
+					got := mustStore(t, app, "offer_members", place.Id)
+					for _, field := range []string{"offer", "runner", "added_by"} {
+						if got.GetString(field) != place.GetString(field) {
+							t.Errorf("the place %s changed: %s = %q, was %q", place.Id, field, got.GetString(field), place.GetString(field))
+						}
+					}
+					if got.GetDateTime("updated").String() != place.GetDateTime("updated").String() {
+						t.Errorf("the place %s was updated %s, now %s", place.Id, place.GetDateTime("updated"), got.GetDateTime("updated"))
+					}
+				}
+				if got := mustStore(t, app, "offers", keptOffer.Id).GetString("event"); got != fx.Event.Id {
+					t.Errorf("the offer of the kept event is in the event %q, want %q", got, fx.Event.Id)
+				}
+				gone(t, app, "events", fx.Event2)
+				if got := len(storedOffers(t, app)); got != 3 {
+					t.Errorf("%d offers after the merge, want the 3 that there were", got)
+				}
+				if got, err := app.CountRecords("offer_members"); err != nil || got != 3 {
+					t.Errorf("%d places after the merge (error %v), want the 3 that there were", got, err)
+				}
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the offers it would move and writes nothing",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedOffers: 2})},
+		}, offersOnBothEvents),
+		{
+			Name:     "the offers of the kept event do not count as moved",
+			Before:   offerOnKeptEventOnly,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "offers", keptOffer.Id).GetString("event"); got != fx.Event.Id {
+					t.Errorf("the offer is in the event %q, want %q", got, fx.Event.Id)
+				}
+				if got, err := app.CountRecords("offer_members"); err != nil || got != 1 {
+					t.Errorf("%d places after the merge (error %v), want the 1 that there was", got, err)
+				}
+			},
+		},
+		{
 			Name: "an event without formats merges too",
 			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				if err := app.Delete(fx.FLyon); err != nil {
@@ -1090,6 +1245,37 @@ func TestMerge_RollsBackWhenAWriteFails(t *testing.T) {
 		}
 	})
 
+	t.Run("merge-events with offers", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		// The offers move with one statement of SQL, like the comments: the
+		// failure is the deletion of the merged event, after the offers moved.
+		car := offer(t, app, fx.Event2, fx.BobRunner, "ride")
+		lodging := offer(t, app, fx.Event2, fx.AdminRunner, "lodging")
+		takePlace(t, app, car, fx.AliceRunner)
+		before := snapshot(t, app)
+		app.OnRecordDelete("events").BindFunc(func(e *core.RecordEvent) error {
+			if e.Record.Id == fx.Event2.Id {
+				return boom
+			}
+			return e.Next()
+		})
+
+		_, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, false)
+		if !errors.Is(err, boom) {
+			t.Fatalf("error = %v, want the failure of the write", err)
+		}
+
+		if got := snapshot(t, app); got != before {
+			t.Errorf("the database changed:\nbefore:\n%s\nafter:\n%s", before, got)
+		}
+		mustStore(t, app, "events", fx.Event2.Id)
+		for _, o := range []*core.Record{car, lodging} {
+			if got := mustStore(t, app, "offers", o.Id).GetString("event"); got != fx.Event2.Id {
+				t.Errorf("the offer %s is in the event %q, want Event2 %q", o.Id, got, fx.Event2.Id)
+			}
+		}
+	})
 	t.Run("merge-events with participations", func(t *testing.T) {
 		app := testutil.NewApp(t)
 		fx := testutil.Seed(t, app)
@@ -1205,6 +1391,28 @@ func TestMerge_DryRunGivesTheResultOfTheRealRun(t *testing.T) {
 			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
 		}
 		if want := (admin.MergeResult{MovedFormats: 1, MovedComments: 2}); results[1] != want {
+			t.Errorf("result = %+v, want %+v", results[1], want)
+		}
+	})
+
+	t.Run("events with offers", func(t *testing.T) {
+		var results [2]admin.MergeResult
+		for i, dryRun := range []bool{true, false} {
+			app, fx := setup(t)
+			offer(t, app, fx.Event, fx.AliceRunner, "ride")
+			car := offer(t, app, fx.Event2, fx.BobRunner, "ride")
+			offer(t, app, fx.Event2, fx.AdminRunner, "lodging")
+			takePlace(t, app, car, fx.AliceRunner)
+			got, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, dryRun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			results[i] = got
+		}
+		if results[0] != results[1] {
+			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
+		}
+		if want := (admin.MergeResult{MovedFormats: 1, MovedOffers: 2}); results[1] != want {
 			t.Errorf("result = %+v, want %+v", results[1], want)
 		}
 	})

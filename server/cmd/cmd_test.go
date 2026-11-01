@@ -347,6 +347,7 @@ func TestSeedDemo(t *testing.T) {
 	checkRegistration(t, app, today)
 	checkSupporter(t, app)
 	checkComments(t, app, today)
+	checkOffers(t, app, today)
 
 	// A second call is refused, and leaves the data as it is.
 	if err := cmd.SeedDemo(app, demoPassword, today); err == nil {
@@ -477,6 +478,78 @@ func checkComments(t *testing.T, app core.App, today time.Time) {
 	}
 	if first, second := comments[0].GetDateTime("created"), comments[1].GetDateTime("created"); !first.Time().Before(second.Time()) {
 		t.Errorf("the comments were written at %s then %s, want the first before the second", first, second)
+	}
+}
+
+// checkOffers checks the two offers of the demo, on the Trail des Crêtes: a car
+// of Bob, who leaves from Lyon the evening before the race, with Alice in it,
+// and a lodging of Alice, from the day before to the day after, with Bob in it.
+func checkOffers(t *testing.T, app core.App, today time.Time) {
+	t.Helper()
+	event, err := app.FindFirstRecordByData("events", "name", "Trail des Crêtes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runnerName := func(id string) string {
+		t.Helper()
+		runner, err := app.FindRecordById("runners", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return runner.GetString("name")
+	}
+	if got := count(t, app, "offers"); got != 2 {
+		t.Fatalf("%d offers, want 2", got)
+	}
+	if got := count(t, app, "offer_members"); got != 2 {
+		t.Fatalf("%d places, want 2", got)
+	}
+
+	// The race is in nine days.
+	raceDay := today.AddDate(0, 0, 9)
+	for _, want := range []struct {
+		kind, owner, place, member, addedBy string
+		seats                               int
+		date, time, endDate                 string
+	}{
+		{"ride", "Bob", "Lyon, Part-Dieu", "Alice", "Alice", 3, day(raceDay.AddDate(0, 0, -1)), "18:00", ""},
+		{"lodging", "Alice", "Gîte des Crêtes", "Bob", "Alice", 4, day(raceDay.AddDate(0, 0, -1)), "", day(raceDay.AddDate(0, 0, 1))},
+	} {
+		offers, err := app.FindAllRecords("offers", dbx.HashExp{"event": event.Id, "kind": want.kind})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(offers) != 1 {
+			t.Fatalf("%d offers of the kind %s on the Trail des Crêtes, want 1", len(offers), want.kind)
+		}
+		o := offers[0]
+		if got := runnerName(o.GetString("owner")); got != want.owner {
+			t.Errorf("the %s is offered by %s, want %s", want.kind, got, want.owner)
+		}
+		if o.GetString("place") != want.place || o.GetInt("seats") != want.seats {
+			t.Errorf("the %s is %q with %d seats, want %q with %d", want.kind, o.GetString("place"), o.GetInt("seats"), want.place, want.seats)
+		}
+		if o.GetString("date") != want.date || o.GetString("time") != want.time || o.GetString("end_date") != want.endDate {
+			t.Errorf("the %s is on %q at %q until %q, want %q at %q until %q", want.kind,
+				o.GetString("date"), o.GetString("time"), o.GetString("end_date"), want.date, want.time, want.endDate)
+		}
+
+		// One person in it, other than the owner. Alice took her place in the
+		// car of Bob herself, and put Bob in her lodging: the one who added a
+		// place is the one the request would have given.
+		places, err := app.FindAllRecords("offer_members", dbx.HashExp{"offer": o.Id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(places) != 1 {
+			t.Fatalf("%d places in the %s, want 1", len(places), want.kind)
+		}
+		if got := runnerName(places[0].GetString("runner")); got != want.member {
+			t.Errorf("the place of the %s is for %s, want %s", want.kind, got, want.member)
+		}
+		if got := runnerName(places[0].GetString("added_by")); got != want.addedBy {
+			t.Errorf("the place of the %s was added by %s, want %s", want.kind, got, want.addedBy)
+		}
 	}
 }
 
@@ -618,7 +691,7 @@ func TestSeedDemo_LeavesNothingWhenItFails(t *testing.T) {
 	if err := cmd.SeedDemo(app, "short", time.Now()); err == nil {
 		t.Fatal("a password of 5 characters: want an error")
 	}
-	for _, collection := range []string{"users", "runners", "events", "formats", "participations", "comments"} {
+	for _, collection := range []string{"users", "runners", "events", "formats", "participations", "comments", "offers", "offer_members"} {
 		if got := count(t, app, collection); got != 0 {
 			t.Errorf("%d %s, want none", got, collection)
 		}

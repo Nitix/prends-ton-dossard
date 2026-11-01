@@ -787,3 +787,34 @@ func TestEventHooks_SuperuserCreatesWithoutCreator(t *testing.T) {
 		},
 	}).Test(t)
 }
+
+// ParseDay is the check of the days that the other packages use too (the
+// offers): a real day, written with four, two and two digits.
+func TestParseDay(t *testing.T) {
+	for _, tt := range []struct {
+		in    string
+		valid bool
+	}{
+		{"2026-06-13", true},
+		{"2028-02-29", true},
+		{"2026-12-31", true},
+		{"2026-02-29", false}, // not a leap year
+		{"2026-02-30", false},
+		{"2026-13-01", false},
+		{"2026-6-13", false},
+		{"13/06/2026", false},
+		{" 2026-06-13", false},
+		{"2026-06-13T10:00", false},
+		{"", false},
+	} {
+		t.Run(tt.in, func(t *testing.T) {
+			day, ok := events.ParseDay(tt.in)
+			if ok != tt.valid {
+				t.Fatalf("ParseDay(%q) = %v, want %v", tt.in, ok, tt.valid)
+			}
+			if ok && day.Format("2006-01-02") != tt.in {
+				t.Errorf("ParseDay(%q) is the day %s", tt.in, day.Format("2006-01-02"))
+			}
+		})
+	}
+}
