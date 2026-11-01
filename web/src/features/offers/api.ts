@@ -69,12 +69,20 @@ export function useOffers(eventId: string): UseQueryResult<OfferView[]> {
 // The hooks below run a request, then make the list ask for the offers again.
 // The mutation lasts until it has the new data, so that what the page does
 // next (moving the focus, closing a window) is done on the new list. A request
-// that is refused refreshes the list as well, without waiting for it: a place
-// can be refused because somebody took it while the page was open.
+// that is refused refreshes the list as well, and waits for it just the same: a
+// place can be refused because somebody took it while the page was open, and
+// the page then has to show the answer with the refusal.
 
-/** Resolves once the list that is on screen has its new data. */
-function refresh(queryClient: QueryClient, eventId: string): Promise<unknown> {
-  return queryClient.invalidateQueries({ queryKey: offersKey(eventId) });
+/**
+ * The options that every mutation of the offers shares: once the request is
+ * over, whether the server did it or refused, the list that is on screen is
+ * asked for again, and the mutation resolves (or rejects) when it has the new
+ * data. A list that cannot be read again keeps what it showed.
+ */
+function refreshing(queryClient: QueryClient, eventId: string) {
+  return {
+    onSettled: () => queryClient.invalidateQueries({ queryKey: offersKey(eventId) }),
+  };
 }
 
 /**
@@ -108,10 +116,7 @@ export function useSaveOffer(
       id === undefined
         ? pb.collection("offers").create<OfferRecord>({ event: eventId, kind, ...input })
         : pb.collection("offers").update<OfferRecord>(id, input),
-    onSuccess: () => refresh(queryClient, eventId),
-    onError: () => {
-      void refresh(queryClient, eventId);
-    },
+    ...refreshing(queryClient, eventId),
   });
 }
 
@@ -122,10 +127,7 @@ export function useTakePlace(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (place) => pb.collection("offer_members").create<OfferMemberRecord>(place),
-    onSuccess: () => refresh(queryClient, eventId),
-    onError: () => {
-      void refresh(queryClient, eventId);
-    },
+    ...refreshing(queryClient, eventId),
   });
 }
 
@@ -136,10 +138,7 @@ export function useLeavePlace(eventId: string): UseMutationResult<void, Error, s
     mutationFn: async (memberId) => {
       await pb.collection("offer_members").delete(memberId);
     },
-    onSuccess: () => refresh(queryClient, eventId),
-    onError: () => {
-      void refresh(queryClient, eventId);
-    },
+    ...refreshing(queryClient, eventId),
   });
 }
 
@@ -150,9 +149,6 @@ export function useDeleteOffer(eventId: string): UseMutationResult<void, Error, 
     mutationFn: async (offerId) => {
       await pb.collection("offers").delete(offerId);
     },
-    onSuccess: () => refresh(queryClient, eventId),
-    onError: () => {
-      void refresh(queryClient, eventId);
-    },
+    ...refreshing(queryClient, eventId),
   });
 }

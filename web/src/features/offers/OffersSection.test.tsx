@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClientResponseError } from "pocketbase";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
@@ -291,6 +291,21 @@ function refusal(field: string, code: string): ClientResponseError {
     },
   });
 }
+
+/** What the SDK throws for a record that is not there any more (deleted by somebody else). */
+function notFound(): ClientResponseError {
+  return new ClientResponseError({
+    status: 404,
+    response: { status: 404, message: "The requested resource wasn't found.", data: {} },
+  });
+}
+
+/** The title of an offer, where the focus goes when its button goes away. */
+const titleOf = (screen: Screen, owner: string) =>
+  offerOf(screen, owner).getByRole("heading", { level: 3, name: owner, exact: true });
+/** The title of the section, where the focus goes when its offer goes away. */
+const sectionTitle = (screen: Screen, kind: OfferKind = "ride") =>
+  screen.getByRole("heading", { level: 2, name: fr.offers.title[kind] });
 
 // --- The list ---
 
@@ -625,6 +640,113 @@ describe("taking and leaving a place", () => {
     await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
   });
 
+  test("OffersSection — un refus après lequel l'offre est pleine : le bouton s'en va, et le focus va sur le titre de l'offre", async () => {
+    // While Nina was looking, the car filled up: the server refuses, and the list it gives back has no place left.
+    mocks.take.mockImplementationOnce(() => {
+      rows = [
+        offer("ride1", "ride", alice, { place: "Lyon, Part-Dieu", seats: 3 }, [
+          ["m-sam", sam],
+          ["m-bob", bob],
+          ["m-admin", admin],
+        ]),
+      ];
+      return Promise.reject(refusal("offer", "offer_full"));
+    });
+    const { screen } = await renderSection({ me: meNina });
+    const one = offerOf(screen, "Alice");
+    await expect.element(button(one, fr.offers.take.ride)).toBeVisible();
+
+    await button(one, fr.offers.take.ride).click();
+
+    // The refusal is told, and so is the car that is full now.
+    await expect.element(one.getByRole("alert")).toHaveTextContent("Il n'y a plus de place.");
+    await expect.element(one.getByText(fr.offers.full)).toBeVisible();
+    await expect.element(button(one, fr.offers.take.ride)).not.toBeInTheDocument();
+    // The button went with the answer: the focus is on the offer, never on the page.
+    await expect.element(titleOf(screen, "Alice")).toHaveFocus();
+    expect(focused()).not.toBe(document.body);
+  });
+
+  test("OffersSection — un refus après lequel j'ai déjà une place ailleurs : le focus va sur le titre de l'offre", async () => {
+    // Nina took a place in another car, on another screen: the places of this one did not change, its button goes.
+    const alices = offer("r1", "ride", alice, { place: "Lyon", seats: 3 });
+    rows = [alices, offer("r2", "ride", sam, { place: "Paris", seats: 3 })];
+    mocks.take.mockImplementationOnce(() => {
+      rows = [alices, offer("r2", "ride", sam, { place: "Paris", seats: 3 }, [["m-nina", nina]])];
+      return Promise.reject(refusal("runner", "offer_already_member"));
+    });
+    const { screen } = await renderSection({ me: meNina });
+    const one = offerOf(screen, "Alice");
+    await expect.element(button(one, fr.offers.take.ride)).toBeVisible();
+
+    await button(one, fr.offers.take.ride).click();
+
+    await expect
+      .element(one.getByRole("alert"))
+      .toHaveTextContent("Cette personne a déjà une place de cette sorte pour cet événement.");
+    await expect.element(button(one, fr.offers.take.ride)).not.toBeInTheDocument();
+    await expect.element(titleOf(screen, "Alice")).toHaveFocus();
+  });
+
+  test("OffersSection — une offre supprimée par un autre pendant l'action : le focus va sur le titre de la section", async () => {
+    mocks.take.mockImplementationOnce(() => {
+      rows = rows.filter((row) => row.id !== "ride1");
+      return Promise.reject(notFound());
+    });
+    const { screen } = await renderSection({ me: meNina });
+    await expect.element(button(offerOf(screen, "Alice"), fr.offers.take.ride)).toBeVisible();
+
+    await button(offerOf(screen, "Alice"), fr.offers.take.ride).click();
+
+    // The offer and its button are gone: the section is still there, and it has the focus.
+    await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    await expect.element(offerOf(screen, "Alice")).not.toBeInTheDocument();
+    await expect.element(sectionTitle(screen)).toHaveFocus();
+  });
+
+  test("OffersSection — la page montre la réponse bien après la fin de la requête : le focus la suit", async () => {
+    // The request is over, and the list is in the cache, when the page draws it a moment later.
+    notifyManager.setScheduler((callback) => {
+      setTimeout(callback, 150);
+    });
+    try {
+      const { screen } = await renderSection({ me: meNina });
+      const one = offerOf(screen, "Alice");
+      await expect.element(button(one, fr.offers.take.ride)).toBeVisible();
+
+      await button(one, fr.offers.take.ride).click();
+
+      await expect.element(button(one, fr.offers.leave.ride)).toHaveFocus();
+    } finally {
+      notifyManager.setScheduler((callback) => {
+        setTimeout(callback, 0);
+      });
+    }
+  });
+
+  test("OffersSection — une place prise dont la relecture échoue ne laisse rien en attente : le focus ne bouge pas plus tard", async () => {
+    const { screen, queryClient } = await renderSection({ me: meNina });
+    const one = offerOf(screen, "Alice");
+    await expect.element(button(one, fr.offers.take.ride)).toBeVisible();
+    // The place is taken, but the list cannot be read again: the page keeps what it showed.
+    mocks.list.mockRejectedValueOnce(new Error("offline"));
+
+    await button(one, fr.offers.take.ride).click();
+
+    await vi.waitFor(() => {
+      expect(mocks.take).toHaveBeenCalledTimes(1);
+      expect(mocks.list).toHaveBeenCalledTimes(2);
+    });
+    await expect.element(button(one, fr.offers.take.ride)).toHaveFocus();
+
+    // Later the member is elsewhere (nothing has the focus), and a refresh brings the new places: it is not the member's action any more, the focus stays.
+    if (!(document.activeElement instanceof HTMLElement)) throw new Error("nothing is focused");
+    document.activeElement.blur();
+    await queryClient.invalidateQueries({ queryKey: ["offers", "event"] });
+    await expect.element(button(one, fr.offers.leave.ride)).toBeVisible();
+    expect(focused()).toBe(document.body);
+  });
+
   test("OffersSection — un refus inconnu donne le message générique, dans l'offre qui l'a reçu seulement", async () => {
     mocks.take.mockRejectedValueOnce(new Error("boom"));
     rows = [offer("r1", "ride", alice, { seats: 2 }), offer("r2", "ride", sam, { seats: 2 })];
@@ -698,6 +820,27 @@ describe("removing someone", () => {
     await expect.element(one.getByText("1 place prise sur 4")).toBeVisible();
     expect(mocks.leave).toHaveBeenCalledWith("m-bob");
     await expect.element(button(one, fr.offers.take.ride)).toHaveFocus();
+  });
+
+  test("OffersSection — retirer une place déjà libérée ailleurs : la ligne s'en va, et le focus va sur le titre de l'offre", async () => {
+    mocks.leave.mockImplementationOnce(() => {
+      rows = rows.map((row) =>
+        withPlaces(
+          row,
+          (row.expand.offer_members_via_offer ?? []).filter((member) => member.id !== "m-sam"),
+        ),
+      );
+      return Promise.reject(notFound());
+    });
+    const { screen } = await renderSection({ me: meAlice });
+    const one = offerOf(screen, "Alice");
+    await expect.element(button(one, fr.offers.removeFor("Sam"))).toBeVisible();
+
+    await button(one, fr.offers.removeFor("Sam")).click();
+
+    await expect.element(one.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+    expect(people(one)).toEqual(["Bob"]);
+    await expect.element(titleOf(screen, "Alice")).toHaveFocus();
   });
 
   test("OffersSection — un refus à la suppression d'une place est traduit dans l'offre", async () => {
@@ -862,6 +1005,55 @@ describe("deleting an offer", () => {
 
     await expect.element(dialog).not.toBeInTheDocument();
     await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    // The offer and the button that opened the window are gone: the title of the section has the focus.
+    await expect.element(sectionTitle(screen)).toHaveFocus();
+  });
+
+  test("OffersSection — annuler la confirmation ne laisse rien en attente : une offre supprimée plus tard ne prend pas le focus", async () => {
+    const { screen, queryClient } = await renderSection({ me: meAlice });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+    await deleteButton(offerOf(screen, "Alice")).click();
+    await screen.getByRole("dialog").getByRole("button", { name: fr.common.cancel }).click();
+    await expect.element(deleteButton(offerOf(screen, "Alice"))).toHaveFocus();
+
+    // Nothing has the focus, and somebody else deletes the offer: not the member's action.
+    if (!(document.activeElement instanceof HTMLElement)) throw new Error("nothing is focused");
+    document.activeElement.blur();
+    rows = [];
+    await queryClient.invalidateQueries({ queryKey: ["offers", "event"] });
+
+    await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    expect(focused()).toBe(document.body);
+  });
+
+  test("OffersSection — un double envoi de la confirmation ne supprime qu'une fois, et le bouton garde le focus", async () => {
+    const pending = Promise.withResolvers<unknown>();
+    mocks.remove.mockReturnValue(pending.promise);
+    const { screen } = await renderSection({ me: meAlice });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+    await deleteButton(offerOf(screen, "Alice")).click();
+    const dialog = screen.getByRole("dialog");
+    const confirm = dialog.getByRole("button", { name: fr.offers.delete });
+    await expect.element(confirm).toBeVisible();
+
+    // Two clicks in the same tick, as a double tap does.
+    const element = confirm.element();
+    if (!(element instanceof HTMLButtonElement)) throw new Error("not a button");
+    element.focus();
+    element.click();
+    element.click();
+
+    // It says it is busy, and it is not disabled: it keeps the focus.
+    await expect.element(confirm).toHaveAttribute("aria-disabled", "true");
+    expect(element.disabled).toBe(false);
+    expect(focused()).toBe(element);
+    expect(mocks.remove).toHaveBeenCalledTimes(1);
+
+    rows = [];
+    pending.resolve(true);
+    await expect.element(screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    expect(mocks.remove).toHaveBeenCalledTimes(1);
+    await expect.element(sectionTitle(screen)).toHaveFocus();
   });
 });
 

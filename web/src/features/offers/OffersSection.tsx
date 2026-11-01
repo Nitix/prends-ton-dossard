@@ -35,13 +35,20 @@ const SEPARATOR = " · ";
  * sections share: what a runner may take depends on the places they already
  * have in the other offers of the kind.
  *
- * The focus stays where the member is: after a place is taken or freed it is
- * on the button that takes the other's place, or on the title of the offer; and
- * a deleted offer takes the focus away with its button, and so does an offer
- * that has just been proposed (the member has their place now, and there is no
- * more to propose), so it goes to the title of the section, which is not in the
- * tab order (it only receives the focus from here). The windows of the other
- * actions give it back to their button, which stays.
+ * The focus stays where the member is. What the member does on an offer (a
+ * place taken, freed or removed, a deletion asked for) can take the button they
+ * used off the page, whether the server did it or refused: the answer to a
+ * request shows the offer as it is now (full, or with a place already
+ * somewhere else, or gone). The section looks after the focus until the page
+ * shows that answer (see `Guard`): if the button went with nothing to take
+ * the focus, it goes to the button that does the opposite, or to the title of
+ * the offer, or, when the offer itself is gone, to the title of the section.
+ * The title of the section is not in the tab order (it only receives the
+ * focus from here), and neither is the title of an offer. An offer that has
+ * just been proposed takes the button that opened its window away too (the
+ * member has their place now, and there is no more to propose): the title of
+ * the section has the focus then as well. The windows of the other actions give
+ * it back to their button, which stays.
  */
 export function OffersSection({
   view,
@@ -57,10 +64,12 @@ export function OffersSection({
   const query = useOffers(eventId);
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
-  // The offer the open confirmation is about, and the one that has just been deleted.
+  const root = useRef<HTMLElement>(null);
+  // The offer the open confirmation is about, and what the member is doing that can take the focus away.
   const [removing, setRemoving] = useState<string | null>(null);
-  const [deleted, setDeleted] = useState<string | null>(null);
-  const handled = useRef<string | null>(null);
+  const [guard, setGuard] = useState<Guard | null>(null);
+  // The guard that is history: it is not looked after any more.
+  const finished = useRef<Guard | null>(null);
   // Whether the window that offers a car or a lodging is open, and how many offers it has saved.
   const [proposing, setProposing] = useState(false);
   const [proposed, setProposed] = useState(0);
@@ -78,19 +87,56 @@ export function OffersSection({
   const target = removing === null ? undefined : all?.find(({ offer }) => offer.id === removing);
   const names = target?.members.map(({ runner }) => runner.name) ?? [];
 
-  // Once the dialog is closed and the page shows the offer gone, the button
-  // that opened the dialog is gone too: if nothing has the focus, the title
-  // does. Either may come first (the dialog closes when the request is
-  // over, and the page shows the new list a moment later, or the reverse):
-  // a dialog that is still open keeps the focus where it is, and an offer that
-  // is still on the page keeps its button.
+  /**
+   * Marks the request of the member on this offer as over: the list has been
+   * asked for again (the mutations wait for it), so the next draw has the answer.
+   */
+  function over(offer: string) {
+    setGuard((current) =>
+      current?.offer === offer && !current.over ? { ...current, over: true } : current,
+    );
+  }
+
+  /** Runs a request of the member on an offer, and looks after the focus until the page shows the answer. */
+  async function guarded(offer: string, to: FocusTo, request: () => Promise<unknown>) {
+    setGuard({ offer, to, over: false });
+    try {
+      await request();
+    } finally {
+      over(offer);
+    }
+  }
+
+  /** Closes the confirmation without deleting anything: its button stays, and gets the focus back from the browser. */
+  function cancel() {
+    setRemoving(null);
+    setGuard(null);
+  }
+
+  // The focus is only moved when it has been lost, never when the member has
+  // gone on to something else (or the browser has already given it back to a
+  // button that is still there). It is looked after on every draw until the
+  // member's action is history: the answer can come before or after the
+  // request is over, and the confirmation can close first or last. The action
+  // is history once the offer is gone, or once the request is over (the draw
+  // that shows it over has the answer of the server: a list that is asked for
+  // again is in the cache when the request ends, and a draw reads the cache).
+  // A later change of the list is nobody's doing, and does not move the focus.
   useEffect(() => {
-    if (deleted === null || handled.current === deleted || removing !== null) return;
-    if (all?.some(({ offer }) => offer.id === deleted)) return;
-    handled.current = deleted;
+    if (!guard || finished.current === guard) return;
     const active = document.activeElement;
-    if (!active || active === document.body || !active.isConnected) heading.current?.focus();
-  }, [deleted, removing, all]);
+    if (!active || active === document.body || !active.isConnected) {
+      const item = Array.from(
+        root.current?.querySelectorAll<HTMLElement>("[data-offer]") ?? [],
+      ).find((element) => element.dataset.offer === guard.offer);
+      const places: FocusTo[] = guard.to === "toggle" ? ["toggle", "title"] : [guard.to];
+      const landing = places
+        .map((place) => item?.querySelector<HTMLElement>(`[data-offer-focus="${place}"]`))
+        .find((element) => !!element);
+      (landing ?? heading.current)?.focus();
+    }
+    if (guard.over || !all?.some(({ offer }) => offer.id === guard.offer)) finished.current = guard;
+  }, [guard, all]);
 
   // The offer that has just been proposed takes the button that opened the
   // window off the page (its owner has their place now), whether the window
@@ -104,7 +150,7 @@ export function OffersSection({
   }, [proposed, proposing, canPropose]);
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
+    <section ref={root} aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
       <h2 id={headingId} ref={heading} tabIndex={-1} className="text-lg font-semibold">
         {t.offers.title[kind]}
       </h2>
@@ -121,8 +167,11 @@ export function OffersSection({
                   offers={all}
                   event={view}
                   me={me}
+                  guarded={guarded}
                   onDelete={() => {
+                    // The offer goes with the confirmation, and with the button that opened it.
                     setRemoving(offerView.offer.id);
+                    setGuard({ offer: offerView.offer.id, to: "section", over: false });
                   }}
                 />
               ))}
@@ -170,9 +219,7 @@ export function OffersSection({
       />
       <Dialog
         open={target !== undefined}
-        onClose={() => {
-          setRemoving(null);
-        }}
+        onClose={cancel}
         title={
           names.length === 0
             ? t.offers.deleteConfirmEmpty
@@ -184,11 +231,10 @@ export function OffersSection({
             eventId={eventId}
             offerId={target.offer.id}
             onDeleted={() => {
-              setDeleted(target.offer.id);
-            }}
-            onClose={() => {
+              over(target.offer.id);
               setRemoving(null);
             }}
+            onCancel={cancel}
           />
         )}
       </Dialog>
@@ -196,11 +242,20 @@ export function OffersSection({
   );
 }
 
-/** Where the focus goes once a place is taken or freed: the button of the offer that does the opposite, or its title. */
-type FocusTo = "toggle" | "title";
+/**
+ * Where the focus goes when the button the member used is gone: the button of
+ * the offer that does the opposite (« Je descends » after « Je monte »), then
+ * the title of the offer; or the title of the section. The title of the
+ * section is also where the focus ends when the offer itself is gone.
+ */
+type FocusTo = "toggle" | "title" | "section";
 
-/** A change of the places of an offer that the page has not shown yet: the places before, and where the focus goes. */
-type Settling = { from: string; to: FocusTo };
+/**
+ * What the member is doing on an offer that can take the focus away: the offer,
+ * where the focus goes, and whether the request is over (a confirmation is
+ * not over until the member has answered it).
+ */
+type Guard = { offer: string; to: FocusTo; over: boolean };
 
 /** The line under the owner: where, and when. A car leaves from a place on a day at a time, a lodging has its days. */
 function detailLine(offer: OfferRecord, f: Formatters, t: Messages): string {
@@ -230,6 +285,7 @@ function OfferItem({
   offers,
   event,
   me,
+  guarded,
   onDelete,
 }: {
   view: OfferView;
@@ -237,6 +293,8 @@ function OfferItem({
   offers: OfferView[];
   event: EventView;
   me: Me | null;
+  /** Runs a request on this offer, and has the section look after the focus until the page shows the answer. */
+  guarded: (offer: string, to: FocusTo, request: () => Promise<unknown>) => Promise<void>;
   onDelete: () => void;
 }) {
   const { t, f } = useI18n();
@@ -244,9 +302,6 @@ function OfferItem({
   const kind = offer.kind;
   const eventId = event.event.id;
   const titleId = useId();
-  const title = useRef<HTMLHeadingElement>(null);
-  // « Je monte » or « Je descends »: only one is on the page at a time.
-  const toggle = useRef<HTMLButtonElement>(null);
   const take = useTakePlace(eventId);
   const leave = useLeavePlace(eventId);
   const [message, setMessage] = useState<string | null>(null);
@@ -257,30 +312,12 @@ function OfferItem({
   const acting = useRef(false);
   const busy = take.isPending || leave.isPending;
 
-  // A place that is taken or freed takes the focus away with its button, and
-  // the page only has the new places a moment after the request is over: the
-  // focus waits for them. It only moves when it has been lost (the user may
-  // have gone on to something else).
-  const places = members.map(({ member }) => member.id).join();
-  const [settling, setSettling] = useState<Settling | null>(null);
-  const handled = useRef<Settling | null>(null);
-  useEffect(() => {
-    if (!settling || handled.current === settling || settling.from === places) return;
-    handled.current = settling;
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    const target = settling.to === "toggle" ? (toggle.current ?? title.current) : title.current;
-    target?.focus();
-  }, [settling, places]);
-
   async function run(action: () => Promise<unknown>, to: FocusTo) {
     if (acting.current) return;
     acting.current = true;
     setMessage(null);
-    const from = places;
     try {
-      await action();
-      setSettling({ from, to });
+      await guarded(offer.id, to, action);
     } catch (err) {
       setMessage(describeError(t, err));
     } finally {
@@ -296,6 +333,7 @@ function OfferItem({
 
   return (
     <article
+      data-offer={offer.id}
       aria-labelledby={titleId}
       className="flex flex-col gap-2 rounded-lg border-2 border-neutral-200 p-3"
     >
@@ -305,7 +343,12 @@ function OfferItem({
           thumb="96x96"
           className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
         />
-        <h3 id={titleId} ref={title} tabIndex={-1} className="min-w-0 font-medium break-words">
+        <h3
+          id={titleId}
+          data-offer-focus="title"
+          tabIndex={-1}
+          className="min-w-0 font-medium break-words"
+        >
           {owner.name}
         </h3>
       </div>
@@ -372,7 +415,7 @@ function OfferItem({
         <div className="flex flex-wrap gap-2">
           {canTake && (
             <button
-              ref={toggle}
+              data-offer-focus="toggle"
               type="button"
               aria-disabled={busy || undefined}
               onClick={() => {
@@ -388,7 +431,7 @@ function OfferItem({
           )}
           {mine && (
             <button
-              ref={toggle}
+              data-offer-focus="toggle"
               type="button"
               aria-disabled={busy || undefined}
               onClick={() => {
@@ -458,29 +501,34 @@ function DeleteForm({
   eventId,
   offerId,
   onDeleted,
-  onClose,
+  onCancel,
 }: {
   eventId: string;
   offerId: string;
-  /** Tells the section that the offer is gone, before the window closes. */
+  /** Tells the section that the offer is deleted: it closes the window. */
   onDeleted: () => void;
-  onClose: () => void;
+  onCancel: () => void;
 }) {
   const { t } = useI18n();
   const remove = useDeleteOffer(eventId);
   const [message, setMessage] = useState<string | null>(null);
+  // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
+  const sending = useRef(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     setMessage(null);
     try {
       await remove.mutateAsync(offerId);
     } catch (err) {
       setMessage(describeError(t, err));
       return;
+    } finally {
+      sending.current = false;
     }
     onDeleted();
-    onClose();
   }
 
   return (
@@ -491,10 +539,14 @@ function DeleteForm({
         </p>
       )}
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" onClick={onClose} className={SECONDARY}>
+        <button type="button" onClick={onCancel} className={SECONDARY}>
           {t.common.cancel}
         </button>
-        <button type="submit" disabled={remove.isPending} className={DANGER}>
+        <button
+          type="submit"
+          aria-disabled={remove.isPending || undefined}
+          className={`${DANGER} ${remove.isPending ? "opacity-60" : ""}`}
+        >
           {t.offers.delete}
         </button>
       </div>
