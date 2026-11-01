@@ -41,7 +41,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
-		"participations", "invitations", "passkeys",
+		"participations", "invitations", "passkeys", "comments",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -821,7 +821,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 	}
 
 	for _, name := range []string{
-		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys",
+		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -992,4 +992,108 @@ func TestMigrations_SupporterDownThenUp(t *testing.T) {
 	mustSave(t, app, "participations", map[string]any{
 		"runner": fx.BobRunner.Id, "event": fx.Event2.Id, "status": "supporter",
 	})
+}
+
+// The migration 9c creates the comments of an event: the table, its index and
+// its rules. Its rollback drops the table, and applying it again gives it back.
+func TestMigrations_CommentsDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9c_comments.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("comments")
+		if err != nil {
+			t.Fatalf("the collection comments is missing: %v", err)
+		}
+		return c
+	}
+	// checkTable checks the fields, the index and the rules of the collection.
+	checkTable := func(when string) {
+		t.Helper()
+		c := collection()
+		relationTo := func(name, to string, cascade bool) {
+			t.Helper()
+			f, ok := c.Fields.GetByName(name).(*core.RelationField)
+			if !ok {
+				t.Fatalf("%s: comments.%s must be a relation field, got %T", when, name, c.Fields.GetByName(name))
+			}
+			target, err := app.FindCollectionByNameOrId(to)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if f.CollectionId != target.Id || f.MaxSelect != 1 || !f.Required || f.CascadeDelete != cascade {
+				t.Errorf("%s: comments.%s = collection %q, maxSelect %d, required %v, cascade %v; want %s, 1, true, %v",
+					when, name, f.CollectionId, f.MaxSelect, f.Required, f.CascadeDelete, to, cascade)
+			}
+		}
+		// A comment goes with its event, and its author is never deleted from
+		// under it: a runner who wrote one cannot be deleted.
+		relationTo("event", "events", true)
+		relationTo("author", "runners", false)
+
+		body, ok := c.Fields.GetByName("body").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: comments.body must be a text field, got %T", when, c.Fields.GetByName("body"))
+		}
+		if !body.Required || body.Max != 2000 {
+			t.Errorf("%s: comments.body = required %v, max %d; want required, 2000", when, body.Required, body.Max)
+		}
+		for _, name := range []string{"created", "updated"} {
+			if _, ok := c.Fields.GetByName(name).(*core.AutodateField); !ok {
+				t.Errorf("%s: comments.%s must be a date field that PocketBase fills, got %T", when, name, c.Fields.GetByName(name))
+			}
+		}
+
+		const index = "CREATE INDEX idx_comments_event_created ON comments (event, created)"
+		if len(c.Indexes) != 1 || c.Indexes[0] != index {
+			t.Errorf("%s: comments.indexes = %q, want [%q]", when, c.Indexes, index)
+		}
+
+		const (
+			signedIn = `@request.auth.id != ""`
+			author   = `author.user = @request.auth.id`
+		)
+		want := []string{
+			signedIn,
+			signedIn,
+			signedIn,
+			signedIn + ` && ` + author + ` && @request.body.author:isset = false && @request.body.event:isset = false`,
+			signedIn + ` && (` + author + ` || @request.auth.role = "admin")`,
+		}
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got == nil || *got != want[i] {
+				t.Errorf("%s: comments rule %d = %v, want %q", when, i, got, want[i])
+			}
+		}
+	}
+
+	checkTable("as created")
+	mustSave(t, app, "comments", map[string]any{"event": fx.Event.Id, "author": fx.AliceRunner.Id, "body": "Salut"})
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.FindCollectionByNameOrId("comments"); err == nil {
+		t.Error("the collection comments must be gone after the rollback")
+	}
+	// What the table held went with it, and nothing else did.
+	mustStore := func(collection, id string) {
+		t.Helper()
+		if _, err := app.FindRecordById(collection, id); err != nil {
+			t.Errorf("after the rollback, the %s %s is gone: %v", collection, id, err)
+		}
+	}
+	mustStore("events", fx.Event.Id)
+	mustStore("runners", fx.AliceRunner.Id)
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	if got, err := app.CountRecords("comments"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d comments (error %v), want an empty table", got, err)
+	}
+	mustSave(t, app, "comments", map[string]any{"event": fx.Event.Id, "author": fx.BobRunner.Id, "body": "Salut"})
 }

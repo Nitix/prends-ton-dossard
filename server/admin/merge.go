@@ -31,11 +31,15 @@ type MergeResult struct {
 	// ClearedFormatDates is the number of formats that lost their date, which
 	// was outside the range of the kept event.
 	ClearedFormatDates int `json:"clearedFormatDates"`
+	// MovedComments is the number of comments of the merged event that went to
+	// the kept event. A merge of formats moves none.
+	MovedComments int `json:"movedComments"`
 }
 
-// MergeEvents moves the formats of the event mergeID to the event keepID, then
-// deletes the event mergeID. A moved format whose date is outside the range of
-// the kept event loses its date, since a format stays inside its event.
+// MergeEvents moves the formats and the comments of the event mergeID to the
+// event keepID, then deletes the event mergeID. A moved format whose date is
+// outside the range of the kept event loses its date, since a format stays
+// inside its event.
 //
 // The participations follow, in this order:
 //
@@ -50,6 +54,9 @@ type MergeResult struct {
 //     kept event, which then is the one dropped, or the one of the merged event,
 //     which replaces it and goes to the kept event (one dropped and one moved).
 //     Otherwise they go to the kept event (they count as moved).
+//
+// The comments of the merged event all go to the kept event, as they are: only
+// their event changes, so they keep their author, their text and their date.
 //
 // With dryRun it only computes the result: nothing is written. Otherwise
 // everything is written in one transaction, so a failure leaves the database as
@@ -73,6 +80,15 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 		if err != nil {
 			return err
 		}
+
+		// The comments move as they are, and none is dropped: counting them
+		// does not depend on what is written below, so a dry run counts them
+		// too.
+		comments, err := tx.FindAllRecords("comments", dbx.HashExp{"event": merged.Id})
+		if err != nil {
+			return err
+		}
+		result.MovedComments = len(comments)
 
 		// What decides which participations stay is read before anything is
 		// written, so that a dry run and a real run count the same.
@@ -205,8 +221,18 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			}
 		}
 
-		// Nothing is left to cascade to: the formats have moved, and the
-		// participations of the event are in the kept event or deleted.
+		// The comments move before the event is deleted: deleting it would
+		// delete them with it.
+		for _, c := range comments {
+			c.Set("event", keep.Id)
+			if err := tx.Save(c); err != nil {
+				return err
+			}
+		}
+
+		// Nothing is left to cascade to: the formats and the comments have
+		// moved, and the participations of the event are in the kept event or
+		// deleted.
 		return tx.Delete(merged)
 	})
 	if err != nil {

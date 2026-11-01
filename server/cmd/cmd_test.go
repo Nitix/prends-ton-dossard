@@ -346,6 +346,7 @@ func TestSeedDemo(t *testing.T) {
 	checkParticipations(t, app)
 	checkRegistration(t, app, today)
 	checkSupporter(t, app)
+	checkComments(t, app, today)
 
 	// A second call is refused, and leaves the data as it is.
 	if err := cmd.SeedDemo(app, demoPassword, today); err == nil {
@@ -427,6 +428,50 @@ func checkSupporter(t *testing.T, app core.App) {
 	}
 	if p.GetString("added_by") != runnerID("Bob") || p.GetBool("confirmed") {
 		t.Errorf("the supporter was added by %q and confirmed = %v, want Bob and false", p.GetString("added_by"), p.GetBool("confirmed"))
+	}
+}
+
+// checkComments checks the two comments of the demo: Alice then Bob write on
+// the Trail des Crêtes, in the days before today, and each one is by the runner
+// the request would have given as its author.
+func checkComments(t *testing.T, app core.App, today time.Time) {
+	t.Helper()
+	event, err := app.FindFirstRecordByData("events", "name", "Trail des Crêtes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := count(t, app, "comments"); got != 2 {
+		t.Fatalf("%d comments, want 2", got)
+	}
+	comments, err := app.FindRecordsByFilter("comments", "event = {:event}", "created", 0, 0, dbx.Params{"event": event.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 2 {
+		t.Fatalf("%d comments on the Trail des Crêtes, want 2", len(comments))
+	}
+
+	for i, name := range []string{"Alice", "Bob"} {
+		c := comments[i]
+		author, err := app.FindRecordById("runners", c.GetString("author"))
+		if err != nil {
+			t.Fatalf("the author of the comment %d: %v", i+1, err)
+		}
+		if author.GetString("name") != name {
+			t.Errorf("the comment %d is by %s, want %s (Alice, then Bob)", i+1, author.GetString("name"), name)
+		}
+		if author.GetString("user") == "" {
+			t.Errorf("the comment %d is by %s, who has no account", i+1, name)
+		}
+		if body := c.GetString("body"); body == "" || body != strings.TrimSpace(body) {
+			t.Errorf("the comment %d has the text %q, want one without spaces around it", i+1, body)
+		}
+		if created := c.GetDateTime("created").Time(); !created.Before(today) {
+			t.Errorf("the comment %d was written on %s, want before today %s", i+1, created, today)
+		}
+	}
+	if first, second := comments[0].GetDateTime("created"), comments[1].GetDateTime("created"); !first.Time().Before(second.Time()) {
+		t.Errorf("the comments were written at %s then %s, want the first before the second", first, second)
 	}
 }
 
@@ -568,7 +613,7 @@ func TestSeedDemo_LeavesNothingWhenItFails(t *testing.T) {
 	if err := cmd.SeedDemo(app, "short", time.Now()); err == nil {
 		t.Fatal("a password of 5 characters: want an error")
 	}
-	for _, collection := range []string{"users", "runners", "events", "formats", "participations"} {
+	for _, collection := range []string{"users", "runners", "events", "formats", "participations", "comments"} {
 		if got := count(t, app, collection); got != 0 {
 			t.Errorf("%d %s, want none", got, collection)
 		}

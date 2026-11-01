@@ -56,10 +56,16 @@ func fLyon(fx testutil.Fixture) *core.Record  { return fx.FLyon }
 // code is how the API reports a refused request: data.code.
 func code(c string) string { return `"code":"` + c + `"` }
 
-// result is the response body of a merge.
-func result(movedFormats, movedParticipations, droppedParticipations, clearedFormatDates int) string {
-	return fmt.Sprintf(`{"movedFormats":%d,"movedParticipations":%d,"droppedParticipations":%d,"clearedFormatDates":%d}`,
-		movedFormats, movedParticipations, droppedParticipations, clearedFormatDates)
+// result is the response body of a merge: the counters of the result as JSON,
+// every one of them, in the order of the fields. A counter that is not named
+// is 0, so that a counter added to MergeResult does not touch the rows that do
+// not count it.
+func result(want admin.MergeResult) string {
+	body, err := json.Marshal(want)
+	if err != nil {
+		panic(err)
+	}
+	return string(body)
 }
 
 // stored returns the record as it is in the database, or nil when it is not.
@@ -97,12 +103,22 @@ func gone(t testing.TB, app core.App, collection string, records ...*core.Record
 	}
 }
 
+// storedComments returns every comment in the database.
+func storedComments(t testing.TB, app core.App) []*core.Record {
+	t.Helper()
+	comments, err := app.FindAllRecords("comments")
+	if err != nil {
+		t.Fatalf("listing the comments: %v", err)
+	}
+	return comments
+}
+
 // snapshot is the whole content of the tables that a merge can touch, with the
 // date of their last change: a record that was written again is not the same.
 func snapshot(t testing.TB, app core.App) string {
 	t.Helper()
 	var out []byte
-	for _, collection := range []string{"events", "formats", "participations", "runners"} {
+	for _, collection := range []string{"events", "formats", "participations", "runners", "comments"} {
 		records, err := app.FindAllRecords(collection)
 		if err != nil {
 			t.Fatalf("listing %s: %v", collection, err)
@@ -192,6 +208,23 @@ func undecidedOf(t testing.TB, app core.App, runner, event *core.Record) *core.R
 		return nil
 	}
 	return found[0]
+}
+
+// comment adds a comment of author on event.
+func comment(t testing.TB, app core.App, event, author *core.Record, text string) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId("comments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := core.NewRecord(collection)
+	c.Set("event", event.Id)
+	c.Set("author", author.Id)
+	c.Set("body", text)
+	if err := app.Save(c); err != nil {
+		t.Fatalf("adding a comment: %v", err)
+	}
+	return c
 }
 
 // setFields saves values on the record that has that id.
@@ -299,6 +332,23 @@ func TestMergeEvents(t *testing.T) {
 		onLyon = participate(t, app, fx.AdminRunner, fx.FLyon, "interested", false)
 	}
 
+	// The comments that the rows below set up: the one of the kept event, and
+	// the ones of the merged event, which move.
+	var keptComment *core.Record
+	var movedComments []*core.Record
+	// Alice comments on Event; Bob and Alice comment on Event2.
+	commentsOnBothEvents := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		keptComment = comment(t, app, fx.Event, fx.AliceRunner, "Je prends la voiture")
+		movedComments = []*core.Record{
+			comment(t, app, fx.Event2, fx.BobRunner, "Qui part de Lyon ?"),
+			comment(t, app, fx.Event2, fx.AliceRunner, "Moi !"),
+		}
+	}
+	// Alice comments on the kept event only.
+	commentOnKeptEventOnly := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		keptComment = comment(t, app, fx.Event, fx.AliceRunner, "Je prends la voiture")
+	}
+
 	testutil.RunRows(t, []testutil.Row{
 		unchanged(testutil.Row{
 			Name:     "a dry run counts what would move and writes nothing",
@@ -307,7 +357,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1})},
 		}, nil),
 		unchanged(testutil.Row{
 			Name:   "a dry run counts the dates it would clear and the participations it would move",
@@ -317,7 +367,7 @@ func TestMergeEvents(t *testing.T) {
 			// Event ends in June 14: F42 (dated) would lose its date, F15 has none.
 			Body:     merge(id(event2), id(event), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(2, 3, 0, 1)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1})},
 		}, nil),
 		{
 			Name:     "the formats move to the kept event and the other event is deleted",
@@ -326,7 +376,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				if got := mustStore(t, app, "formats", fx.FLyon.Id).GetString("event"); got != fx.Event.Id {
 					t.Errorf("FLyon is in the event %q, want %q", got, fx.Event.Id)
@@ -345,7 +395,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 0, 1)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, ClearedFormatDates: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				lyon := mustStore(t, app, "formats", fx.FLyon.Id)
 				if got := lyon.GetString("date"); got != "" {
@@ -378,7 +428,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     func(fx testutil.Fixture) string { return merge(literal(wide.Id), id(event), false)(fx) },
 			Status:   http.StatusOK,
-			Contains: []string{result(2, 3, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				for _, format := range []*core.Record{fx.F42, fx.F15} {
 					if got := mustStore(t, app, "formats", format.Id).GetString("event"); got != wide.Id {
@@ -411,7 +461,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				got := mustStore(t, app, "participations", sam.Id)
 				if got.GetString("event") != fx.Event.Id || got.GetString("format") != fx.FLyon.Id {
@@ -440,7 +490,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				got := mustStore(t, app, "participations", movedUndecided.Id)
 				if got.GetString("event") != fx.Event.Id || got.GetString("format") != "" {
@@ -457,7 +507,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1})},
 		}, adminUndecidedOnEvent2),
 		{
 			Name:     "a participation without a format is dropped when its runner is on a format of the kept event",
@@ -467,7 +517,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				gone(t, app, "participations", droppedUndecided)
 				p2 := mustStore(t, app, "participations", fx.P2.Id)
@@ -484,7 +534,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, DroppedParticipations: 1})},
 		}, bobUndecidedOnEvent2),
 		{
 			Name:     "a runner without a format in both events keeps the participation of the kept event",
@@ -494,7 +544,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				mustStore(t, app, "participations", keptUndecided.Id)
 				gone(t, app, "participations", droppedUndecided)
@@ -508,7 +558,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, DroppedParticipations: 1})},
 		}, adminUndecidedOnBoth),
 		{
 			Name:     "a runner without a format in both events keeps the confirmed participation of the kept event",
@@ -518,7 +568,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				got := mustStore(t, app, "participations", keptUndecided.Id)
 				if got.GetString("event") != fx.Event.Id || !got.GetBool("confirmed") {
@@ -536,7 +586,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 0, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, DroppedParticipations: 1})},
 		}, adminConfirmedInKeptEvent),
 		{
 			// The runner said it is true: the one of the merged event survives
@@ -548,7 +598,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				got := mustStore(t, app, "participations", movedUndecided.Id)
 				if got.GetString("event") != fx.Event.Id || got.GetString("format") != "" || !got.GetBool("confirmed") {
@@ -569,7 +619,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1})},
 		}, adminConfirmedInMergedEvent),
 		{
 			Name:     "a participation without a format of the kept event is dropped when its runner gets a format by the merge",
@@ -579,7 +629,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				if got := undecidedOf(t, app, fx.AdminRunner, fx.Event); got != nil {
 					t.Errorf("Admin still has a participation in the event only: %v", got.FieldsData())
@@ -600,8 +650,66 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(1, 1, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1})},
 		}, adminUndecidedOnEventAndOnLyon),
+		{
+			Name:     "the comments of the merged event move to the kept one",
+			Before:   commentsOnBothEvents,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedComments: 2})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				for _, moved := range movedComments {
+					got := mustStore(t, app, "comments", moved.Id)
+					// Only the event changes: who wrote it, what, and when.
+					if got.GetString("event") != fx.Event.Id {
+						t.Errorf("the comment %q is in the event %q, want the kept one %q", moved.GetString("body"), got.GetString("event"), fx.Event.Id)
+					}
+					if got.GetString("author") != moved.GetString("author") || got.GetString("body") != moved.GetString("body") {
+						t.Errorf("the comment %q changed beyond its event: author %q, body %q",
+							moved.GetString("body"), got.GetString("author"), got.GetString("body"))
+					}
+					if got.GetDateTime("created").String() != moved.GetDateTime("created").String() {
+						t.Errorf("the comment %q was created %s, now %s", moved.GetString("body"),
+							moved.GetDateTime("created"), got.GetDateTime("created"))
+					}
+				}
+				if got := mustStore(t, app, "comments", keptComment.Id).GetString("event"); got != fx.Event.Id {
+					t.Errorf("the comment of the kept event is in the event %q, want %q", got, fx.Event.Id)
+				}
+				gone(t, app, "events", fx.Event2)
+				if got := len(storedComments(t, app)); got != 3 {
+					t.Errorf("%d comments after the merge, want the 3 that there were", got)
+				}
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the comments it would move and writes nothing",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1, MovedComments: 2})},
+		}, commentsOnBothEvents),
+		{
+			Name:     "the comments of the kept event do not count as moved",
+			Before:   commentOnKeptEventOnly,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "comments", keptComment.Id).GetString("event"); got != fx.Event.Id {
+					t.Errorf("the comment is in the event %q, want %q", got, fx.Event.Id)
+				}
+			},
+		},
 		{
 			Name: "an event without formats merges too",
 			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -614,7 +722,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event), id(event2), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(0, 0, 0, 0)},
+			Contains: []string{result(admin.MergeResult{})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				gone(t, app, "events", fx.Event2)
 			},
@@ -694,7 +802,7 @@ func TestMergeFormats(t *testing.T) {
 			URL:      path(mergeFormats),
 			Body:     merge(id(f42), id(f15), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(0, 1, 0, 0)},
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				sam := mustStore(t, app, "participations", fx.P3.Id)
 				// Moved as it is, not recreated.
@@ -722,7 +830,7 @@ func TestMergeFormats(t *testing.T) {
 			URL:      path(mergeFormats),
 			Body:     merge(id(f42), id(f15), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(0, 1, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				// P1 is confirmed: it wins over a finished one that is not.
 				p1 := mustStore(t, app, "participations", fx.P1.Id)
@@ -753,7 +861,7 @@ func TestMergeFormats(t *testing.T) {
 			URL:      path(mergeFormats),
 			Body:     merge(id(f15), id(f42), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(0, 2, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 2, DroppedParticipations: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				p1 := mustStore(t, app, "participations", fx.P1.Id)
 				if p1.GetString("format") != fx.F15.Id || p1.GetString("status") != "registered" || !p1.GetBool("confirmed") {
@@ -780,7 +888,7 @@ func TestMergeFormats(t *testing.T) {
 			URL:      path(mergeFormats),
 			Body:     merge(id(f42), id(f15), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(0, 1, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 1, DroppedParticipations: 1})},
 		}, aliceOnF15("finished", false)),
 		unchanged(testutil.Row{
 			Name:     "a dry run says the same when the other participation would win",
@@ -789,7 +897,7 @@ func TestMergeFormats(t *testing.T) {
 			URL:      path(mergeFormats),
 			Body:     merge(id(f15), id(f42), true),
 			Status:   http.StatusOK,
-			Contains: []string{result(0, 2, 1, 0)},
+			Contains: []string{result(admin.MergeResult{MovedParticipations: 2, DroppedParticipations: 1})},
 		}, aliceOnF15("interested", false)),
 		unchanged(testutil.Row{
 			Name:     "a member is forbidden",
@@ -929,6 +1037,30 @@ func TestMerge_RollsBackWhenAWriteFails(t *testing.T) {
 		}
 	})
 
+	t.Run("merge-events with comments", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		// Event2 holds two comments: the second move fails, after the first and
+		// after the formats have moved.
+		first := comment(t, app, fx.Event2, fx.BobRunner, "Qui part de Lyon ?")
+		comment(t, app, fx.Event2, fx.AliceRunner, "Moi !")
+		before := snapshot(t, app)
+		failOn(app, "comments", 2)
+
+		_, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, false)
+		if !errors.Is(err, boom) {
+			t.Fatalf("error = %v, want the failure of the write", err)
+		}
+
+		if got := snapshot(t, app); got != before {
+			t.Errorf("the database changed:\nbefore:\n%s\nafter:\n%s", before, got)
+		}
+		mustStore(t, app, "events", fx.Event2.Id)
+		if got := mustStore(t, app, "comments", first.Id).GetString("event"); got != fx.Event2.Id {
+			t.Errorf("the first comment is in the event %q, want Event2 %q", got, fx.Event2.Id)
+		}
+	})
+
 	t.Run("merge-events with participations", func(t *testing.T) {
 		app := testutil.NewApp(t)
 		fx := testutil.Seed(t, app)
@@ -1023,6 +1155,27 @@ func TestMerge_DryRunGivesTheResultOfTheRealRun(t *testing.T) {
 			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
 		}
 		if want := (admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1}); results[1] != want {
+			t.Errorf("result = %+v, want %+v", results[1], want)
+		}
+	})
+
+	t.Run("events with comments", func(t *testing.T) {
+		var results [2]admin.MergeResult
+		for i, dryRun := range []bool{true, false} {
+			app, fx := setup(t)
+			comment(t, app, fx.Event, fx.AliceRunner, "Je prends la voiture")
+			comment(t, app, fx.Event2, fx.BobRunner, "Qui part de Lyon ?")
+			comment(t, app, fx.Event2, fx.AliceRunner, "Moi !")
+			got, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, dryRun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			results[i] = got
+		}
+		if results[0] != results[1] {
+			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
+		}
+		if want := (admin.MergeResult{MovedFormats: 1, MovedComments: 2}); results[1] != want {
 			t.Errorf("result = %+v, want %+v", results[1], want)
 		}
 	})

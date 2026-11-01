@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cobra"
 
 	"courses/server/config"
@@ -116,7 +117,7 @@ func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
 // one runner who is interested in an event without having chosen a race, and
 // one supporter.
 // Two of the events to come have a registration deadline, and three of their
-// races have a price.
+// races have a price. The first of them has two comments, Alice's then Bob's.
 //
 // Every date comes from today, so the same day gives the same data. It refuses
 // when an account exists, and writes nothing when it fails.
@@ -249,7 +250,36 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			return fmt.Errorf("the participation of %s, without a format: %w", entry.runner, err)
 		}
 	}
+
+	// The comments, oldest first. The request hooks do not run here, so the
+	// author is set by hand, and so is the date: two comments written in the
+	// same millisecond would have no order.
+	for _, entry := range event.comments {
+		if err := seedComment(app, saved, runners[entry.author], entry); err != nil {
+			return fmt.Errorf("the comment of %s: %w", entry.author, err)
+		}
+	}
 	return nil
+}
+
+// seedComment saves a comment of author on event, written at the moment of entry.
+func seedComment(app core.App, event, author *core.Record, entry commentSpec) error {
+	collection, err := app.FindCollectionByNameOrId("comments")
+	if err != nil {
+		return err
+	}
+	written, err := types.ParseDateTime(entry.written)
+	if err != nil {
+		return err
+	}
+	comment := core.NewRecord(collection)
+	comment.Set("event", event.Id)
+	comment.Set("author", author.Id)
+	comment.Set("body", entry.body)
+	// Set does nothing on a date that PocketBase fills, and the save keeps a
+	// value that was given with SetRaw.
+	comment.SetRaw("created", written)
+	return app.Save(comment)
 }
 
 // eventSpec describes an event of the demo. Names are the ones of the runners.
@@ -265,6 +295,15 @@ type eventSpec struct {
 	// yet ("interested"), and the ones who come to cheer ("supporter"). None of
 	// them is on a format of the event.
 	undecided []entrySpec
+	// comments are written by runners who have an account, oldest first.
+	comments []commentSpec
+}
+
+// commentSpec describes a comment of the demo: who wrote it, what it says, and
+// when (a moment before today).
+type commentSpec struct {
+	author, body string
+	written      time.Time
 }
 
 // formatSpec describes a format of the demo. A measure that is zero is not set.
@@ -290,6 +329,10 @@ func demoEvents(today time.Time) []eventSpec {
 	year, month, dayOfMonth := today.Date()
 	base := time.Date(year, month, dayOfMonth, 0, 0, 0, 0, time.UTC)
 	in := func(days int) string { return base.AddDate(0, 0, days).Format(dayLayout) }
+	// at is a moment of the day that is that many days from today, in UTC.
+	at := func(days, hour, minute int) time.Time {
+		return base.AddDate(0, 0, days).Add(time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute)
+	}
 
 	// The first day of the first month that starts three weeks after today at
 	// the earliest: the event over two months starts two days before it and
@@ -325,6 +368,10 @@ func demoEvents(today time.Time) []eventSpec {
 			// Admin is on neither of the two formats yet.
 			undecided: []entrySpec{
 				{runnerAdmin, "interested", runnerAdmin},
+			},
+			comments: []commentSpec{
+				{runnerAlice, "La navette part de la gare à 6 h 30. On se retrouve devant à 6 h 15 ?", at(-2, 19, 5)},
+				{runnerBob, "Parfait pour moi.\nJ'apporte des gels pour le long.", at(-1, 8, 20)},
 			},
 		},
 		{
