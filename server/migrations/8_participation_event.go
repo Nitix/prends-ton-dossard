@@ -35,8 +35,8 @@ const (
 // upParticipationEvent gives each participation an event, and makes its format
 // optional: a participation without a format is for the event only.
 //
-// The participations that exist take the event of their format, which every one
-// of them has.
+// The participations that exist take the event of their format. One whose
+// format does not exist has none to take: it is deleted.
 func upParticipationEvent(app core.App) error {
 	participations, err := app.FindCollectionByNameOrId("participations")
 	if err != nil {
@@ -57,6 +57,17 @@ func upParticipationEvent(app core.App) error {
 	participations.Indexes = types.JSONArray[string]{indexRunnerFormat, indexRunnerEvent}
 	if err := app.Save(participations); err != nil {
 		return fmt.Errorf("participations: %w", err)
+	}
+
+	// A participation whose format does not exist (a hand edit, a restore of an
+	// inconsistent database) is invisible in the v1, which reads the
+	// participations through their format, and it has no event to take: the
+	// subquery below would give NULL, which the NOT NULL column refuses and
+	// fails the whole migration. It cannot be repaired, so it is deleted.
+	if _, err := app.DB().NewQuery(
+		"DELETE FROM participations WHERE format != '' AND NOT EXISTS (SELECT 1 FROM formats WHERE formats.id = participations.format)",
+	).Execute(); err != nil {
+		return fmt.Errorf("participations: deleting the ones whose format is gone: %w", err)
 	}
 
 	if _, err := app.DB().NewQuery(

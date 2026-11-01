@@ -474,6 +474,56 @@ func TestMigrations_ParticipationEventBackfill(t *testing.T) {
 	}
 }
 
+// An orphan participation (its format row does not exist: a hand edit, or a
+// restore of an inconsistent database) is invisible in the v1, which reads the
+// participations through their format, and it has no event to take. The
+// migration 8 deletes it, instead of writing NULL into the event, which is
+// NOT NULL and would fail the whole migration, and with it the start of the
+// container. The other participations get the event of their format.
+func TestMigrations_ParticipationEventBackfillOrphan(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+
+	// The database as the v1 left it: the migrations 8 and 9 rolled back.
+	runner := core.NewMigrationsRunner(app, core.AppMigrations)
+	reverted, err := runner.Down(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"9_runner_avatar.go", "8_participation_event.go"}; !slices.Equal(reverted, want) {
+		t.Fatalf("reverted %v, want %v", reverted, want)
+	}
+
+	// The orphan is written with SQL: no record of "formats" has this id, and
+	// the collection has no foreign key to refuse it.
+	const orphan = "orphanpart0001"
+	if _, err := app.DB().NewQuery(
+		"INSERT INTO participations (id, runner, format, status, confirmed) VALUES ({:id}, {:runner}, {:format}, 'interested', 1)",
+	).Bind(map[string]any{"id": orphan, "runner": fx.AdminRunner.Id, "format": "nosuchformat01"}).Execute(); err != nil {
+		t.Fatalf("inserting the orphan participation: %v", err)
+	}
+
+	if _, err := runner.Up(); err != nil {
+		t.Fatalf("applying the migrations to a database with an orphan participation: %v", err)
+	}
+
+	if _, err := app.FindRecordById("participations", orphan); err == nil {
+		t.Error("the orphan participation must be deleted by the migration")
+	}
+	for _, p := range []*core.Record{fx.P1, fx.P2, fx.P3} {
+		got, err := app.FindRecordById("participations", p.Id)
+		if err != nil {
+			t.Fatalf("the participation %s must survive the migration: %v", p.Id, err)
+		}
+		if got.GetString("event") != fx.Event.Id {
+			t.Errorf("the participation %s is in the event %q, want %q", p.Id, got.GetString("event"), fx.Event.Id)
+		}
+	}
+	if got, _ := app.CountRecords("participations"); got != 3 {
+		t.Errorf("%d participations after the migration, want the 3 of the fixture", got)
+	}
+}
+
 func TestMigrations_HiddenFields(t *testing.T) {
 	app := testutil.NewApp(t)
 
