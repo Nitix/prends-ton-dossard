@@ -42,8 +42,9 @@ export function MonthGrid({
 
   // On a phone the grid runs from one edge of the screen to the other: seven
   // days of at least 44 px do not fit between the gutters of the page (`px-4`
-  // of the app shell's `<main>`) on a 320 px screen. From `md` it is back
-  // between them.
+  // of the app shell's `<main>`) on a 320 px screen. For the same reason a day
+  // has no room at its sides there (312 px for seven, 44.5 px each), only
+  // above and below. From `md` it is back between them.
   return (
     <div className="-mx-4 bg-white px-1 py-2 shadow-card md:mx-0 md:overflow-hidden md:rounded-[1.25rem] md:p-2">
       <table
@@ -115,7 +116,7 @@ function DayCell({
 
   return (
     <td
-      className={`p-0.5 align-top md:border md:border-neutral-100 md:p-0 ${inMonth ? "" : "md:bg-neutral-50"}`}
+      className={`px-0 py-0.5 align-top md:border md:border-neutral-100 md:p-0 ${inMonth ? "" : "md:bg-neutral-50"}`}
     >
       <button
         type="button"
