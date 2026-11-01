@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
+import { userEvent } from "vitest/browser";
 
+import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ElevationProfile } from "./ElevationProfile";
 import { toTrack, type TrackPoint } from "./gpx";
+import { SLOPE_COLORS, SLOPE_ZONES } from "./slope";
 
 // The colours are classes of Tailwind, which the styles load.
 import "../../styles.css";
@@ -27,7 +30,28 @@ function flatMap(): TrackPoint[] {
   return mountain().map(({ ele: _ele, ...point }) => point);
 }
 
+/** 2 km flat at 500 m, then a wall: 1 km that climbs to 800 m (30 %), a point every 100 m. */
+function flatThenWall(): TrackPoint[] {
+  return Array.from({ length: 31 }, (_, i) => ({
+    lat: 45 + i / 1000,
+    lon: 6,
+    km: i / 10,
+    ele: i <= 20 ? 500 : 500 + (i - 20) * 30,
+  }));
+}
+
 const COUNT = (texts: string[], unit: RegExp) => texts.filter((text) => unit.test(text)).length;
+
+// Intl separates a number from its unit with a no-break space: tests read the
+// text as it looks.
+const seen = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " ");
+
+/** A colour "#rrggbb" as the browser gives it back from a style. */
+const rgb = (hex: string) =>
+  `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(", ")})`;
+
+/** The figures over the drawing: the summit's altitude, or the cursor's reading in its place. */
+const pill = (container: HTMLElement) => seen(container.querySelector("p")?.textContent);
 
 describe("ElevationProfile", () => {
   test("ElevationProfile — graduations et aria-label", async () => {
@@ -124,6 +148,83 @@ describe("ElevationProfile", () => {
     );
     expect(screen.container.querySelector("svg")).not.toBeNull();
     expect(screen.container.innerHTML).not.toMatch(/NaN|Infinity/);
+  });
+
+  test("ElevationProfile — la pente colore les bandes, et la légende dit chaque couleur en mots", async () => {
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </I18nProvider>,
+    );
+    await expect.element(screen.getByRole("img", { name: "Profil" })).toBeVisible();
+
+    // Flat, then a wall: the first band is in the gentlest zone, the last in the steepest.
+    const fills = [...screen.container.querySelectorAll("g[clip-path] rect")].map((rect) =>
+      rect.getAttribute("fill"),
+    );
+    expect(fills.at(0)).toBe(SLOPE_COLORS[1]);
+    expect(fills.at(-1)).toBe(SLOPE_COLORS[5]);
+
+    // The legend: each colour of the bands, in order, with what it means.
+    const legend = screen.getByText(fr.route.slope, { exact: true }).element().parentElement;
+    const entries = [...(legend?.children ?? [])].slice(1);
+    expect(entries.map((entry) => seen(entry.textContent))).toEqual([
+      "< 5 %",
+      "5–10 %",
+      "10–15 %",
+      "15–25 %",
+      "≥ 25 %",
+    ]);
+    expect(
+      entries.map((entry) => getComputedStyle(entry.firstElementChild ?? entry).backgroundColor),
+    ).toEqual(SLOPE_ZONES.map((zone) => rgb(SLOPE_COLORS[zone])));
+  });
+
+  test("ElevationProfile — au clavier, le curseur dit la distance, l'altitude et la pente", async () => {
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </I18nProvider>,
+    );
+    const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
+    const reading = () => seen(cursor.element().getAttribute("aria-valuetext"));
+    // Before the cursor, the summit is named over the drawing.
+    expect(pill(screen.container)).toBe("800 m");
+
+    // Tab reaches it, with a ring to show it; it starts at the start.
+    await userEvent.tab();
+    expect(document.activeElement).toBe(cursor.element());
+    expect(getComputedStyle(cursor.element()).outlineStyle).not.toBe("none");
+    expect(reading()).toBe("0 km, altitude 500 m, pente 0 %");
+    expect(pill(screen.container)).toBe("0 km · 500 m · 0 %");
+
+    // End goes to the finish, at the top of the wall; Home back to the start.
+    await userEvent.keyboard("{End}");
+    expect(reading()).toBe("3 km, altitude 800 m, pente 30 %");
+    expect(pill(screen.container)).toBe("3 km · 800 m · 30 %");
+    await userEvent.keyboard("{Home}");
+    expect(reading()).toBe("0 km, altitude 500 m, pente 0 %");
+
+    // Escape puts the cursor away: the summit is named again, the focus stays.
+    await userEvent.keyboard("{End}{Escape}");
+    expect(pill(screen.container)).toBe("800 m");
+    expect(document.activeElement).toBe(cursor.element());
+  });
+
+  test("ElevationProfile — le curseur suit le pointeur, et s'en va avec lui", async () => {
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </I18nProvider>,
+    );
+    const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
+
+    // The middle of the range is the middle of the track: 1.5 km, still on the flat.
+    await userEvent.hover(cursor);
+    expect(pill(screen.container)).toBe("1,5 km · 500 m · 0 %");
+
+    await userEvent.unhover(cursor);
+    expect(pill(screen.container)).toBe("800 m");
   });
 
   test("ElevationProfile — des points sans altitude parmi d'autres sont passés", async () => {
