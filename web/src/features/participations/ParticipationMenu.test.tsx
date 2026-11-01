@@ -262,10 +262,13 @@ const ninaMenu = (screen: Screen) => trigger(screen, "Nina");
 const chooseFormat = (screen: Screen) =>
   screen.getByRole("button", { name: fr.participation.chooseFormat });
 
-async function renderOnEventAlone(options: { canConfirm?: boolean; confirmed?: boolean } = {}) {
-  const { canConfirm = true, confirmed = false } = options;
+async function renderOnEventAlone(
+  options: { canConfirm?: boolean; confirmed?: boolean; supporter?: boolean } = {},
+) {
+  const { canConfirm = true, confirmed = false, supporter = false } = options;
+  const own = confirmed ? ninaConfirmed : ninaParticipation;
   return renderMenu({
-    participation: confirmed ? ninaConfirmed : ninaParticipation,
+    participation: supporter ? { ...own, status: "supporter" } : own,
     runner: ninaRunner,
     formatsOf: trail,
     // No format: the participation is on the event.
@@ -274,20 +277,115 @@ async function renderOnEventAlone(options: { canConfirm?: boolean; confirmed?: b
   });
 }
 
-test("ParticipationMenu — sans épreuve : pas de statuts, mais « Choisir l'épreuve », Confirmer s'il y a lieu, et Retirer", async () => {
+/** The labels of the buttons of a menu, in order, without the check mark of the current status. */
+function itemsOf(button: Element): string[] {
+  return Array.from(popoverOf(button).querySelectorAll("button")).map((item) =>
+    (item.textContent ?? "").replace("✓", "").trim(),
+  );
+}
+
+test("ParticipationMenu — à l'événement : Intéressé et Supporteur, puis Choisir l'épreuve", async () => {
   const { screen } = await renderOnEventAlone();
   await ninaMenu(screen).click();
   await expect.element(chooseFormat(screen)).toBeVisible();
 
-  // Only « Intéressé » is possible with no format: no status to choose from.
-  for (const status of ["interested", "registered", "finished", "dnf", "dns"] as const) {
+  // The two statuses of a participation on the event, then what is left of the menu.
+  expect(itemsOf(ninaMenu(screen).element())).toEqual([
+    fr.status.interested,
+    fr.status.supporter,
+    fr.participation.chooseFormat,
+    fr.common.confirm,
+    fr.common.remove,
+  ]);
+  await expect.element(screen.getByRole("list", { name: fr.participation.status })).toBeVisible();
+  // The current one is marked as it is among the formats, and not by the weight of the text alone.
+  const interested = screen.getByRole("button", { name: fr.status.interested });
+  const supporter = screen.getByRole("button", { name: fr.status.supporter });
+  await expect.element(interested).toHaveAttribute("aria-current", "true");
+  await expect.element(supporter).not.toHaveAttribute("aria-current", "true");
+  expect(interested.element().textContent).toContain("✓");
+  expect(supporter.element().textContent).not.toContain("✓");
+  for (const item of [interested, supporter]) {
+    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("ParticipationMenu — à l'événement, un supporteur a Supporteur pour statut courant", async () => {
+  const { screen } = await renderOnEventAlone({ supporter: true });
+  await ninaMenu(screen).click();
+  await expect.element(chooseFormat(screen)).toBeVisible();
+
+  await expect
+    .element(screen.getByRole("button", { name: fr.status.supporter }))
+    .toHaveAttribute("aria-current", "true");
+  await expect
+    .element(screen.getByRole("button", { name: fr.status.interested }))
+    .not.toHaveAttribute("aria-current", "true");
+});
+
+test('ParticipationMenu — passer d\'Intéressé à Supporteur envoie {status: "supporter"}', async () => {
+  const { screen, invalidate } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+  const popover = popoverOf(ninaMenu(screen).element());
+
+  await screen.getByRole("button", { name: fr.status.supporter }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pNinaUndecided", {
+      status: "supporter",
+    });
+  });
+  expect(popover.matches(":popover-open")).toBe(false);
+  await vi.waitFor(() => {
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toContainEqual(["event", "event"]);
+  });
+});
+
+test("ParticipationMenu — passer d'Intéressé à Supporteur, ou l'inverse, change la ligne de section : la page en est prévenue", async () => {
+  const toSupporter = await renderOnEventAlone();
+  await ninaMenu(toSupporter.screen).click();
+  await toSupporter.screen.getByRole("button", { name: fr.status.supporter }).click();
+  await vi.waitFor(() => {
+    expect(toSupporter.onRemoved).toHaveBeenCalledOnce();
+  });
+  await toSupporter.screen.unmount();
+
+  mocks.update.mockClear();
+  const toInterested = await renderOnEventAlone({ supporter: true });
+  await ninaMenu(toInterested.screen).click();
+  await toInterested.screen.getByRole("button", { name: fr.status.interested }).click();
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pNinaUndecided", {
+      status: "interested",
+    });
+  });
+  await vi.waitFor(() => {
+    expect(toInterested.onRemoved).toHaveBeenCalledOnce();
+  });
+});
+
+test("ParticipationMenu — à l'événement, le statut courant ne renvoie rien et ne prévient pas la page", async () => {
+  const { screen, onRemoved } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+
+  await screen.getByRole("button", { name: fr.status.interested }).click();
+
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(onRemoved).not.toHaveBeenCalled();
+});
+
+test("ParticipationMenu — à l'événement : ni Inscrit, ni Terminé, ni Abandon, ni Non partant, mais Confirmer s'il y a lieu et Retirer", async () => {
+  const { screen } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+  await expect.element(chooseFormat(screen)).toBeVisible();
+
+  // The statuses of a format are not possible with no format.
+  for (const status of ["registered", "finished", "dnf", "dns"] as const) {
     await expect
       .element(screen.getByRole("button", { name: fr.status[status] }))
       .not.toBeInTheDocument();
   }
-  await expect
-    .element(screen.getByRole("list", { name: fr.participation.status }))
-    .not.toBeInTheDocument();
   // Nina's own participation is not confirmed yet, and she may confirm it.
   const confirm = screen.getByRole("button", { name: fr.common.confirm });
   await expect.element(confirm).toBeVisible();

@@ -105,6 +105,7 @@ export const fr = {
     finished: "Terminé",
     dnf: "Abandon",
     dns: "Non partant",
+    supporter: "Supporteur",
   },
   // The event cards and the chips of the participants.
   event: {
@@ -128,6 +129,8 @@ export const fr = {
     deleted: "Événement supprimé.",
     // The section of the participations on the event alone, before the formats.
     interestedTitle: "Intéressés, format à choisir",
+    // The section of the supporters of the event, after the formats, and the line of the cards that has their chips.
+    supportersTitle: "Supporteurs",
     // A participation with no format yet, said in words (never by a colour alone) on the cards and on the home page.
     formatToChoose: "Format à choisir",
     // The summary of the closed list, at the bottom, of those who do not start: the count.
@@ -165,6 +168,11 @@ export const fr = {
     undecided: "Pas encore décidé",
     // Under the status when it cannot be chosen: with no format, it is « Intéressé ».
     undecidedHint: "Sans épreuve, le statut est « Intéressé ». Tu choisiras l'épreuve plus tard.",
+    // The choice « Je viens encourager » among the formats of « J'y vais » (and « Vient encourager » in « Ajouter quelqu'un »): the participation is on the event alone, as a supporter.
+    support: "Je viens encourager",
+    supportOther: "Vient encourager",
+    // Under the status when it cannot be chosen: a supporter comes to cheer without running.
+    supportHint: "Un supporteur vient encourager sans courir.",
     // The item of the menu of a participation on the event alone, and the title of its dialog.
     chooseFormat: "Choisir l'épreuve",
     chooseFormatTitle: "Choisir l'épreuve",

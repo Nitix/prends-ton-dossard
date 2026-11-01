@@ -11,6 +11,7 @@ describe("status labels", () => {
       finished: "Terminé",
       dnf: "Abandon",
       dns: "Non partant",
+      supporter: "Supporteur",
     });
   });
 
@@ -21,7 +22,24 @@ describe("status labels", () => {
       finished: "Finished",
       dnf: "DNF",
       dns: "DNS",
+      supporter: "Supporter",
     });
+  });
+});
+
+describe("supporter texts", () => {
+  test("French", () => {
+    expect(fr.participation.support).toBe("Je viens encourager");
+    expect(fr.participation.supportOther).toBe("Vient encourager");
+    expect(fr.participation.supportHint).toBe("Un supporteur vient encourager sans courir.");
+    expect(fr.event.supportersTitle).toBe("Supporteurs");
+  });
+
+  test("English", () => {
+    expect(en.participation.support).toBe("I'm coming to cheer");
+    expect(en.participation.supportOther).toBe("Coming to cheer");
+    expect(en.participation.supportHint).toBe("A supporter comes to cheer without running.");
+    expect(en.event.supportersTitle).toBe("Supporters");
   });
 });
 

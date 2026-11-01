@@ -8,8 +8,15 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "../events/api";
-import { UNDECIDED } from "../events/participants";
-import { aliceRunner, event2Record, eventRecord, ninaRunner } from "../events/testFixture";
+import { SUPPORT, UNDECIDED } from "../events/participants";
+import {
+  aliceRunner,
+  event2Record,
+  eventRecord,
+  ninaRunner,
+  pNinaSupporter,
+  withParticipations,
+} from "../events/testFixture";
 import { JoinDialog } from "./JoinDialog";
 import type { Me } from "./permissions";
 
@@ -99,25 +106,30 @@ test("JoinDialog — Alice (sur F42) : seule F15 est proposée, sans « Pas enco
   expect(optionValues(formatSelect(screen).element())).toEqual(["f15"]);
   await expect.element(formatSelect(screen)).toHaveValue("f15");
   expect(screen.container.textContent).not.toContain(fr.participation.undecided);
+  expect(screen.container.textContent).not.toContain(fr.participation.support);
 });
 
 test("JoinDialog — Nina (sur aucune épreuve) : F15, F42 et « Pas encore décidé », la première épreuve est choisie, le statut est « Intéressé »", async () => {
   const { screen } = await renderDialog(nina);
 
   const select = formatSelect(screen).element();
-  expect(optionValues(select)).toEqual(["f15", "f42", UNDECIDED]);
-  // « Pas encore décidé » comes last, and is said in words.
-  expect(optionsOf(select).at(-1)?.textContent).toBe(fr.participation.undecided);
+  expect(optionValues(select)).toEqual(["f15", "f42", UNDECIDED, SUPPORT]);
+  // « Pas encore décidé » and « Je viens encourager » come last, and are said in words.
+  expect(
+    optionsOf(select)
+      .map((option) => option.textContent)
+      .slice(-2),
+  ).toEqual([fr.participation.undecided, fr.participation.support]);
   await expect.element(formatSelect(screen)).toHaveValue("f15");
   await expect.element(statusSelect(screen)).toHaveValue("interested");
   await expect.element(statusSelect(screen)).toBeEnabled();
   expect(screen.container.textContent).not.toContain(fr.participation.undecidedHint);
 });
 
-test("JoinDialog — sur un événement à une seule épreuve, pas de « Pas encore décidé »", async () => {
+test("JoinDialog — sur un événement à une seule épreuve, pas de « Pas encore décidé » mais « Je viens encourager »", async () => {
   const { screen } = await renderDialog(nina, lyon);
 
-  expect(optionValues(formatSelect(screen).element())).toEqual(["fLyon"]);
+  expect(optionValues(formatSelect(screen).element())).toEqual(["fLyon", SUPPORT]);
   expect(screen.container.textContent).not.toContain(fr.participation.undecided);
 });
 
@@ -248,6 +260,71 @@ test("JoinDialog — rouverte, elle repart des valeurs de départ", async () => 
 
   await expect.element(statusSelect(screen)).toHaveValue("interested");
   await expect.element(formatSelect(screen)).toHaveValue("f15");
+});
+
+// --- Supporter: « Je viens encourager » ---
+
+test("JoinDialog — « Je viens encourager » crée une participation supporter sans format, statut verrouillé avec sa phrase", async () => {
+  const { screen, onClose, onJoined } = await renderDialog(nina, lyon);
+  // The status was chosen before: the lock puts it on « Supporteur ».
+  await statusSelect(screen).selectOptions("registered");
+
+  await formatSelect(screen).selectOptions(SUPPORT);
+
+  await expect.element(statusSelect(screen)).toBeDisabled();
+  await expect.element(statusSelect(screen)).toHaveValue("supporter");
+  await expect.element(screen.getByText(fr.participation.supportHint)).toBeVisible();
+  // It is not the sentence of « Pas encore décidé ».
+  expect(screen.container.textContent).not.toContain(fr.participation.undecidedHint);
+  const hint = screen.getByText(fr.participation.supportHint).element();
+  expect(statusSelect(screen).element().getAttribute("aria-describedby")).toBe(hint.id);
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+    runner: nina.runnerId,
+    event: "event2",
+    status: "supporter",
+  });
+  // The key is absent, not `undefined`.
+  const [body] = mocks.create.mock.calls[0] ?? [];
+  expect("format" in (body ?? {})).toBe(false);
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(onJoined).toHaveBeenCalledOnce();
+});
+
+test("JoinDialog — passer de « Je viens encourager » à une épreuve rend le choix du statut", async () => {
+  const { screen } = await renderDialog(nina, lyon);
+  await formatSelect(screen).selectOptions(SUPPORT);
+  await expect.element(statusSelect(screen)).toBeDisabled();
+
+  await formatSelect(screen).selectOptions("fLyon");
+
+  await expect.element(statusSelect(screen)).toBeEnabled();
+  await expect.element(statusSelect(screen)).toHaveValue("interested");
+  expect(screen.container.textContent).not.toContain(fr.participation.supportHint);
+});
+
+test("JoinDialog — de « Pas encore décidé » à « Je viens encourager », la phrase et le statut suivent", async () => {
+  const { screen } = await renderDialog(nina);
+  await formatSelect(screen).selectOptions(UNDECIDED);
+  await expect.element(screen.getByText(fr.participation.undecidedHint)).toBeVisible();
+
+  await formatSelect(screen).selectOptions(SUPPORT);
+
+  await expect.element(statusSelect(screen)).toHaveValue("supporter");
+  await expect.element(screen.getByText(fr.participation.supportHint)).toBeVisible();
+  expect(screen.container.textContent).not.toContain(fr.participation.undecidedHint);
+});
+
+test("JoinDialog — un supporteur n'a plus « Je viens encourager » ni « Pas encore décidé », mais les épreuves", async () => {
+  const supporter = toEventView(withParticipations(eventRecord, [pNinaSupporter]));
+  const { screen } = await renderDialog(nina, supporter);
+
+  expect(optionValues(formatSelect(screen).element())).toEqual(["f15", "f42"]);
 });
 
 // --- Failures ---

@@ -7,7 +7,7 @@ import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { ParticipationRecord, RunnerRecord, Status } from "../../lib/types";
 import { invalidateEvents, type EventView } from "../events/api";
-import { STATUSES, useDeleteParticipation, useUpdateParticipation } from "./api";
+import { EVENT_STATUSES, STATUSES, useDeleteParticipation, useUpdateParticipation } from "./api";
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 import { isNotFound, participationError } from "./errors";
 
@@ -19,11 +19,12 @@ type Opened = "remove" | "choose";
 
 /**
  * The actions on a participation: change its status, confirm it, remove it.
- * For a participation on the event alone (`formatsOf`), it offers « Pick the
- * race » in place of the statuses: with no format the status can only be
- * « Interested ». It is a menu of the browser (the Popover API): the button
- * opens it, and it closes with Esc, with a click outside, and with a click on
- * one of its actions, with no script. Removing asks first, in a dialog.
+ * For a participation on the event alone (`formatsOf`), it offers the two
+ * statuses that are possible with no format (« Interested » and
+ * « Supporter »), then « Pick the race ». It is a menu of the browser (the
+ * Popover API): the button opens it, and it closes with Esc, with a click
+ * outside, and with a click on one of its actions, with no script. Removing
+ * asks first, in a dialog.
  *
  * Who may do what is the page's call: it only shows this to those who may
  * edit the participation, and passes `canConfirm` for the runner it is about.
@@ -32,9 +33,10 @@ type Opened = "remove" | "choose";
  * the top of the page): a status change or a confirmation gives it back to the
  * button of the menu (the browser does, when the popover closes); so does a
  * dialog that is cancelled; and a removal that goes through, like a format that
- * is given or a status that moves the participation to or from the "did not
- * start" list, calls `onRemoved`, since this menu goes away with its row: the
- * page puts the focus somewhere that stays.
+ * is given or a status that moves the participation to another list (to or
+ * from the "did not start" list, or from interested to supporter and back),
+ * calls `onRemoved`, since this menu goes away with its row: the page puts the
+ * focus somewhere that stays.
  */
 export function ParticipationMenu({
   eventId,
@@ -99,11 +101,13 @@ export function ParticipationMenu({
       }
       return;
     }
-    // The page lists those who do not start apart from the others: the row moves.
+    // The page lists those who do not start apart from the others, and the
+    // supporters of the event apart from those who are interested in it: the row moves.
     const { status } = patch;
-    if (status !== undefined && (status === "dns") !== (participation.status === "dns")) {
-      onRemoved();
-    }
+    const moves = formatsOf
+      ? status !== participation.status
+      : (status === "dns") !== (participation.status === "dns");
+    if (status !== undefined && moves) onRemoved();
   }
 
   return (
@@ -123,8 +127,34 @@ export function ParticipationMenu({
         popover="auto"
         className="menu-popover rounded-lg border border-neutral-200 bg-white p-1 shadow-lg"
       >
-        {formatsOf ? (
-          <ul>
+        {/* With no format, only two statuses are possible: the participation is on the event alone. */}
+        <ul aria-label={t.participation.status}>
+          {(formatsOf ? EVENT_STATUSES : STATUSES).map((status) => {
+            const current = status === participation.status;
+            return (
+              <li key={status}>
+                <button
+                  type="button"
+                  popoverTarget={menuId}
+                  popoverTargetAction="hide"
+                  aria-current={current ? "true" : undefined}
+                  onClick={() => {
+                    if (!current) void change({ status });
+                  }}
+                  className={`${ITEM} ${current ? "font-semibold" : ""}`}
+                >
+                  {/* The current status is not told by the weight of the text alone. */}
+                  <span aria-hidden="true" className="w-4 text-center">
+                    {current ? "✓" : ""}
+                  </span>
+                  {t.status[status]}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <ul className="mt-1 border-t border-neutral-200 pt-1">
+          {formatsOf && (
             <li>
               <button
                 type="button"
@@ -138,35 +168,7 @@ export function ParticipationMenu({
                 {t.participation.chooseFormat}
               </button>
             </li>
-          </ul>
-        ) : (
-          <ul aria-label={t.participation.status}>
-            {STATUSES.map((status) => {
-              const current = status === participation.status;
-              return (
-                <li key={status}>
-                  <button
-                    type="button"
-                    popoverTarget={menuId}
-                    popoverTargetAction="hide"
-                    aria-current={current ? "true" : undefined}
-                    onClick={() => {
-                      if (!current) void change({ status });
-                    }}
-                    className={`${ITEM} ${current ? "font-semibold" : ""}`}
-                  >
-                    {/* The current status is not told by the weight of the text alone. */}
-                    <span aria-hidden="true" className="w-4 text-center">
-                      {current ? "✓" : ""}
-                    </span>
-                    {t.status[status]}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <ul className="mt-1 border-t border-neutral-200 pt-1">
+          )}
           {canConfirm && !participation.confirmed && (
             <li>
               <button

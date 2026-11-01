@@ -5,10 +5,10 @@ import { Dialog } from "../../components/Dialog";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { ParticipationRecord, Status } from "../../lib/types";
 import type { EventView } from "../events/api";
-import { joinOptions, UNDECIDED } from "../events/participants";
+import { joinOptions, SUPPORT } from "../events/participants";
 import { useCreateParticipation } from "./api";
 import { participationError } from "./errors";
-import { FormatField, StatusField } from "./fields";
+import { FormatField, noFormatChoice, StatusField } from "./fields";
 import type { Me } from "./permissions";
 
 /**
@@ -18,7 +18,9 @@ import type { Me } from "./permissions";
  * from its own row, so the dialog never changes one.
  *
  * "Not decided yet" puts the member on the event alone, with no format: the
- * status is then « Intéressé », which the field says.
+ * status is then « Intéressé », which the field says. "I'm coming to cheer"
+ * does too, as a supporter: the status is then « Supporteur », which the
+ * field says as well.
  *
  * Once the participation is saved, `onJoined` is given it, then the dialog
  * closes: the button that opened it may be gone with the last format to take,
@@ -62,12 +64,14 @@ function JoinForm({
   // What the runner can choose from is settled when the dialog opens. Once
   // saved, the page loads the new participation before the dialog closes: the
   // form must not lose the format that has just been taken.
-  const [{ formats, undecided }] = useState(() => joinOptions(view, me.runnerId));
+  const [{ formats, undecided, support }] = useState(() => joinOptions(view, me.runnerId));
 
-  const [formatId, setFormatId] = useState(formats[0]?.format.id ?? "");
+  // The first format; an event with none leaves the supporter's choice alone.
+  const [formatId, setFormatId] = useState(formats[0]?.format.id ?? (support ? SUPPORT : ""));
   const [status, setStatus] = useState<Status>("interested");
   const [message, setMessage] = useState<string | null>(null);
-  const noFormat = formatId === UNDECIDED;
+  // « Pas encore décidé » and « Je viens encourager » are on the event alone, with a status that is not a choice.
+  const alone = noFormatChoice(formatId);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +79,7 @@ function JoinForm({
     const who = { runner: me.runnerId, event: view.event.id };
     try {
       const created = await create.mutateAsync(
-        noFormat ? { ...who, status: "interested" } : { ...who, format: formatId, status },
+        alone ? { ...who, status: alone.status } : { ...who, format: formatId, status },
       );
       onJoined?.(created);
       onClose();
@@ -90,10 +94,11 @@ function JoinForm({
         view={view}
         formats={formats}
         undecided={undecided}
+        support={support ? t.participation.support : undefined}
         value={formatId}
         onChange={setFormatId}
       />
-      <StatusField value={status} onChange={setStatus} locked={noFormat} />
+      <StatusField value={status} onChange={setStatus} locked={alone?.lock} />
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
           {message}

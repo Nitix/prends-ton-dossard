@@ -148,6 +148,17 @@ export const pNinaUndecided = {
   expand: { runner: ninaRunner, added_by: ninaRunner },
 };
 
+/**
+ * Nina, supporter of the event: a participation on the event alone, with the
+ * status `supporter`, added by herself so confirmed. Like `pNinaUndecided`, she
+ * is not in `eventRecord`: see `withParticipations`.
+ */
+export const pNinaSupporter = {
+  ...pNinaUndecided,
+  id: "pNinaSupporter",
+  status: "supporter",
+};
+
 /** A copy of the event whose participations are those it has, then `extra`. */
 export function withParticipations<E extends { expand: object }>(event: E, extra: unknown[]) {
   const known =

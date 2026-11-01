@@ -9,6 +9,7 @@ import {
   joinOptions,
   nonStarters,
   starters,
+  SUPPORT,
   UNDECIDED,
 } from "./participants";
 import {
@@ -22,6 +23,7 @@ import {
   p1,
   p2,
   p3,
+  pNinaSupporter,
   pNinaUndecided,
   samRunner as sam,
   withParticipations,
@@ -48,6 +50,15 @@ describe("UNDECIDED", () => {
     expect(UNDECIDED).toBe("undecided");
     expect(UNDECIDED).not.toHaveLength(15);
     for (const id of [f15.id, f42.id, "fLyon"]) expect(id).not.toBe(UNDECIDED);
+  });
+});
+
+describe("SUPPORT", () => {
+  test("is not an id of PocketBase (15 characters), nor UNDECIDED", () => {
+    expect(SUPPORT).toBe("support");
+    expect(SUPPORT).not.toHaveLength(15);
+    expect(SUPPORT).not.toBe(UNDECIDED);
+    for (const id of [f15.id, f42.id, "fLyon"]) expect(id).not.toBe(SUPPORT);
   });
 });
 
@@ -91,7 +102,57 @@ describe("joinOptions", () => {
   test("Alice, on F42 and on F15: nothing left to choose", () => {
     const view = eventWith([p1, { ...p1, id: "p1b", format: "f15" }, p2, p3]);
 
-    expect(joinOptions(view, alice.id)).toEqual({ formats: [], undecided: false });
+    expect(joinOptions(view, alice.id)).toEqual({ formats: [], undecided: false, support: false });
+  });
+
+  test("joinOptions — sur un événement à une épreuve, support sans undecided", () => {
+    const options = joinOptions(event2(), nina.id);
+
+    expect(options.formats.map(({ format }) => format.id)).toEqual(["fLyon"]);
+    expect(options.undecided).toBe(false);
+    expect(options.support).toBe(true);
+  });
+
+  test("Nina, who is nowhere on an event of two formats: both formats, not deciding yet, and support", () => {
+    expect(joinOptions(event(), nina.id)).toMatchObject({ undecided: true, support: true });
+  });
+
+  test("support is for a runner with nothing at all: not for one on a format, nor a dns", () => {
+    expect(joinOptions(event(), alice.id).support).toBe(false);
+    expect(joinOptions(eventWith([as(p2, "dns"), p1, p3]), bob.id).support).toBe(false);
+  });
+
+  test("Nina interested with no format: no support (she has a participation already)", () => {
+    const view = eventWith([pNinaUndecided]);
+
+    expect(joinOptions(view, nina.id).support).toBe(false);
+  });
+
+  test("joinOptions — un supporteur n'a plus ni épreuve ni « Pas encore décidé », et pas de « Je viens encourager »", () => {
+    // Alice, Bob (F42) and Sam (F15) as in the fixture, and Nina, supporter of the event.
+    const view = toEventView(withParticipations(eventRecord, [pNinaSupporter]));
+
+    const options = joinOptions(view, nina.id);
+
+    // Nina is on the event alone: no « Pas encore décidé », and no second « Je viens encourager ».
+    expect(options.undecided).toBe(false);
+    expect(options.support).toBe(false);
+    // As for any participation on the event alone, the formats are what is left to give: the
+    // server turns her participation into one on the format she takes.
+    expect(formatIds(view, nina.id)).toEqual(["f15", "f42"]);
+    // She does not change what the others are offered.
+    expect(joinOptions(view, sam.id).support).toBe(false);
+    expect(joinOptions(view, alice.id)).toMatchObject({ undecided: false, support: false });
+    expect(joinOptions(view, "nobody0000000")).toMatchObject({ undecided: true, support: true });
+  });
+
+  test("a supporter of an event with a single format has no « Je viens encourager » either, and keeps the format", () => {
+    const lyon = toEventView(
+      withParticipations(event2Record, [{ ...pNinaSupporter, event: "event2" }]),
+    );
+
+    expect(joinOptions(lyon, nina.id)).toMatchObject({ undecided: false, support: false });
+    expect(formatIds(lyon, nina.id)).toEqual(["fLyon"]);
   });
 
   test("gives the formats of the view, so the order of their days", () => {
@@ -175,6 +236,10 @@ describe("hasStarters", () => {
   test("true with a dnf, who did start", () => {
     expect(hasStarters(eventWith([as(p1, "dnf")]))).toBe(true);
   });
+
+  test("false with nothing but a supporter: a supporter does not start anything", () => {
+    expect(hasStarters(eventWith([pNinaSupporter]))).toBe(false);
+  });
 });
 
 describe("isOnEvent", () => {
@@ -187,6 +252,13 @@ describe("isOnEvent", () => {
     const view = eventWith([pNinaUndecided]);
 
     expect(isOnEvent(view, nina.id)).toBe(true);
+  });
+
+  test("isOnEvent — vrai pour un supporteur", () => {
+    const view = eventWith([pNinaSupporter]);
+
+    expect(isOnEvent(view, nina.id)).toBe(true);
+    expect(isOnEvent(view, alice.id)).toBe(false);
   });
 
   test("false for a runner who is only a dns, true again with a dnf", () => {
@@ -220,6 +292,10 @@ describe("isInterested", () => {
     expect(isInterested(event(), alice.id)).toBe(false);
     expect(isInterested(eventWith([as(p2, "dns")]), bob.id)).toBe(false);
     expect(isInterested(event(), nina.id)).toBe(false);
+  });
+
+  test("false for a supporter, who is not interested in a race", () => {
+    expect(isInterested(eventWith([pNinaSupporter]), nina.id)).toBe(false);
   });
 
   test("true when one of several participations of the runner is interested", () => {

@@ -313,6 +313,27 @@ test("PendingConfirmations — une participation sans épreuve, dont on ne sait 
   await expect.element(row.getByText(fr.event.formatToChoose, { exact: true })).toBeVisible();
 });
 
+test("PendingConfirmations — une participation supporter affiche « Supporteur »", async () => {
+  // Bob, added by Alice as a supporter of the event: no format to pick, so no « Format à choisir ».
+  mocks.pending.mockResolvedValue([{ ...pendingUndecided, status: "supporter" }]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  const row = pendingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByText(fr.status.supporter, { exact: true })).toBeVisible();
+  await expect.element(row.getByText(fr.event.formatToChoose)).not.toBeInTheDocument();
+  // It is dealt with as any other: the sentence names the event, and Confirmer confirms it.
+  const line = row.getByText(/Alice/);
+  expect(plain(line.element().textContent)).toBe(fr.home.addedYou("Alice", "Trail des Crêtes"));
+
+  await confirmButton(screen).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p-undecided", { confirmed: true });
+  });
+});
+
 test("PendingConfirmations — une participation à une épreuve n'a pas de ligne « Format à choisir »", async () => {
   mocks.pending.mockResolvedValue([pendingP2]);
 

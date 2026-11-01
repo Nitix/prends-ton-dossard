@@ -205,6 +205,14 @@ const row = (screen: Screen, runner: string) =>
 const menuOf = (screen: Screen, runner: string) =>
   screen.getByRole("button", { name: fr.participation.actionsFor(runner) });
 
+/** What a row says, without the items of its menu: they are on the page, hidden, until the menu opens. */
+function textOfRow(element: Element): string {
+  const copy = element.cloneNode(true);
+  if (!(copy instanceof Element)) throw new Error("not an element");
+  for (const menu of copy.querySelectorAll("[popover]")) menu.remove();
+  return copy.textContent ?? "";
+}
+
 // --- The information ---
 
 test("EventPage — montre le nom, les dates, le lieu et les notes de l'événement", async () => {
@@ -655,8 +663,9 @@ test("EventPage — la ligne d'un intéressé sans épreuve ne dit pas de statut
 
   const zoe = row(screen, "Zoe");
   await expect.element(zoe.getByText("ajouté par Alice · non confirmé")).toBeVisible();
+  // The menu has « Intéressé » and « Supporteur », hidden: it is the text of the row that has no status.
   for (const status of Object.values(fr.status)) {
-    expect(zoe.element().textContent).not.toContain(status);
+    expect(textOfRow(zoe.element())).not.toContain(status);
   }
   expect(getComputedStyle(zoe.element()).borderStyle).toBe("dashed");
 });
@@ -668,7 +677,7 @@ test("EventPage — sans intéressé sans épreuve, pas de section pour eux", as
   await expect.element(interestedSection(screen)).not.toBeInTheDocument();
 });
 
-test("EventPage — le menu d'un intéressé sans épreuve propose « Choisir l'épreuve », et pas les statuts", async () => {
+test("EventPage — le menu d'un intéressé sans épreuve propose « Choisir l'épreuve » et les deux statuts de l'événement, pas ceux d'une épreuve", async () => {
   const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe]) });
   await loaded(screen);
 
@@ -677,9 +686,14 @@ test("EventPage — le menu d'un intéressé sans épreuve propose « Choisir l'
   await expect
     .element(screen.getByRole("button", { name: fr.participation.chooseFormat }))
     .toBeVisible();
-  await expect
-    .element(screen.getByRole("button", { name: fr.status.finished }))
-    .not.toBeInTheDocument();
+  for (const status of ["interested", "supporter"] as const) {
+    await expect.element(screen.getByRole("button", { name: fr.status[status] })).toBeVisible();
+  }
+  for (const status of ["registered", "finished", "dnf", "dns"] as const) {
+    await expect
+      .element(screen.getByRole("button", { name: fr.status[status] }))
+      .not.toBeInTheDocument();
+  }
 });
 
 test("EventPage — choisir l'épreuve d'un intéressé la lui donne : il passe dans l'épreuve, et le focus va au titre de cette épreuve", async () => {

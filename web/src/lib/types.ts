@@ -8,7 +8,10 @@
 // Dates are `YYYY-MM-DD` strings (see lib/dates.ts). Date-times (`created`,
 // `expires_at`...) are PocketBase's `YYYY-MM-DD HH:MM:SS.sssZ` strings.
 
-export type Status = "interested" | "registered" | "finished" | "dnf" | "dns";
+// `supporter` comes to cheer without running: the server accepts it on the
+// event alone only, with no format, where `interested` is the only other
+// status it accepts. The other statuses need a format.
+export type Status = "interested" | "registered" | "finished" | "dnf" | "dns" | "supporter";
 
 export type Role = "member" | "admin";
 
@@ -72,7 +75,7 @@ export type ParticipationRecord = BaseRecord & {
   runner: string;
   /** The event: always set, also when the participation is on a format. */
   event: string;
-  /** Empty for an "interested, format to choose" participation. */
+  /** Empty for a participation on the event alone: "interested, format to choose", or supporter. */
   format?: string;
   status: Status;
   /** The runner of the user who added the participation (a `runners` id). */

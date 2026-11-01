@@ -24,7 +24,8 @@ export type { ListSearch } from "./search";
 // formats (back-relation of `formats.event`) with their race type, and all the
 // participations of the event (back-relation of `participations.event`) with
 // the runner and who added them. `toEventView` ranges the participations: by
-// format, or, for those with no format, in `interested`.
+// format, or, for those with no format, in `interested` or, when they are
+// supporters, in `supporters`.
 
 export type ParticipationView = {
   participation: ParticipationRecord;
@@ -45,8 +46,10 @@ export type EventView = {
   event: EventRecord;
   /** In the order of their days, then of their distances. */
   formats: FormatView[];
-  /** The participations without a format ("interested, format to choose"), by runner name. */
+  /** The participations on the event alone, with the status `interested` ("interested, format to choose"), by runner name. */
   interested: ParticipationView[];
+  /** The participations on the event alone, with the status `supporter`, by runner name: they come to cheer, they do not start. */
+  supporters: ParticipationView[];
   start: Temporal.PlainDate;
   /** The last day: the same as `start` when the event has no end date. */
   end: Temporal.PlainDate;
@@ -168,9 +171,10 @@ export function toEventView(event: unknown): EventView {
     formatRecords.map(({ id }) => [id, []]),
   );
   const interested: ExpandedParticipation[] = [];
+  const supporters: ExpandedParticipation[] = [];
   for (const record of event.expand?.participations_via_event ?? []) {
     if (!record.format) {
-      interested.push(record);
+      (record.status === "supporter" ? supporters : interested).push(record);
       continue;
     }
     const list = onFormat.get(record.format);
@@ -188,6 +192,7 @@ export function toEventView(event: unknown): EventView {
       .map((format) => toFormatView(format, event, onFormat.get(format.id) ?? []))
       .toSorted(compareFormats),
     interested: interested.map(toParticipationView).toSorted(byRunnerName),
+    supporters: supporters.map(toParticipationView).toSorted(byRunnerName),
     ...eventRange(event),
   };
 }

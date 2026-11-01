@@ -8,7 +8,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "../events/api";
-import { UNDECIDED } from "../events/participants";
+import { SUPPORT, UNDECIDED } from "../events/participants";
 import {
   aliceRunner,
   bobRunner,
@@ -16,6 +16,7 @@ import {
   ninaRunner,
   p1,
   p2,
+  pNinaSupporter,
   samRunner,
   withParticipations,
 } from "../events/testFixture";
@@ -131,15 +132,18 @@ test("AddSomeoneDialog — les coureurs proposés sont ceux qui ont encore quelq
   expect(offered(screen)).toEqual(["Alice", "Bob", "Nina", "Sam"]);
 });
 
-test("AddSomeoneDialog — un coureur sur aucune épreuve a toutes les épreuves et « Pas encore décidé »", async () => {
+test("AddSomeoneDialog — un coureur sur aucune épreuve a toutes les épreuves, « Pas encore décidé » et « Vient encourager »", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
 
   await runnerSelect(screen).selectOptions(ninaRunner.id);
 
   const options = optionsOf(formatSelect(screen).element());
-  expect(options.map((option) => option.value)).toEqual(["f15", "f42", UNDECIDED]);
-  expect(options.at(-1)?.textContent).toBe(fr.participation.undecided);
+  expect(options.map((option) => option.value)).toEqual(["f15", "f42", UNDECIDED, SUPPORT]);
+  expect(options.map((option) => option.textContent).slice(-2)).toEqual([
+    fr.participation.undecided,
+    fr.participation.supportOther,
+  ]);
   await expect.element(formatSelect(screen)).toHaveValue("f15");
 });
 
@@ -163,6 +167,7 @@ test("AddSomeoneDialog — les épreuves se reconnaissent à leur type, leur mes
     "Trail 15 km · sam. 13 juin",
     "Trail 42 km · dim. 14 juin",
     fr.participation.undecided,
+    fr.participation.supportOther,
   ]);
 });
 
@@ -235,6 +240,85 @@ test('AddSomeoneDialog — « Pas encore décidé » crée {runner, event, statu
   });
   const [body] = mocks.create.mock.calls[0] ?? [];
   expect("format" in (body ?? {})).toBe(false);
+});
+
+// --- Supporter: « Vient encourager » ---
+
+test("AddSomeoneDialog — « Vient encourager » pour un autre coureur", async () => {
+  const { screen, onClose, invalidate } = await renderDialog();
+  await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  // The status was chosen before: the lock puts it on « Supporteur ».
+  await statusSelect(screen).selectOptions("registered");
+
+  await formatSelect(screen).selectOptions(SUPPORT);
+
+  // The choice is worded for somebody else.
+  expect(screen.container.textContent).not.toContain(fr.participation.support);
+  await expect.element(statusSelect(screen)).toBeDisabled();
+  await expect.element(statusSelect(screen)).toHaveValue("supporter");
+  await expect.element(screen.getByText(fr.participation.supportHint)).toBeVisible();
+  expect(screen.container.textContent).not.toContain(fr.participation.undecidedHint);
+  const hint = screen.getByText(fr.participation.supportHint).element();
+  expect(statusSelect(screen).element().getAttribute("aria-describedby")).toBe(hint.id);
+
+  await submit(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+    runner: ninaRunner.id,
+    event: "event",
+    status: "supporter",
+  });
+  const [body] = mocks.create.mock.calls[0] ?? [];
+  expect("format" in (body ?? {})).toBe(false);
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["event", "event"]);
+});
+
+test("AddSomeoneDialog — un coureur qui n'a plus que ce choix est proposé", async () => {
+  // An event with no format: « Vient encourager » is all that is left to choose, for everybody.
+  const noFormat = toEventView({
+    ...eventRecord,
+    expand: { formats_via_event: [], participations_via_event: [] },
+  });
+  const { screen, onClose } = await renderDialog(noFormat);
+  await loaded(screen);
+
+  expect(offered(screen)).toEqual(["Alice", "Bob", "Nina", "Sam"]);
+  await runnerSelect(screen).selectOptions(samRunner.id);
+  // It is the only choice, and it is the one that is chosen.
+  expect(optionsOf(formatSelect(screen).element()).map((option) => option.value)).toEqual([
+    SUPPORT,
+  ]);
+  await expect.element(formatSelect(screen)).toHaveValue(SUPPORT);
+  await expect.element(statusSelect(screen)).toHaveValue("supporter");
+
+  await submit(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+    runner: samRunner.id,
+    event: "event",
+    status: "supporter",
+  });
+});
+
+test("AddSomeoneDialog — un supporteur n'a plus « Vient encourager » ni « Pas encore décidé », mais les épreuves", async () => {
+  const supporter = toEventView(withParticipations(eventRecord, [pNinaSupporter]));
+  const { screen } = await renderDialog(supporter);
+  await loaded(screen);
+
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+
+  expect(optionsOf(formatSelect(screen).element()).map((option) => option.value)).toEqual([
+    "f15",
+    "f42",
+  ]);
 });
 
 test("AddSomeoneDialog — le statut de départ est « Intéressé », et les cinq statuts sont proposés", async () => {

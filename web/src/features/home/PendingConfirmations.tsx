@@ -87,7 +87,8 @@ export function PendingConfirmations({
  * confirmed, and said in words by the title of the block and the sentence.
  * A participation on a format names the format, and has the day of the format;
  * one on the event alone names the event, has the start of the event, and says
- * « Format à choisir » on its own line.
+ * « Format à choisir » on its own line (« Supporteur » for a supporter, who has
+ * no format to choose).
  * Both buttons are off while a request of the row is on its way, so that a
  * second tap cannot send it twice.
  *
@@ -191,7 +192,12 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
             ? t.home.addedYou(addedBy.name, subject)
             : `${subject}${SEPARATOR}${t.event.unconfirmed}`}
         </p>
-        {!format && <p className="text-sm">{t.event.formatToChoose}</p>}
+        {/* On the event alone, the participation says in words what it is: a supporter has no format to pick. */}
+        {!format && (
+          <p className="text-sm">
+            {participation.status === "supporter" ? t.status.supporter : t.event.formatToChoose}
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         <button

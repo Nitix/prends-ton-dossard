@@ -4,8 +4,8 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { Status } from "../../lib/types";
 import type { EventView, FormatView } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
-import { UNDECIDED } from "../events/participants";
-import { STATUSES } from "./api";
+import { SUPPORT, UNDECIDED } from "../events/participants";
+import { EVENT_STATUSES, STATUSES } from "./api";
 
 /**
  * A labelled native select: the browser gives the picker, the keyboard and the
@@ -65,14 +65,17 @@ export function FormatField({
   view,
   formats,
   undecided = false,
+  support,
   value,
   onChange,
 }: {
   view: EventView;
   /** The ones to offer: some of `view.formats`. */
   formats: FormatView[];
-  /** Adds « Pas encore décidé » (value `UNDECIDED`), last. */
+  /** Adds « Pas encore décidé » (value `UNDECIDED`), after the formats. */
   undecided?: boolean;
+  /** Adds the choice of a supporter (value `SUPPORT`), last, with this label: without it, there is no such choice. */
+  support?: string;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -90,6 +93,7 @@ export function FormatField({
         );
       })}
       {undecided && <option value={UNDECIDED}>{t.participation.undecided}</option>}
+      {support !== undefined && <option value={SUPPORT}>{support}</option>}
     </SelectField>
   );
 }
@@ -98,33 +102,61 @@ function isStatus(value: string): value is Status {
   return STATUSES.some((status) => status === value);
 }
 
+/** What a locked status field shows, and the sentence under it that says why. */
+const LOCKS = {
+  undecided: { status: "interested", hint: "undecidedHint" },
+  support: { status: "supporter", hint: "supportHint" },
+} as const;
+
 /**
- * The status of a participation. With no format chosen (`locked`) it can only
- * be « Intéressé »: the field says so, and tells why under it.
+ * What a choice of the format field stands for when it is not a format
+ * ("Not decided yet", "I'm coming to cheer"): the participation is on the
+ * event alone, with a status that is not a choice. `lock` is for the
+ * `StatusField`, `status` is what the participation is created with. Nothing
+ * for a format.
+ */
+export function noFormatChoice(
+  choice: string,
+): { lock: keyof typeof LOCKS; status: Status } | undefined {
+  if (choice === UNDECIDED) return { lock: "undecided", status: LOCKS.undecided.status };
+  if (choice === SUPPORT) return { lock: "support", status: LOCKS.support.status };
+  return undefined;
+}
+
+/**
+ * The status of a participation. With no format chosen (`locked`) it is not
+ * a choice: « Intéressé » when the format is to be decided (`"undecided"`),
+ * « Supporteur » for somebody who comes to cheer (`"support"`). The field is
+ * disabled on that status, and tells why under it.
  */
 export function StatusField({
   value,
   onChange,
-  locked = false,
+  locked,
 }: {
   value: Status;
   onChange: (status: Status) => void;
-  /** No format chosen: disabled on « Intéressé », with `t.participation.undecidedHint` under it. */
-  locked?: boolean;
+  /**
+   * No format chosen: disabled on « Intéressé » (`"undecided"`, with
+   * `t.participation.undecidedHint` under it) or on « Supporteur »
+   * (`"support"`, with `t.participation.supportHint`).
+   */
+  locked?: keyof typeof LOCKS;
 }) {
   const { t } = useI18n();
+  const lock = locked && LOCKS[locked];
 
   return (
     <SelectField
       label={t.participation.status}
-      value={locked ? "interested" : value}
-      disabled={locked}
-      hint={locked ? t.participation.undecidedHint : undefined}
+      value={lock ? lock.status : value}
+      disabled={lock !== undefined}
+      hint={lock ? t.participation[lock.hint] : undefined}
       onChange={(next) => {
         if (isStatus(next)) onChange(next);
       }}
     >
-      {STATUSES.map((status) => (
+      {(lock ? EVENT_STATUSES : STATUSES).map((status) => (
         <option key={status} value={status}>
           {t.status[status]}
         </option>

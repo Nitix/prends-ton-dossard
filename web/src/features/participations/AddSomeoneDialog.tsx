@@ -5,16 +5,17 @@ import { Dialog } from "../../components/Dialog";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Status } from "../../lib/types";
 import { useRunners, type EventView } from "../events/api";
-import { joinOptions, UNDECIDED } from "../events/participants";
+import { joinOptions, SUPPORT, UNDECIDED } from "../events/participants";
 import { useCreateParticipation } from "./api";
 import { participationError } from "./errors";
-import { FormatField, SelectField, StatusField } from "./fields";
+import { FormatField, noFormatChoice, SelectField, StatusField } from "./fields";
 
 /**
  * "Add someone": the choice of a runner first, then of one of the formats where
- * they are not yet (and "Not decided yet", as for "I'm in"), then of a status.
- * A runner who has nothing left to choose is not offered. The runner has to
- * confirm it themselves later (unless it is the member's own).
+ * they are not yet (and "Not decided yet" and "Coming to cheer", as for "I'm
+ * in"), then of a status. A runner who has nothing left to choose is not
+ * offered. The runner has to confirm it themselves later (unless it is the
+ * member's own).
  */
 export function AddSomeoneDialog({
   open,
@@ -62,24 +63,27 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
     );
   }
 
-  // The runners who still have a format to take, by name.
+  // The runners who still have something to choose, by name.
   const available = runners.data
     .filter((runner) => {
-      const { formats, undecided } = joinOptions(view, runner.id);
-      return formats.length > 0 || undecided;
+      const { formats, undecided, support } = joinOptions(view, runner.id);
+      return formats.length > 0 || undecided || support;
     })
     .toSorted((a, b) => a.name.localeCompare(b.name));
   // The page may load a change while the dialog is open: a runner who is not offered any more is not chosen any more.
   const runnerId = available.some((runner) => runner.id === chosenRunner) ? chosenRunner : "";
   const options = runnerId === "" ? undefined : joinOptions(view, runnerId);
-  // The same for the format: it is one of those of this runner, the first by default.
-  const firstFormat = options?.formats[0]?.format.id ?? "";
+  // The same for the format: it is one of those of this runner, the first by default
+  // (or the supporter's choice, when that is all there is).
+  const firstFormat = options?.formats[0]?.format.id ?? (options?.support ? SUPPORT : "");
   const formatOffered =
     options !== undefined &&
     ((formatId === UNDECIDED && options.undecided) ||
+      (formatId === SUPPORT && options.support) ||
       options.formats.some(({ format }) => format.id === formatId));
   const chosenFormat = formatOffered ? formatId : firstFormat;
-  const noFormat = chosenFormat === UNDECIDED;
+  // « Pas encore décidé » and « Vient encourager » are on the event alone, with a status that is not a choice.
+  const alone = noFormatChoice(chosenFormat);
 
   function chooseRunner(id: string) {
     setChosenRunner(id);
@@ -93,7 +97,7 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
     const who = { runner: runnerId, event: view.event.id };
     try {
       await create.mutateAsync(
-        noFormat ? { ...who, status: "interested" } : { ...who, format: chosenFormat, status },
+        alone ? { ...who, status: alone.status } : { ...who, format: chosenFormat, status },
       );
       onClose();
     } catch (err) {
@@ -127,11 +131,12 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
               view={view}
               formats={options.formats}
               undecided={options.undecided}
+              support={options.support ? t.participation.supportOther : undefined}
               value={chosenFormat}
               onChange={setFormatId}
             />
           )}
-          <StatusField value={status} onChange={setStatus} locked={noFormat} />
+          <StatusField value={status} onChange={setStatus} locked={alone?.lock} />
         </>
       )}
       {message !== null && (

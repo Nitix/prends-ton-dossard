@@ -23,6 +23,7 @@ import {
   p1,
   p2,
   p3,
+  pNinaSupporter,
   pNinaUndecided,
   withParticipations,
 } from "./testFixture";
@@ -128,6 +129,27 @@ test("DeleteEventDialog — cite aussi les intéressés sans épreuve et les non
   const { screen } = await renderDialog(everyone);
 
   await expect.element(screen.getByText("Alice, Bob, Nina et Sam")).toBeVisible();
+});
+
+test("DeleteEventDialog — nomme aussi les supporteurs", async () => {
+  // Nina is supporter of the event: the server deletes her participation too.
+  const withSupporter = toEventView(withParticipations(eventRecord, [pNinaSupporter]));
+
+  const { screen } = await renderDialog(withSupporter);
+
+  await expect.element(screen.getByText("Alice, Bob, Nina et Sam")).toBeVisible();
+});
+
+test("DeleteEventDialog — si les supporteurs sont seuls, elle les cite quand même", async () => {
+  const onlyNina = toEventView({
+    ...eventRecord,
+    expand: { ...eventRecord.expand, participations_via_event: [pNinaSupporter] },
+  });
+
+  const { screen } = await renderDialog(onlyNina);
+
+  await expect.element(screen.getByText("Nina", { exact: true })).toBeVisible();
+  expect(screen.getByRole("dialog").element().textContent).toContain(fr.event.deleteParticipants);
 });
 
 test("DeleteEventDialog — si seuls des intéressés sans épreuve sont inscrits, elle les cite quand même", async () => {

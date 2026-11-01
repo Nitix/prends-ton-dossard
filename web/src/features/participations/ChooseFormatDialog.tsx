@@ -13,10 +13,10 @@ import { FormatField, StatusField } from "./fields";
 
 /**
  * "Pick the race": gives a format, and a status, to a participation that is
- * on the event alone. All the formats of the event are offered: the runner is
- * on none of them, which the server requires of a participation with no format.
- * The participation then moves to its format, and the status can be more than
- * « Interested ».
+ * on the event alone (interested, or supporter). All the formats of the event
+ * are offered: the runner is on none of them, which the server requires of a
+ * participation with no format. The participation then moves to its format,
+ * and the status can be more than « Interested ».
  */
 export function ChooseFormatDialog({
   open,
@@ -69,7 +69,10 @@ function ChooseForm({
   const { participation, runner } = participationView;
 
   const [chosenFormat, setChosenFormat] = useState("");
-  const [status, setStatus] = useState<Status>(participation.status);
+  // A supporter is not on a format: « Supporteur » is no status of one, the dialog starts from « Intéressé ».
+  const [status, setStatus] = useState<Status>(
+    participation.status === "supporter" ? "interested" : participation.status,
+  );
   const [message, setMessage] = useState<string | null>(null);
   // The page may load a change while the dialog is open: a format that is not
   // on the event any more is not chosen any more, the first one is.

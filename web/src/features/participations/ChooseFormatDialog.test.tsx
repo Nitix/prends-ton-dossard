@@ -8,7 +8,13 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "../events/api";
-import { eventRecord, f15, pNinaUndecided, withParticipations } from "../events/testFixture";
+import {
+  eventRecord,
+  f15,
+  pNinaSupporter,
+  pNinaUndecided,
+  withParticipations,
+} from "../events/testFixture";
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -26,19 +32,23 @@ vi.mock("../../lib/pb", () => ({
 
 // Nina is interested in the event, with no format yet; Alice and Bob are on F42, Sam on F15.
 let view: EventView;
+// The same, with Nina supporter of the event instead of interested.
+let supporterView: EventView;
 
 beforeAll(async () => {
   await ensureTemporal();
   view = toEventView(withParticipations(eventRecord, [pNinaUndecided]));
+  supporterView = toEventView(withParticipations(eventRecord, [pNinaSupporter]));
 });
 
 beforeEach(() => {
   mocks.update.mockReset().mockResolvedValue({ id: "pNinaUndecided" });
 });
 
-async function renderDialog(options: { withOnChosen?: boolean } = {}) {
-  const { withOnChosen = false } = options;
-  const participationView = view.interested[0];
+async function renderDialog(options: { withOnChosen?: boolean; supporter?: boolean } = {}) {
+  const { withOnChosen = false, supporter = false } = options;
+  const shown = supporter ? supporterView : view;
+  const participationView = (supporter ? shown.supporters : shown.interested)[0];
   if (!participationView) throw new Error("the fixture has no participation on the event alone");
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -59,7 +69,7 @@ async function renderDialog(options: { withOnChosen?: boolean } = {}) {
       </I18nProvider>
     </QueryClientProvider>
   );
-  const screen = await render(ui(view));
+  const screen = await render(ui(shown));
   await expect
     .element(screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle }))
     .toBeVisible();
@@ -111,6 +121,27 @@ test('ChooseFormatDialog — propose F15 et F42 ; Enregistrer envoie updateParti
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["event", "event"]);
   expect(keys).toContainEqual(["pending"]);
+});
+
+test("ChooseFormatDialog — un supporteur part avec le statut Intéressé", async () => {
+  const { screen, onClose } = await renderDialog({ supporter: true });
+
+  // « Supporteur » is not a status of a format: the dialog starts from « Intéressé ».
+  await expect.element(statusSelect(screen)).toHaveValue("interested");
+  expect(
+    optionsOf(statusSelect(screen).element()).map((option) => option.textContent),
+  ).not.toContain(fr.status.supporter);
+
+  await formatSelect(screen).selectOptions("f42");
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pNinaSupporter", {
+    format: "f42",
+    status: "interested",
+  });
 });
 
 test("ChooseFormatDialog — si la page recharge l'événement et que l'épreuve choisie n'y est plus, la première est proposée", async () => {

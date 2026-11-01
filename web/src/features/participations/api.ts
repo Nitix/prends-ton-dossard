@@ -4,18 +4,24 @@ import { pb } from "../../lib/pb";
 import type { ParticipationRecord, Status } from "../../lib/types";
 import { invalidateEvents } from "../events/api";
 
-/** Every status, in the order they are offered: from the plan to the result. */
+/** The statuses of a participation on a format, in the order they are offered: from the plan to the result. */
 export const STATUSES: readonly Status[] = ["interested", "registered", "finished", "dnf", "dns"];
 
 /**
+ * The statuses of a participation on the event alone, with no format: the only
+ * two the server accepts there (anything else is `format_required`).
+ */
+export const EVENT_STATUSES: readonly Status[] = ["interested", "supporter"];
+
+/**
  * Adds a runner to an event: to one of its formats, or, with no `format`, to
- * the event alone ("interested, format to choose": the server accepts no
- * other status for that, and refuses it for a runner who is on a format of
- * the event already). A participation on a format takes the place of the one
- * on the event alone, which the server removes. Anybody may, for any runner:
- * the server tells who added it (`added_by`) and whether it is confirmed (it
- * is when the runner is the one who adds it), so neither is sent. Nor is an
- * absent `format`.
+ * the event alone ("interested, format to choose", or supporter: the server
+ * accepts no other status for that, and refuses it for a runner who is on a
+ * format of the event already). A participation on a format takes the place
+ * of the one on the event alone (a supporter's too), which the server
+ * removes. Anybody may, for any runner: the server tells who added it
+ * (`added_by`) and whether it is confirmed (it is when the runner is the one
+ * who adds it), so neither is sent. Nor is an absent `format`.
  */
 export function createParticipation(input: {
   runner: string;

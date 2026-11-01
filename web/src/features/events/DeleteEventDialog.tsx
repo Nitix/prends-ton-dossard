@@ -32,12 +32,17 @@ export function DeleteEventDialog({
 
 /**
  * The runners who have a participation in the event, each once, by name: on a
- * format, or on the event alone, whatever the status (those who do not start
- * too: the server deletes every participation of the event).
+ * format, or on the event alone (interested, or supporter), whatever the status
+ * (those who do not start too: the server deletes every participation of the
+ * event).
  */
 function participantNames(view: EventView): string[] {
   const names = new Map<string, string>();
-  const lists = [view.interested, ...view.formats.map(({ participations }) => participations)];
+  const lists = [
+    view.interested,
+    view.supporters,
+    ...view.formats.map(({ participations }) => participations),
+  ];
   for (const participations of lists) {
     for (const { runner } of participations) names.set(runner.id, runner.name);
   }
