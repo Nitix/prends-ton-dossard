@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { ToastProvider } from "./components/Toast";
 import { connectSession, restoreSession } from "./features/auth/session";
 import { I18nProvider } from "./i18n/I18nProvider";
+import { reloadOnStaleChunks } from "./lib/staleChunks";
 import { ensureTemporal } from "./lib/temporal";
 import { TodayProvider } from "./lib/useToday";
 import { routeTree } from "./routeTree.gen";
@@ -27,6 +28,9 @@ const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("The #root element is missing from index.html");
 }
+
+// A tab opened before a deploy reloads when the chunks it asks for are gone.
+reloadOnStaleChunks();
 
 // Temporal must exist before any code that uses it runs.
 await ensureTemporal();

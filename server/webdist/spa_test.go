@@ -56,6 +56,32 @@ func TestRegister(t *testing.T) {
 			NotExpectedContent: []string{`id="root"`},
 		},
 		{
+			// After a deploy, a tab opened before asks for chunks that are
+			// gone: index.html in their place would break it in silence. A
+			// 404 lets the app notice, and reload (see lib/staleChunks.ts).
+			Name:               "a missing file under /assets/ is a 404, not index.html",
+			Method:             http.MethodGet,
+			URL:                "/assets/old-chunk-1234.js",
+			ExpectedStatus:     http.StatusNotFound,
+			NotExpectedContent: []string{`id="root"`},
+		},
+		{
+			Name:               "a missing nested file under /assets/ is a 404 too",
+			Method:             http.MethodGet,
+			URL:                "/assets/fonts/gone.woff2",
+			ExpectedStatus:     http.StatusNotFound,
+			NotExpectedContent: []string{`id="root"`},
+		},
+		{
+			// Only the directory is reserved: a client route that starts like
+			// it is still a route.
+			Name:            "a client route that starts with assets falls back to index.html",
+			Method:          http.MethodGet,
+			URL:             "/assets-de-course",
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{`id="root"`},
+		},
+		{
 			Name:               "the API keeps its own handlers",
 			Method:             http.MethodGet,
 			URL:                "/api/health",
