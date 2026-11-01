@@ -1,6 +1,6 @@
 {
   "name": "Prends ton dossard",
-  "short_name": "Dossard",
+  "short_name": "Prends ton dossard",
   "description": "Les courses du groupe : qui part où, quand s'inscrire.",
   "lang": "fr",
   "start_url": "/",
