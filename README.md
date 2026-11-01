@@ -14,7 +14,8 @@ web/      front React 19 + Vite, compilé dans server/webdist/dist puis embarqu�
 - **Go 1.27** ;
 - **Node 26** ou plus (voir `.nvmrc`) ;
 - **pnpm 12** (la version exacte est dans `packageManager`, dans `package.json`) ;
-- pour la production : **Docker** avec Compose, et **Caddy** sur la machine.
+- pour la production : **Docker** avec Compose, et **Caddy** sur la machine ;
+- pour les visiteurs : **iOS 17+ / Safari 17+** sur iPhone et iPad, ou un navigateur récent ailleurs. Le site s'appuie sur des fonctions que Safari n'a qu'à partir de la version 17 (l'API Popover des menus, entre autres) : sur un iPhone plus ancien, les menus ne s'ouvrent pas et des pages restent blanches.
 
 ## Développement local
 
@@ -265,12 +266,26 @@ Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les com
 - se connecter au tableau de bord avec le super-admin, par le tunnel SSH ;
 - créer une sauvegarde à la main : elle doit apparaître dans la liste (ou dans le bucket).
 
+## Mot de passe oublié
+
+- **Un membre** : un admin crée un lien de réinitialisation depuis l'administration des membres, et le lui envoie. Les sessions ouvertes du compte sont fermées dès que le lien est utilisé.
+- **Le seul admin** : personne ne peut lui créer ce lien. Deux façons d'en sortir, depuis le serveur :
+  - inviter un admin de secours, **sous un autre nom** (`bootstrap-admin` refuse un coureur qui a déjà un compte, et `--force` passe outre l'admin qui existe) :
+
+    ```sh
+    docker compose exec courses /app/courses bootstrap-admin "<Prénom> (secours)" --force
+    ```
+
+    Ouvrir le lien affiché pour créer ce compte, puis, depuis l'administration des membres, créer un lien de réinitialisation pour le compte d'origine et l'utiliser. Désactiver ensuite le compte de secours ;
+  - ou ouvrir le tableau de bord par le tunnel SSH (voir « Tableau de bord PocketBase »), et dans la collection `users`, donner un nouveau mot de passe au compte (10 caractères au moins). Ses sessions ouvertes sont fermées.
+
 ## Recette manuelle sur iPhone
 
 À faire **avant d'ouvrir le site au groupe**, avec le téléphone d'un ami, sur le vrai domaine en HTTPS. Un compte de test dédié sert à cette recette, puis il est désactivé (depuis l'administration des membres).
 
 Préparation : inviter un coureur de test depuis l'administration du site, et ouvrir le lien d'invitation dans Safari sur l'iPhone.
 
+- [ ] Vérifier que l'iPhone a **iOS 17+ / Safari 17+** (Réglages, Général, Informations), et noter sa version : en dessous, le site ne fonctionne pas.
 - [ ] Créer une passkey avec Face ID ou Touch ID, puis se déconnecter et se connecter avec la passkey.
 - [ ] Dans Safari, parcourir l'accueil, la liste, l'agenda et la fiche d'un événement : tout s'affiche et se manipule correctement.
 - [ ] Partager un lien d'invitation avec la feuille de partage de l'iPhone (Web Share).
