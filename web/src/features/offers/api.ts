@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import { pb } from "../../lib/pb";
-import type { OfferMemberRecord, OfferRecord, RunnerRecord } from "../../lib/types";
+import type { OfferKind, OfferMemberRecord, OfferRecord, RunnerRecord } from "../../lib/types";
 
 // The places that members offer for an event, with the runner who offers them
 // and the ones who have taken one, in a single request: the `expand` of the
@@ -75,6 +75,44 @@ export function useOffers(eventId: string): UseQueryResult<OfferView[]> {
 /** Resolves once the list that is on screen has its new data. */
 function refresh(queryClient: QueryClient, eventId: string): Promise<unknown> {
   return queryClient.invalidateQueries({ queryKey: offersKey(eventId) });
+}
+
+/**
+ * What the form of an offer sends, for a car or for a lodging: the fields that
+ * the member fills in. Never the event, the kind or the owner, which the
+ * member does not change (the server sets the owner when it creates the offer
+ * and refuses a change of any of the three). An empty value (`""`, `0`) clears
+ * the field of an offer that is changed.
+ */
+export type OfferInput = {
+  place: string;
+  seats?: number;
+  date?: string;
+  time?: string;
+  end_date?: string;
+  url?: string;
+  notes?: string;
+};
+
+/**
+ * Offers a car or a lodging for the event, or, given the `id` of an offer,
+ * changes it: its owner may, and so may an admin. The event and the kind go
+ * with a new offer only; the owner is the server's to set.
+ */
+export function useSaveOffer(
+  eventId: string,
+): UseMutationResult<OfferRecord, Error, { kind: OfferKind; id?: string; input: OfferInput }> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, id, input }) =>
+      id === undefined
+        ? pb.collection("offers").create<OfferRecord>({ event: eventId, kind, ...input })
+        : pb.collection("offers").update<OfferRecord>(id, input),
+    onSuccess: () => refresh(queryClient, eventId),
+    onError: () => {
+      void refresh(queryClient, eventId);
+    },
+  });
 }
 
 /** Takes a place in an offer for a runner: for oneself, or, for the owner of the offer and the admins, for anyone. */

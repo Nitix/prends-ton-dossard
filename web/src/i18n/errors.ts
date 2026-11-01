@@ -45,6 +45,7 @@ export const ERROR_CODES: readonly string[] = [
   "validation_required",
   "validation_not_unique",
   "validation_invalid_email",
+  "validation_invalid_url",
   "validation_invalid_old_password",
   "validation_min_text_constraint",
   "validation_max_text_constraint",

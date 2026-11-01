@@ -232,6 +232,24 @@ export const fr = {
         ? `Supprimer cette offre ? ${names} perdra sa place.`
         : `Supprimer cette offre ? ${names} perdront leur place.`,
     deleteConfirmEmpty: "Supprimer cette offre ?",
+    propose: { ride: "Proposer une voiture", lodging: "Proposer un logement" },
+    edit: "Modifier",
+    addSomeone: "Ajouter quelqu'un",
+    addSomeoneTitle: "Ajouter quelqu'un",
+    nobodyToAdd: "Tout le monde a déjà une place.",
+    // The form that offers a car or a lodging, or changes the offer.
+    form: {
+      place: { ride: "Lieu de départ", lodging: "Nom ou adresse" },
+      seats: { ride: "Places proposées", lodging: "Places (facultatif)" },
+      date: { ride: "Jour du départ", lodging: "Arrivée" },
+      time: "Heure de départ",
+      endDate: "Départ",
+      url: "Lien de l'annonce",
+      notes: "Notes",
+      save: "Enregistrer",
+      titleNew: { ride: "Proposer une voiture", lodging: "Proposer un logement" },
+      titleEdit: "Modifier l'offre",
+    },
   },
   // The measures of a format, next to its name (see features/events/formatName.ts).
   format: {
@@ -513,6 +531,7 @@ export const fr = {
         other: "dates d'épreuve effacées (hors des dates de l'événement)",
       },
       movedComments: { one: "commentaire déplacé", other: "commentaires déplacés" },
+      movedOffers: { one: "offre déplacée", other: "offres déplacées" },
     },
     merge: "Fusionner",
     mergeConfirmTitle: {
@@ -576,6 +595,7 @@ export const fr = {
     validation_required: "Ce champ est obligatoire.",
     validation_not_unique: "Cette valeur est déjà utilisée.",
     validation_invalid_email: "Cet email n'est pas valide.",
+    validation_invalid_url: "Cette adresse web n'est pas valide.",
     validation_invalid_old_password: "Le mot de passe actuel est incorrect.",
     validation_min_text_constraint: "Cette valeur est trop courte.",
     validation_max_text_constraint: "Ce texte est trop long.",

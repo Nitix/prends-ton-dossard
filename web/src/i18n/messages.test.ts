@@ -196,6 +196,29 @@ describe("offers texts", () => {
     );
     expect(o.deleteConfirm("Bob", 1)).toBe("Supprimer cette offre ? Bob perdra sa place.");
     expect(o.deleteConfirmEmpty).toBe("Supprimer cette offre ?");
+    expect(o.propose).toEqual({ ride: "Proposer une voiture", lodging: "Proposer un logement" });
+    expect([o.edit, o.addSomeone, o.addSomeoneTitle]).toEqual([
+      "Modifier",
+      "Ajouter quelqu'un",
+      "Ajouter quelqu'un",
+    ]);
+    expect(o.nobodyToAdd).toBe("Tout le monde a déjà une place.");
+    const form = o.form;
+    expect(form.place).toEqual({ ride: "Lieu de départ", lodging: "Nom ou adresse" });
+    expect(form.seats).toEqual({ ride: "Places proposées", lodging: "Places (facultatif)" });
+    expect(form.date).toEqual({ ride: "Jour du départ", lodging: "Arrivée" });
+    expect([form.time, form.endDate, form.url, form.notes, form.save]).toEqual([
+      "Heure de départ",
+      "Départ",
+      "Lien de l'annonce",
+      "Notes",
+      "Enregistrer",
+    ]);
+    expect(form.titleNew).toEqual({
+      ride: "Proposer une voiture",
+      lodging: "Proposer un logement",
+    });
+    expect(form.titleEdit).toBe("Modifier l'offre");
   });
 
   test("English", () => {
@@ -214,6 +237,26 @@ describe("offers texts", () => {
       "Delete this offer? Bob and Sam will lose their place.",
     );
     expect(o.deleteConfirmEmpty).toBe("Delete this offer?");
+    expect(o.propose).toEqual({ ride: "Offer a car", lodging: "Offer lodging" });
+    expect([o.edit, o.addSomeone, o.addSomeoneTitle]).toEqual([
+      "Edit",
+      "Add someone",
+      "Add someone",
+    ]);
+    expect(o.nobodyToAdd).toBe("Everyone already has a place.");
+    const form = o.form;
+    expect(form.place).toEqual({ ride: "Leaving from", lodging: "Name or address" });
+    expect(form.seats).toEqual({ ride: "Seats offered", lodging: "Places (optional)" });
+    expect(form.date).toEqual({ ride: "Departure day", lodging: "Arrival" });
+    expect([form.time, form.endDate, form.url, form.notes, form.save]).toEqual([
+      "Departure time",
+      "Departure",
+      "Listing link",
+      "Notes",
+      "Save",
+    ]);
+    expect(form.titleNew).toEqual({ ride: "Offer a car", lodging: "Offer lodging" });
+    expect(form.titleEdit).toBe("Edit the offer");
     expect(o.empty).toEqual({
       ride: "Nobody offers a car yet.",
       lodging: "Nobody offers lodging yet.",

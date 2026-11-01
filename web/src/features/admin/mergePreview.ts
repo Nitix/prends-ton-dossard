@@ -27,6 +27,8 @@ export type MergeResult = {
   clearedFormatDates: number;
   /** The comments of the merged event that went to the kept event: a merge of formats moves none. */
   movedComments: number;
+  /** The offers (cars and lodgings) of the merged event that went to the kept event, with their places: a merge of formats moves none. */
+  movedOffers: number;
 };
 
 /** The counters, in the order a merge goes through them. */
@@ -36,6 +38,7 @@ const COUNTERS = [
   "droppedParticipations",
   "clearedFormatDates",
   "movedComments",
+  "movedOffers",
 ] as const satisfies readonly (keyof MergeResult)[];
 
 /**

@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => ({
   take: vi.fn<(body: Rec) => Promise<unknown>>(),
   leave: vi.fn<(id: string) => Promise<unknown>>(),
   remove: vi.fn<(id: string) => Promise<unknown>>(),
+  create: vi.fn<(body: Rec) => Promise<unknown>>(),
+  update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
+  runners: vi.fn<(options?: Rec) => Promise<unknown>>(),
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -32,8 +35,14 @@ vi.mock("../../lib/pb", () => ({
     filter: (raw: string, params: Rec) => `${raw} ${JSON.stringify(params)}`,
     collection: (name: string) =>
       ({
-        offers: { getFullList: mocks.list, delete: mocks.remove },
+        offers: {
+          getFullList: mocks.list,
+          delete: mocks.remove,
+          create: mocks.create,
+          update: mocks.update,
+        },
         offer_members: { create: mocks.take, delete: mocks.leave },
+        runners: { getFullList: mocks.runners },
       })[name],
   },
 }));
@@ -159,11 +168,35 @@ function withPlaces(row: Row, places: ReturnType<typeof place>[]): Row {
  */
 let rows: Row[];
 let placed: number;
+let offersCreated: number;
+/** Who is signed in: the owner of an offer that is created. */
+let signedIn: Me | null;
 
 beforeEach(() => {
   for (const fn of Object.values(mocks)) fn.mockReset();
   rows = [car(), lodging()];
   placed = 0;
+  offersCreated = 0;
+  signedIn = null;
+  mocks.runners.mockImplementation(() => Promise.resolve([sam, nina, bob, alice, admin]));
+  mocks.create.mockImplementation((body) => {
+    const owner = [alice, bob, sam, nina, admin].find(({ id }) => id === signedIn?.runnerId);
+    if (!owner) throw new Error("nobody is signed in");
+    offersCreated += 1;
+    const { event: _event, kind, ...fields } = body;
+    const row = offer(
+      `new-offer${offersCreated}`,
+      kind === "lodging" ? "lodging" : "ride",
+      owner,
+      fields,
+    );
+    rows = [...rows, row];
+    return Promise.resolve(row);
+  });
+  mocks.update.mockImplementation((id, body) => {
+    rows = rows.map((row) => (row.id === id ? { ...row, ...body } : row));
+    return Promise.resolve(rows.find((row) => row.id === id));
+  });
   mocks.list.mockImplementation(() => Promise.resolve(rows));
   mocks.take.mockImplementation((body) => {
     const runner = [alice, bob, sam, nina, admin].find(({ id }) => id === body.runner);
@@ -196,6 +229,7 @@ async function renderSection(
   options: { me?: Me | null; kind?: OfferKind; languages?: string[] } = {},
 ) {
   const { me = meNina, kind = "ride", languages = ["fr"] } = options;
+  signedIn = me;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const screen = await render(
     <QueryClientProvider client={queryClient}>
@@ -837,6 +871,326 @@ async function heightOf(target: Locator) {
   return target.element().getBoundingClientRect().height;
 }
 
+// --- Offering a car or a lodging ---
+
+const propose = (scope: { getByRole: Screen["getByRole"] }, kind: OfferKind = "ride") =>
+  button(scope, fr.offers.propose[kind]);
+
+describe("offering", () => {
+  test("OffersSection — « Proposer une voiture » absent quand j'ai déjà une place ou une voiture", async () => {
+    // Nina has no car and no place in one: she may offer hers.
+    const nobody = await renderSection({ me: meNina });
+    await expect.element(offerOf(nobody.screen, "Alice")).toBeVisible();
+    await expect.element(propose(nobody.screen)).toBeVisible();
+    await nobody.screen.unmount();
+
+    // Alice has a car already.
+    const driver = await renderSection({ me: meAlice });
+    await expect.element(offerOf(driver.screen, "Alice")).toBeVisible();
+    await expect.element(propose(driver.screen)).not.toBeInTheDocument();
+    await driver.screen.unmount();
+
+    // Bob has a place in it.
+    const passenger = await renderSection({ me: meBob });
+    await expect.element(offerOf(passenger.screen, "Alice")).toBeVisible();
+    await expect.element(propose(passenger.screen)).not.toBeInTheDocument();
+    await passenger.screen.unmount();
+
+    // An admin who has neither may offer one, like anybody.
+    const boss = await renderSection({ me: meAdmin });
+    await expect.element(offerOf(boss.screen, "Alice")).toBeVisible();
+    await expect.element(propose(boss.screen)).toBeVisible();
+    await boss.screen.unmount();
+
+    // Nobody known: the offers are read, and nothing is proposed.
+    const stranger = await renderSection({ me: null });
+    await expect.element(offerOf(stranger.screen, "Alice")).toBeVisible();
+    await expect.element(propose(stranger.screen)).not.toBeInTheDocument();
+  });
+
+  test("OffersSection — une place ou un logement à soi ne compte que pour sa sorte", async () => {
+    // In the lodgings: Bob owns one, Nina has a bed in it. Alice has nothing there, though she has a car.
+    const owner = await renderSection({ me: meBob, kind: "lodging" });
+    await expect.element(offerOf(owner.screen, "Bob")).toBeVisible();
+    await expect.element(propose(owner.screen, "lodging")).not.toBeInTheDocument();
+    await owner.screen.unmount();
+
+    const guest = await renderSection({ me: meNina, kind: "lodging" });
+    await expect.element(offerOf(guest.screen, "Bob")).toBeVisible();
+    await expect.element(propose(guest.screen, "lodging")).not.toBeInTheDocument();
+    await guest.screen.unmount();
+
+    const driver = await renderSection({ me: meAlice, kind: "lodging" });
+    await expect.element(offerOf(driver.screen, "Bob")).toBeVisible();
+    await expect.element(propose(driver.screen, "lodging")).toBeVisible();
+    // The lodging button is not the car's.
+    await expect.element(propose(driver.screen, "ride")).not.toBeInTheDocument();
+  });
+
+  test("OffersSection — sans offre, on peut proposer ; pendant le chargement et sur une erreur, non", async () => {
+    rows = [];
+    const empty = await renderSection({ me: meNina });
+    await expect.element(empty.screen.getByText(fr.offers.empty.ride)).toBeVisible();
+    await expect.element(propose(empty.screen)).toBeVisible();
+    await empty.screen.unmount();
+
+    // Whether the member already has a place is known from the list: until there is one, nothing is offered.
+    mocks.list.mockReturnValueOnce(new Promise(() => {}));
+    const loading = await renderSection({ me: meNina });
+    await expect.element(section(loading.screen).getByText(fr.common.loading)).toBeVisible();
+    await expect.element(propose(loading.screen)).not.toBeInTheDocument();
+    await loading.screen.unmount();
+
+    mocks.list.mockRejectedValueOnce(new Error("boom"));
+    const failed = await renderSection({ me: meNina });
+    await expect.element(section(failed.screen).getByRole("alert")).toBeVisible();
+    await expect.element(propose(failed.screen)).not.toBeInTheDocument();
+  });
+
+  test("OffersSection — en anglais, « Offer a car » et « Offer lodging »", async () => {
+    const rides = await renderSection({ me: meNina, languages: ["en"] });
+    await expect
+      .element(rides.screen.getByRole("button", { name: en.offers.propose.ride, exact: true }))
+      .toBeVisible();
+    expect(en.offers.propose).toEqual({ ride: "Offer a car", lodging: "Offer lodging" });
+    await rides.screen.unmount();
+
+    const lodgings = await renderSection({ me: meAlice, kind: "lodging", languages: ["en"] });
+    await expect
+      .element(
+        lodgings.screen.getByRole("button", { name: en.offers.propose.lodging, exact: true }),
+      )
+      .toBeVisible();
+  });
+
+  test("OffersSection — Proposer une voiture ouvre le formulaire ; l'offre créée est sur la page, et le focus sur le titre de la section", async () => {
+    const { screen } = await renderSection({ me: meNina });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+
+    await propose(screen).click();
+
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleNew.ride });
+    await expect.element(dialog).toBeVisible();
+    await dialog.getByLabelText(fr.offers.form.place.ride, { exact: true }).fill("Annecy, gare");
+    await dialog.getByLabelText(fr.offers.form.seats.ride, { exact: true }).fill("3");
+    await dialog.getByRole("button", { name: fr.offers.form.save, exact: true }).click();
+
+    // Her car is on the page, the window is closed, and the button is gone: she has a car now.
+    await expect.element(offerOf(screen, "Nina")).toBeVisible();
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.create).toHaveBeenCalledWith({
+      event: "event",
+      kind: "ride",
+      place: "Annecy, gare",
+      seats: 3,
+      date: "2026-06-13",
+      time: "",
+      notes: "",
+    });
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(propose(screen)).not.toBeInTheDocument();
+    // The focus is not lost on the page: it goes to the title of the section.
+    await expect
+      .element(screen.getByRole("heading", { level: 2, name: fr.offers.title.ride }))
+      .toHaveFocus();
+  });
+
+  test("OffersSection — Annuler dans le formulaire rend le focus au bouton Proposer, qui reste", async () => {
+    const { screen } = await renderSection({ me: meNina });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+
+    await propose(screen).click();
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleNew.ride });
+    await expect.element(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: fr.common.cancel }).click();
+
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(mocks.create).not.toHaveBeenCalled();
+    await expect.element(propose(screen)).toHaveFocus();
+  });
+
+  test("OffersSection — Proposer un logement : le formulaire du logement, et son offre sur la page", async () => {
+    const { screen } = await renderSection({ me: meAlice, kind: "lodging" });
+    await expect.element(offerOf(screen, "Bob")).toBeVisible();
+
+    await propose(screen, "lodging").click();
+
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleNew.lodging });
+    await expect.element(dialog).toBeVisible();
+    await dialog.getByLabelText(fr.offers.form.place.lodging, { exact: true }).fill("Camping");
+    await dialog.getByRole("button", { name: fr.offers.form.save, exact: true }).click();
+
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "event", kind: "lodging", place: "Camping", seats: 0 }),
+    );
+    await expect.element(propose(screen, "lodging")).not.toBeInTheDocument();
+    await expect
+      .element(screen.getByRole("heading", { level: 2, name: fr.offers.title.lodging }))
+      .toHaveFocus();
+  });
+
+  test("OffersSection — une offre refusée (offer_already_member) reste dans la fenêtre, et le bouton aussi", async () => {
+    mocks.create.mockRejectedValueOnce(refusal("kind", "offer_already_member"));
+    const { screen } = await renderSection({ me: meNina });
+    await expect.element(offerOf(screen, "Alice")).toBeVisible();
+
+    await propose(screen).click();
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleNew.ride });
+    await dialog.getByLabelText(fr.offers.form.place.ride, { exact: true }).fill("Annecy");
+    await dialog.getByLabelText(fr.offers.form.seats.ride, { exact: true }).fill("3");
+    await dialog.getByRole("button", { name: fr.offers.form.save, exact: true }).click();
+
+    await expect
+      .element(dialog.getByRole("alert").getByText(fr.errors.offer_already_member))
+      .toBeVisible();
+    await expect.element(dialog).toBeVisible();
+  });
+});
+
+// --- Editing an offer, and adding someone to it ---
+
+const edit = (scope: { getByRole: Screen["getByRole"] }) => button(scope, fr.offers.edit);
+const addSomeone = (scope: { getByRole: Screen["getByRole"] }) =>
+  button(scope, fr.offers.addSomeone);
+
+describe("managing an offer", () => {
+  test("OffersSection — Modifier et Ajouter quelqu'un pour le propriétaire et un admin seulement", async () => {
+    const owner = await renderSection({ me: meAlice });
+    await expect.element(offerOf(owner.screen, "Alice")).toBeVisible();
+    await expect.element(edit(offerOf(owner.screen, "Alice"))).toBeVisible();
+    await expect.element(addSomeone(offerOf(owner.screen, "Alice"))).toBeVisible();
+    await owner.screen.unmount();
+
+    // A passenger, a member who is not in the car, and nobody known.
+    for (const me of [meBob, meNina, null]) {
+      const other = await renderSection({ me });
+      await expect.element(offerOf(other.screen, "Alice")).toBeVisible();
+      await expect.element(edit(offerOf(other.screen, "Alice"))).not.toBeInTheDocument();
+      await expect.element(addSomeone(offerOf(other.screen, "Alice"))).not.toBeInTheDocument();
+      await other.screen.unmount();
+    }
+
+    // An admin changes any offer, whoever's, and places anybody in it.
+    const boss = await renderSection({ me: meAdmin });
+    await expect.element(offerOf(boss.screen, "Alice")).toBeVisible();
+    await expect.element(edit(offerOf(boss.screen, "Alice"))).toBeVisible();
+    await expect.element(addSomeone(offerOf(boss.screen, "Alice"))).toBeVisible();
+  });
+
+  test("OffersSection — Modifier ouvre le formulaire prérempli, enregistre, et rend le focus à Modifier", async () => {
+    const { screen } = await renderSection({ me: meAlice });
+    const one = offerOf(screen, "Alice");
+    await expect.element(one).toBeVisible();
+
+    await edit(one).click();
+
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleEdit });
+    await expect.element(dialog).toBeVisible();
+    const where = dialog.getByLabelText(fr.offers.form.place.ride, { exact: true });
+    await expect.element(where).toHaveValue("Lyon, Part-Dieu");
+    await expect
+      .element(dialog.getByLabelText(fr.offers.form.seats.ride, { exact: true }))
+      .toHaveValue(4);
+    await where.fill("Lyon, Perrache");
+    await dialog.getByRole("button", { name: fr.offers.form.save, exact: true }).click();
+
+    // The page has the new place, and the window is closed: the focus is on the button that opened it.
+    expect(await textOf(offerOf(screen, "Alice").getByText(/^Départ de/))).toBe(
+      "Départ de Lyon, Perrache · sam. 13 juin · 06:30",
+    );
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update).toHaveBeenCalledWith("ride1", {
+      place: "Lyon, Perrache",
+      seats: 4,
+      date: "2026-06-13",
+      time: "06:30",
+      notes: "Rendez-vous devant la gare.\nPas de chien.",
+    });
+    await expect.element(edit(offerOf(screen, "Alice"))).toHaveFocus();
+  });
+
+  test("OffersSection — un admin modifie le logement d'un autre", async () => {
+    const { screen } = await renderSection({ me: meAdmin, kind: "lodging" });
+    const one = offerOf(screen, "Bob");
+    await expect.element(one).toBeVisible();
+
+    await edit(one).click();
+
+    const dialog = screen.getByRole("dialog", { name: fr.offers.form.titleEdit });
+    await expect.element(dialog).toBeVisible();
+    await expect
+      .element(dialog.getByLabelText(fr.offers.form.endDate, { exact: true }))
+      .toHaveValue("2026-06-14");
+    await dialog.getByLabelText(fr.offers.form.url, { exact: true }).fill("");
+    await dialog.getByRole("button", { name: fr.offers.form.save, exact: true }).click();
+
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(mocks.update).toHaveBeenCalledWith("lodging1", {
+      place: "Gîte des Crêtes, Valloire",
+      seats: 0,
+      date: "2026-06-13",
+      end_date: "2026-06-14",
+      url: "",
+      notes: "",
+    });
+    // The listing link goes with the address.
+    await expect
+      .element(offerOf(screen, "Bob").getByRole("link", { name: fr.offers.seeAd }))
+      .not.toBeInTheDocument();
+  });
+
+  test("OffersSection — Ajouter quelqu'un ne propose que ceux qui peuvent prendre une place ; l'envoi les place, et le focus revient au bouton", async () => {
+    const { screen } = await renderSection({ me: meAlice });
+    const one = offerOf(screen, "Alice");
+    await expect.element(one).toBeVisible();
+
+    await addSomeone(one).click();
+
+    const dialog = screen.getByRole("dialog", { name: fr.offers.addSomeoneTitle });
+    await expect.element(dialog).toBeVisible();
+    const who = dialog.getByLabelText(fr.participation.runner);
+    // Alice owns the car, Sam and Bob are in it: Nina and the admin are left.
+    await vi.waitFor(() => {
+      const select = who.element();
+      if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
+      expect(
+        Array.from(select.options)
+          .filter((option) => option.value !== "")
+          .map((option) => option.textContent),
+      ).toEqual(["Admin", "Nina"]);
+    });
+    await who.selectOptions(nina.id);
+    await dialog.getByRole("button", { name: fr.participation.addSubmit, exact: true }).click();
+
+    await expect.element(offerOf(screen, "Alice").getByText("3 places prises sur 4")).toBeVisible();
+    expect(mocks.take).toHaveBeenCalledTimes(1);
+    expect(mocks.take).toHaveBeenCalledWith({ offer: "ride1", runner: nina.id });
+    expect(people(offerOf(screen, "Alice"))).toEqual(["Bob", "Nina", "Sam"]);
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(addSomeone(offerOf(screen, "Alice"))).toHaveFocus();
+  });
+
+  test("OffersSection — l'admin place quelqu'un dans la voiture d'un autre", async () => {
+    const { screen } = await renderSection({ me: meAdmin });
+    const one = offerOf(screen, "Alice");
+    await expect.element(one).toBeVisible();
+
+    await addSomeone(one).click();
+
+    const dialog = screen.getByRole("dialog", { name: fr.offers.addSomeoneTitle });
+    await expect.element(dialog).toBeVisible();
+    const who = dialog.getByLabelText(fr.participation.runner);
+    await expect.element(who).toBeVisible();
+    await who.selectOptions(admin.id);
+    await dialog.getByRole("button", { name: fr.participation.addSubmit, exact: true }).click();
+
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(mocks.take).toHaveBeenCalledWith({ offer: "ride1", runner: admin.id });
+  });
+});
+
 describe("tap targets", () => {
   test("OffersSection — zones tactiles d'au moins 44 px", async () => {
     await page.viewport(390, 844);
@@ -865,6 +1219,24 @@ describe("tap targets", () => {
     heights.push(await heightOf(button(offerOf(passenger.screen, "Alice"), fr.offers.leave.ride)));
 
     expect(heights).toHaveLength(5);
+    for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
+    await page.viewport(414, 896);
+  });
+
+  test("OffersSection — Proposer, Modifier et Ajouter quelqu'un font au moins 44 px", async () => {
+    await page.viewport(390, 844);
+    const heights: number[] = [];
+
+    const guest = await renderSection({ me: meNina });
+    await expect.element(offerOf(guest.screen, "Alice")).toBeVisible();
+    heights.push(await heightOf(propose(guest.screen)));
+    await guest.screen.unmount();
+
+    const owner = await renderSection({ me: meAlice });
+    const ride = offerOf(owner.screen, "Alice");
+    heights.push(await heightOf(edit(ride)), await heightOf(addSomeone(ride)));
+
+    expect(heights).toHaveLength(3);
     for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
     await page.viewport(414, 896);
   });

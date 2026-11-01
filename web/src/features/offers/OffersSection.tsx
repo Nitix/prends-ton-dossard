@@ -13,8 +13,10 @@ import { webAddress } from "../../lib/url";
 import type { EventView } from "../events/api";
 import { canManageOffer, canRemoveMember, type Me } from "../participations/permissions";
 import { describeError } from "../profile/forms";
+import { AddToOfferDialog } from "./AddToOfferDialog";
 import { useDeleteOffer, useLeavePlace, useOffers, useTakePlace, type OfferView } from "./api";
-import { canTakePlace, isFull } from "./offerRules";
+import { OfferDialog } from "./OfferDialog";
+import { canTakePlace, hasPlaceOfKind, isFull } from "./offerRules";
 
 const SEPARATOR = " · ";
 
@@ -22,10 +24,12 @@ const SEPARATOR = " · ";
  * The offers of one kind for an event: the cars (`ride`, « Covoiturage ») or
  * the lodgings (`lodging`, « Logement »), each with who offers it, where and
  * when, how many places are taken and by whom. A member takes a place for
- * themselves, or frees theirs; the owner of an offer, or an admin, also takes
- * someone out, or deletes the offer (after a confirmation that names the
- * people who lose their place). `me` is null while the runner of the user
- * loads: the offers can be read, not acted on.
+ * themselves, or frees theirs; the owner of an offer, or an admin, also puts
+ * someone in (`AddToOfferDialog`), takes someone out, changes the offer
+ * (`OfferDialog`) or deletes it (after a confirmation that names the people who
+ * lose their place). Under the offers, a member who has no place of this kind
+ * in the event may propose their own car or lodging. `me` is null while the
+ * runner of the user loads: the offers can be read, not acted on.
  *
  * The page asks for the offers of both kinds in one request, which the two
  * sections share: what a runner may take depends on the places they already
@@ -33,9 +37,11 @@ const SEPARATOR = " · ";
  *
  * The focus stays where the member is: after a place is taken or freed it is
  * on the button that takes the other's place, or on the title of the offer; and
- * a deleted offer takes the focus away with its button, so it goes to the title
- * of the section, which is not in the tab order (it only receives the focus
- * from here).
+ * a deleted offer takes the focus away with its button, and so does an offer
+ * that has just been proposed (the member has their place now, and there is no
+ * more to propose), so it goes to the title of the section, which is not in the
+ * tab order (it only receives the focus from here). The windows of the other
+ * actions give it back to their button, which stays.
  */
 export function OffersSection({
   view,
@@ -55,12 +61,19 @@ export function OffersSection({
   const [removing, setRemoving] = useState<string | null>(null);
   const [deleted, setDeleted] = useState<string | null>(null);
   const handled = useRef<string | null>(null);
+  // Whether the window that offers a car or a lodging is open, and how many offers it has saved.
+  const [proposing, setProposing] = useState(false);
+  const [proposed, setProposed] = useState(0);
+  const proposedHandled = useRef(0);
 
   // A refresh that fails keeps what the section already shows. While the
   // offers load, or when they could not, the section is there all the same,
   // with its title.
   const all = query.data;
   const offers = all?.filter(({ offer }) => offer.kind === kind);
+  // A member has one place of each kind in an event (a car or a bed of their own, or a seat in one):
+  // «Proposer» is for those who have none, and it needs the list to know.
+  const canPropose = !!me && !!all && !hasPlaceOfKind(all, kind, me.runnerId);
   // The confirmation follows the list: the people it names are those who are in the offer now.
   const target = removing === null ? undefined : all?.find(({ offer }) => offer.id === removing);
   const names = target?.members.map(({ runner }) => runner.name) ?? [];
@@ -79,30 +92,54 @@ export function OffersSection({
     if (!active || active === document.body || !active.isConnected) heading.current?.focus();
   }, [deleted, removing, all]);
 
+  // The offer that has just been proposed takes the button that opened the
+  // window off the page (its owner has their place now), whether the window
+  // closes first or the list shows it first: once the window is closed and the
+  // button is gone, if nothing has the focus, the title of the section does.
+  useEffect(() => {
+    if (proposed === proposedHandled.current || proposing || canPropose) return;
+    proposedHandled.current = proposed;
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) heading.current?.focus();
+  }, [proposed, proposing, canPropose]);
+
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
       <h2 id={headingId} ref={heading} tabIndex={-1} className="text-lg font-semibold">
         {t.offers.title[kind]}
       </h2>
       {offers && all ? (
-        offers.length === 0 ? (
-          <p className="text-sm text-neutral-600">{t.offers.empty[kind]}</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {offers.map((offerView) => (
-              <OfferItem
-                key={offerView.offer.id}
-                view={offerView}
-                offers={all}
-                eventId={eventId}
-                me={me}
-                onDelete={() => {
-                  setRemoving(offerView.offer.id);
-                }}
-              />
-            ))}
-          </div>
-        )
+        <>
+          {offers.length === 0 ? (
+            <p className="text-sm text-neutral-600">{t.offers.empty[kind]}</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {offers.map((offerView) => (
+                <OfferItem
+                  key={offerView.offer.id}
+                  view={offerView}
+                  offers={all}
+                  event={view}
+                  me={me}
+                  onDelete={() => {
+                    setRemoving(offerView.offer.id);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {canPropose && (
+            <button
+              type="button"
+              onClick={() => {
+                setProposing(true);
+              }}
+              className={`${SECONDARY} self-start`}
+            >
+              {t.offers.propose[kind]}
+            </button>
+          )}
+        </>
       ) : query.isError ? (
         <div className="flex flex-col gap-3">
           <p role="alert" className="text-sm font-medium text-red-700">
@@ -120,6 +157,17 @@ export function OffersSection({
       ) : (
         <output>{t.common.loading}</output>
       )}
+      <OfferDialog
+        open={proposing}
+        onClose={() => {
+          setProposing(false);
+        }}
+        onSaved={() => {
+          setProposed((count) => count + 1);
+        }}
+        view={view}
+        kind={kind}
+      />
       <Dialog
         open={target !== undefined}
         onClose={() => {
@@ -180,20 +228,21 @@ function detailLine(offer: OfferRecord, f: Formatters, t: Messages): string {
 function OfferItem({
   view,
   offers,
-  eventId,
+  event,
   me,
   onDelete,
 }: {
   view: OfferView;
   /** The offers of the event, of both kinds: whether a place can be taken depends on the places the member has already. */
   offers: OfferView[];
-  eventId: string;
+  event: EventView;
   me: Me | null;
   onDelete: () => void;
 }) {
   const { t, f } = useI18n();
   const { offer, owner, members } = view;
   const kind = offer.kind;
+  const eventId = event.event.id;
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   // « Je monte » or « Je descends »: only one is on the page at a time.
@@ -201,6 +250,9 @@ function OfferItem({
   const take = useTakePlace(eventId);
   const leave = useLeavePlace(eventId);
   const [message, setMessage] = useState<string | null>(null);
+  // The windows of the owner and the admin: they give the focus back to their button when they close.
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
   // Set on the spot: the state of a mutation is there after a render only, and two taps can come before it.
   const acting = useRef(false);
   const busy = take.isPending || leave.isPending;
@@ -349,11 +401,53 @@ function OfferItem({
             </button>
           )}
           {manage && (
-            <button type="button" onClick={onDelete} className={`${SECONDARY} ${DANGER_TEXT}`}>
-              {t.offers.delete}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setAdding(true);
+                }}
+                className={SECONDARY}
+              >
+                {t.offers.addSomeone}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(true);
+                }}
+                className={SECONDARY}
+              >
+                {t.offers.edit}
+              </button>
+              <button type="button" onClick={onDelete} className={`${SECONDARY} ${DANGER_TEXT}`}>
+                {t.offers.delete}
+              </button>
+            </>
           )}
         </div>
+      )}
+      {manage && (
+        <>
+          <AddToOfferDialog
+            open={adding}
+            onClose={() => {
+              setAdding(false);
+            }}
+            eventId={eventId}
+            offers={offers}
+            offer={view}
+          />
+          <OfferDialog
+            open={editing}
+            onClose={() => {
+              setEditing(false);
+            }}
+            view={event}
+            kind={kind}
+            offer={view}
+          />
+        </>
       )}
     </article>
   );
