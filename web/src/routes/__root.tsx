@@ -1,21 +1,14 @@
-import { Outlet, createRootRoute, redirect, useLocation } from "@tanstack/react-router";
+import { Outlet, createRootRoute, useLocation } from "@tanstack/react-router";
 
 import { AppShell } from "../components/AppShell";
 import { OfflineBanner } from "../components/OfflineBanner";
 import { Provisional } from "../components/Provisional";
-import { isPublicPath } from "../features/auth/session";
-import { pb } from "../lib/pb";
+import { isPublicPath, requireSession } from "../features/auth/session";
 
 export const Route = createRootRoute({
   // Without a session, every page but the public ones sends to the login
   // page, which brings the user back here once signed in.
-  beforeLoad: ({ location }) => {
-    if (pb.authStore.isValid || isPublicPath(location.pathname)) return;
-    throw redirect({
-      to: "/connexion",
-      search: { redirect: location.href === "/" ? undefined : location.href },
-    });
-  },
+  beforeLoad: ({ location }) => requireSession(location),
   component: Root,
   // Only a few pages exist, so every other path shows the provisional one
   // too: that lets the server's fallback to index.html be seen.

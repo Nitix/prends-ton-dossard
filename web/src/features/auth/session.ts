@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { redirect as redirectTo } from "@tanstack/react-router";
 import { ClientResponseError, type AuthRecord } from "pocketbase";
 import { useSyncExternalStore } from "react";
 
 import { pb } from "../../lib/pb";
+import { onResume } from "../../lib/resume";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
 
 /** The pages anybody can open, signed in or not. */
@@ -46,6 +48,86 @@ export async function restoreSession(): Promise<void> {
       pb.authStore.clear();
     }
   }
+}
+
+/** How often, at most, the server is asked whether the session still works. */
+export const SESSION_CHECK_INTERVAL_MS = 10 * 60_000;
+
+/** How often an app in view looks whether that check is due. */
+const SESSION_TICK_MS = 60_000;
+
+/**
+ * Returns the check that runs while the app is open: when it comes back to
+ * the foreground, and regularly while it stays there (see connectSession).
+ *
+ * PocketBase serves a request with a token it refuses as an anonymous one:
+ * lists come back empty and records "not found", but no 401. Only the routes
+ * that need a session answer 401. So a session that ended elsewhere (account
+ * disabled, password reset, email changed on another device) would go
+ * unnoticed. The check asks for a renewal, which needs a session: a refusal
+ * empties the store (restoreSession, and afterSend in lib/pb.ts). The renewal
+ * also keeps the token of a tab left open for days from expiring.
+ *
+ * A token that has expired is dropped at once, without asking. Otherwise the
+ * server is asked at most once per `interval`, counted from the creation of the
+ * check: restoreSession has just asked, when the app started. `now` is
+ * injectable for tests.
+ */
+export function sessionCheck({
+  now = Date.now,
+  interval = SESSION_CHECK_INTERVAL_MS,
+}: { now?: () => number; interval?: number } = {}): () => Promise<void> {
+  let lastAsked = now();
+  return async () => {
+    if (!pb.authStore.token) return;
+    if (!pb.authStore.isValid) {
+      pb.authStore.clear();
+      return;
+    }
+    if (now() - lastAsked < interval) return;
+    lastAsked = now();
+    await restoreSession();
+  };
+}
+
+/**
+ * Ties the app to the session, once it has been restored. When the session
+ * ends (sign-out, a token that the server refused or that expired), what the
+ * last user saw is forgotten and the router checks the page again: the guard
+ * of the root route sends to the login page. While the app is open, the
+ * session is checked (sessionCheck). Returns the function that stops it all.
+ */
+export function connectSession(
+  router: { invalidate: () => Promise<unknown> },
+  queryClient: QueryClient,
+  options?: Parameters<typeof sessionCheck>[0],
+): () => void {
+  const stopListening = pb.authStore.onChange((token) => {
+    if (token) return;
+    queryClient.clear();
+    void router.invalidate();
+  });
+  const check = sessionCheck(options);
+  const stopChecking = onResume(() => void check(), SESSION_TICK_MS);
+  return () => {
+    stopListening();
+    stopChecking();
+  };
+}
+
+/**
+ * The guard of the root route. Without a session, every page but the public
+ * ones sends to the login page, which brings the user back once signed in. A
+ * token that expired while the app was open is dropped on the way, which also
+ * forgets what its user saw (connectSession).
+ */
+export function requireSession(location: { pathname: string; href: string }): void {
+  if (pb.authStore.isValid || isPublicPath(location.pathname)) return;
+  if (pb.authStore.token) pb.authStore.clear();
+  throw redirectTo({
+    to: "/connexion",
+    search: { redirect: location.href === "/" ? undefined : location.href },
+  });
 }
 
 export function logout(): void {

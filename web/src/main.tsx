@@ -4,9 +4,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { ToastProvider } from "./components/Toast";
-import { restoreSession } from "./features/auth/session";
+import { connectSession, restoreSession } from "./features/auth/session";
 import { I18nProvider } from "./i18n/I18nProvider";
-import { pb } from "./lib/pb";
 import { ensureTemporal } from "./lib/temporal";
 import { TodayProvider } from "./lib/useToday";
 import { routeTree } from "./routeTree.gen";
@@ -35,14 +34,11 @@ await ensureTemporal();
 // The router checks the session when it loads the first page.
 await restoreSession();
 
-// The session ended (sign-out, or the server refused the token): forget what
-// the last user saw, and run the root route's check again, which sends the
-// app to the login page.
-pb.authStore.onChange((token) => {
-  if (token) return;
-  queryClient.clear();
-  void router.invalidate();
-});
+// From now on, the end of the session (sign-out, a token that the server
+// refused or that expired) forgets what the last user saw and sends the app to
+// the login page; the session is checked again whenever the app comes back to
+// the foreground.
+connectSession(router, queryClient);
 
 createRoot(rootElement).render(
   <StrictMode>

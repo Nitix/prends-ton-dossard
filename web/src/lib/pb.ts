@@ -13,7 +13,10 @@ pb.autoCancellation(false);
 
 // A 401 means the server refused our token: it expired, it was replaced, or
 // the account was disabled. The session is over, so the store is emptied;
-// that is what sends the app back to the login page (see main.tsx).
+// that is what sends the app back to the login page (connectSession, in
+// features/auth/session.ts). PocketBase only answers 401 on the routes that
+// need a session: elsewhere a refused token reads as a guest, which is why the
+// app asks for a renewal when it comes back to the foreground (sessionCheck).
 pb.afterSend = (response: Response, data: unknown) => {
   if (response.status === 401 && pb.authStore.token) {
     pb.authStore.clear();

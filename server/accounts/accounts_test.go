@@ -226,6 +226,28 @@ func TestUsers_DisableInvalidatesSessions(t *testing.T) {
 	}
 }
 
+// The front end relies on this: PocketBase serves a request whose token it
+// refuses as an anonymous one on the collection routes (an empty list, no 401),
+// and only the routes that need a session answer 401. That is why the front end
+// asks for a renewal when it comes back to the foreground (sessionCheck in
+// web/src/features/auth/session.ts): the 401 of the renewal is what ends a
+// session that ended elsewhere. If PocketBase starts answering 401 here, the
+// front end can rely on any request instead.
+func TestUsers_RefusedTokenIsAGuestOnCollectionRoutes(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	bobToken := testutil.Token(t, fx.Bob)
+	adminToken := testutil.Token(t, fx.Admin)
+
+	seq := testutil.NewSequence(t, app)
+	events := "/api/collections/events/records"
+	seq.Step("an enabled account reads the events", http.MethodGet, events, bobToken, "", http.StatusOK, `"totalItems":2`)
+	seq.Step("the admin disables the account", http.MethodPatch, "/api/collections/users/records/"+fx.Bob.Id, adminToken, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
+	seq.Step("the refused token reads as a guest: an empty list", http.MethodGet, events, bobToken, "", http.StatusOK, `"items":[]`, `"totalItems":0`)
+	seq.Step("a garbage token reads as a guest too", http.MethodGet, events, "not-a-token", "", http.StatusOK, `"items":[]`, `"totalItems":0`)
+	seq.Step("the renewal of the refused token answers 401", http.MethodPost, "/api/collections/users/auth-refresh", bobToken, "", http.StatusUnauthorized, `"status":401`)
+}
+
 // The refusal is the authRule of the collection (disabled = false), which
 // PocketBase answers with a 403 once the credentials are right: 400 is what it
 // answers for wrong credentials.
