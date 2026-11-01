@@ -45,24 +45,33 @@ export function Dialog({
         if (event.target === event.currentTarget && open) onClose();
       }}
       // Tailwind's reset zeroes the margin that centres a dialog.
-      className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-xl bg-white p-0 text-neutral-900 shadow-xl backdrop:bg-black/50"
+      className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-[1.75rem] border border-white bg-white p-0 text-ink shadow-[0_30px_80px_-20px_rgb(42_32_112/0.55)] backdrop:bg-[rgb(36_27_53/0.5)] backdrop:backdrop-blur-[3px]"
     >
       {open && (
-        <div className="p-4">
-          <div className="mb-4 flex items-start justify-between gap-2">
-            <h2 id={titleId} className="text-lg font-semibold">
+        <div className="relative p-5">
+          {/* A glow of sunrise at the top of the window. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-blush-100/70 via-iris-50/40 to-transparent"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-dawn"
+          />
+          <div className="relative mb-4 flex items-start justify-between gap-2">
+            <h2 id={titleId} className="pt-1.5 font-display text-xl font-extrabold tracking-tight">
               {title}
             </h2>
             <button
               type="button"
               onClick={onClose}
               aria-label={t.common.close}
-              className="-mt-2 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none hover:bg-neutral-100"
+              className="press -mt-1 -mr-1 flex size-11 shrink-0 items-center justify-center rounded-full bg-white/80 text-2xl leading-none text-neutral-700 shadow-[0_1px_3px_rgb(36_27_53/0.12)] hover:bg-iris-50 hover:text-ink"
             >
               <span aria-hidden="true">×</span>
             </button>
           </div>
-          {children}
+          <div className="relative">{children}</div>
         </div>
       )}
     </dialog>

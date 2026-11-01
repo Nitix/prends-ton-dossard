@@ -1,7 +1,8 @@
 import { useId, type ReactNode } from "react";
 
 /** The look of a text input, a select and a text area: at least 44 px tall, which is a tap target. */
-export const INPUT = "min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base";
+export const INPUT =
+  "min-h-11 rounded-xl border border-neutral-300 bg-white px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-300 focus:border-iris-500 focus:shadow-[0_0_0_4px_rgb(139_124_255/0.18)] aria-invalid:border-red-700";
 
 /** What the control of a field gets, to be linked to its label, its hint and its error. */
 export type FieldControl = {
@@ -37,7 +38,7 @@ export function Field({
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="text-sm font-semibold text-neutral-800">
         {label}
       </label>
       {children({

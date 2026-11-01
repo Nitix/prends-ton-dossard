@@ -97,7 +97,7 @@ export function AvatarPicker({ runner }: { runner: RunnerRecord }) {
       <Avatar
         runner={runner}
         thumb="256x256"
-        className="size-32 shrink-0 bg-neutral-200 text-4xl font-semibold text-neutral-700"
+        className="avatar-soft size-32 shrink-0 text-4xl font-bold"
       />
       <div className="flex flex-wrap gap-2">
         <label
