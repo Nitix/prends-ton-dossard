@@ -38,6 +38,16 @@ describe("distanceTicks", () => {
     expect(distanceTicks(0)).toEqual([0]);
     expect(distanceTicks(Number.NaN)).toEqual([0]);
   });
+
+  test("distanceTicks — une longueur énorme ou infinie se termine", () => {
+    expect(distanceTicks(Infinity)).toEqual([0]);
+    for (const km of [1e12, 1e100, 1e300, 1.7e308, Number.MAX_VALUE]) {
+      const ticks = distanceTicks(km);
+      expect(ticks.length).toBeGreaterThanOrEqual(2);
+      expect(ticks.length).toBeLessThanOrEqual(6);
+      expect(ticks.every(Number.isFinite)).toBe(true);
+    }
+  });
 });
 
 describe("altitudeScale", () => {
@@ -59,11 +69,52 @@ describe("altitudeScale", () => {
           Number.isInteger(step) &&
           isRound(step) &&
           // Never a -0, which Intl writes "-0 m".
-          ticks.every((tick) => !Object.is(tick, -0));
+          ticks.every((tick) => !Object.is(tick, -0)) &&
+          // A track at or above sea level has no scale below it.
+          (min < 0 || from >= 0);
         if (!ok) problems.push(`${min} to ${max}: ${from}, ${to}, ${ticks.join(", ")}`);
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  test("altitudeScale — des altitudes énormes ou infinies se terminent", () => {
+    const inputs: [number, number][] = [
+      [-1e308, 1e308],
+      [0, 1.7e308],
+      [-Number.MAX_VALUE, Number.MAX_VALUE],
+      [1e300, 1e300],
+      [-Infinity, Infinity],
+      [Infinity, Infinity],
+      [Number.NaN, 5],
+      [Number.NaN, Number.NaN],
+      [0, 1e7],
+    ];
+    const problems: string[] = [];
+    for (const [min, max] of inputs) {
+      const { from, to, ticks } = altitudeScale(min, max);
+      const ok =
+        ticks.length >= 3 &&
+        ticks.length <= 5 &&
+        Number.isFinite(from) &&
+        Number.isFinite(to) &&
+        from < to &&
+        ticks.every(Number.isFinite);
+      if (!ok) problems.push(`${min} to ${max}: ${from}, ${to}, ${ticks.join(", ")}`);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  test("altitudeScale — une trace au niveau de la mer ne descend pas sous 0", () => {
+    expect(altitudeScale(0, 3)).toEqual({ from: 0, to: 10, ticks: [0, 5, 10] });
+    expect(altitudeScale(0, 0)).toEqual({ from: 0, to: 10, ticks: [0, 5, 10] });
+    const small = altitudeScale(2, 3);
+    expect(small.from).toBe(0);
+    expect(small.ticks.every((tick) => tick >= 0)).toBe(true);
+    // Below sea level, the scale is centred on the track as before.
+    const below = altitudeScale(-3, 0);
+    expect(below.from).toBeLessThanOrEqual(-3);
+    expect(below.to).toBeGreaterThanOrEqual(0);
   });
 
   test("altitudeScale — un exemple", () => {

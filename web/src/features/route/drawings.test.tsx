@@ -207,6 +207,22 @@ describe("ElevationProfile", () => {
     expect(screen.container.innerHTML).not.toContain("NaN");
   });
 
+  test("ElevationProfile — des altitudes absurdes ne bloquent pas le dessin", async () => {
+    // Not what a file read by parseGpx can give, but what a caller could pass.
+    const absurd = toTrack([
+      { lat: 45, lon: 6, ele: -1e308 },
+      { lat: 45.01, lon: 6, ele: 1e308 },
+      { lat: 45.02, lon: 6, ele: 0 },
+    ]);
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ElevationProfile points={absurd} label="Profil" />
+      </I18nProvider>,
+    );
+    expect(screen.container.querySelector("svg")).not.toBeNull();
+    expect(screen.container.innerHTML).not.toMatch(/NaN|Infinity/);
+  });
+
   test("ElevationProfile — des points sans altitude parmi d'autres sont passés", async () => {
     const mixed = mountain(100).map((point, i) => {
       if (i % 3 !== 0) return point;

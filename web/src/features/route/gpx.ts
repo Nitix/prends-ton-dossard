@@ -48,6 +48,14 @@ export function toTrack(raw: RawPoint[]): TrackPoint[] {
   });
 }
 
+/**
+ * The altitudes beyond this, up or down, are not altitudes (the highest road is
+ * under 6 000 m, the deepest mine under 4 000 m below the sea): they are read as
+ * missing, like a text that is not a number. A track is stored on the server and
+ * read by every member, and an altitude of 1e308 m must not reach the drawing.
+ */
+export const MAX_ELEVATION_M = 100_000;
+
 /** A number written in a file, or `undefined` when there is none: a blank is not a 0. */
 function numberOf(text: string | null | undefined): number | undefined {
   if (text === null || text === undefined || text.trim() === "") return undefined;
@@ -58,14 +66,18 @@ function numberOf(text: string | null | undefined): number | undefined {
 /**
  * The points of a GPX file: those of its track (`trkpt`, all its segments one
  * after the other), or of its route (`rtept`) when it has no track point. A
- * point without a usable position is left out; an altitude that is missing or
- * not a number is just not set. The elements are found by their local name, so
- * the file may or may not declare the GPX namespace, and may prefix it.
+ * point without a usable position is left out; an altitude that is missing, not
+ * a number or beyond `MAX_ELEVATION_M` is just not set. Blanks before the XML
+ * declaration are allowed (a newline or a BOM at the start of a file). The
+ * elements are found by their local name, so the file may or may not declare the
+ * GPX namespace, and may prefix it.
  *
  * @throws {GpxError} when the text is not XML, or has no point to draw.
  */
 export function parseGpx(xml: string): TrackPoint[] {
-  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  // The declaration `<?xml` must be the very first thing of a document: the XML
+  // parser refuses a file that starts with a blank.
+  const doc = new DOMParser().parseFromString(xml.trimStart(), "application/xml");
   // Every browser says that it could not parse with a `parsererror` element.
   if (doc.getElementsByTagNameNS("*", "parsererror").length > 0) {
     throw new GpxError("The file is not valid XML.");
@@ -81,7 +93,8 @@ export function parseGpx(xml: string): TrackPoint[] {
     if (lat === undefined || lon === undefined) continue;
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
     const ele = numberOf(element.getElementsByTagNameNS("*", "ele")[0]?.textContent);
-    raw.push(ele === undefined ? { lat, lon } : { lat, lon, ele });
+    const plausible = ele !== undefined && Math.abs(ele) <= MAX_ELEVATION_M;
+    raw.push(plausible ? { lat, lon, ele } : { lat, lon });
   }
 
   if (raw.length === 0) throw new GpxError("The file has no track point.");

@@ -97,6 +97,48 @@ describe("parseGpx", () => {
     expect(stats.max).toBeUndefined();
   });
 
+  test("parseGpx — une altitude hors du plausible compte pour absente", () => {
+    // A file stored on the server is read by every member: an altitude of
+    // 1e308 m must not reach the drawing. Up to 100 000 m is kept.
+    const xml = gpx(`
+      <trkpt lat="45.00" lon="6"><ele>1e308</ele></trkpt>
+      <trkpt lat="45.01" lon="6"><ele>-1e308</ele></trkpt>
+      <trkpt lat="45.02" lon="6"><ele>1e999</ele></trkpt>
+      <trkpt lat="45.03" lon="6"><ele>100001</ele></trkpt>
+      <trkpt lat="45.04" lon="6"><ele>-100001</ele></trkpt>
+      <trkpt lat="45.05" lon="6"><ele>100000</ele></trkpt>
+      <trkpt lat="45.06" lon="6"><ele>-430</ele></trkpt>`);
+
+    const points = parseGpx(xml);
+
+    expect(points).toHaveLength(7);
+    expect(points.map((p) => p.ele)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      100_000,
+      -430,
+    ]);
+    const stats = gpxStats(points);
+    expect(stats.min).toBe(-430);
+    expect(stats.max).toBe(100_000);
+
+    // A file with nothing but absurd altitudes has no profile, but is still a track.
+    const absurd = parseGpx(gpx('<trkpt lat="45" lon="6"><ele>1e308</ele></trkpt>'));
+    expect(absurd).toEqual([{ lat: 45, lon: 6, km: 0 }]);
+  });
+
+  test("parseGpx — des blancs avant la déclaration XML sont permis", () => {
+    // A file from an editor or a download often starts with a newline or a BOM,
+    // which the XML parser refuses before `<?xml`.
+    const xml = gpx('<trkpt lat="45" lon="6"><ele>10</ele></trkpt>');
+    const leads = ["\n", "  \n\t", "\uFEFF", "\r\n\r\n "];
+    const parsed = leads.map((lead) => parseGpx(lead + xml));
+    expect(parsed).toEqual(leads.map(() => [{ lat: 45, lon: 6, ele: 10, km: 0 }]));
+  });
+
   test("parseGpx — un point sans position utilisable est laissé de côté", () => {
     const xml = gpx(`
       <trkpt lat="45" lon="6"/>
