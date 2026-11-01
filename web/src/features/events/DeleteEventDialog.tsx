@@ -30,10 +30,15 @@ export function DeleteEventDialog({
   );
 }
 
-/** The runners who are on a format of the event, each once, by name. */
+/**
+ * The runners who have a participation in the event, each once, by name: on a
+ * format, or on the event alone, whatever the status (those who do not start
+ * too: the server deletes every participation of the event).
+ */
 function participantNames(view: EventView): string[] {
   const names = new Map<string, string>();
-  for (const { participations } of view.formats) {
+  const lists = [view.interested, ...view.formats.map(({ participations }) => participations)];
+  for (const participations of lists) {
     for (const { runner } of participations) names.set(runner.id, runner.name);
   }
   return [...names.values()].toSorted((a, b) => a.localeCompare(b));

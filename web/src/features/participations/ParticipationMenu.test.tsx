@@ -1,14 +1,25 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClientResponseError } from "pocketbase";
-import { beforeEach, expect, test, vi } from "vitest";
+import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { userEvent } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { ensureTemporal } from "../../lib/temporal";
 import type { ParticipationRecord, RunnerRecord } from "../../lib/types";
-import { aliceRunner, bobRunner, p1, p2 } from "../events/testFixture";
+import { toEventView, type EventView } from "../events/api";
+import {
+  aliceRunner,
+  bobRunner,
+  eventRecord,
+  ninaRunner,
+  p1,
+  p2,
+  pNinaUndecided,
+  withParticipations,
+} from "../events/testFixture";
 import { ParticipationMenu } from "./ParticipationMenu";
 
 // The tap targets and the place of the menu are a matter of the styles, which
@@ -33,6 +44,22 @@ vi.mock("../../lib/pb", () => ({
 const bobParticipation: ParticipationRecord = { ...p2, status: "interested" };
 const aliceParticipation: ParticipationRecord = { ...p1, status: "registered" };
 
+// Nina is interested in the event, with no format yet.
+const ninaParticipation: ParticipationRecord = {
+  ...pNinaUndecided,
+  status: "interested",
+  confirmed: false,
+};
+// The same, confirmed: it is her own.
+const ninaConfirmed: ParticipationRecord = { ...pNinaUndecided, status: "interested" };
+
+let trail: EventView;
+
+beforeAll(async () => {
+  await ensureTemporal();
+  trail = toEventView(withParticipations(eventRecord, [pNinaUndecided]));
+});
+
 beforeEach(() => {
   mocks.update.mockReset().mockResolvedValue({});
   mocks.remove.mockReset().mockResolvedValue(true);
@@ -43,9 +70,16 @@ async function renderMenu(
     participation?: ParticipationRecord;
     runner?: RunnerRecord;
     canConfirm?: boolean;
+    /** Given for a participation on the event alone: the formats to choose from. */
+    formatsOf?: EventView;
   } = {},
 ) {
-  const { participation = bobParticipation, runner = bobRunner, canConfirm = false } = options;
+  const {
+    participation = bobParticipation,
+    runner = bobRunner,
+    canConfirm = false,
+    formatsOf,
+  } = options;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onRemoved = vi.fn<() => void>();
@@ -59,7 +93,8 @@ async function renderMenu(
               eventId="event"
               participation={participation}
               runner={runner}
-              formatLabel="Trail 42 km"
+              label="Trail 42 km"
+              formatsOf={formatsOf}
               canConfirm={canConfirm}
               onRemoved={onRemoved}
             />
@@ -216,6 +251,170 @@ test("ParticipationMenu — pas de Confirmer pour quelqu'un d'autre, ni pour une
   await expect
     .element(confirmed.screen.getByRole("button", { name: fr.common.confirm }))
     .not.toBeInTheDocument();
+});
+
+// --- A participation on the event alone ---
+
+const ninaMenu = (screen: Screen) => trigger(screen, "Nina");
+const chooseFormat = (screen: Screen) =>
+  screen.getByRole("button", { name: fr.participation.chooseFormat });
+
+async function renderOnEventAlone(options: { canConfirm?: boolean; confirmed?: boolean } = {}) {
+  const { canConfirm = true, confirmed = false } = options;
+  return renderMenu({
+    participation: confirmed ? ninaConfirmed : ninaParticipation,
+    runner: ninaRunner,
+    formatsOf: trail,
+    canConfirm,
+  });
+}
+
+test("ParticipationMenu — sans épreuve : pas de statuts, mais « Choisir l'épreuve », Confirmer s'il y a lieu, et Retirer", async () => {
+  const { screen } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+  await expect.element(chooseFormat(screen)).toBeVisible();
+
+  // Only « Intéressé » is possible with no format: no status to choose from.
+  for (const status of ["interested", "registered", "finished", "dnf", "dns"] as const) {
+    await expect
+      .element(screen.getByRole("button", { name: fr.status[status] }))
+      .not.toBeInTheDocument();
+  }
+  await expect
+    .element(screen.getByRole("list", { name: fr.participation.status }))
+    .not.toBeInTheDocument();
+  // Nina's own participation is not confirmed yet, and she may confirm it.
+  const confirm = screen.getByRole("button", { name: fr.common.confirm });
+  await expect.element(confirm).toBeVisible();
+  const remove = screen.getByRole("button", { name: fr.common.remove });
+  await expect.element(remove).toBeVisible();
+  for (const item of [chooseFormat(screen), confirm, remove]) {
+    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("ParticipationMenu — sans épreuve, pas de Confirmer pour quelqu'un d'autre, ni pour une participation déjà confirmée", async () => {
+  const other = await renderOnEventAlone({ canConfirm: false });
+  await ninaMenu(other.screen).click();
+  await expect.element(chooseFormat(other.screen)).toBeVisible();
+  await expect
+    .element(other.screen.getByRole("button", { name: fr.common.confirm }))
+    .not.toBeInTheDocument();
+  await other.screen.unmount();
+
+  const confirmed = await renderOnEventAlone({ confirmed: true });
+  await ninaMenu(confirmed.screen).click();
+  await expect.element(chooseFormat(confirmed.screen)).toBeVisible();
+  await expect
+    .element(confirmed.screen.getByRole("button", { name: fr.common.confirm }))
+    .not.toBeInTheDocument();
+});
+
+test("ParticipationMenu — sans épreuve, Retirer demande confirmation avec le nom de l'événement", async () => {
+  const { screen } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+
+  await screen.getByRole("button", { name: fr.common.remove }).click();
+
+  await expect
+    .element(screen.getByRole("dialog", { name: fr.participation.removeTitle }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText(fr.participation.removeWarning("Nina", "Trail 42 km")))
+    .toBeVisible();
+});
+
+test("ParticipationMenu — « Choisir l'épreuve » ouvre le dialogue des épreuves de l'événement", async () => {
+  const { screen } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+
+  await chooseFormat(screen).click();
+
+  const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
+  await expect.element(dialog).toBeVisible();
+  const select = dialog.getByLabelText(fr.participation.format).element();
+  if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
+  expect(Array.from(select.options).map((option) => option.value)).toEqual(["f15", "f42"]);
+  // The menu is closed: the dialog does not leave it open behind.
+  expect(popoverOf(ninaMenu(screen).element()).matches(":popover-open")).toBe(false);
+});
+
+test("ParticipationMenu — choisir l'épreuve met la participation à jour, et le dit à la page (la ligne change de section)", async () => {
+  const { screen, onRemoved } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+  await chooseFormat(screen).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
+  await dialog.getByLabelText(fr.participation.format).selectOptions("f42");
+  expect(onRemoved).not.toHaveBeenCalled();
+
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pNinaUndecided", {
+      format: "f42",
+      status: "interested",
+    });
+  });
+  await vi.waitFor(() => {
+    expect(onRemoved).toHaveBeenCalledOnce();
+  });
+  await expect.element(dialog).not.toBeInTheDocument();
+});
+
+test("ParticipationMenu — Annuler dans le dialogue des épreuves rend le focus au bouton du menu", async () => {
+  const { screen, onRemoved } = await renderOnEventAlone();
+  await ninaMenu(screen).click();
+  await chooseFormat(screen).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
+  await expect.element(dialog).toBeVisible();
+
+  await dialog.getByRole("button", { name: fr.common.cancel }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(document.activeElement).toBe(ninaMenu(screen).element());
+  });
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(onRemoved).not.toHaveBeenCalled();
+});
+
+// A "not starting" participation is not in the list of its format but in the one
+// of those who do not start: a status change across that line moves its row.
+
+test("ParticipationMenu — passer à « Non partant » ou en revenir déplace la ligne : la page en est prévenue", async () => {
+  const toDns = await renderMenu();
+  await open(toDns.screen);
+  await toDns.screen.getByRole("button", { name: fr.status.dns }).click();
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p2", { status: "dns" });
+  });
+  await vi.waitFor(() => {
+    expect(toDns.onRemoved).toHaveBeenCalledOnce();
+  });
+  await toDns.screen.unmount();
+
+  mocks.update.mockClear();
+  const fromDns = await renderMenu({ participation: { ...bobParticipation, status: "dns" } });
+  await open(fromDns.screen);
+  await fromDns.screen.getByRole("button", { name: fr.status.registered }).click();
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p2", { status: "registered" });
+  });
+  await vi.waitFor(() => {
+    expect(fromDns.onRemoved).toHaveBeenCalledOnce();
+  });
+});
+
+test("ParticipationMenu — un changement de statut qui laisse la ligne où elle est ne prévient pas la page", async () => {
+  const { screen, onRemoved } = await renderMenu();
+  await open(screen);
+
+  await screen.getByRole("button", { name: fr.status.finished }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledOnce();
+  });
+  expect(onRemoved).not.toHaveBeenCalled();
 });
 
 test("ParticipationMenu — Retirer demande confirmation, et Annuler ne retire rien", async () => {

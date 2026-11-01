@@ -8,7 +8,17 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "../events/api";
-import { aliceRunner, bobRunner, eventRecord, samRunner } from "../events/testFixture";
+import { UNDECIDED } from "../events/participants";
+import {
+  aliceRunner,
+  bobRunner,
+  eventRecord,
+  ninaRunner,
+  p1,
+  p2,
+  samRunner,
+  withParticipations,
+} from "../events/testFixture";
 import { AddSomeoneDialog } from "./AddSomeoneDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -31,19 +41,29 @@ vi.mock("../../lib/pb", () => ({
   },
 }));
 
+// Alice and Bob are on F42, Sam is on F15, Nina is on none.
 let view: EventView;
+// Alice is on F42 and F15 both.
+let aliceEverywhere: EventView;
+// Alice and Bob are on both formats.
+let everyoneEverywhere: EventView;
 
 beforeAll(async () => {
   await ensureTemporal();
   view = toEventView(eventRecord);
+  const aliceOnF15 = { ...p1, id: "p1b", format: "f15", expand: p1.expand };
+  const bobOnF15 = { ...p2, id: "p2b", format: "f15", expand: p2.expand };
+  aliceEverywhere = toEventView(withParticipations(eventRecord, [aliceOnF15]));
+  everyoneEverywhere = toEventView(withParticipations(eventRecord, [aliceOnF15, bobOnF15]));
 });
 
 beforeEach(() => {
-  mocks.runners.mockReset().mockResolvedValue([aliceRunner, bobRunner, samRunner]);
+  // On purpose in the order of neither the names nor the formats they are on.
+  mocks.runners.mockReset().mockResolvedValue([samRunner, ninaRunner, bobRunner, aliceRunner]);
   mocks.create.mockReset().mockResolvedValue({ id: "new" });
 });
 
-async function renderDialog() {
+async function renderDialog(eventView: EventView = view) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onClose = vi.fn<() => void>();
@@ -51,7 +71,7 @@ async function renderDialog() {
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={["fr"]}>
         <ToastProvider>
-          <AddSomeoneDialog open onClose={onClose} view={view} />
+          <AddSomeoneDialog open onClose={onClose} view={eventView} />
         </ToastProvider>
       </I18nProvider>
     </QueryClientProvider>,
@@ -64,6 +84,7 @@ type Screen = Awaited<ReturnType<typeof renderDialog>>["screen"];
 const runnerSelect = (screen: Screen) => screen.getByLabelText(fr.participation.runner);
 const formatSelect = (screen: Screen) => screen.getByLabelText(fr.participation.format);
 const statusSelect = (screen: Screen) => screen.getByLabelText(fr.participation.status);
+const submit = (screen: Screen) => screen.getByRole("button", { name: fr.participation.addSubmit });
 
 function optionsOf(select: Element): HTMLOptionElement[] {
   if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
@@ -87,59 +108,98 @@ async function loaded(screen: Screen) {
   });
 }
 
-test("AddSomeoneDialog — pour F42, Alice et Bob ne sont pas proposés, Sam l'est", async () => {
+// --- The runner first ---
+
+test("AddSomeoneDialog — le coureur se choisit d'abord ; Sam (sur F15) n'a que F42, sans « Pas encore décidé »", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
+  // No format to choose before a runner is.
+  await expect.element(formatSelect(screen)).not.toBeInTheDocument();
 
-  await formatSelect(screen).selectOptions("f42");
+  await runnerSelect(screen).selectOptions(samRunner.id);
 
-  expect(offered(screen)).toEqual(["Sam"]);
+  expect(optionsOf(formatSelect(screen).element()).map((option) => option.value)).toEqual(["f42"]);
+  await expect.element(formatSelect(screen)).toHaveValue("f42");
+  expect(screen.container.textContent).not.toContain(fr.participation.undecided);
 });
 
-test("AddSomeoneDialog — par défaut, la première épreuve (F15, le 13 juin) : Sam y est, Alice et Bob sont proposés", async () => {
+test("AddSomeoneDialog — les coureurs proposés sont ceux qui ont encore quelque chose à choisir, par nom", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
 
+  // Alice and Bob are on F42 and can still take F15; Nina and Sam too.
+  expect(offered(screen)).toEqual(["Alice", "Bob", "Nina", "Sam"]);
+});
+
+test("AddSomeoneDialog — un coureur sur aucune épreuve a toutes les épreuves et « Pas encore décidé »", async () => {
+  const { screen } = await renderDialog();
+  await loaded(screen);
+
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+
+  const options = optionsOf(formatSelect(screen).element());
+  expect(options.map((option) => option.value)).toEqual(["f15", "f42", UNDECIDED]);
+  expect(options.at(-1)?.textContent).toBe(fr.participation.undecided);
   await expect.element(formatSelect(screen)).toHaveValue("f15");
-  expect(offered(screen)).toEqual(["Alice", "Bob"]);
+});
+
+test("AddSomeoneDialog — un coureur déjà sur toutes les épreuves n'est pas proposé", async () => {
+  const { screen } = await renderDialog(aliceEverywhere);
+  await loaded(screen);
+
+  expect(offered(screen)).toEqual(["Bob", "Nina", "Sam"]);
 });
 
 test("AddSomeoneDialog — les épreuves se reconnaissent à leur type, leur mesure et leur jour", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
 
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+
   const labels = optionsOf(formatSelect(screen).element()).map((option) =>
     (option.textContent ?? "").replace(/\p{Zs}/gu, " "),
   );
-  expect(labels).toEqual(["Trail 15 km · sam. 13 juin", "Trail 42 km · dim. 14 juin"]);
+  expect(labels).toEqual([
+    "Trail 15 km · sam. 13 juin",
+    "Trail 42 km · dim. 14 juin",
+    fr.participation.undecided,
+  ]);
 });
 
-test("AddSomeoneDialog — changer d'épreuve oublie le coureur choisi s'il n'y est plus proposé", async () => {
+test("AddSomeoneDialog — changer de coureur repart de sa première épreuve proposée", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
-  await runnerSelect(screen).selectOptions(bobRunner.id);
-  await expect.element(runnerSelect(screen)).toHaveValue(bobRunner.id);
-
-  // Bob is on F42.
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
   await formatSelect(screen).selectOptions("f42");
+  await expect.element(formatSelect(screen)).toHaveValue("f42");
 
-  await expect.element(runnerSelect(screen)).toHaveValue("");
+  // Sam only has F42 left: it is his first.
+  await runnerSelect(screen).selectOptions(samRunner.id);
+  await expect.element(formatSelect(screen)).toHaveValue("f42");
+
+  // Alice only has F15 left.
+  await runnerSelect(screen).selectOptions(aliceRunner.id);
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
+
+  // Back to Nina, whose choice of F42 is forgotten.
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
 });
+
+// --- What it creates ---
 
 test("AddSomeoneDialog — ajoute Sam sur F42 avec le statut choisi, puis se ferme et invalide les listes", async () => {
   const { screen, onClose, invalidate } = await renderDialog();
   await loaded(screen);
-  await formatSelect(screen).selectOptions("f42");
   await runnerSelect(screen).selectOptions(samRunner.id);
   await statusSelect(screen).selectOptions("registered");
 
-  await screen.getByRole("button", { name: fr.participation.addSubmit }).click();
+  await submit(screen).click();
 
   await vi.waitFor(() => {
     expect(onClose).toHaveBeenCalledOnce();
   });
-  expect(mocks.create).toHaveBeenCalledOnce();
-  expect(mocks.create).toHaveBeenCalledWith({
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
     runner: samRunner.id,
     event: "event",
     format: "f42",
@@ -149,6 +209,32 @@ test("AddSomeoneDialog — ajoute Sam sur F42 avec le statut choisi, puis se fer
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["event", "event"]);
   expect(keys).toContainEqual(["pending"]);
+});
+
+test('AddSomeoneDialog — « Pas encore décidé » crée {runner, event, status: "interested"} sans format', async () => {
+  const { screen, onClose } = await renderDialog();
+  await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  await statusSelect(screen).selectOptions("registered");
+
+  await formatSelect(screen).selectOptions(UNDECIDED);
+
+  await expect.element(statusSelect(screen)).toBeDisabled();
+  await expect.element(statusSelect(screen)).toHaveValue("interested");
+  await expect.element(screen.getByText(fr.participation.undecidedHint)).toBeVisible();
+
+  await submit(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+    runner: ninaRunner.id,
+    event: "event",
+    status: "interested",
+  });
+  const [body] = mocks.create.mock.calls[0] ?? [];
+  expect("format" in (body ?? {})).toBe(false);
 });
 
 test("AddSomeoneDialog — le statut de départ est « Intéressé », et les cinq statuts sont proposés", async () => {
@@ -169,7 +255,7 @@ test("AddSomeoneDialog — on ne peut pas valider sans avoir choisi un coureur",
   const { screen, onClose } = await renderDialog();
   await loaded(screen);
 
-  await screen.getByRole("button", { name: fr.participation.addSubmit }).click();
+  await submit(screen).click();
 
   expect(mocks.create).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
@@ -177,6 +263,8 @@ test("AddSomeoneDialog — on ne peut pas valider sans avoir choisi un coureur",
   if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
   expect(select.validity.valueMissing).toBe(true);
 });
+
+// --- Failures ---
 
 test("AddSomeoneDialog — un coureur déjà sur l'épreuve (le serveur le dit) : message clair, la fenêtre reste ouverte", async () => {
   mocks.create.mockRejectedValue(
@@ -193,14 +281,12 @@ test("AddSomeoneDialog — un coureur déjà sur l'épreuve (le serveur le dit) 
   await loaded(screen);
   await runnerSelect(screen).selectOptions(aliceRunner.id);
 
-  await screen.getByRole("button", { name: fr.participation.addSubmit }).click();
+  await submit(screen).click();
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.participation.alreadyThere);
   expect(onClose).not.toHaveBeenCalled();
   // The user can try again with somebody else.
-  await expect
-    .element(screen.getByRole("button", { name: fr.participation.addSubmit }))
-    .toBeEnabled();
+  await expect.element(submit(screen)).toBeEnabled();
 });
 
 test("AddSomeoneDialog — toute autre erreur est traduite d'après son code", async () => {
@@ -214,24 +300,18 @@ test("AddSomeoneDialog — toute autre erreur est traduite d'après son code", a
   await loaded(screen);
   await runnerSelect(screen).selectOptions(aliceRunner.id);
 
-  await screen.getByRole("button", { name: fr.participation.addSubmit }).click();
+  await submit(screen).click();
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
 });
 
-test("AddSomeoneDialog — si tout le monde est déjà sur l'épreuve, il n'y a personne à ajouter", async () => {
+test("AddSomeoneDialog — si tout le monde est déjà sur toutes les épreuves, il n'y a personne à ajouter", async () => {
   mocks.runners.mockResolvedValue([aliceRunner, bobRunner]);
-  const { screen } = await renderDialog();
-  await expect
-    .element(screen.getByRole("dialog", { name: fr.participation.addSomeoneTitle }))
-    .toBeVisible();
-
-  await formatSelect(screen).selectOptions("f42");
+  const { screen } = await renderDialog(everyoneEverywhere);
 
   await expect.element(screen.getByText(fr.participation.everyoneThere)).toBeVisible();
-  await expect
-    .element(screen.getByRole("button", { name: fr.participation.addSubmit }))
-    .toBeDisabled();
+  await expect.element(submit(screen)).toBeDisabled();
+  await expect.element(runnerSelect(screen)).not.toBeInTheDocument();
 });
 
 test("AddSomeoneDialog — Annuler ferme sans rien créer", async () => {
@@ -247,12 +327,14 @@ test("AddSomeoneDialog — Annuler ferme sans rien créer", async () => {
 test("AddSomeoneDialog — les champs et les boutons font au moins 44 px", async () => {
   const { screen } = await renderDialog();
   await loaded(screen);
+  await runnerSelect(screen).selectOptions(ninaRunner.id);
+  await formatSelect(screen).selectOptions(UNDECIDED);
 
   for (const element of [
     runnerSelect(screen),
     formatSelect(screen),
     statusSelect(screen),
-    screen.getByRole("button", { name: fr.participation.addSubmit }),
+    submit(screen),
     screen.getByRole("button", { name: fr.common.cancel }),
   ]) {
     expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

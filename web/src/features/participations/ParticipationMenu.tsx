@@ -5,17 +5,24 @@ import { Dialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { ParticipationRecord, RunnerRecord, Status } from "../../lib/types";
+import type { EventView } from "../events/api";
 import { STATUSES, useDeleteParticipation, useUpdateParticipation } from "./api";
+import { ChooseFormatDialog } from "./ChooseFormatDialog";
 import { participationError } from "./errors";
 
 const ITEM =
   "flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left hover:bg-neutral-100";
 
+/** Which dialog the menu has opened, if any. */
+type Opened = "remove" | "choose";
+
 /**
  * The actions on a participation: change its status, confirm it, remove it.
- * It is a menu of the browser (the Popover API): the button opens it, and it
- * closes with Esc, with a click outside, and with a click on one of its
- * actions, with no script. Removing asks first, in a dialog.
+ * For a participation on the event alone (`formatsOf`), it offers « Pick the
+ * format » in place of the statuses: with no format the status can only be
+ * « Interested ». It is a menu of the browser (the Popover API): the button
+ * opens it, and it closes with Esc, with a click outside, and with a click on
+ * one of its actions, with no script. Removing asks first, in a dialog.
  *
  * Who may do what is the page's call: it only shows this to those who may
  * edit the participation, and passes `canConfirm` for the runner it is about.
@@ -23,15 +30,17 @@ const ITEM =
  * Where the focus goes (a keyboard or screen reader user must not restart from
  * the top of the page): a status change or a confirmation gives it back to the
  * button of the menu (the browser does, when the popover closes); so does a
- * removal that is cancelled; and a removal that goes through calls
- * `onRemoved`, since this menu goes away with its row: the page puts the focus
- * somewhere that stays.
+ * dialog that is cancelled; and a removal that goes through, like a format that
+ * is given or a status that moves the participation to or from the "did not
+ * start" list, calls `onRemoved`, since this menu goes away with its row: the
+ * page puts the focus somewhere that stays.
  */
 export function ParticipationMenu({
   eventId,
   participation,
   runner,
-  formatLabel,
+  label,
+  formatsOf,
   canConfirm,
   onRemoved,
 }: {
@@ -39,36 +48,38 @@ export function ParticipationMenu({
   eventId: string;
   participation: ParticipationRecord;
   runner: RunnerRecord;
-  /** The name of the format, for the dialog that asks to confirm the removal. */
-  formatLabel: string;
+  /** What the participation is on, for the dialog that asks to confirm the removal: its format, or the event when it has none. */
+  label: string;
+  /** Given for a participation on the event alone: the event, whose formats it can take. */
+  formatsOf?: EventView;
   canConfirm: boolean;
-  /** The participation has just been removed: this menu is about to go away. */
+  /** The participation has just left its row (removed, or moved to another list): this menu is about to go away. */
   onRemoved: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
   const menuId = useId();
   const update = useUpdateParticipation(eventId);
-  const [removing, setRemoving] = useState(false);
+  const [opened, setOpened] = useState<Opened | null>(null);
 
-  // The removal dialog opens from an item of the popover, which closes at the
-  // same time. The native dialog would take that item, now hidden, as the place
-  // to give the focus back to, and the focus would fall to the page's <body>.
-  // So the button of the menu gets it, once the dialog is closed (the effect
-  // of the dialog, a child of this component, closes it before this one runs).
+  // A dialog opens from an item of the popover, which closes at the same time.
+  // The native dialog would take that item, now hidden, as the place to give
+  // the focus back to, and the focus would fall to the page's <body>. So the
+  // button of the menu gets it, once the dialog is closed (the effect of the
+  // dialog, a child of this component, closes it before this one runs).
   const trigger = useRef<HTMLButtonElement>(null);
   const dismissed = useRef(false);
   useEffect(() => {
-    if (removing || !dismissed.current) return;
+    if (opened !== null || !dismissed.current) return;
     dismissed.current = false;
     trigger.current?.focus();
-  }, [removing]);
+  }, [opened]);
   const dismiss = () => {
     dismissed.current = true;
-    setRemoving(false);
+    setOpened(null);
   };
   const removed = () => {
-    setRemoving(false);
+    setOpened(null);
     onRemoved();
   };
 
@@ -77,6 +88,12 @@ export function ParticipationMenu({
       await update.mutateAsync({ id: participation.id, patch });
     } catch (err) {
       toast.show(participationError(t, err));
+      return;
+    }
+    // The page lists those who do not start apart from the others: the row moves.
+    const { status } = patch;
+    if (status !== undefined && (status === "dns") !== (participation.status === "dns")) {
+      onRemoved();
     }
   }
 
@@ -97,31 +114,49 @@ export function ParticipationMenu({
         popover="auto"
         className="menu-popover rounded-lg border border-neutral-200 bg-white p-1 shadow-lg"
       >
-        <ul aria-label={t.participation.status}>
-          {STATUSES.map((status) => {
-            const current = status === participation.status;
-            return (
-              <li key={status}>
-                <button
-                  type="button"
-                  popoverTarget={menuId}
-                  popoverTargetAction="hide"
-                  aria-current={current ? "true" : undefined}
-                  onClick={() => {
-                    if (!current) void change({ status });
-                  }}
-                  className={`${ITEM} ${current ? "font-semibold" : ""}`}
-                >
-                  {/* The current status is not told by the weight of the text alone. */}
-                  <span aria-hidden="true" className="w-4 text-center">
-                    {current ? "✓" : ""}
-                  </span>
-                  {t.status[status]}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {formatsOf ? (
+          <ul>
+            <li>
+              <button
+                type="button"
+                popoverTarget={menuId}
+                popoverTargetAction="hide"
+                onClick={() => {
+                  setOpened("choose");
+                }}
+                className={ITEM}
+              >
+                {t.participation.chooseFormat}
+              </button>
+            </li>
+          </ul>
+        ) : (
+          <ul aria-label={t.participation.status}>
+            {STATUSES.map((status) => {
+              const current = status === participation.status;
+              return (
+                <li key={status}>
+                  <button
+                    type="button"
+                    popoverTarget={menuId}
+                    popoverTargetAction="hide"
+                    aria-current={current ? "true" : undefined}
+                    onClick={() => {
+                      if (!current) void change({ status });
+                    }}
+                    className={`${ITEM} ${current ? "font-semibold" : ""}`}
+                  >
+                    {/* The current status is not told by the weight of the text alone. */}
+                    <span aria-hidden="true" className="w-4 text-center">
+                      {current ? "✓" : ""}
+                    </span>
+                    {t.status[status]}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <ul className="mt-1 border-t border-neutral-200 pt-1">
           {canConfirm && !participation.confirmed && (
             <li>
@@ -142,7 +177,7 @@ export function ParticipationMenu({
               popoverTarget={menuId}
               popoverTargetAction="hide"
               onClick={() => {
-                setRemoving(true);
+                setOpened("remove");
               }}
               className={`${ITEM} text-red-700`}
             >
@@ -151,16 +186,25 @@ export function ParticipationMenu({
           </li>
         </ul>
       </div>
-      <Dialog open={removing} onClose={dismiss} title={t.participation.removeTitle}>
+      <Dialog open={opened === "remove"} onClose={dismiss} title={t.participation.removeTitle}>
         <RemoveForm
           eventId={eventId}
           participation={participation}
           runner={runner}
-          formatLabel={formatLabel}
+          label={label}
           onClose={dismiss}
           onRemoved={removed}
         />
       </Dialog>
+      {formatsOf && (
+        <ChooseFormatDialog
+          open={opened === "choose"}
+          onClose={dismiss}
+          onChosen={onRemoved}
+          view={formatsOf}
+          participationView={{ participation, runner }}
+        />
+      )}
     </>
   );
 }
@@ -169,14 +213,14 @@ function RemoveForm({
   eventId,
   participation,
   runner,
-  formatLabel,
+  label,
   onClose,
   onRemoved,
 }: {
   eventId: string;
   participation: ParticipationRecord;
   runner: RunnerRecord;
-  formatLabel: string;
+  label: string;
   onClose: () => void;
   onRemoved: () => void;
 }) {
@@ -197,7 +241,7 @@ function RemoveForm({
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-      <p>{t.participation.removeWarning(runner.name, formatLabel)}</p>
+      <p>{t.participation.removeWarning(runner.name, label)}</p>
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
           {message}

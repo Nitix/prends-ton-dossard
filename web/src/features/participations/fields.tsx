@@ -4,23 +4,32 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { Status } from "../../lib/types";
 import type { EventView, FormatView } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
+import { UNDECIDED } from "../events/participants";
 import { STATUSES } from "./api";
 
-/** A labelled native select: the browser gives the picker, the keyboard and the screen reader support. */
+/**
+ * A labelled native select: the browser gives the picker, the keyboard and the
+ * screen reader support. A `hint` is read with the field, and shown under it.
+ */
 export function SelectField({
   label,
   value,
   onChange,
   required = false,
+  disabled = false,
+  hint,
   children,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   required?: boolean;
+  disabled?: boolean;
+  hint?: string;
   children: ReactNode;
 }) {
   const id = useId();
+  const hintId = useId();
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium">
@@ -30,6 +39,8 @@ export function SelectField({
         id={id}
         value={value}
         required={required}
+        disabled={disabled}
+        aria-describedby={hint === undefined ? undefined : hintId}
         onChange={(event) => {
           onChange(event.target.value);
         }}
@@ -37,6 +48,11 @@ export function SelectField({
       >
         {children}
       </select>
+      {hint !== undefined && (
+        <p id={hintId} className="text-sm text-neutral-600">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -48,14 +64,17 @@ export function SelectField({
 export function FormatField({
   view,
   formats,
+  undecided = false,
   value,
   onChange,
 }: {
   view: EventView;
   /** The ones to offer: some of `view.formats`. */
   formats: FormatView[];
+  /** Adds « Pas encore décidé » (value `UNDECIDED`), last. */
+  undecided?: boolean;
   value: string;
-  onChange: (formatId: string) => void;
+  onChange: (value: string) => void;
 }) {
   const { t, f } = useI18n();
   const severalDays = !view.start.equals(view.end);
@@ -70,6 +89,7 @@ export function FormatField({
           </option>
         );
       })}
+      {undecided && <option value={UNDECIDED}>{t.participation.undecided}</option>}
     </SelectField>
   );
 }
@@ -78,19 +98,28 @@ function isStatus(value: string): value is Status {
   return STATUSES.some((status) => status === value);
 }
 
+/**
+ * The status of a participation. With no format chosen (`locked`) it can only
+ * be « Intéressé »: the field says so, and tells why under it.
+ */
 export function StatusField({
   value,
   onChange,
+  locked = false,
 }: {
   value: Status;
   onChange: (status: Status) => void;
+  /** No format chosen: disabled on « Intéressé », with `t.participation.undecidedHint` under it. */
+  locked?: boolean;
 }) {
   const { t } = useI18n();
 
   return (
     <SelectField
       label={t.participation.status}
-      value={value}
+      value={locked ? "interested" : value}
+      disabled={locked}
+      hint={locked ? t.participation.undecidedHint : undefined}
       onChange={(next) => {
         if (isStatus(next)) onChange(next);
       }}

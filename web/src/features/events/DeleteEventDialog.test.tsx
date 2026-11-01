@@ -17,7 +17,15 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
-import { event2Record, eventRecord, p1, withParticipations } from "./testFixture";
+import {
+  event2Record,
+  eventRecord,
+  p1,
+  p2,
+  p3,
+  pNinaUndecided,
+  withParticipations,
+} from "./testFixture";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
@@ -105,6 +113,33 @@ test("DeleteEventDialog — un coureur sur deux épreuves n'est cité qu'une foi
   const { screen } = await renderDialog(twice);
 
   await expect.element(screen.getByText("Alice, Bob et Sam")).toBeVisible();
+});
+
+test("DeleteEventDialog — cite aussi les intéressés sans épreuve et les non partants", async () => {
+  // Nina is interested with no format, and Bob does not start: the server deletes both.
+  const everyone = toEventView({
+    ...eventRecord,
+    expand: {
+      ...eventRecord.expand,
+      participations_via_event: [{ ...p2, status: "dns" }, p1, p3, pNinaUndecided],
+    },
+  });
+
+  const { screen } = await renderDialog(everyone);
+
+  await expect.element(screen.getByText("Alice, Bob, Nina et Sam")).toBeVisible();
+});
+
+test("DeleteEventDialog — si seuls des intéressés sans épreuve sont inscrits, elle les cite quand même", async () => {
+  // Nina only: nobody is on a format.
+  const onlyNina = toEventView({
+    ...eventRecord,
+    expand: { ...eventRecord.expand, participations_via_event: [pNinaUndecided] },
+  });
+
+  const { screen } = await renderDialog(onlyNina);
+
+  await expect.element(screen.getByText("Nina", { exact: true })).toBeVisible();
 });
 
 test("DeleteEventDialog — dit quel événement est supprimé, avec ses épreuves et leurs participations", async () => {

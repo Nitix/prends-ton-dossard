@@ -113,13 +113,16 @@ export const fr = {
     // Followed by the names of the participants, already joined: "Alice, Bob et Sam".
     deleteParticipants: "Participants concernés :",
     deleted: "Événement supprimé.",
+    // The section of the participations on the event alone, before the formats.
+    interestedTitle: "Intéressés, format à choisir",
+    // The summary of the closed list, at the bottom, of those who do not start: the count.
+    nonStarters: (n: number) => `Non partants (${n})`,
   },
   // What a member does with the participations of an event (see features/participations).
   participation: {
     // The button of the page, and the title of its dialog.
     join: "J'y vais",
     joinTitle: "J'y vais",
-    alreadyIn: "Tu es déjà sur cet événement : tu peux changer d'épreuve ou de statut.",
     addSomeone: "Ajouter quelqu'un",
     addSomeoneTitle: "Ajouter quelqu'un",
     addSubmit: "Ajouter",
@@ -127,12 +130,19 @@ export const fr = {
     chooseRunner: "Choisis un coureur",
     format: "Épreuve",
     status: "Statut",
-    everyoneThere: "Tout le monde est déjà sur cette épreuve.",
+    everyoneThere: "Tout le monde est déjà sur toutes les épreuves.",
     alreadyThere: "Cette personne est déjà sur cette épreuve.",
     // The accessible name of the menu button of a participant.
     actionsFor: (name: string) => `Actions pour ${name}`,
-    removeTitle: "Retirer de l'épreuve ?",
+    removeTitle: "Retirer la participation ?",
     removeWarning: (name: string, format: string) => `${name} ne sera plus sur « ${format} ».`,
+    // The choice "Not decided yet" among the formats of « J'y vais » and « Ajouter quelqu'un »: the participation is on the event alone.
+    undecided: "Pas encore décidé",
+    // Under the status when it cannot be chosen: with no format, it is « Intéressé ».
+    undecidedHint: "Sans épreuve, le statut est « Intéressé ». Tu choisiras l'épreuve plus tard.",
+    // The item of the menu of a participation on the event alone, and the title of its dialog.
+    chooseFormat: "Choisir l'épreuve",
+    chooseFormatTitle: "Choisir l'épreuve",
   },
   // The measures of a format, next to its name (see features/events/formatName.ts).
   format: {

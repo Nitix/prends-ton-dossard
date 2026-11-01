@@ -5,14 +5,16 @@ import { Dialog } from "../../components/Dialog";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Status } from "../../lib/types";
 import { useRunners, type EventView } from "../events/api";
+import { joinOptions, UNDECIDED } from "../events/participants";
 import { useCreateParticipation } from "./api";
 import { participationError } from "./errors";
 import { FormatField, SelectField, StatusField } from "./fields";
 
 /**
- * "Add someone": the choice of a runner, of a format and of a status. The
- * runners who are on the chosen format already are not offered. The runner
- * has to confirm it themselves later (unless it is the member's own).
+ * "Add someone": the choice of a runner first, then of one of the formats where
+ * they are not yet (and "Not decided yet", as for "I'm in"), then of a status.
+ * A runner who has nothing left to choose is not offered. The runner has to
+ * confirm it themselves later (unless it is the member's own).
  */
 export function AddSomeoneDialog({
   open,
@@ -36,8 +38,8 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
   const runners = useRunners();
   const create = useCreateParticipation(view.event.id);
 
-  const [formatId, setFormatId] = useState(view.formats[0]?.format.id ?? "");
   const [chosenRunner, setChosenRunner] = useState("");
+  const [formatId, setFormatId] = useState("");
   const [status, setStatus] = useState<Status>("interested");
   const [message, setMessage] = useState<string | null>(null);
 
@@ -60,22 +62,39 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
     );
   }
 
-  const onFormat = view.formats.find(({ format }) => format.id === formatId)?.participations;
-  const present = new Set(onFormat?.map(({ runner }) => runner.id));
-  const available = runners.data.filter((runner) => !present.has(runner.id));
-  // Changing the format may take the chosen runner away: they are not chosen any more.
+  // The runners who still have a format to take, by name.
+  const available = runners.data
+    .filter((runner) => {
+      const { formats, undecided } = joinOptions(view, runner.id);
+      return formats.length > 0 || undecided;
+    })
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+  // The page may load a change while the dialog is open: a runner who is not offered any more is not chosen any more.
   const runnerId = available.some((runner) => runner.id === chosenRunner) ? chosenRunner : "";
+  const options = runnerId === "" ? undefined : joinOptions(view, runnerId);
+  // The same for the format: it is one of those of this runner, the first by default.
+  const firstFormat = options?.formats[0]?.format.id ?? "";
+  const formatOffered =
+    options !== undefined &&
+    ((formatId === UNDECIDED && options.undecided) ||
+      options.formats.some(({ format }) => format.id === formatId));
+  const chosenFormat = formatOffered ? formatId : firstFormat;
+  const noFormat = chosenFormat === UNDECIDED;
+
+  function chooseRunner(id: string) {
+    setChosenRunner(id);
+    // Each runner starts from the first format that is offered to them.
+    setFormatId("");
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
+    const who = { runner: runnerId, event: view.event.id };
     try {
-      await create.mutateAsync({
-        runner: runnerId,
-        event: view.event.id,
-        format: formatId,
-        status,
-      });
+      await create.mutateAsync(
+        noFormat ? { ...who, status: "interested" } : { ...who, format: chosenFormat, status },
+      );
       onClose();
     } catch (err) {
       setMessage(participationError(t, err));
@@ -84,27 +103,37 @@ function AddSomeoneForm({ view, onClose }: { view: EventView; onClose: () => voi
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-      <FormatField view={view} formats={view.formats} value={formatId} onChange={setFormatId} />
       {available.length === 0 ? (
         <p className="text-sm">{t.participation.everyoneThere}</p>
       ) : (
-        <SelectField
-          label={t.participation.runner}
-          value={runnerId}
-          onChange={setChosenRunner}
-          required
-        >
-          <option value="" disabled>
-            {t.participation.chooseRunner}
-          </option>
-          {available.map((runner) => (
-            <option key={runner.id} value={runner.id}>
-              {runner.name}
+        <>
+          <SelectField
+            label={t.participation.runner}
+            value={runnerId}
+            onChange={chooseRunner}
+            required
+          >
+            <option value="" disabled>
+              {t.participation.chooseRunner}
             </option>
-          ))}
-        </SelectField>
+            {available.map((runner) => (
+              <option key={runner.id} value={runner.id}>
+                {runner.name}
+              </option>
+            ))}
+          </SelectField>
+          {options && (
+            <FormatField
+              view={view}
+              formats={options.formats}
+              undecided={options.undecided}
+              value={chosenFormat}
+              onChange={setFormatId}
+            />
+          )}
+          <StatusField value={status} onChange={setStatus} locked={noFormat} />
+        </>
       )}
-      <StatusField value={status} onChange={setStatus} />
       {message !== null && (
         <p role="alert" className="text-sm font-medium text-red-700">
           {message}
