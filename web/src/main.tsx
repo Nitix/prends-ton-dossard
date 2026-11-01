@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 
 import { ToastProvider } from "./components/Toast";
 import { connectSession, restoreSession } from "./features/auth/session";
+import { captureInstallPrompt } from "./features/pwa/installPrompt";
+import { registerServiceWorker } from "./features/pwa/register";
 import { I18nProvider } from "./i18n/I18nProvider";
 import { reloadOnStaleChunks } from "./lib/staleChunks";
 import { ensureTemporal } from "./lib/temporal";
@@ -31,6 +33,11 @@ if (!rootElement) {
 
 // A tab opened before a deploy reloads when the chunks it asks for are gone.
 reloadOnStaleChunks();
+
+// The site can be installed: the service worker is what makes it so, and the
+// browser makes its offer once, early, which the profile page shows later.
+registerServiceWorker();
+captureInstallPrompt();
 
 // Temporal must exist before any code that uses it runs.
 await ensureTemporal();

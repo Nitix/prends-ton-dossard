@@ -106,6 +106,12 @@ export const en = {
     renewHint: "The old link will stop working.",
     remove: "Delete the link",
   },
+  install: {
+    title: "App",
+    button: "Install",
+    ios: "On iPhone: tap Share, then “Add to Home Screen”.",
+    other: "Your browser offers to install it from its menu.",
+  },
   status: {
     interested: "Interested",
     registered: "Registered",

@@ -119,6 +119,15 @@ export const fr = {
     renewHint: "L'ancien lien cessera de marcher.",
     remove: "Supprimer le lien",
   },
+  // The "App" section of the profile page (see features/pwa): putting the site on the home screen.
+  install: {
+    title: "Application",
+    button: "Installer",
+    // Safari makes no offer to install: this is where to tap.
+    ios: "Sur iPhone : touche Partager, puis « Sur l'écran d'accueil ».",
+    // Where the browser offers it from its own menu.
+    other: "Ton navigateur propose l'installation depuis son menu.",
+  },
   // The labels of the participation statuses.
   status: {
     interested: "Intéressé",

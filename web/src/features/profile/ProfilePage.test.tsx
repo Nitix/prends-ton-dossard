@@ -249,6 +249,18 @@ test("ProfilePage — la section Agenda vient après les clés d'accès, et avan
   ).toBe(true);
 });
 
+test("ProfilePage — la section Application vient après l'Agenda, et avant le lien « Statistiques »", async () => {
+  const screen = await renderProfile();
+
+  const install = section(screen, fr.install.title);
+  // Nothing to offer in a tab of the test browser: the way to do it from its menu.
+  await expect.element(install.getByText(fr.install.other)).toBeVisible();
+  expect(follows(section(screen, fr.calendar.title).element(), install.element())).toBe(true);
+  expect(
+    follows(install.element(), screen.getByRole("link", { name: fr.stats.link }).element()),
+  ).toBe(true);
+});
+
 test("ProfilePage — le lien « Statistiques » est avant la déconnexion", async () => {
   const screen = await renderProfile();
 

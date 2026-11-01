@@ -335,3 +335,23 @@ describe("route texts", () => {
     expect(r.unreadable).toBe("This track could not be read.");
   });
 });
+
+describe("install texts", () => {
+  test("French", () => {
+    expect(fr.install).toEqual({
+      title: "Application",
+      button: "Installer",
+      ios: "Sur iPhone : touche Partager, puis « Sur l'écran d'accueil ».",
+      other: "Ton navigateur propose l'installation depuis son menu.",
+    });
+  });
+
+  test("English", () => {
+    expect(en.install).toEqual({
+      title: "App",
+      button: "Install",
+      ios: "On iPhone: tap Share, then “Add to Home Screen”.",
+      other: "Your browser offers to install it from its menu.",
+    });
+  });
+});

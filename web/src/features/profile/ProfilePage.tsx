@@ -13,6 +13,7 @@ import { pb } from "../../lib/pb";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
 import { logout, useSession } from "../auth/session";
 import { CalendarSection } from "../calendar/CalendarSection";
+import { InstallSection } from "../pwa/InstallSection";
 import { failureOf, text, type Failure } from "./forms";
 import { PasskeyList } from "./PasskeyList";
 import { Section } from "./Section";
@@ -23,8 +24,8 @@ const BUTTON =
 /**
  * The profile of the signed-in user: the photo and the name the group sees,
  * the email and the password of the account, the passkeys, the calendar link,
- * the link to the statistics, and the sign-out. The app shell around it owns
- * the page's `<main>`.
+ * how to install the app, the link to the statistics, and the sign-out. The app
+ * shell around it owns the page's `<main>`.
  */
 export function ProfilePage() {
   const { t } = useI18n();
@@ -56,6 +57,7 @@ export function ProfilePage() {
       </Section>
       <PasskeyList userId={user.id} />
       <CalendarSection />
+      <InstallSection />
       <Link to="/stats" className={`${SECONDARY} inline-flex items-center self-start`}>
         {t.stats.link}
       </Link>
