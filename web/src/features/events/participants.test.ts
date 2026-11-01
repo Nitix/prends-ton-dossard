@@ -128,7 +128,7 @@ describe("joinOptions", () => {
     expect(joinOptions(view, nina.id).support).toBe(false);
   });
 
-  test("joinOptions — un supporteur n'a plus ni épreuve ni « Pas encore décidé », et pas de « Je viens encourager »", () => {
+  test("joinOptions — un supporteur garde les épreuves, sans « Pas encore décidé » ni « Je viens encourager »", () => {
     // Alice, Bob (F42) and Sam (F15) as in the fixture, and Nina, supporter of the event.
     const view = toEventView(withParticipations(eventRecord, [pNinaSupporter]));
 

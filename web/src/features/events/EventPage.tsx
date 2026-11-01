@@ -28,14 +28,16 @@ const SEPARATOR = " · ";
 /** The days that are counted next to the deadline: a week or less. */
 const DAYS_LEFT_SHOWN = 7;
 
-/** The box of a section of the page: the interested, a format, those who do not start. */
+/** The box of a section of the page: the interested, a format, the supporters, those who do not start. */
 const SECTION = "rounded-lg border border-neutral-200 bg-white p-3";
 
 // The titles that the focus can be given to, by their `data-focus`: the title of
-// the page, of the section of the interested, of a format, of those who do not
-// start. None is in the tab order: they only receive the focus from the page.
+// the page, of the section of the interested, of a format, of the supporters, of
+// those who do not start. None is in the tab order: they only receive the focus
+// from the page.
 const PAGE_TITLE = "title";
 const INTERESTED = "interested";
+const SUPPORTERS = "supporters";
 const NON_STARTERS = "non-starters";
 const formatTitle = (formatId: string) => `format:${formatId}`;
 
@@ -62,6 +64,7 @@ type Depart = (participation: string, source: string, row: HTMLElement | null) =
 /** The title of the section where the participation is on this page, if it is. */
 function titleOfParticipation(view: EventView, id: string): string | undefined {
   if (view.interested.some(({ participation }) => participation.id === id)) return INTERESTED;
+  if (view.supporters.some(({ participation }) => participation.id === id)) return SUPPORTERS;
   for (const { format, participations } of view.formats) {
     const found = participations.find(({ participation }) => participation.id === id);
     if (found) {
@@ -74,9 +77,9 @@ function titleOfParticipation(view: EventView, id: string): string | undefined {
 
 /**
  * The page of an event: what it is, its link to register, who is interested
- * with no format yet, each format with who starts it and in what state, those
- * who do not start, and the actions the signed-in member may take. The app
- * shell around it owns the page's `<main>`.
+ * with no format yet, each format with who starts it and in what state, the
+ * supporters, those who do not start, and the actions the signed-in member may
+ * take. The app shell around it owns the page's `<main>`.
  */
 export function EventPage({ id }: { id: string }) {
   const { t } = useI18n();
@@ -289,6 +292,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             onDeparture={departed}
           />
         ))}
+        {view.supporters.length > 0 && (
+          <SupportersSection view={view} me={me} onDeparture={departed} />
+        )}
         {notStarting.length > 0 && (
           <NonStartersSection
             eventId={event.id}
@@ -329,22 +335,81 @@ function InterestedSection({
   onDeparture: Depart;
 }) {
   const { t } = useI18n();
+
+  return (
+    <EventSection
+      view={view}
+      list={view.interested}
+      title={t.event.interestedTitle}
+      focus={INTERESTED}
+      me={me}
+      onDeparture={onDeparture}
+    />
+  );
+}
+
+/** The supporters of the event, who come to cheer and start nothing: after the formats. */
+function SupportersSection({
+  view,
+  me,
+  onDeparture,
+}: {
+  view: EventView;
+  me: Me | null;
+  onDeparture: Depart;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <EventSection
+      view={view}
+      list={view.supporters}
+      title={t.event.supportersTitle}
+      focus={SUPPORTERS}
+      me={me}
+      onDeparture={onDeparture}
+    />
+  );
+}
+
+/**
+ * A section of the runners who are on the event alone, with no format: their
+ * title says what they are (the rows do not), and the menu of each row can give
+ * them a format or move them to the other section of the event.
+ */
+function EventSection({
+  view,
+  list,
+  title,
+  focus,
+  me,
+  onDeparture,
+}: {
+  view: EventView;
+  list: ParticipationView[];
+  title: string;
+  /** The `data-focus` of the title, which is also where the focus goes when a row of the section leaves it. */
+  focus: string;
+  me: Me | null;
+  onDeparture: Depart;
+}) {
+  const { t } = useI18n();
   const headingId = useId();
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-2 ${SECTION}`}>
-      <h2 id={headingId} data-focus={INTERESTED} tabIndex={-1} className="text-lg font-semibold">
-        {t.event.interestedTitle}
+      <h2 id={headingId} data-focus={focus} tabIndex={-1} className="text-lg font-semibold">
+        {title}
       </h2>
       <ul aria-label={t.event.participants} className="flex flex-col gap-2">
-        {view.interested.map((participationView) => (
+        {list.map((participationView) => (
           <ParticipantRow
             key={participationView.participation.id}
             eventId={view.event.id}
             participationView={participationView}
             label={view.event.name}
             formatsOf={view}
-            source={INTERESTED}
+            source={focus}
             me={me}
             onDeparture={onDeparture}
           />

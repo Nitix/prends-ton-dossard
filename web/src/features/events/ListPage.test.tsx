@@ -30,6 +30,7 @@ import {
   p1,
   p2,
   p3,
+  pNinaSupporter,
   pNinaUndecided,
   roadType,
   samRunner,
@@ -443,6 +444,55 @@ test("EventCard — en anglais, la ligne des intéressés dit « Race to pick »
     .toBeInTheDocument();
 });
 
+test("EventCard — les supporteurs ont leurs pastilles sous « Supporteurs »", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter]), event2Record]);
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  // The words say it: the chips are not told apart by their place alone.
+  const label = screen.getByText(fr.event.supportersTitle, { exact: true });
+  await expect.element(label).toBeVisible();
+  const chips = screen.getByRole("list", { name: fr.event.supportersTitle });
+  await expect.element(chips.getByText("Nina", { exact: true })).toBeInTheDocument();
+  expect(chips.getByRole("listitem").elements()).toHaveLength(1);
+  // The chip is the usual one: Nina added herself, so it is confirmed.
+  expect(chips.element().textContent).not.toContain(fr.event.unconfirmed);
+  // After the formats, with their chips.
+  const lastFormat = screen.getByText(/^Trail 42\s+km/);
+  expect(label.element().getBoundingClientRect().top).toBeGreaterThan(
+    lastFormat.element().getBoundingClientRect().bottom,
+  );
+  // A supporter starts nothing: she is not among the runners of a format, nor among the interested.
+  const card = screen.getByRole("article").filter({ hasText: "Trail des Crêtes" });
+  await expect
+    .element(card.getByRole("list", { name: fr.event.participants }).getByText("Nina"))
+    .not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.event.formatToChoose)).not.toBeInTheDocument();
+  // Only on the event that has supporters.
+  expect(screen.getByText(fr.event.supportersTitle, { exact: true }).elements()).toHaveLength(1);
+});
+
+test("EventCard — un événement sans supporteurs n'a pas de ligne « Supporteurs »", async () => {
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  await expect.element(screen.getByText(fr.event.supportersTitle)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("list", { name: fr.event.supportersTitle }))
+    .not.toBeInTheDocument();
+});
+
+test("EventCard — en anglais, la ligne des supporteurs dit « Supporters »", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+  const { screen } = await renderList("/liste", ["en-GB"]);
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  await expect.element(screen.getByText("Supporters", { exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByRole("list", { name: "Supporters" }).getByText("Nina", { exact: true }))
+    .toBeInTheDocument();
+});
+
 test("ParticipantChips — la puce de Bob, non confirmée, le dit en texte, en pointillés, avec son auteur", async () => {
   const { screen } = await renderList();
   await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
@@ -627,6 +677,18 @@ test("ListPage — ?personne=<id> garde un événement où ce coureur est intér
 
   const { screen } = await renderList(`/liste?personne=${ninaRunner.id}`);
 
+  await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  await expect.element(screen.getByText("10 km de Lyon")).not.toBeInTheDocument();
+  await expect.element(screen.getByLabelText(fr.filters.person)).toHaveValue(ninaRunner.id);
+});
+
+test("ListPage — ?personne=<id> garde un événement où ce coureur est supporteur", async () => {
+  mocks.runners.mockResolvedValue([aliceRunner, bobRunner, ninaRunner, samRunner]);
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter]), event2Record]);
+
+  const { screen } = await renderList(`/liste?personne=${ninaRunner.id}`);
+
+  // A supporter is on the event, whatever she does there: it is not a "not starting".
   await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
   await expect.element(screen.getByText("10 km de Lyon")).not.toBeInTheDocument();
   await expect.element(screen.getByLabelText(fr.filters.person)).toHaveValue(ninaRunner.id);

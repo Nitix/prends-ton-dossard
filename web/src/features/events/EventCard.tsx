@@ -13,10 +13,10 @@ const SEPARATOR = " · ";
 /**
  * An event in a list: its day or days, its name (the link to its page, a bar
  * as wide as the card and tall enough to tap), its place, the runners who are
- * interested with no format chosen yet, and each of its formats with its
- * measures and its participants. Those who do not start are not on the card.
- * Under the place, the registration deadline, if the event has one, and
- * "Inscriptions closes" once it has passed.
+ * interested with no format chosen yet, each of its formats with its measures
+ * and its participants, then its supporters. Those who do not start are not on
+ * the card. Under the place, the registration deadline, if the event has one,
+ * and "Inscriptions closes" once it has passed.
  */
 export function EventCard({ view }: { view: EventView }) {
   const { t, f } = useI18n();
@@ -59,6 +59,13 @@ export function EventCard({ view }: { view: EventView }) {
             </li>
           ))}
         </ul>
+      )}
+      {/* After the formats: they come to cheer, they start nothing. The words say it, not the place. */}
+      {view.supporters.length > 0 && (
+        <div className="mt-1 flex flex-col gap-1">
+          <p className="text-sm">{t.event.supportersTitle}</p>
+          <ParticipantChips participations={view.supporters} label={t.event.supportersTitle} />
+        </div>
       )}
     </article>
   );

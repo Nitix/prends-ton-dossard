@@ -13,7 +13,7 @@ const SEPARATOR = " · ";
 
 type Upcoming = {
   event: EventView["event"];
-  /** Absent for a participation on the event alone ("format to choose"). */
+  /** Absent for a participation on the event alone ("format to choose", or supporter). */
   formatView?: FormatView;
   participation: ParticipationRecord;
   /** The day of the format, or the start of the event when there is no format. */
@@ -31,13 +31,13 @@ function mine(list: ParticipationView[], runnerId: string): ParticipationRecord[
  * The participations of a runner (but the "not starting" ones) on a day that
  * is today or later, the nearest first. The day is the one of the format: on
  * an event of several days, a format that has been run is behind, whatever the
- * end of its event. A participation with no format is on the start of its
- * event: it is behind once the event has started.
+ * end of its event. A participation with no format (interested, or supporter)
+ * is on the start of its event: it is behind once the event has started.
  */
 function upcomingOf(views: EventView[], runnerId: string, today: Temporal.PlainDate): Upcoming[] {
   const upcoming = (date: Temporal.PlainDate) => Temporal.PlainDate.compare(date, today) >= 0;
   return views
-    .flatMap(({ event, formats, interested, start }) => [
+    .flatMap(({ event, formats, interested, supporters, start }) => [
       ...formats
         .filter(({ date }) => upcoming(date))
         .flatMap((formatView) =>
@@ -48,8 +48,9 @@ function upcomingOf(views: EventView[], runnerId: string, today: Temporal.PlainD
             date: formatView.date,
           })),
         ),
+      // On the event alone: the interested with no format, and the supporters.
       ...(upcoming(start)
-        ? mine(interested, runnerId).map((participation) => ({
+        ? [...mine(interested, runnerId), ...mine(supporters, runnerId)].map((participation) => ({
             event,
             participation,
             date: start,
@@ -71,7 +72,8 @@ function upcomingOf(views: EventView[], runnerId: string, today: Temporal.PlainD
  *
  * A participation the user has not confirmed is here too, dashed and said in
  * words: it is part of their plans until they refuse it. So is one with no
- * format yet, which says « Format à choisir » where the format would be.
+ * format yet, which says « Format à choisir » where the format would be, and a
+ * supporter, who has no format to choose: its status says it all.
  */
 export function MyUpcoming({
   views,
@@ -109,9 +111,11 @@ function UpcomingRow({ row, today }: { row: Upcoming; today: Temporal.PlainDate 
   const { t, f } = useI18n();
   const { event, formatView, participation, date } = row;
   const confirmed = participation.confirmed;
-  const what = formatView
-    ? formatDisplayName(formatView.format, formatView.raceType.label, f, t)
-    : t.event.formatToChoose;
+  // Before the status: the format, or « Format à choisir » when there is none yet. A
+  // supporter has no format to choose: only its status.
+  let what: string | undefined;
+  if (formatView) what = formatDisplayName(formatView.format, formatView.raceType.label, f, t);
+  else if (participation.status !== "supporter") what = t.event.formatToChoose;
 
   return (
     <li
@@ -130,8 +134,7 @@ function UpcomingRow({ row, today }: { row: Upcoming; today: Temporal.PlainDate 
           </Link>
         </h3>
         <p className="text-sm">
-          {what}
-          {SEPARATOR}
+          {what !== undefined && `${what}${SEPARATOR}`}
           {t.status[participation.status]}
         </p>
         <p className="text-sm text-neutral-600">{f.date(date)}</p>

@@ -30,6 +30,7 @@ import {
   p1,
   p2,
   p3,
+  pNinaSupporter,
   pNinaUndecided,
   samRunner,
   withParticipations,
@@ -1407,6 +1408,316 @@ test("EventPage — choisir l'épreuve du seul intéressé : la section dispara�
   const heading = screen.getByRole("heading", { level: 2, name: /^Trail 15/ });
   await vi.waitFor(() => {
     expect(focused()).toBe(heading.element());
+  });
+});
+
+// --- The supporters ---
+
+/** Zoe, supporter of the event, added by Alice and not confirmed: Alice may act on it. */
+const pZoeSupporter = { ...pZoe, id: "pZoeSupporter", status: "supporter" };
+/** Léa, supporter of the event, confirmed: she is added by herself. */
+const leaRunner = { ...base, id: "leaRunner00000", name: "Léa", user: "" };
+const pLeaSupporter = {
+  ...pNinaSupporter,
+  id: "pLeaSupporter",
+  runner: leaRunner.id,
+  added_by: leaRunner.id,
+  expand: { runner: leaRunner, added_by: leaRunner },
+};
+
+const supportersSection = (screen: Screen) =>
+  screen.getByRole("region", { name: fr.event.supportersTitle });
+
+/** Whether `a` is before `b` on the page. */
+const before = (a: Element, b: Element) =>
+  (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ===
+  Node.DOCUMENT_POSITION_FOLLOWING;
+
+test("EventPage — la section Supporteurs, après les épreuves et avant les non partants", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, dns(p2), p3, pNinaSupporter]) });
+  await loaded(screen);
+  await nonStartersSummary(screen).click();
+
+  const section = supportersSection(screen);
+  await expect.element(section).toBeVisible();
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: fr.event.supportersTitle }))
+    .toBeVisible();
+  await expect.element(section.getByText("Nina", { exact: true })).toBeVisible();
+  // The title says it, not a colour: the row has no status of its own, as for the interested.
+  expect(textOfRow(row(screen, "Nina").element())).not.toContain(fr.status.supporter);
+  // After the formats and before those who do not start.
+  expect(before(format(screen, /^Trail 15/).element(), section.element())).toBe(true);
+  expect(before(format(screen, /^Trail 42/).element(), section.element())).toBe(true);
+  expect(before(section.element(), nonStartersSummary(screen).element())).toBe(true);
+  // A supporter starts nothing: she is in no format, nor among the interested.
+  await expect
+    .element(format(screen, /^Trail 15/).getByText("Nina", { exact: true }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(format(screen, /^Trail 42/).getByText("Nina", { exact: true }))
+    .not.toBeInTheDocument();
+  await expect.element(interestedSection(screen)).not.toBeInTheDocument();
+});
+
+test("EventPage — les supporteurs sont rangés par nom, et la section vient après celle des intéressés", async () => {
+  // Zoe comes first in what the server sends; Nina is interested, not a supporter.
+  const { screen } = await renderPage({
+    event: eventWith([p1, p2, p3, pZoeSupporter, pLeaSupporter, pNinaUndecided]),
+  });
+  await loaded(screen);
+
+  const names = supportersSection(screen)
+    .getByRole("listitem")
+    .elements()
+    .map((item) => item.querySelector("p")?.textContent);
+  expect(names).toEqual(["Léa", "Zoe"]);
+  expect(before(interestedSection(screen).element(), supportersSection(screen).element())).toBe(
+    true,
+  );
+});
+
+test("EventPage — la ligne d'un supporteur non confirmé le dit en texte, comme celle d'un intéressé", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoeSupporter]) });
+  await loaded(screen);
+
+  const zoe = row(screen, "Zoe");
+  await expect.element(zoe.getByText("ajouté par Alice · non confirmé")).toBeVisible();
+  expect(getComputedStyle(zoe.element()).borderStyle).toBe("dashed");
+});
+
+test("EventPage — sans supporteur, pas de section pour eux", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe]) });
+  await loaded(screen);
+
+  await expect.element(supportersSection(screen)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: fr.event.supportersTitle }))
+    .not.toBeInTheDocument();
+});
+
+test("EventPage — en anglais, la section s'appelle « Supporters »", async () => {
+  const { screen } = await renderPage({
+    event: eventWith([p1, p2, p3, pNinaSupporter]),
+    languages: ["en-GB"],
+  });
+
+  await expect.element(screen.getByRole("heading", { level: 2, name: "Supporters" })).toBeVisible();
+});
+
+test("EventPage — le menu d'un supporteur propose « Choisir l'épreuve » et les deux statuts de l'événement, avec Supporteur pour statut actuel", async () => {
+  signIn("nina");
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pNinaSupporter]) });
+  await loaded(screen);
+
+  await menuOf(screen, "Nina").click();
+
+  await expect
+    .element(screen.getByRole("button", { name: fr.participation.chooseFormat }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: fr.status.supporter }))
+    .toHaveAttribute("aria-current", "true");
+  await expect
+    .element(screen.getByRole("button", { name: fr.status.interested }))
+    .not.toHaveAttribute("aria-current");
+  for (const status of ["registered", "finished", "dnf", "dns"] as const) {
+    await expect
+      .element(screen.getByRole("button", { name: fr.status[status] }))
+      .not.toBeInTheDocument();
+  }
+});
+
+test("EventPage — retirer le seul supporteur nomme l'événement, et le focus va au titre de la page", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoeSupporter]) });
+  await loaded(screen);
+  mocks.remove.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(eventWith([p1, p2, p3]));
+    return Promise.resolve(true);
+  });
+  const dialog = await openRemovalDialog(screen, "Zoe");
+  // This participation is on no format: the dialog names the event.
+  await expect
+    .element(dialog.getByText(fr.participation.removeWarning("Zoe", "Trail des Crêtes")))
+    .toBeVisible();
+
+  await dialog.getByRole("button", { name: fr.common.remove }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(supportersSection(screen)).not.toBeInTheDocument();
+  const title = screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(title.element());
+  });
+});
+
+test("EventPage — après le retrait d'un supporteur, le focus va au titre « Supporteurs » quand il en reste", async () => {
+  const { screen } = await renderPage({
+    event: eventWith([p1, p2, p3, pNinaSupporter, pZoeSupporter]),
+  });
+  await loaded(screen);
+  mocks.remove.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(eventWith([p1, p2, p3, pNinaSupporter]));
+    return Promise.resolve(true);
+  });
+  const dialog = await openRemovalDialog(screen, "Zoe");
+
+  await dialog.getByRole("button", { name: fr.common.remove }).click();
+
+  await expect.element(menuOf(screen, "Zoe")).not.toBeInTheDocument();
+  const heading = screen.getByRole("heading", { level: 2, name: fr.event.supportersTitle });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+});
+
+test("EventPage — choisir l'épreuve du seul supporteur : le focus va sur le titre de l'épreuve", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoeSupporter]) });
+  await loaded(screen);
+  // Once saved, the server has Zoe on F15, as interested: a supporter who is given a format is not one any more.
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([p1, p2, p3, { ...pZoeSupporter, format: "f15", status: "interested" }]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.participation.chooseFormat }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pZoeSupporter", {
+      format: "f15",
+      status: "interested",
+    });
+  });
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(supportersSection(screen)).not.toBeInTheDocument();
+  await expect.element(format(screen, /^Trail 15/).getByText("Zoe", { exact: true })).toBeVisible();
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 15/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+});
+
+test("EventPage — passer un supporteur en « Intéressé » le fait passer chez les intéressés, et le focus va au titre « Intéressés, format à choisir »", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoeSupporter]) });
+  await loaded(screen);
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([p1, p2, p3, { ...pZoeSupporter, status: "interested" }]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.status.interested }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pZoeSupporter", {
+      status: "interested",
+    });
+  });
+  await expect.element(interestedSection(screen).getByText("Zoe", { exact: true })).toBeVisible();
+  await expect.element(supportersSection(screen)).not.toBeInTheDocument();
+  // The row has left the supporters, whose section went with it: the focus is where Zoe is.
+  const heading = screen.getByRole("heading", { level: 2, name: fr.event.interestedTitle });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+});
+
+test("EventPage — passer un intéressé en « Supporteur » le fait passer chez les supporteurs, et le focus va au titre « Supporteurs »", async () => {
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pZoe]) });
+  await loaded(screen);
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(eventWith([p1, p2, p3, { ...pZoe, status: "supporter" }]));
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.status.supporter }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("pZoe", { status: "supporter" });
+  });
+  await expect.element(supportersSection(screen).getByText("Zoe", { exact: true })).toBeVisible();
+  await expect.element(interestedSection(screen)).not.toBeInTheDocument();
+  const heading = screen.getByRole("heading", { level: 2, name: fr.event.supportersTitle });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+});
+
+test("EventPage — passer un supporteur en « Intéressé » quand il en reste d'autres : le focus va au titre « Intéressés, format à choisir », jamais sur le corps de la page", async () => {
+  // Nina stays a supporter, and Zoe is the only one who is interested after it.
+  const { screen } = await renderPage({
+    event: eventWith([p1, p2, p3, pNinaSupporter, pZoeSupporter]),
+  });
+  await loaded(screen);
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([p1, p2, p3, pNinaSupporter, { ...pZoeSupporter, status: "interested" }]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.status.interested }).click();
+
+  await expect.element(interestedSection(screen).getByText("Zoe", { exact: true })).toBeVisible();
+  // The supporters are still there, with Nina: the focus is where Zoe is now.
+  await expect.element(supportersSection(screen).getByText("Nina", { exact: true })).toBeVisible();
+  const heading = screen.getByRole("heading", { level: 2, name: fr.event.interestedTitle });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+  expect(focused()).not.toBe(document.body);
+});
+
+test("EventPage — passer un intéressé en « Supporteur » quand il en reste d'autres : le focus va au titre « Supporteurs », jamais sur le corps de la page", async () => {
+  // Nina stays interested, and Zoe is the only supporter after it.
+  const { screen } = await renderPage({ event: eventWith([p1, p2, p3, pNinaUndecided, pZoe]) });
+  await loaded(screen);
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([p1, p2, p3, pNinaUndecided, { ...pZoe, status: "supporter" }]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Zoe").click();
+  await screen.getByRole("button", { name: fr.status.supporter }).click();
+
+  await expect.element(supportersSection(screen).getByText("Zoe", { exact: true })).toBeVisible();
+  await expect.element(interestedSection(screen).getByText("Nina", { exact: true })).toBeVisible();
+  const heading = screen.getByRole("heading", { level: 2, name: fr.event.supportersTitle });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+  expect(focused()).not.toBe(document.body);
+});
+
+test("EventPage — J'y vais en « Je viens encourager » : la participation arrive chez les supporteurs, et le bouton reste, avec le focus", async () => {
+  // Both formats are still Nina's to take: the button stays, and gets the focus back.
+  signIn("nina");
+  const { screen } = await renderPage();
+  await loaded(screen);
+  mocks.create.mockResolvedValue({ id: "pNinaSupporter" });
+  mocks.getOne.mockResolvedValue(withParticipations(eventRecord, [pNinaSupporter]));
+  const join = screen.getByRole("button", { name: fr.participation.join });
+
+  await join.click();
+  const dialog = screen.getByRole("dialog", { name: fr.participation.joinTitle });
+  await dialog.getByLabelText(fr.participation.format).selectOptions("support");
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.element(supportersSection(screen).getByText("Nina", { exact: true })).toBeVisible();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(join.element());
   });
 });
 

@@ -22,6 +22,7 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  pNinaSupporter,
   pNinaUndecided,
   roadType,
   samRunner,
@@ -599,6 +600,24 @@ test("AgendaPage — la liste du jour dit « Format à choisir » pour les inté
         .getByText("Nina", { exact: true }),
     )
     .toBeInTheDocument();
+});
+
+test("AgendaPage — la liste du jour montre la ligne Supporteurs", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+  const { screen } = await renderAgenda("/agenda?mois=2026-06&jour=2026-06-13");
+
+  // The words say it, after the formats; the supporters are not among those who start.
+  await expect.element(screen.getByText(fr.event.supportersTitle, { exact: true })).toBeVisible();
+  const card = screen.getByRole("article");
+  await expect
+    .element(
+      card.getByRole("list", { name: fr.event.supportersTitle }).getByText("Nina", { exact: true }),
+    )
+    .toBeInTheDocument();
+  await expect.element(card.getByText(fr.event.formatToChoose)).not.toBeInTheDocument();
+  await expect
+    .element(card.getByRole("list", { name: fr.event.participants }).getByText("Nina"))
+    .not.toBeInTheDocument();
 });
 
 test("AgendaPage — à partir de md, les noms des courses sont dans les cases, et la liste du jour n'y est plus", async () => {

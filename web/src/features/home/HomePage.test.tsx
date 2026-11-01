@@ -29,6 +29,7 @@ import {
   p1,
   p2,
   p3,
+  pNinaSupporter,
   pNinaUndecided,
   roadType,
   trailType,
@@ -1198,6 +1199,93 @@ test("MyUpcoming — mes participations « Non partant » n'y sont pas", async (
   await expect.element(upcomingBlock(screen).getByRole("listitem")).not.toBeInTheDocument();
 });
 
+test("MyUpcoming — une participation supporter compte, à la date de début de l'événement, avec « Supporteur »", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  const row = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  // The event starts on the 13th of June: 44 days after the 30th of April.
+  await expect.element(row.getByText("dans 44 jours")).toBeVisible();
+  await expect.element(row.getByText("sam. 13 juin", { exact: true })).toBeVisible();
+  // The status alone: a supporter has no format to choose.
+  await expect.element(row.getByText(fr.status.supporter, { exact: true })).toBeVisible();
+  const text = plain(row.element().textContent);
+  expect(text).not.toContain(fr.event.formatToChoose);
+  expect(text).not.toContain(" · ");
+  // Nina added herself: nothing to confirm.
+  expect(text).not.toContain(fr.event.unconfirmed);
+  expect(getComputedStyle(row.element()).borderStyle).toBe("solid");
+});
+
+test("MyUpcoming — une participation supporter que je n'ai pas confirmée est dite « non confirmé », en pointillés", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([
+    withParticipations(eventRecord, [{ ...pNinaSupporter, confirmed: false }]),
+  ]);
+
+  const { screen } = await renderHome();
+
+  const row = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByText(fr.event.unconfirmed)).toBeVisible();
+  expect(getComputedStyle(row.element()).borderStyle).toBe("dashed");
+});
+
+test("MyUpcoming — un supporteur est trié avec les épreuves, à la date de début de l'événement", async () => {
+  signIn("alice");
+  // Alice is on F42 (the 14th), and supports an event of the 20th, with no format of hers.
+  const parisSupporter = {
+    ...pNinaSupporter,
+    id: "p-paris",
+    runner: aliceRunner.id,
+    event: "event3",
+    added_by: aliceRunner.id,
+    expand: { runner: aliceRunner, added_by: aliceRunner },
+  };
+  const paris = {
+    ...event2Record,
+    id: "event3",
+    name: "Marathon de Paris",
+    start_date: "2026-06-20",
+    expand: { formats_via_event: [{ ...fLyon, id: "fParis", event: "event3" }] },
+  };
+  mocks.events.mockResolvedValue([withParticipations(paris, [parisSupporter]), eventRecord]);
+
+  const { screen } = await renderHome();
+
+  const rows = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(rows.first()).toBeVisible();
+  expect(rows.elements().map((row) => row.querySelector("h3")?.textContent)).toEqual([
+    "Trail des Crêtes",
+    "Marathon de Paris",
+  ]);
+  expect(plain(rows.elements()[1]?.textContent ?? "")).toContain("dans 51 jours");
+});
+
+test("MyUpcoming — un supporteur d'un événement déjà commencé n'y est plus", async () => {
+  signIn("nina");
+  // The event runs from the 13th to the 14th of June: on the 14th it has started.
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+
+  const { screen } = await renderHome({ today: "2026-06-14" });
+
+  await expect.element(upcomingBlock(screen).getByText(fr.home.upcomingEmpty)).toBeVisible();
+});
+
+test("MyUpcoming — en anglais, une participation supporter dit « Supporter »", async () => {
+  signIn("nina");
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+
+  const { screen } = await renderHome({ languages: ["en-GB"] });
+
+  const row = screen.getByRole("region", { name: en.home.upcomingTitle }).getByRole("listitem");
+  await expect.element(row.getByText("Supporter", { exact: true })).toBeVisible();
+  expect(plain(row.element().textContent)).not.toContain(en.event.formatToChoose);
+});
+
 // ---- Bientôt dans le groupe
 
 test("GroupSoon — les événements qui ont au moins une participation, avec leurs pastilles", async () => {
@@ -1287,6 +1375,31 @@ test("GroupSoon — un événement avec seulement des intéressés sans épreuve
     .element(card.getByRole("list", { name: fr.event.interestedTitle }).getByText("Nina"))
     .toBeInTheDocument();
   await expect.element(groupBlock(screen).getByText(fr.home.groupEmpty)).not.toBeInTheDocument();
+});
+
+test("GroupSoon — un événement dont les seuls participants sont supporteurs n'est pas proposé", async () => {
+  // Nina only comes to cheer: nobody starts anything.
+  mocks.events.mockResolvedValue([
+    withParticipations(event2Record, [{ ...pNinaSupporter, event: "event2" }]),
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(groupBlock(screen).getByText(fr.home.groupEmpty)).toBeVisible();
+  await expect.element(groupBlock(screen).getByRole("article")).not.toBeInTheDocument();
+});
+
+test("GroupSoon — un événement avec un partant et un supporteur est proposé, avec la ligne Supporteurs", async () => {
+  mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaSupporter])]);
+
+  const { screen } = await renderHome();
+
+  const card = groupBlock(screen).getByRole("article");
+  await expect.element(card.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+  await expect.element(card.getByText(fr.event.supportersTitle, { exact: true })).toBeVisible();
+  await expect
+    .element(card.getByRole("list", { name: fr.event.supportersTitle }).getByText("Nina"))
+    .toBeInTheDocument();
 });
 
 test("HomePage — demande les événements à venir une seule fois pour les deux blocs", async () => {
