@@ -391,9 +391,12 @@ export const en = {
     race_type_in_use: "This type can't be deleted: some races still use it.",
     date_invalid: "This date is not valid.",
     end_before_start: "The end date is before the start date.",
+    registration_deadline_after_start:
+      "The registration deadline must be on or before the start day.",
     format_date_out_of_range: "The race date must fall within the dates of the event.",
     format_other_event: "This race belongs to another event.",
     format_measure_required: "Enter at least a distance, a duration or a time limit.",
+    price_invalid: "The price is to the cent at most.",
     format_required: "Pick a race.",
     merge_same_record: "Pick two different items.",
     merge_formats_different_events: "These two races are not in the same event.",

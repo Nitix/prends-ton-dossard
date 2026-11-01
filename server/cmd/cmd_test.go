@@ -344,6 +344,7 @@ func TestSeedDemo(t *testing.T) {
 
 	checkFormats(t, app)
 	checkParticipations(t, app)
+	checkRegistration(t, app, today)
 
 	// A second call is refused, and leaves the data as it is.
 	if err := cmd.SeedDemo(app, demoPassword, today); err == nil {
@@ -354,6 +355,40 @@ func TestSeedDemo(t *testing.T) {
 	}
 	if got := count(t, app, "events"); got != 6 {
 		t.Errorf("%d events after the second call, want 6", got)
+	}
+}
+
+// checkRegistration checks the deadline of two events and the price of three
+// formats: the Trail des Crêtes closes in five days and the Hyrox Lyon in forty.
+func checkRegistration(t *testing.T, app core.App, today time.Time) {
+	t.Helper()
+	deadlineOf := func(event string) string {
+		t.Helper()
+		record, err := app.FindFirstRecordByData("events", "name", event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return record.GetString("registration_deadline")
+	}
+	priceOf := func(format string) float64 {
+		t.Helper()
+		record, err := app.FindFirstRecordByData("formats", "name", format)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return record.GetFloat("price_eur")
+	}
+
+	if got, want := deadlineOf("Trail des Crêtes"), day(today.AddDate(0, 0, 5)); got != want {
+		t.Errorf("the deadline of the Trail des Crêtes is %q, want %q", got, want)
+	}
+	if got, want := deadlineOf("Hyrox Lyon"), day(today.AddDate(0, 0, 40)); got != want {
+		t.Errorf("the deadline of the Hyrox Lyon is %q, want %q", got, want)
+	}
+	for format, want := range map[string]float64{"Trail long": 65, "Trail court": 30, "Hyrox Open": 89.5} {
+		if got := priceOf(format); got != want {
+			t.Errorf("the price of %q is %v, want %v", format, got, want)
+		}
 	}
 }
 

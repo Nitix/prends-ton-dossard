@@ -114,6 +114,8 @@ func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
 // account), four events in the three months after today, one of them over two
 // months, and two events that are over, with participations in every status,
 // and one runner who is interested in an event without having chosen a race.
+// Two of the events to come have a registration deadline, and three of their
+// races have a price.
 //
 // Every date comes from today, so the same day gives the same data. It refuses
 // when an account exists, and writes nothing when it fails.
@@ -180,13 +182,14 @@ func create(app core.App, collection string, values map[string]any) (*core.Recor
 // seedEvent saves an event, its formats and their participations.
 func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) error {
 	saved, err := create(app, "events", map[string]any{
-		"name":             event.name,
-		"location":         event.location,
-		"start_date":       event.start,
-		"end_date":         event.end,
-		"registration_url": event.url,
-		"notes":            event.notes,
-		"created_by":       runners[event.createdBy].Id,
+		"name":                  event.name,
+		"location":              event.location,
+		"start_date":            event.start,
+		"end_date":              event.end,
+		"registration_deadline": event.deadline,
+		"registration_url":      event.url,
+		"notes":                 event.notes,
+		"created_by":            runners[event.createdBy].Id,
 	})
 	if err != nil {
 		return err
@@ -205,6 +208,7 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			"duration_min":     format.durationMin,
 			"time_limit_min":   format.timeLimitMin,
 			"elevation_gain_m": format.elevationGainM,
+			"price_eur":        format.price,
 			"date":             format.date,
 		})
 		if err != nil {
@@ -251,6 +255,7 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 type eventSpec struct {
 	name, location string
 	start, end     string // YYYY-MM-DD, end may be empty
+	deadline       string // YYYY-MM-DD, the last day to register, on or before start; may be empty
 	url, notes     string
 	createdBy      string
 	formats        []formatSpec
@@ -267,7 +272,8 @@ type formatSpec struct {
 	durationMin    int
 	timeLimitMin   int
 	elevationGainM int
-	date           string // YYYY-MM-DD, within its event; may be empty
+	date           string  // YYYY-MM-DD, within its event; may be empty
+	price          float64 // in euros, to the cent at most; zero when the format has none
 	entries        []entrySpec
 }
 
@@ -294,19 +300,20 @@ func demoEvents(today time.Time) []eventSpec {
 		// To come.
 		{
 			name: "Trail des Crêtes", location: "Annecy", start: in(9),
+			deadline:  in(5),
 			url:       "https://example.test/trail-des-cretes",
 			notes:     "Navette depuis la gare à 6h30.",
 			createdBy: runnerAlice,
 			formats: []formatSpec{
 				{
-					name: "Trail long", raceType: "Trail", distanceKm: 42, elevationGainM: 2400,
+					name: "Trail long", raceType: "Trail", distanceKm: 42, elevationGainM: 2400, price: 65,
 					entries: []entrySpec{
 						{runnerAlice, "registered", runnerAlice},
 						{runnerBob, "interested", runnerAlice},
 					},
 				},
 				{
-					name: "Trail court", raceType: "Trail", distanceKm: 15, elevationGainM: 700,
+					name: "Trail court", raceType: "Trail", distanceKm: 15, elevationGainM: 700, price: 30,
 					entries: []entrySpec{
 						{runnerSam, "interested", runnerAlice},
 						{runnerJulie, "registered", runnerBob},
@@ -355,12 +362,13 @@ func demoEvents(today time.Time) []eventSpec {
 		},
 		{
 			name: "Hyrox Lyon", location: "Lyon", start: in(70),
+			deadline:  in(40),
 			url:       "https://example.test/hyrox-lyon",
 			createdBy: runnerAlice,
 			formats: []formatSpec{
 				{
 					// Eight runs of one kilometre.
-					name: "Hyrox Open", raceType: "Hyrox", distanceKm: 8,
+					name: "Hyrox Open", raceType: "Hyrox", distanceKm: 8, price: 89.5,
 					entries: []entrySpec{
 						{runnerAlice, "interested", runnerAlice},
 						{runnerAdmin, "interested", runnerAlice},

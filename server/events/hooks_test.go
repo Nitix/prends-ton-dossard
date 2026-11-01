@@ -447,6 +447,198 @@ func TestEventHooks(t *testing.T) {
 	})
 }
 
+// withDeadline is a Before that gives the fixture event a registration
+// deadline, the way the code of the application would.
+func withDeadline(day string) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		record := storedEvent(t, app, fx.Event.Id)
+		record.Set("registration_deadline", day)
+		if err := app.Save(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// deadlineIs asserts the stored registration deadline of the fixture event.
+func deadlineIs(want string) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		if got := storedEvent(t, app, fx.Event.Id).GetString("registration_deadline"); got != want {
+			t.Errorf("registration_deadline = %q, want %q", got, want)
+		}
+	}
+}
+
+// priceIs asserts the stored price of F42.
+func priceIs(want float64) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		record, err := app.FindRecordById("formats", fx.F42.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := record.GetFloat("price_eur"); got != want {
+			t.Errorf("price_eur = %v, want %v", got, want)
+		}
+	}
+}
+
+// The deadline of an event is on or before its first day, and the price of a
+// format is a sum of euros and cents. The event of the fixture is on the 13th
+// and 14th of June 2026, and F42 on the 14th.
+func TestRegistrationAndPrice(t *testing.T) {
+	testutil.RunRows(t, []testutil.Row{
+		// registration_deadline
+		{
+			Name:   "a deadline before the start",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    records("events", event),
+			Body:   body(`{"registration_deadline":"2026-06-10"}`),
+			Status: http.StatusOK,
+			After:  deadlineIs("2026-06-10"),
+		},
+		{
+			Name:   "a deadline on the first day",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    records("events", event),
+			Body:   body(`{"registration_deadline":"2026-06-13"}`),
+			Status: http.StatusOK,
+			After:  deadlineIs("2026-06-13"),
+		},
+		{
+			Name:     "a deadline after the first day",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      records("events", event),
+			Body:     body(`{"registration_deadline":"2026-06-14"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("registration_deadline", "registration_deadline_after_start")},
+			After:    deadlineIs(""),
+		},
+		{
+			Name:     "a deadline that is not a day",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      records("events", event),
+			Body:     body(`{"registration_deadline":"10/06/2026"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("registration_deadline", "date_invalid")},
+			After:    deadlineIs(""),
+		},
+		{
+			Name:     "the start cannot move before the deadline",
+			As:       "alice",
+			Before:   withDeadline("2026-06-10"),
+			Method:   http.MethodPatch,
+			URL:      records("events", event),
+			Body:     body(`{"start_date":"2026-06-08"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("registration_deadline", "registration_deadline_after_start")},
+			After:    eventDatesAre("2026-06-13", "2026-06-14"),
+		},
+		{
+			Name:   "the deadline can be emptied",
+			As:     "alice",
+			Before: withDeadline("2026-06-10"),
+			Method: http.MethodPatch,
+			URL:    records("events", event),
+			Body:   body(`{"registration_deadline":""}`),
+			Status: http.StatusOK,
+			After:  deadlineIs(""),
+		},
+		{
+			Name:   "an event is created with a deadline",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    records("events"),
+			Body:   body(`{"name":"Marathon d'Annecy","location":"Annecy","start_date":"2026-09-01","registration_deadline":"2026-08-15"}`),
+			Status: http.StatusOK,
+		},
+		{
+			Name:     "an event cannot be created with a deadline after its start",
+			As:       "alice",
+			Method:   http.MethodPost,
+			URL:      records("events"),
+			Body:     body(`{"name":"Marathon d'Annecy","location":"Annecy","start_date":"2026-09-01","registration_deadline":"2026-09-02"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("registration_deadline", "registration_deadline_after_start")},
+		},
+
+		// price_eur
+		{
+			Name:   "a round price",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    records("formats", f42),
+			Body:   body(`{"price_eur":65}`),
+			Status: http.StatusOK,
+			After:  priceIs(65),
+		},
+		{
+			// 19.99 * 100 is 1998.9999999999998: a price is not refused for it.
+			Name:   "a price of 19.99 is to the cent",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    records("formats", f42),
+			Body:   body(`{"price_eur":19.99}`),
+			Status: http.StatusOK,
+			After:  priceIs(19.99),
+		},
+		{
+			Name:   "a price with one decimal",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    records("formats", f42),
+			Body:   body(`{"price_eur":42.5}`),
+			Status: http.StatusOK,
+			After:  priceIs(42.5),
+		},
+		{
+			Name:     "a price with three decimals",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      records("formats", f42),
+			Body:     body(`{"price_eur":12.345}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("price_eur", "price_invalid")},
+			After:    priceIs(0),
+		},
+		{
+			Name:     "a negative price",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      records("formats", f42),
+			Body:     body(`{"price_eur":-1}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("price_eur", "validation_min_number_constraint")},
+			After:    priceIs(0),
+		},
+		{
+			Name:   "a format is created with a price",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    records("formats"),
+			Body: body(`{"event":%q,"race_type":%q,"duration_min":360,"price_eur":30}`,
+				idOf(event2), idOf(road)),
+			Status: http.StatusOK,
+		},
+		{
+			Name:   "a format is created with a price of three decimals",
+			As:     "bob",
+			Method: http.MethodPost,
+			URL:    records("formats"),
+			Body: body(`{"event":%q,"race_type":%q,"duration_min":360,"price_eur":30.001}`,
+				idOf(event2), idOf(road)),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("price_eur", "price_invalid")},
+			After:    formatCount(1),
+		},
+	})
+}
+
 // The invariants hold for any write, not only the API ones: they are model
 // hooks, so a Go write or a dashboard edit is checked the same way.
 func TestEventHooks_ModelWrites(t *testing.T) {

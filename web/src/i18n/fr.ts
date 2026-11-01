@@ -461,10 +461,13 @@ export const fr = {
     race_type_in_use: "Impossible de supprimer ce type : des épreuves l'utilisent encore.",
     date_invalid: "Cette date n'est pas valide.",
     end_before_start: "La date de fin est avant la date de début.",
+    registration_deadline_after_start:
+      "La date limite d'inscription doit être au plus tard le jour du début.",
     format_date_out_of_range:
       "La date de l'épreuve doit être comprise dans les dates de l'événement.",
     format_other_event: "Cette épreuve appartient à un autre événement.",
     format_measure_required: "Indique au moins une distance, une durée ou un temps max.",
+    price_invalid: "Le prix se donne au centime près.",
     format_required: "Il faut choisir une épreuve.",
     merge_same_record: "Choisis deux éléments différents.",
     merge_formats_different_events: "Ces deux épreuves ne sont pas du même événement.",

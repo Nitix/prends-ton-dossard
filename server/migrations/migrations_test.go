@@ -484,13 +484,23 @@ func TestMigrations_ParticipationEventBackfillOrphan(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
 
-	// The database as the v1 left it: the migrations 8 and 9 rolled back.
+	// The database as the v1 left it: the migration 8 and every one after it
+	// rolled back, however many there are by now.
+	migrations := core.AppMigrations.Items()
+	from := slices.IndexFunc(migrations, func(m *core.Migration) bool { return m.File == "8_participation_event.go" })
+	if from < 0 {
+		t.Fatal("the migration 8_participation_event.go is not registered")
+	}
+	var want []string
+	for _, m := range slices.Backward(migrations[from:]) {
+		want = append(want, m.File)
+	}
 	runner := core.NewMigrationsRunner(app, core.AppMigrations)
-	reverted, err := runner.Down(2)
+	reverted, err := runner.Down(len(want))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"9_runner_avatar.go", "8_participation_event.go"}; !slices.Equal(reverted, want) {
+	if !slices.Equal(reverted, want) {
 		t.Fatalf("reverted %v, want %v", reverted, want)
 	}
 
@@ -845,4 +855,56 @@ func TestMigrations_DownThenUp(t *testing.T) {
 		t.Errorf("%d race types after applying again, want 6", got)
 	}
 	testutil.Seed(t, app) // the whole schema is usable again
+}
+
+// The migration 9a adds the deadline of an event and the price of a format,
+// and its rollback takes them away again.
+func TestMigrations_RegistrationDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	migration := migrationFile(t, "9a_registration.go")
+
+	field := func(collection, name string) core.Field {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId(collection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Fields.GetByName(name)
+	}
+
+	deadline, ok := field("events", "registration_deadline").(*core.TextField)
+	if !ok {
+		t.Fatalf("events.registration_deadline must be a text field, got %T", field("events", "registration_deadline"))
+	}
+	if deadline.Required {
+		t.Error("events.registration_deadline must be optional")
+	}
+	price, ok := field("formats", "price_eur").(*core.NumberField)
+	if !ok {
+		t.Fatalf("formats.price_eur must be a number field, got %T", field("formats", "price_eur"))
+	}
+	if price.Required || price.Min == nil || *price.Min != 0 || price.Max != nil || price.OnlyInt {
+		t.Errorf("formats.price_eur = required %v, min %v, max %v, only int %v; want optional, min 0, no max, decimals",
+			price.Required, price.Min, price.Max, price.OnlyInt)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	if field("events", "registration_deadline") != nil {
+		t.Error("events.registration_deadline must be gone after the rollback")
+	}
+	if field("formats", "price_eur") != nil {
+		t.Error("formats.price_eur must be gone after the rollback")
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := field("events", "registration_deadline").(*core.TextField); !ok {
+		t.Errorf("events.registration_deadline must be a text field again, got %T", field("events", "registration_deadline"))
+	}
+	if _, ok := field("formats", "price_eur").(*core.NumberField); !ok {
+		t.Errorf("formats.price_eur must be a number field again, got %T", field("formats", "price_eur"))
+	}
 }

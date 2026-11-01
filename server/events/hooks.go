@@ -1,13 +1,15 @@
 // Package events holds the hooks that keep events and their formats valid.
 //
 // The creator of an event comes from the request, so it is set by request
-// hooks. The rules on dates and measures are invariants of the data, so they
-// are model hooks: they also check the writes that do not come from the API.
+// hooks. The rules on dates, measures and prices are invariants of the data, so
+// they are model hooks: they also check the writes that do not come from the
+// API.
 package events
 
 import (
 	"database/sql"
 	"errors"
+	"math"
 	"regexp"
 	"time"
 
@@ -114,6 +116,19 @@ func validateEvent(app core.App, event *core.Record) error {
 		}
 	}
 
+	// The last day to register is not after the first day of the event. It is
+	// checked on every save, before the formats: moving the start before the
+	// deadline is refused on the deadline, even when the formats are fine with
+	// it, and an edit that leaves the dates alone still checks the deadline.
+	if deadline := event.GetString("registration_deadline"); deadline != "" {
+		if _, ok := parseDay(deadline); !ok {
+			return apperr.Field("registration_deadline", apperr.CodeDateInvalid)
+		}
+		if deadline > start {
+			return apperr.Field("registration_deadline", apperr.CodeRegistrationDeadlineAfterStart)
+		}
+	}
+
 	// A format stays inside its event: the range of an event cannot move away
 	// from the formats it holds. An edit that leaves the dates alone is not
 	// held against the formats.
@@ -152,6 +167,11 @@ func validateFormat(app core.App, format *core.Record) error {
 		}
 	}
 
+	// Before the measures: the loop below returns at the first one that is set.
+	if priceInvalid(format.GetFloat("price_eur")) {
+		return apperr.Field("price_eur", apperr.CodePriceInvalid)
+	}
+
 	// PocketBase stores a number that is not set as 0, so 0 is not a measure.
 	for _, field := range measures {
 		if format.GetFloat(field) > 0 {
@@ -159,4 +179,11 @@ func validateFormat(app core.App, format *core.Record) error {
 		}
 	}
 	return apperr.Field("distance_km", apperr.CodeFormatMeasureRequired)
+}
+
+// priceInvalid tells whether a price has more than two decimals. A float
+// such as 19.99 is 1998.9999999999998 cents: the tolerance absorbs that.
+func priceInvalid(eur float64) bool {
+	cents := eur * 100
+	return math.Abs(cents-math.Round(cents)) > 1e-6
 }
