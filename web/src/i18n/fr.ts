@@ -1,5 +1,7 @@
 import { createElement, Fragment, type ReactNode } from "react";
 
+import { plural } from "./plural";
+
 // The French dictionary is the reference. en.ts is typed against it
 // (`satisfies Messages`), so a missing or extra key fails the type check.
 // A text with a variable is a function; one that is put in a sentence with a
@@ -199,6 +201,37 @@ export const fr = {
     edited: "modifié",
     // The help under the field: the keys that send the comment.
     sendHint: "Ctrl+Entrée pour envoyer",
+  },
+  // The carpooling and the lodging of an event: the offers of places, and who has taken one (see features/offers).
+  offers: {
+    title: { ride: "Covoiturage", lodging: "Logement" },
+    empty: {
+      ride: "Personne ne propose de voiture pour l'instant.",
+      lodging: "Personne ne propose de logement pour l'instant.",
+    },
+    // Where a car leaves from: "Départ de Lyon, Part-Dieu".
+    rideFrom: (place: string) => `Départ de ${place}`,
+    // The days of a lodging, already formatted: "du sam. 13 juin au dim. 14 juin".
+    dates: (from: string, to: string) => `du ${from} au ${to}`,
+    seeAd: "Voir l'annonce",
+    // The places taken, and in words whether it is full: "2 places prises sur 4" ("0 place prise", in French 0 is singular).
+    taken: (n: number, seats: number) =>
+      `${n} ${plural("fr", n, { one: "place prise", other: "places prises" })} sur ${seats}`,
+    // A lodging that does not say how many people it takes: the people are counted, not the places.
+    unlimited: (n: number) =>
+      `${n} ${plural("fr", n, { one: "personne", other: "personnes" })}, places non précisées`,
+    full: "Complet",
+    take: { ride: "Je monte", lodging: "J'y dors" },
+    leave: { ride: "Je descends", lodging: "Je n'y dors plus" },
+    // The button of a person of an offer: its text is its accessible name.
+    removeFor: (name: string) => `Retirer ${name}`,
+    delete: "Supprimer",
+    // The question of the window that deletes an offer, with the people who lose their place (the names are already joined: "Bob et Sam"; `n` of them, for the verb).
+    deleteConfirm: (names: string, n: number) =>
+      n === 1
+        ? `Supprimer cette offre ? ${names} perdra sa place.`
+        : `Supprimer cette offre ? ${names} perdront leur place.`,
+    deleteConfirmEmpty: "Supprimer cette offre ?",
   },
   // The measures of a format, next to its name (see features/events/formatName.ts).
   format: {

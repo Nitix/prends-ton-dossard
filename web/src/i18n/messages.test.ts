@@ -174,3 +174,49 @@ describe("site name", () => {
     expect(en.admin.shareSubject.reset).toBe("New password on Prends ton dossard");
   });
 });
+
+describe("offers texts", () => {
+  test("French", () => {
+    const o = fr.offers;
+    expect(o.title).toEqual({ ride: "Covoiturage", lodging: "Logement" });
+    expect(o.rideFrom("Lyon")).toBe("Départ de Lyon");
+    expect(o.dates("sam. 13 juin", "dim. 14 juin")).toBe("du sam. 13 juin au dim. 14 juin");
+    // In French 0 is singular, as 1 is.
+    expect(o.taken(0, 4)).toBe("0 place prise sur 4");
+    expect(o.taken(1, 4)).toBe("1 place prise sur 4");
+    expect(o.taken(2, 4)).toBe("2 places prises sur 4");
+    expect(o.unlimited(1)).toBe("1 personne, places non précisées");
+    expect(o.unlimited(3)).toBe("3 personnes, places non précisées");
+    expect([o.take.ride, o.take.lodging]).toEqual(["Je monte", "J'y dors"]);
+    expect([o.leave.ride, o.leave.lodging]).toEqual(["Je descends", "Je n'y dors plus"]);
+    expect(o.removeFor("Bob")).toBe("Retirer Bob");
+    // The verb agrees with the number of people named.
+    expect(o.deleteConfirm("Bob et Sam", 2)).toBe(
+      "Supprimer cette offre ? Bob et Sam perdront leur place.",
+    );
+    expect(o.deleteConfirm("Bob", 1)).toBe("Supprimer cette offre ? Bob perdra sa place.");
+    expect(o.deleteConfirmEmpty).toBe("Supprimer cette offre ?");
+  });
+
+  test("English", () => {
+    const o = en.offers;
+    expect(o.title).toEqual({ ride: "Carpooling", lodging: "Lodging" });
+    expect(o.rideFrom("Lyon")).toBe("Leaving from Lyon");
+    expect(o.dates("Sat 13 Jun", "Sun 14 Jun")).toBe("from Sat 13 Jun to Sun 14 Jun");
+    expect(o.taken(0, 4)).toBe("0 of 4 seats taken");
+    expect(o.taken(1, 1)).toBe("1 of 1 seat taken");
+    expect(o.unlimited(1)).toBe("1 person, places not given");
+    expect(o.unlimited(3)).toBe("3 people, places not given");
+    expect([o.take.ride, o.take.lodging]).toEqual(["I'll ride", "I'll stay"]);
+    expect([o.leave.ride, o.leave.lodging]).toEqual(["I'll leave the car", "I won't stay"]);
+    expect(o.removeFor("Bob")).toBe("Remove Bob");
+    expect(o.deleteConfirm("Bob and Sam")).toBe(
+      "Delete this offer? Bob and Sam will lose their place.",
+    );
+    expect(o.deleteConfirmEmpty).toBe("Delete this offer?");
+    expect(o.empty).toEqual({
+      ride: "Nobody offers a car yet.",
+      lodging: "Nobody offers lodging yet.",
+    });
+  });
+});

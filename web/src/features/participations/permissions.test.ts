@@ -7,6 +7,8 @@ import {
   canDeleteEvent,
   canEditComment,
   canEditParticipation,
+  canManageOffer,
+  canRemoveMember,
   type Me,
 } from "./permissions";
 
@@ -176,5 +178,48 @@ describe("canDeleteComment", () => {
   test("an empty user id is nobody, the admin apart", () => {
     expect(canDeleteComment(sam, { userId: "", runnerId: "x", isAdmin: false })).toBe(false);
     expect(canDeleteComment(sam, meAdmin)).toBe(true);
+  });
+});
+
+// "Modifier ou supprimer une offre : la sienne ; admin : toutes".
+describe("canManageOffer", () => {
+  test.each([
+    { title: "its owner", me: meAlice, expected: true },
+    { title: "another member", me: meBob, expected: false },
+    { title: "the admin", me: meAdmin, expected: true },
+  ])("$title: $expected", ({ me, expected }) => {
+    expect(canManageOffer(alice, me)).toBe(expected);
+  });
+
+  test("an empty user id is nobody, the admin apart", () => {
+    const nobody: Me = { userId: "", runnerId: "x", isAdmin: false };
+    expect(canManageOffer(sam, nobody)).toBe(false);
+    expect(canManageOffer(sam, meAdmin)).toBe(true);
+  });
+});
+
+// "Prendre ou libérer une place : pour soi ; placer ou retirer quelqu'un : dans la sienne ; admin : tout".
+describe("canRemoveMember", () => {
+  const stranger: Me = { userId: "u-stranger", runnerId: "strangerRunner", isAdmin: false };
+
+  test.each([
+    { title: "the passenger themselves", member: bob, me: meBob, expected: true },
+    { title: "the owner of the offer", member: bob, me: meAlice, expected: true },
+    { title: "the admin", member: bob, me: meAdmin, expected: true },
+    { title: "another member", member: bob, me: stranger, expected: false },
+    // A runner with no account is placed by the owner: nobody else removes them.
+    { title: "the owner, for a runner with no account", member: sam, me: meAlice, expected: true },
+    {
+      title: "another member, for a runner with no account",
+      member: sam,
+      me: meBob,
+      expected: false,
+    },
+  ])("$title: $expected", ({ member, me, expected }) => {
+    expect(canRemoveMember(member, alice, me)).toBe(expected);
+  });
+
+  test("an empty user id is nobody", () => {
+    expect(canRemoveMember(sam, alice, { userId: "", runnerId: "x", isAdmin: false })).toBe(false);
   });
 });

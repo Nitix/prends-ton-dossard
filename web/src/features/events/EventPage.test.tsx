@@ -60,6 +60,15 @@ const mocks = vi.hoisted(() => ({
     update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
     delete: vi.fn<(id: string) => Promise<unknown>>(),
   },
+  // The carpooling and the lodging, before the comments: the offers of the event, and the places taken in them.
+  offers: {
+    getFullList: vi.fn<(options: Rec) => Promise<unknown>>(),
+    delete: vi.fn<(id: string) => Promise<unknown>>(),
+  },
+  offerMembers: {
+    create: vi.fn<(body: Rec) => Promise<unknown>>(),
+    delete: vi.fn<(id: string) => Promise<unknown>>(),
+  },
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -78,6 +87,8 @@ vi.mock("../../lib/pb", () => ({
         runners: { getFullList: mocks.runners, getFirstListItem: mocks.myRunner },
         participations: { create: mocks.create, update: mocks.update, delete: mocks.remove },
         comments: mocks.comments,
+        offers: mocks.offers,
+        offer_members: mocks.offerMembers,
       })[name],
     // Only called for a runner who has a photo: none has, unless a test says so.
     files: { getURL: mocks.getURL },
@@ -113,10 +124,13 @@ beforeEach(() => {
     mocks.remove,
     mocks.getURL,
     ...Object.values(mocks.comments),
+    ...Object.values(mocks.offers),
+    ...Object.values(mocks.offerMembers),
   ]) {
     fn.mockReset();
   }
   mocks.comments.getFullList.mockResolvedValue([]);
+  mocks.offers.getFullList.mockResolvedValue([]);
   mocks.getOne.mockResolvedValue(eventRecord);
   mocks.runners.mockResolvedValue([aliceRunner, bobRunner, samRunner, adminRunner, newRunner]);
   mocks.create.mockResolvedValue({ id: "new" });
@@ -496,10 +510,12 @@ test("EventPage — chaque épreuve a son titre (type, mesures), dans l'ordre de
     .getByRole("heading", { level: 2 })
     .elements()
     .map((element) => plain(element.textContent));
-  // The comments come after the formats.
+  // The carpooling, the lodging and the comments come after the formats.
   expect(titles).toEqual([
     "Trail 15 km · 700 m D+",
     "Trail 42 km · 2 400 m D+ · max 10h",
+    fr.offers.title.ride,
+    fr.offers.title.lodging,
     fr.comments.title(0),
   ]);
   await expect.element(format(screen, /^Trail 15/).getByText("sam. 13 juin")).toBeVisible();
@@ -1735,6 +1751,113 @@ test("EventPage — J'y vais en « Je viens encourager » : la participation arr
   await vi.waitFor(() => {
     expect(focused()).toBe(join.element());
   });
+});
+
+// --- The carpooling and the lodging ---
+
+test("EventPage — Covoiturage puis Logement, avant les commentaires", async () => {
+  mocks.offers.getFullList.mockResolvedValue([
+    {
+      ...base,
+      collectionName: "offers",
+      id: "ride1",
+      event: "event",
+      kind: "ride",
+      owner: bobRunner.id,
+      place: "Lyon, Part-Dieu",
+      seats: 3,
+      date: "2026-06-13",
+      time: "06:30",
+      end_date: "",
+      url: "",
+      notes: "",
+      expand: { owner: bobRunner },
+    },
+    {
+      ...base,
+      collectionName: "offers",
+      id: "lodging1",
+      event: "event",
+      kind: "lodging",
+      owner: aliceRunner.id,
+      place: "Gîte des Crêtes, Valloire",
+      seats: 0,
+      date: "2026-06-13",
+      time: "",
+      end_date: "2026-06-14",
+      url: "",
+      notes: "",
+      expand: { owner: aliceRunner },
+    },
+  ]);
+  // A format, the supporters and those who do not start, all open: the offers come after them.
+  const { screen } = await renderPage({ event: eventWith([p1, dns(p2), p3, pNinaSupporter]) });
+  await loaded(screen);
+  await nonStartersSummary(screen).click();
+
+  const rides = screen.getByRole("region", { name: fr.offers.title.ride });
+  const lodgings = screen.getByRole("region", { name: fr.offers.title.lodging });
+  const comments = screen.getByRole("region", { name: fr.comments.title(0) });
+  await expect.element(rides).toBeVisible();
+  await expect.element(lodgings).toBeVisible();
+  // Each offer is in the section of its kind.
+  await expect.element(rides.getByRole("article", { name: "Bob" })).toBeVisible();
+  await expect.element(rides.getByText("0 place prise sur 3")).toBeVisible();
+  await expect.element(lodgings.getByRole("article", { name: "Alice" })).toBeVisible();
+  await expect.element(lodgings.getByText("0 personne, places non précisées")).toBeVisible();
+  await expect.element(rides.getByRole("article", { name: "Alice" })).not.toBeInTheDocument();
+  await expect.element(lodgings.getByRole("article", { name: "Bob" })).not.toBeInTheDocument();
+  // The carpooling after those who do not start, the lodging after the carpooling, then the comments.
+  expect(before(nonStartersSummary(screen).element(), rides.element())).toBe(true);
+  expect(before(supportersSection(screen).element(), rides.element())).toBe(true);
+  expect(before(format(screen, /^Trail 42/).element(), rides.element())).toBe(true);
+  expect(before(rides.element(), lodgings.element())).toBe(true);
+  expect(before(lodgings.element(), comments.element())).toBe(true);
+  // Both sections share one request: the offers of this event.
+  expect(mocks.offers.getFullList).toHaveBeenCalledTimes(1);
+  expect(mocks.offers.getFullList).toHaveBeenCalledWith(
+    expect.objectContaining({ filter: expect.stringContaining("event"), sort: "created" }),
+  );
+});
+
+test("EventPage — le propriétaire d'une offre peut la supprimer ; un autre membre peut y prendre une place", async () => {
+  mocks.offers.getFullList.mockResolvedValue([
+    {
+      ...base,
+      collectionName: "offers",
+      id: "ride1",
+      event: "event",
+      kind: "ride",
+      owner: bobRunner.id,
+      place: "Lyon",
+      seats: 3,
+      date: "",
+      time: "",
+      end_date: "",
+      url: "",
+      notes: "",
+      expand: { owner: bobRunner },
+    },
+  ]);
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  // Alice is signed in: she is not the owner, and she may take a place.
+  const offer = screen.getByRole("article", { name: "Bob", exact: true });
+  await expect.element(offer.getByRole("button", { name: fr.offers.take.ride })).toBeVisible();
+  await expect
+    .element(offer.getByRole("button", { name: fr.offers.delete }))
+    .not.toBeInTheDocument();
+  await screen.unmount();
+
+  signIn("bob");
+  const owner = await renderPage();
+  await loaded(owner.screen);
+  const mine = owner.screen.getByRole("article", { name: "Bob", exact: true });
+  await expect.element(mine.getByRole("button", { name: fr.offers.delete })).toBeVisible();
+  await expect
+    .element(mine.getByRole("button", { name: fr.offers.take.ride }))
+    .not.toBeInTheDocument();
 });
 
 // --- The comments ---

@@ -1,6 +1,7 @@
 import { createElement, Fragment, type ReactNode } from "react";
 
 import type { Messages } from "./fr";
+import { plural } from "./plural";
 
 // The English dictionary. `satisfies Messages` makes a missing or extra key
 // fail the type check.
@@ -161,6 +162,24 @@ export const en = {
     removeConfirm: "Delete this comment?",
     edited: "edited",
     sendHint: "Ctrl+Enter to send",
+  },
+  offers: {
+    title: { ride: "Carpooling", lodging: "Lodging" },
+    empty: { ride: "Nobody offers a car yet.", lodging: "Nobody offers lodging yet." },
+    rideFrom: (place: string) => `Leaving from ${place}`,
+    dates: (from: string, to: string) => `from ${from} to ${to}`,
+    seeAd: "See the listing",
+    taken: (n: number, seats: number) =>
+      `${n} of ${seats} ${plural("en", seats, { one: "seat", other: "seats" })} taken`,
+    unlimited: (n: number) =>
+      `${n} ${plural("en", n, { one: "person", other: "people" })}, places not given`,
+    full: "Full",
+    take: { ride: "I'll ride", lodging: "I'll stay" },
+    leave: { ride: "I'll leave the car", lodging: "I won't stay" },
+    removeFor: (name: string) => `Remove ${name}`,
+    delete: "Delete",
+    deleteConfirm: (names: string) => `Delete this offer? ${names} will lose their place.`,
+    deleteConfirmEmpty: "Delete this offer?",
   },
   format: {
     max: (duration: string) => `max ${duration}`,

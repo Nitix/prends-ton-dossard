@@ -111,3 +111,35 @@ export type CommentRecord = BaseRecord & {
   /** Plain text, 1 to 2000 characters. */
   body: string;
 };
+
+export type OfferKind = "ride" | "lodging";
+
+/**
+ * Places that a member offers for an event: a car (`ride`) or a lodging. The
+ * places do not count the owner: 3 seats in a car are 3 passengers besides
+ * the driver. `seats` is 0 for a lodging that does not say how many people it
+ * takes (no limit); `time` is `HH:MM`; `end_date` and `url` are for a lodging.
+ */
+export type OfferRecord = BaseRecord & {
+  event: string;
+  kind: OfferKind;
+  /** The runner who offers the places: set by the server, never sent. */
+  owner: string;
+  /** Where the car leaves from, or the name or address of the lodging. */
+  place: string;
+  seats?: number;
+  /** The day of the departure of a car, or the arrival at a lodging. */
+  date?: string;
+  time?: string;
+  end_date?: string;
+  url?: string;
+  notes?: string;
+};
+
+/** A place taken in an offer by a runner (the owner is not one). */
+export type OfferMemberRecord = BaseRecord & {
+  offer: string;
+  runner: string;
+  /** The runner of the user who placed them: set by the server. */
+  added_by: string;
+};

@@ -43,3 +43,17 @@ export function canEditComment(author: RunnerRecord, me: Me): boolean {
 export function canDeleteComment(author: RunnerRecord, me: Me): boolean {
   return isMine(author, me) || me.isAdmin;
 }
+
+/** Changing or deleting an offer, or placing someone in it: its owner, or an admin. */
+export function canManageOffer(owner: RunnerRecord, me: Me): boolean {
+  return isMine(owner, me) || me.isAdmin;
+}
+
+/**
+ * Freeing a place in an offer: the runner who has it (for themselves), the
+ * owner of the offer (who places whoever they want, and takes them out), or an
+ * admin.
+ */
+export function canRemoveMember(member: RunnerRecord, owner: RunnerRecord, me: Me): boolean {
+  return isMine(member, me) || canManageOffer(owner, me);
+}

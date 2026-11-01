@@ -10,6 +10,7 @@ import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { CommentsSection } from "../comments/CommentsSection";
+import { OffersSection } from "../offers/OffersSection";
 import { AddSomeoneDialog } from "../participations/AddSomeoneDialog";
 import { JoinDialog } from "../participations/JoinDialog";
 import { ParticipationMenu } from "../participations/ParticipationMenu";
@@ -77,8 +78,9 @@ function titleOfParticipation(view: EventView, id: string): string | undefined {
 /**
  * The page of an event: what it is, its link to register, who is interested
  * with no format yet, each format with who starts it and in what state, the
- * supporters, those who do not start, the comments, and the actions the
- * signed-in member may take. The app shell around it owns the page's `<main>`.
+ * supporters, those who do not start, the carpooling and the lodging, the
+ * comments, and the actions the signed-in member may take. The app shell
+ * around it owns the page's `<main>`.
  */
 export function EventPage({ id }: { id: string }) {
   const { t } = useI18n();
@@ -302,6 +304,8 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             onDeparture={departed}
           />
         )}
+        <OffersSection view={view} kind="ride" me={me} />
+        <OffersSection view={view} kind="lodging" me={me} />
         <CommentsSection eventId={event.id} me={me} />
       </div>
 
