@@ -1274,3 +1274,97 @@ func TestMigrations_OffersDownThenUp(t *testing.T) {
 	}
 	saveBoth()
 }
+
+// The migration 9e adds the result of a participation: a time, a rank, how many
+// were ranked, and a note. Its rollback takes the four fields away, with what
+// they hold, and keeps the participations; applying it again gives the fields
+// back, empty.
+func TestMigrations_ResultsDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9e_results.go")
+
+	field := func(name string) core.Field {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("participations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Fields.GetByName(name)
+	}
+	// checkFields checks the type and the limits of the four fields.
+	checkFields := func(when string) {
+		t.Helper()
+		for _, name := range []string{"finish_time_s", "rank", "rank_of"} {
+			f, ok := field(name).(*core.NumberField)
+			if !ok {
+				t.Fatalf("%s: participations.%s must be a number field, got %T", when, name, field(name))
+			}
+			// A whole number, 0 or more, that is 0 when it is not given.
+			if !f.OnlyInt || f.Required || f.Min == nil || *f.Min != 0 || f.Max != nil {
+				t.Errorf("%s: participations.%s = only int %v, required %v, min %v, max %v; want an optional integer, min 0, no max",
+					when, name, f.OnlyInt, f.Required, f.Min, f.Max)
+			}
+		}
+		note, ok := field("result_note").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: participations.result_note must be a text field, got %T", when, field("result_note"))
+		}
+		if note.Required || note.Max != 200 {
+			t.Errorf("%s: participations.result_note = required %v, max %d; want optional, 200", when, note.Required, note.Max)
+		}
+	}
+	// saveResult gives P1 a complete result.
+	saveResult := func() {
+		t.Helper()
+		p1, err := app.FindRecordById("participations", fx.P1.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p1.Set("status", "finished")
+		p1.Set("finish_time_s", 15130)
+		p1.Set("rank", 12)
+		p1.Set("rank_of", 340)
+		p1.Set("result_note", "3e V1H")
+		if err := app.Save(p1); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	checkFields("as created")
+	saveResult()
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with a result: %v", err)
+	}
+	for _, name := range []string{"finish_time_s", "rank", "rank_of", "result_note"} {
+		if field(name) != nil {
+			t.Errorf("participations.%s must be gone after the rollback", name)
+		}
+	}
+	// The participation stays as it was, result apart.
+	p1, err := app.FindRecordById("participations", fx.P1.Id)
+	if err != nil {
+		t.Fatalf("after the rollback, P1 is gone: %v", err)
+	}
+	if p1.GetString("status") != "finished" || p1.GetString("runner") != fx.AliceRunner.Id || p1.GetString("format") != fx.F42.Id {
+		t.Errorf("after the rollback, P1 changed beyond its result: %v", p1.FieldsData())
+	}
+	// Rolling back again, with nothing left to remove, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkFields("after applying again")
+	p1, err = app.FindRecordById("participations", fx.P1.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p1.GetInt("finish_time_s") != 0 || p1.GetInt("rank") != 0 || p1.GetInt("rank_of") != 0 || p1.GetString("result_note") != "" {
+		t.Errorf("after applying again, the result is %v, want it empty", p1.FieldsData())
+	}
+	saveResult()
+}

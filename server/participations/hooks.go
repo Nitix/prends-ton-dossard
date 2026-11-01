@@ -9,6 +9,11 @@
 // giving the runner a format replaces the one to the event, whether it is
 // "interested" or "supporter".
 //
+// A finished participation can carry a result: the time, the rank, how many
+// were ranked, and a note (the note also goes with "dnf"). A result only means
+// something with its status, so changing the status clears what no longer
+// applies instead of refusing the write.
+//
 // What a request changes is decided by request hooks, since it depends on the
 // caller. The rules that hold for any write, such as the default status, the
 // event of a format and the invariants above, are model hooks: they also cover
@@ -35,6 +40,14 @@ const statusInterested = "interested"
 // of a participation without a format, and it is not allowed with one.
 const statusSupporter = "supporter"
 
+// statusFinished and statusDNF are the statuses of a runner who took the start
+// of the race: the first finished it, the second gave up. They are the ones
+// that a result goes with.
+const (
+	statusFinished = "finished"
+	statusDNF      = "dnf"
+)
+
 // Register attaches the hooks of the participations collection to app.
 func Register(app core.App) {
 	app.OnRecordCreate("participations").BindFunc(func(e *core.RecordEvent) error {
@@ -56,14 +69,21 @@ func Register(app core.App) {
 		return e.Next()
 	})
 
-	// The validation of the system runs after this hook. It calls Next first,
-	// so that a missing or unknown event, format or runner is reported by it,
-	// and validate can rely on them being there.
+	// The validation of the system runs after this hook. The result that does
+	// not go with the status is cleared before it, so that it is not held
+	// against the participation: a time that is not a whole number is dropped
+	// with the status that had it. The hook then calls Next first, so that a
+	// missing or unknown event, format or runner is reported by it, and
+	// validate can rely on them being there.
 	app.OnRecordValidate("participations").BindFunc(func(e *core.RecordEvent) error {
+		clearResult(e.Record)
 		if err := e.Next(); err != nil {
 			return err
 		}
-		return validate(e.App, e.Record)
+		if err := validate(e.App, e.Record); err != nil {
+			return err
+		}
+		return validateResult(e.Record)
 	})
 
 	// The runner who is given a format of the event stops being a participant
@@ -185,6 +205,37 @@ func validate(app core.App, p *core.Record) error {
 	}
 	if onFormats > 0 {
 		return apperr.Field("format", apperr.CodeFormatRequired)
+	}
+	return nil
+}
+
+// clearResult empties the parts of the result that the status of the
+// participation does not go with: the time, the rank and the number of people
+// ranked are for "finished" only, and the note is for "finished" and "dnf". The
+// result of a runner who is no longer a finisher would skew every statistic, and
+// asking for it to be emptied by hand first would make a change of status a
+// chore.
+func clearResult(p *core.Record) {
+	status := p.GetString("status")
+	if status != statusFinished {
+		p.Set("finish_time_s", 0)
+		p.Set("rank", 0)
+		p.Set("rank_of", 0)
+	}
+	if status != statusFinished && status != statusDNF {
+		p.Set("result_note", "")
+	}
+}
+
+// validateResult refuses a rank that is past the last place: the rank is not
+// above the number of people ranked (apperr.CodeRankAboveTotal on rank). It
+// only counts when both are given, a 0 being "not given". The result of a status
+// that has none was cleared by clearResult, so a rank that is left here is a
+// finisher's.
+func validateResult(p *core.Record) error {
+	rank, rankOf := p.GetInt("rank"), p.GetInt("rank_of")
+	if rank > 0 && rankOf > 0 && rank > rankOf {
+		return apperr.Field("rank", apperr.CodeRankAboveTotal)
 	}
 	return nil
 }

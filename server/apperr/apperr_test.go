@@ -74,7 +74,7 @@ func TestCodes_FrontEndContract(t *testing.T) {
 		"offer_already_member", "offer_full", "offer_owner_member", "offer_seats_below_members",
 		"offer_seats_required",
 		"passkey_failed", "passkey_session_expired", "password_mismatch", "password_too_short", "price_invalid",
-		"race_type_in_use", "registration_deadline_after_start", "runner_has_account",
+		"race_type_in_use", "rank_above_total", "registration_deadline_after_start", "runner_has_account",
 		"runner_has_participations", "supporter_with_format", "time_invalid", "wrong_password",
 	}
 	if !slices.Equal(got, want) {

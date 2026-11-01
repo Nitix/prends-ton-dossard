@@ -481,6 +481,7 @@ export const en = {
     price_invalid: "The price is to the cent at most.",
     format_required: "Pick a race.",
     supporter_with_format: "A supporter does not run a race.",
+    rank_above_total: "The rank is higher than the number of finishers.",
     offer_seats_required: "Give the number of seats, from 1 to 8.",
     offer_seats_below_members: "More people already have a seat.",
     offer_full: "There is no seat left.",

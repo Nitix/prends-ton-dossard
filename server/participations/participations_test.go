@@ -66,7 +66,8 @@ func stored(t testing.TB, app core.App, id string) *core.Record {
 	return r
 }
 
-// assertStored fails when a field of the stored record differs from the want.
+// assertStored fails when a field of the stored record differs from the want: a
+// boolean, a string or an integer.
 func assertStored(t testing.TB, got *core.Record, want map[string]any) {
 	t.Helper()
 	for field, value := range want {
@@ -78,6 +79,10 @@ func assertStored(t testing.TB, got *core.Record, want map[string]any) {
 		case string:
 			if got.GetString(field) != v {
 				t.Errorf("%s = %q, want %q", field, got.GetString(field), v)
+			}
+		case int:
+			if got.GetInt(field) != v {
+				t.Errorf("%s = %d, want %d", field, got.GetInt(field), v)
 			}
 		default:
 			t.Fatalf("unsupported expectation on %s: %v", field, value)
@@ -1367,6 +1372,261 @@ func TestParticipations_Supporter(t *testing.T) {
 			Status:   http.StatusBadRequest,
 			Contains: []string{fieldError("status", apperr.CodeSupporterWithFormat)},
 			After:    unchanged(p2),
+		},
+	})
+}
+
+// withResult is a Before that gives the participation a complete result: it is
+// finished, in 4 h 12 min 10 s, 12th of 340, with a note.
+func withResult(of record) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		r := of(fx)
+		r.Set("status", "finished")
+		r.Set("finish_time_s", 15130)
+		r.Set("rank", 12)
+		r.Set("rank_of", 340)
+		r.Set("result_note", "3e V1H")
+		if err := app.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The result of a participation (its time, its rank, how many were ranked, and a
+// note) belongs to the statuses where it means something: the time and the rank
+// to "finished", the note to "finished" and "dnf". Changing the status clears
+// what no longer applies, instead of refusing the write. Who may enter one is
+// who may change the participation: the rules are the ones of the update.
+func TestParticipations_Results(t *testing.T) {
+	// result asserts the status and the result stored for P1 (the registration
+	// of Alice to F42).
+	result := func(status string, timeS, rank, rankOf int, note string) check {
+		return storedIs(p1, func(testutil.Fixture) map[string]any {
+			return map[string]any{
+				"status": status, "finish_time_s": timeS, "rank": rank, "rank_of": rankOf, "result_note": note,
+			}
+		})
+	}
+
+	testutil.RunRows(t, []testutil.Row{
+		{
+			Name:   "a finisher keeps the time, the rank, the number of finishers and the note",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","finish_time_s":15130,"rank":12,"rank_of":340,"result_note":"3e V1H"}`),
+			Status: http.StatusOK,
+			After:  result("finished", 15130, 12, 340, "3e V1H"),
+		},
+		{
+			Name:     "a rank above the number of finishers is refused",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p1),
+			Body:     body(`{"status":"finished","rank":341,"rank_of":340}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("rank", apperr.CodeRankAboveTotal)},
+			After:    result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:   "the last of the finishers is not above them",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","rank":340,"rank_of":340}`),
+			Status: http.StatusOK,
+			After:  result("finished", 0, 340, 340, ""),
+		},
+		{
+			Name:   "a rank without the number of finishers is kept",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","rank":12}`),
+			Status: http.StatusOK,
+			After:  result("finished", 0, 12, 0, ""),
+		},
+		{
+			Name:   "the number of finishers without a rank is kept",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","rank_of":340}`),
+			Status: http.StatusOK,
+			After:  result("finished", 0, 0, 340, ""),
+		},
+		{
+			Name:   "a finish time alone is kept",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","finish_time_s":15130}`),
+			Status: http.StatusOK,
+			After:  result("finished", 15130, 0, 0, ""),
+		},
+
+		// changing the status clears the result
+		{
+			Name:   "changing the status clears the result: a retirement keeps the note only",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Before: withResult(p1),
+			Body:   body(`{"status":"dnf"}`),
+			Status: http.StatusOK,
+			After:  result("dnf", 0, 0, 0, "3e V1H"),
+		},
+		{
+			Name:   "changing the status clears the result: back to registered clears everything",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Before: withResult(p1),
+			Body:   body(`{"status":"registered"}`),
+			Status: http.StatusOK,
+			After:  result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:   "changing the status clears the result: did not start clears everything",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Before: withResult(p1),
+			Body:   body(`{"status":"dns"}`),
+			Status: http.StatusOK,
+			After:  result("dns", 0, 0, 0, ""),
+		},
+		{
+			Name:   "a result that comes with a status that has none is dropped",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"registered","finish_time_s":100}`),
+			Status: http.StatusOK,
+			After:  result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:   "a retirement keeps its note and has no time",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"dnf","finish_time_s":100,"rank":3,"rank_of":9,"result_note":"abandon au km 30"}`),
+			Status: http.StatusOK,
+			After:  result("dnf", 0, 0, 0, "abandon au km 30"),
+		},
+		{
+			Name:   "a rank above the number of finishers on a retirement is dropped, not refused",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"dnf","rank":341,"rank_of":340}`),
+			Status: http.StatusOK,
+			After:  result("dnf", 0, 0, 0, ""),
+		},
+		{
+			Name:   "the result of a finisher stays when something else changes",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Before: withResult(p1),
+			Body:   body(`{"result_note":"3e V2H"}`),
+			Status: http.StatusOK,
+			After:  result("finished", 15130, 12, 340, "3e V2H"),
+		},
+		{
+			Name:   "a result is dropped when the participation is created with another status",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    participations(),
+			Body:   body(`{"runner":%q,"event":%q,"status":"interested","finish_time_s":100,"result_note":"x"}`, aliceRunner, event2),
+			Status: http.StatusOK,
+			After: createdUndecidedIs(aliceRunner, event2, func(testutil.Fixture) map[string]any {
+				return map[string]any{"status": "interested", "finish_time_s": 0, "result_note": ""}
+			}),
+		},
+
+		// what the fields accept
+		{
+			Name:     "a note of 201 characters is refused",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p1),
+			Body:     body(`{"status":"finished","result_note":"` + strings.Repeat("a", 201) + `"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("result_note", "validation_max_text_constraint")},
+			After:    result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:   "a note of 200 characters is kept",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","result_note":"` + strings.Repeat("a", 200) + `"}`),
+			Status: http.StatusOK,
+			After:  result("finished", 0, 0, 0, strings.Repeat("a", 200)),
+		},
+		{
+			Name:     "a negative time is refused",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p1),
+			Body:     body(`{"status":"finished","finish_time_s":-1}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("finish_time_s", "validation_min_number_constraint")},
+			After:    result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:     "a time with a decimal is refused",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p1),
+			Body:     body(`{"status":"finished","finish_time_s":10.5}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("finish_time_s", "validation_only_int_constraint")},
+			After:    result("registered", 0, 0, 0, ""),
+		},
+
+		// who may enter one
+		{
+			Name:   "bob cannot enter a result on the confirmed participation of alice",
+			As:     "bob",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"finish_time_s":1}`),
+			Status: http.StatusNotFound,
+			After:  result("registered", 0, 0, 0, ""),
+		},
+		{
+			Name:   "an admin enters the result of alice",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    participations(p1),
+			Body:   body(`{"status":"finished","finish_time_s":15130}`),
+			Status: http.StatusOK,
+			After:  result("finished", 15130, 0, 0, ""),
+		},
+		{
+			Name:   "alice enters the result of bob, who has not confirmed: it stays unconfirmed",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p2),
+			Body:   body(`{"status":"finished","finish_time_s":7500}`),
+			Status: http.StatusOK,
+			After: storedIs(p2, func(testutil.Fixture) map[string]any {
+				return map[string]any{"status": "finished", "finish_time_s": 7500, "confirmed": false}
+			}),
+		},
+		{
+			Name:   "bob enters his own result: it confirms the participation",
+			As:     "bob",
+			Method: http.MethodPatch,
+			URL:    participations(p2),
+			Body:   body(`{"status":"finished","finish_time_s":7500}`),
+			Status: http.StatusOK,
+			After: storedIs(p2, func(testutil.Fixture) map[string]any {
+				return map[string]any{"status": "finished", "finish_time_s": 7500, "confirmed": true}
+			}),
 		},
 	})
 }

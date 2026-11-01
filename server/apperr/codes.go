@@ -25,6 +25,7 @@ const (
 	CodePriceInvalid                   = "price_invalid"
 	CodeFormatRequired                 = "format_required"
 	CodeSupporterWithFormat            = "supporter_with_format"
+	CodeRankAboveTotal                 = "rank_above_total"
 	CodeOfferSeatsRequired             = "offer_seats_required"
 	CodeOfferSeatsBelowMembers         = "offer_seats_below_members"
 	CodeOfferFull                      = "offer_full"

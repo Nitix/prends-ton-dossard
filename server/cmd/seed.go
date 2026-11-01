@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"time"
@@ -218,21 +219,40 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			return fmt.Errorf("the format %q: %w", format.name, err)
 		}
 
+		results := map[string]resultSpec{}
+		for _, result := range format.results {
+			results[result.runner] = result
+		}
 		for _, entry := range format.entries {
 			runner, addedBy := runners[entry.runner], runners[entry.addedBy]
 			// The request hooks do not run here, so the values they would give
 			// are set by hand: a participation is confirmed by its own runner,
 			// when that one adds it.
-			if _, err := create(app, "participations", map[string]any{
+			values := map[string]any{
 				"runner":    runner.Id,
 				"event":     saved.Id,
 				"format":    savedFormat.Id,
 				"status":    entry.status,
 				"added_by":  addedBy.Id,
 				"confirmed": runner.Id == addedBy.Id,
-			}); err != nil {
+			}
+			// The model hook of the participations runs here: a result that
+			// does not go with the status would be cleared, not saved.
+			if result, ok := results[entry.runner]; ok {
+				values["finish_time_s"] = result.timeS
+				values["rank"] = result.rank
+				values["rank_of"] = result.rankOf
+				values["result_note"] = result.note
+				delete(results, entry.runner)
+			}
+			if _, err := create(app, "participations", values); err != nil {
 				return fmt.Errorf("the participation of %s in %q: %w", entry.runner, format.name, err)
 			}
+		}
+		if len(results) > 0 {
+			// A typo would otherwise leave a result out of the demo, unseen.
+			return fmt.Errorf("the format %q has results for runners who are not in it: %v",
+				format.name, slices.Sorted(maps.Keys(results)))
 		}
 	}
 
@@ -373,11 +393,25 @@ type formatSpec struct {
 	date           string  // YYYY-MM-DD, within its event; may be empty
 	price          float64 // in euros, to the cent at most; zero when the format has none
 	entries        []entrySpec
+	// results are the results of some of the entries: a finisher's time, rank
+	// and note, or the note of a runner who gave up. Each is for a runner of
+	// entries, and the hook of the participations keeps the parts that the
+	// status of that runner goes with.
+	results []resultSpec
 }
 
 // entrySpec describes who takes part in a format, and who put them there.
 type entrySpec struct {
 	runner, status, addedBy string
+}
+
+// resultSpec describes the result of a runner of a format of the demo. A number
+// that is zero is not given: a time of 1 h 52 min 10 s is 6730 seconds, and a
+// runner who was not ranked has a rank of 0.
+type resultSpec struct {
+	runner              string
+	timeS, rank, rankOf int
+	note                string
 }
 
 // demoEvents returns the events of the demo: four to come in the next three
@@ -519,6 +553,12 @@ func demoEvents(today time.Time) []eventSpec {
 						{runnerBob, "finished", runnerBob},
 						{runnerSam, "dnf", runnerAlice},
 						{runnerJulie, "finished", runnerAlice},
+					},
+					results: []resultSpec{
+						{runner: runnerAlice, timeS: 1*3600 + 52*60 + 10, rank: 412, rankOf: 1830},
+						{runner: runnerBob, timeS: 2*3600 + 5*60},
+						{runner: runnerJulie, timeS: 1*3600 + 47*60 + 3, note: "3e V1F"},
+						{runner: runnerSam, note: "crampes au km 15"},
 					},
 				},
 				{

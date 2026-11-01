@@ -348,6 +348,7 @@ func TestSeedDemo(t *testing.T) {
 	checkSupporter(t, app)
 	checkComments(t, app, today)
 	checkOffers(t, app, today)
+	checkResults(t, app)
 
 	// A second call is refused, and leaves the data as it is.
 	if err := cmd.SeedDemo(app, demoPassword, today); err == nil {
@@ -549,6 +550,48 @@ func checkOffers(t *testing.T, app core.App, today time.Time) {
 		}
 		if got := runnerName(places[0].GetString("added_by")); got != want.addedBy {
 			t.Errorf("the place of the %s was added by %s, want %s", want.kind, got, want.addedBy)
+		}
+	}
+}
+
+// checkResults checks the results of the Semi-marathon d'Annecy, which is over:
+// Alice, Bob and Julie finished it, each with the result that the demo gives
+// them (the time, and the rank or the note when there is one), and Sam gave up
+// with a note and no time, as the hook of the participations clears it.
+func checkResults(t *testing.T, app core.App) {
+	t.Helper()
+	format, err := app.FindFirstRecordByData("formats", "name", "Semi-marathon")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []struct {
+		runner, status string
+		timeS          int // 1 h 52 min 10 s is 6730
+		rank, rankOf   int
+		note           string
+	}{
+		{"Alice", "finished", 6730, 412, 1830, ""},
+		{"Bob", "finished", 7500, 0, 0, ""},
+		{"Julie", "finished", 6423, 0, 0, "3e V1F"},
+		{"Sam", "dnf", 0, 0, 0, "crampes au km 15"},
+	} {
+		runner, err := app.FindFirstRecordByData("runners", "name", want.runner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := app.FindFirstRecordByFilter("participations", "runner = {:runner} && format = {:format}",
+			dbx.Params{"runner": runner.Id, "format": format.Id})
+		if err != nil {
+			t.Fatalf("the participation of %s in the Semi-marathon: %v", want.runner, err)
+		}
+		if p.GetString("status") != want.status {
+			t.Errorf("%s is %q in the Semi-marathon, want %q", want.runner, p.GetString("status"), want.status)
+		}
+		if p.GetInt("finish_time_s") != want.timeS || p.GetInt("rank") != want.rank || p.GetInt("rank_of") != want.rankOf || p.GetString("result_note") != want.note {
+			t.Errorf("the result of %s is %d s, rank %d of %d, note %q; want %d s, rank %d of %d, note %q", want.runner,
+				p.GetInt("finish_time_s"), p.GetInt("rank"), p.GetInt("rank_of"), p.GetString("result_note"),
+				want.timeS, want.rank, want.rankOf, want.note)
 		}
 	}
 }

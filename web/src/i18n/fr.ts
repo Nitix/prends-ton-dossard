@@ -590,6 +590,7 @@ export const fr = {
     price_invalid: "Le prix se donne au centime près.",
     format_required: "Il faut choisir une épreuve.",
     supporter_with_format: "Un supporteur ne court pas d'épreuve.",
+    rank_above_total: "Le classement dépasse le nombre de classés.",
     offer_seats_required: "Indique le nombre de places, de 1 à 8.",
     offer_seats_below_members: "Plus de personnes ont déjà une place.",
     offer_full: "Il n'y a plus de place.",
