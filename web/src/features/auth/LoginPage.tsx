@@ -132,7 +132,9 @@ export function LoginPage({ redirect }: { redirect?: string }) {
 
   return (
     <form action={submit} className="flex flex-col gap-4">
-      <h1 className="page-title">{t.auth.signIn}</h1>
+      <h1 tabIndex={-1} className="page-title">
+        {t.auth.signIn}
+      </h1>
       <label className="flex flex-col gap-1 text-sm font-medium">
         {t.auth.email}
         <input

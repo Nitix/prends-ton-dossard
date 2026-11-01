@@ -245,6 +245,12 @@
     outline-offset: 2px;
   }
 
+  /* The page takes the focus as a whole only when it has no title to give it to
+     (see useFocusOnNavigation): a ring around all of it would say nothing. */
+  main:focus {
+    outline: none;
+  }
+
   input,
   select,
   textarea {

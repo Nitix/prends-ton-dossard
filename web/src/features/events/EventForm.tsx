@@ -321,7 +321,9 @@ function EventFields({
       }}
       className="flex flex-col gap-6"
     >
-      <h1 className="page-title">{initial ? t.form.editTitle : t.form.createTitle}</h1>
+      <h1 tabIndex={-1} className="page-title">
+        {initial ? t.form.editTitle : t.form.createTitle}
+      </h1>
 
       <div className="card flex flex-col gap-4 p-4 md:p-5">
         <Field label={t.form.name} error={eventError("name")}>

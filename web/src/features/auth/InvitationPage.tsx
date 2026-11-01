@@ -201,7 +201,7 @@ function InvitationForm({ token, invitation }: { token: string; invitation: Invi
 
   return (
     <form action={submit} className="flex flex-col gap-4">
-      <h1 className="page-title">
+      <h1 tabIndex={-1} className="page-title">
         {isInvite
           ? t.auth.welcome(invitation.runnerName)
           : t.auth.resetTitle(invitation.runnerName)}

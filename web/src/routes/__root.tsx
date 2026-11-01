@@ -6,6 +6,7 @@ import { BrandMark } from "../components/Brand";
 import { OfflineBanner } from "../components/OfflineBanner";
 import { Provisional } from "../components/Provisional";
 import { isPublicPath, requireSession } from "../features/auth/session";
+import { useFocusOnNavigation } from "../lib/useFocusOnNavigation";
 
 export const Route = createRootRoute({
   // Without a session, every page but the public ones sends to the login
@@ -18,6 +19,8 @@ export const Route = createRootRoute({
 });
 
 function Root() {
+  // On the login page as on the others, a new page starts at its title.
+  useFocusOnNavigation();
   return (
     <>
       {/* The paths of the motifs, once for every page. */}

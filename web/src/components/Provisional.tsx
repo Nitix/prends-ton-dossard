@@ -7,7 +7,9 @@ export function Provisional() {
 
   return (
     <div className="flex flex-col items-center justify-center p-4">
-      <h1 className="page-title">{t.common.appName}</h1>
+      <h1 tabIndex={-1} className="page-title">
+        {t.common.appName}
+      </h1>
     </div>
   );
 }

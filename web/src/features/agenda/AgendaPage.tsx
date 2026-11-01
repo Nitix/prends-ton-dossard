@@ -58,7 +58,9 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="page-title">{t.nav.calendar}</h1>
+      <h1 tabIndex={-1} className="page-title">
+        {t.nav.calendar}
+      </h1>
       <Filters search={search} withPeriod={false} />
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">

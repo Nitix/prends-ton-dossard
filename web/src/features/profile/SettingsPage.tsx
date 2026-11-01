@@ -40,7 +40,9 @@ export function SettingsPage() {
       <Link to="/profil" className={`${SECONDARY} inline-flex items-center self-start`}>
         {t.profile.backToProfile}
       </Link>
-      <h1 className="page-title">{t.profile.settings}</h1>
+      <h1 tabIndex={-1} className="page-title">
+        {t.profile.settings}
+      </h1>
       {/* An account that is not a member's (the super-admin of PocketBase) has none of these. */}
       {user !== null && <AccountSections user={user} runner={runner} />}
       <button type="button" onClick={logout} className={`${SECONDARY} self-start`}>

@@ -26,7 +26,9 @@ export function ListPage({ search }: { search: ListSearch }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title">{t.nav.list}</h1>
+        <h1 tabIndex={-1} className="page-title">
+          {t.nav.list}
+        </h1>
         {/* The past events are the ones that have results: the statistics are one tap away. */}
         {period === "passees" && (
           <Link to="/stats" className={`${SECONDARY} inline-flex items-center`}>
