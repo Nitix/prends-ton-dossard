@@ -48,6 +48,7 @@ const EVENT_FIELDS: readonly string[] = [
   "start_date",
   "end_date",
   "registration_url",
+  "registration_deadline",
   "notes",
 ];
 const FORMAT_FIELDS: readonly string[] = [
@@ -57,6 +58,7 @@ const FORMAT_FIELDS: readonly string[] = [
   "duration_min",
   "time_limit_min",
   "elevation_gain_m",
+  "price_eur",
   "date",
 ];
 
@@ -360,6 +362,20 @@ function EventFields({
               value={draft.registrationUrl}
               onChange={(event) => {
                 change({ registrationUrl: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+        <Field label={t.form.registrationDeadline} error={eventError("registration_deadline")}>
+          {(control) => (
+            <input
+              {...control}
+              name="registration_deadline"
+              type="date"
+              value={draft.registrationDeadline}
+              onChange={(event) => {
+                change({ registrationDeadline: event.target.value });
               }}
               className={INPUT}
             />

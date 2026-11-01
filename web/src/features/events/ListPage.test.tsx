@@ -112,7 +112,7 @@ beforeEach(() => {
 /** The `YYYY-MM-DD` day of the tests: events are over or to come from there. */
 const TODAY = "2026-06-01";
 
-async function renderList(url = "/liste", languages = ["fr"]) {
+async function renderList(url = "/liste", languages = ["fr"], today = TODAY) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute({ component: Outlet });
   const list = createRoute({
@@ -133,7 +133,7 @@ async function renderList(url = "/liste", languages = ["fr"]) {
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
-        <TodayProvider value={Temporal.PlainDate.from(TODAY)}>
+        <TodayProvider value={Temporal.PlainDate.from(today)}>
           <RouterProvider router={router} />
         </TodayProvider>
       </I18nProvider>
@@ -288,6 +288,95 @@ test("EventCard — sur plusieurs jours, chaque épreuve dit son jour", async ()
 
   await expect.element(screen.getByText("sam. 13 juin", { exact: true })).toBeVisible();
   await expect.element(screen.getByText("dim. 14 juin", { exact: true })).toBeVisible();
+});
+
+test("EventCard — le prix suit les caractéristiques de l'épreuve", async () => {
+  const priced = { ...f42, price_eur: 65 };
+  const cents = { ...fLyon, price_eur: 42.5 };
+  mocks.events.mockResolvedValue([
+    { ...eventRecord, expand: { formats_via_event: [priced] } },
+    { ...event2Record, expand: { formats_via_event: [cents] } },
+  ]);
+
+  const { screen } = await renderList();
+
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+  // At the end of the line, after the elevation gain and the time limit; a round price has no cents.
+  expect(plain(screen.getByText(/^Trail 42/).element().textContent)).toBe(
+    "Trail 42 km · 2 400 m D+ · max 10h · 65 €",
+  );
+  expect(plain(screen.getByText(/^Route 10/).element().textContent)).toBe("Route 10 km · 42,50 €");
+});
+
+test("EventCard — une épreuve sans prix (0) n'en montre pas", async () => {
+  mocks.events.mockResolvedValue([
+    { ...event2Record, expand: { formats_via_event: [{ ...fLyon, price_eur: 0 }] } },
+  ]);
+
+  const { screen } = await renderList();
+
+  await expect.element(screen.getByText("10 km de Lyon")).toBeVisible();
+  expect(plain(screen.getByText(/^Route 10/).element().textContent)).toBe("Route 10 km");
+});
+
+const withDeadline = { ...eventRecord, registration_deadline: "2026-06-10" };
+
+test("EventCard — « Inscriptions jusqu'au … » puis « Inscriptions closes » une fois la date passée", async () => {
+  mocks.events.mockResolvedValue([withDeadline]);
+
+  // On 1 June the deadline of the 10th is ahead, under the place.
+  const open = await renderList("/liste", ["fr"], "2026-06-01");
+  await expect.element(open.screen.getByText("Trail des Crêtes")).toBeVisible();
+  const until = open.screen.getByText(fr.event.registrationUntil("mer. 10 juin"), { exact: true });
+  await expect.element(until).toBeVisible();
+  await expect.element(open.screen.getByText(fr.event.registrationClosed)).not.toBeInTheDocument();
+  const place = open.screen.getByText("Annecy", { exact: true });
+  expect(until.element().getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    place.element().getBoundingClientRect().bottom,
+  );
+  expect(plain(until.element().textContent)).toBe("Inscriptions jusqu'au mer. 10 juin");
+  await open.screen.unmount();
+
+  // On the 11th it is closed, and the event is still to come (the 13th): said in words.
+  const closed = await renderList("/liste", ["fr"], "2026-06-11");
+  await expect.element(closed.screen.getByText("Trail des Crêtes")).toBeVisible();
+  await expect
+    .element(closed.screen.getByText(fr.event.registrationClosed, { exact: true }))
+    .toBeVisible();
+  await expect.element(closed.screen.getByText(/Inscriptions jusqu/)).not.toBeInTheDocument();
+});
+
+test("EventCard — le jour de la date limite, l'inscription est encore ouverte", async () => {
+  mocks.events.mockResolvedValue([withDeadline]);
+
+  const { screen } = await renderList("/liste", ["fr"], "2026-06-10");
+
+  await expect
+    .element(screen.getByText(fr.event.registrationUntil("mer. 10 juin"), { exact: true }))
+    .toBeVisible();
+  await expect.element(screen.getByText(fr.event.registrationClosed)).not.toBeInTheDocument();
+});
+
+test("EventCard — sans date limite, pas de ligne d'inscription", async () => {
+  const { screen } = await renderList();
+  await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
+
+  expect(screen.container.textContent).not.toContain("Inscriptions");
+});
+
+test("EventCard — en anglais, « Registration until … » et « Registration closed »", async () => {
+  mocks.events.mockResolvedValue([withDeadline]);
+
+  const open = await renderList("/liste", ["en-GB"], "2026-06-01");
+  await expect
+    .element(open.screen.getByText("Registration until Wed 10 Jun", { exact: true }))
+    .toBeVisible();
+  await open.screen.unmount();
+
+  const closed = await renderList("/liste", ["en-GB"], "2026-06-11");
+  await expect
+    .element(closed.screen.getByText("Registration closed", { exact: true }))
+    .toBeVisible();
 });
 
 test("EventCard — un « Non partant » n'a pas de pastille ; un « Abandon » en a une", async () => {

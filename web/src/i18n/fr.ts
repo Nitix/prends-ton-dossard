@@ -132,6 +132,16 @@ export const fr = {
     formatToChoose: "Format à choisir",
     // The summary of the closed list, at the bottom, of those who do not start: the count.
     nonStarters: (n: number) => `Non partants (${n})`,
+    // The registration deadline, on the cards and on the page: the date is already formatted.
+    registrationUntil: (date: string) => `Inscriptions jusqu'au ${date}`,
+    // Said in words, never by a colour alone, once the deadline is over and the event is not.
+    registrationClosed: "Inscriptions closes",
+    // Next to the deadline of the page when it is a week away or less: "Inscriptions jusqu'au mer. 10 juin · plus que 3 jours".
+    daysLeft: (n: number) =>
+      n === 0 ? "dernier jour" : n === 1 ? "plus qu'un jour" : `plus que ${n} jours`,
+    // The box that reminds a runner who is only interested to register, and its text: the date is already formatted.
+    reminderTitle: "Rappel",
+    reminder: (date: string) => `Pense à t'inscrire avant le ${date}.`,
   },
   // What a member does with the participations of an event (see features/participations).
   participation: {
@@ -165,6 +175,8 @@ export const fr = {
     max: (duration: string) => `max ${duration}`,
     // The elevation gain, the height already formatted: "2 400 m D+".
     elevation: (height: string) => `${height} D+`,
+    // The label of the field of the price of a format, in the form.
+    price: "Prix (€)",
   },
   // The form that creates or edits an event and its formats (see features/events/EventForm.tsx).
   form: {
@@ -178,6 +190,7 @@ export const fr = {
     endDateHint: "Seulement si l'événement dure plusieurs jours.",
     registrationUrl: "Lien pour s'inscrire",
     registrationUrlHint: "Facultatif : l'adresse de la page d'inscription.",
+    registrationDeadline: "Date limite d'inscription",
     notes: "Notes",
     formatsTitle: "Épreuves",
     // The title of the group of fields of a format, from 1.

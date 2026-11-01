@@ -45,6 +45,8 @@ export type EventRecord = BaseRecord & {
   start_date: string;
   end_date?: string;
   registration_url?: string;
+  /** The last day to register, never after the start of the event: empty without a deadline. */
+  registration_deadline?: string;
   notes?: string;
   /** The runner of the user who created the event (a `runners` id). */
   created_by: string;
@@ -60,6 +62,8 @@ export type FormatRecord = BaseRecord & {
   /** The cut-off time, in minutes. */
   time_limit_min?: number;
   elevation_gain_m?: number;
+  /** The price of the registration, in euros: 0 without a price. */
+  price_eur?: number;
   /** The day of the format when it differs from the start of its event. */
   date?: string;
 };

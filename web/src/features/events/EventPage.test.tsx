@@ -17,6 +17,7 @@ import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { TodayProvider } from "../../lib/useToday";
 import { pixelURL } from "../../test/images";
 import { EventPage } from "./EventPage";
 import {
@@ -119,6 +120,9 @@ function signIn(who: keyof typeof users) {
   mocks.myRunner.mockResolvedValue(runner);
 }
 
+/** The day of the tests, unless one says otherwise: nine days before the deadline of the 10th. */
+const TODAY = "2026-06-01";
+
 /** The page, as the route of the app gives it its `id`. */
 function Routed() {
   const { id } = useParams({ strict: false });
@@ -132,9 +136,17 @@ async function renderPage(
     answer?: "pending" | Error;
     languages?: string[];
     id?: string;
+    /** The `YYYY-MM-DD` day it is: the event of the fixture is on 13 and 14 June. */
+    today?: string;
   } = {},
 ) {
-  const { event = eventRecord, answer, languages = ["fr"], id = String(event.id) } = options;
+  const {
+    event = eventRecord,
+    answer,
+    languages = ["fr"],
+    id = String(event.id),
+    today = TODAY,
+  } = options;
   if (answer === "pending") mocks.getOne.mockReturnValue(new Promise(() => {}));
   else if (answer) mocks.getOne.mockRejectedValue(answer);
   else mocks.getOne.mockResolvedValue(event);
@@ -162,9 +174,11 @@ async function renderPage(
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
+        <TodayProvider value={Temporal.PlainDate.from(today)}>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -259,6 +273,197 @@ test("EventPage — une adresse qui n'est pas http(s) n'est jamais un lien", asy
   await expect
     .element(screen.getByRole("link", { name: fr.event.register }))
     .not.toBeInTheDocument();
+});
+
+// --- The registration deadline and the reminder ---
+
+const withDeadline = { ...eventRecord, registration_deadline: "2026-06-10" };
+const registrationLine = (screen: Screen) => screen.getByText(/^Inscriptions (jusqu|closes)/);
+const reminder = (screen: Screen) =>
+  screen.getByRole("complementary", { name: fr.event.reminderTitle });
+const top = (locator: { element(): Element }) => locator.element().getBoundingClientRect().top;
+
+test("EventPage — la date limite, avec « plus que 3 jours »", async () => {
+  const { screen } = await renderPage({ event: withDeadline, today: "2026-06-07" });
+
+  await loaded(screen);
+  await expect.element(registrationLine(screen)).toBeVisible();
+  expect(plain(registrationLine(screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin · plus que 3 jours",
+  );
+});
+
+test("EventPage — le décompte n'apparaît qu'à 7 jours ou moins, et dit « dernier jour » le jour même", async () => {
+  // Eight days before: the date alone.
+  const far = await renderPage({ event: withDeadline, today: "2026-06-02" });
+  await loaded(far.screen);
+  expect(plain(registrationLine(far.screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin",
+  );
+  await far.screen.unmount();
+
+  // Seven days before: counted.
+  const week = await renderPage({ event: withDeadline, today: "2026-06-03" });
+  await loaded(week.screen);
+  expect(plain(registrationLine(week.screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin · plus que 7 jours",
+  );
+  await week.screen.unmount();
+
+  const tomorrow = await renderPage({ event: withDeadline, today: "2026-06-09" });
+  await loaded(tomorrow.screen);
+  expect(plain(registrationLine(tomorrow.screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin · plus qu'un jour",
+  );
+  await tomorrow.screen.unmount();
+
+  // The day of the deadline one can still register: the last day.
+  const last = await renderPage({ event: withDeadline, today: "2026-06-10" });
+  await loaded(last.screen);
+  expect(plain(registrationLine(last.screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin · dernier jour",
+  );
+});
+
+test("EventPage — la date limite passée, avant l'événement : « Inscriptions closes », sans décompte", async () => {
+  const { screen } = await renderPage({ event: withDeadline, today: "2026-06-11" });
+
+  await loaded(screen);
+  expect(plain(registrationLine(screen).element().textContent)).toBe("Inscriptions closes");
+});
+
+test("EventPage — sans date limite, ou une fois l'événement passé, pas de ligne d'inscription", async () => {
+  const none = await renderPage();
+  await loaded(none.screen);
+  expect(none.screen.container.textContent).not.toContain("Inscriptions");
+  await none.screen.unmount();
+
+  const over = await renderPage({ event: withDeadline, today: "2026-06-15" });
+  await loaded(over.screen);
+  expect(over.screen.container.textContent).not.toContain("Inscriptions");
+});
+
+test("EventPage — en anglais, la date limite et le décompte suivent la langue", async () => {
+  const { screen } = await renderPage({
+    event: withDeadline,
+    today: "2026-06-07",
+    languages: ["en-GB"],
+  });
+
+  await loaded(screen);
+  await expect
+    .element(screen.getByText("Registration until Wed 10 Jun · 3 days left", { exact: true }))
+    .toBeVisible();
+});
+
+test("EventPage — l'encadré de rappel pour un coureur intéressé, avec le lien d'inscription", async () => {
+  // Bob is interested in F42 (and has not confirmed it, which does not matter).
+  signIn("bob");
+  const { screen } = await renderPage({
+    event: { ...withDeadline, registration_url: "https://inscriptions.example.test/trail" },
+    today: "2026-06-07",
+  });
+
+  await loaded(screen);
+  const box = reminder(screen);
+  await expect.element(box).toBeVisible();
+  await expect.element(box.getByText(fr.event.reminder("mer. 10 juin"))).toBeVisible();
+  expect(plain(box.element().textContent)).toContain("Pense à t'inscrire avant le mer. 10 juin.");
+  const register = box.getByRole("link", { name: fr.event.register });
+  await expect.element(register).toHaveAttribute("href", "https://inscriptions.example.test/trail");
+  await expect.element(register).toHaveAttribute("target", "_blank");
+  const rel = register.element().getAttribute("rel") ?? "";
+  expect(rel.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
+  expect(register.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  // Just after the information, before the buttons of the page and the formats.
+  const info = screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" });
+  const firstFormat = screen.getByRole("heading", { level: 2, name: /^Trail 15/ });
+  expect(top(box)).toBeGreaterThan(top(info));
+  expect(top(box)).toBeLessThan(top(firstFormat));
+  expect(top(box)).toBeLessThan(top(screen.getByRole("button", { name: fr.participation.join })));
+  // The button of the information stays: the box adds a second one next to the reminder.
+  expect(screen.getByRole("link", { name: fr.event.register }).elements()).toHaveLength(2);
+});
+
+test("EventPage — le rappel sans adresse d'inscription n'a pas de bouton, ni avec une adresse qui n'est pas http(s)", async () => {
+  signIn("bob");
+  const none = await renderPage({ event: withDeadline, today: "2026-06-07" });
+  await loaded(none.screen);
+  await expect.element(reminder(none.screen)).toBeVisible();
+  await expect
+    .element(none.screen.getByRole("link", { name: fr.event.register }))
+    .not.toBeInTheDocument();
+  await none.screen.unmount();
+
+  const unsafe = await renderPage({
+    event: { ...withDeadline, registration_url: "javascript:alert(1)" },
+    today: "2026-06-07",
+  });
+  await loaded(unsafe.screen);
+  await expect.element(reminder(unsafe.screen)).toBeVisible();
+  await expect
+    .element(unsafe.screen.getByRole("link", { name: fr.event.register }))
+    .not.toBeInTheDocument();
+});
+
+test("EventPage — le rappel est aussi pour un intéressé sans épreuve, et dit son texte en anglais", async () => {
+  signIn("nina");
+  const { screen } = await renderPage({
+    event: withParticipations(withDeadline, [pNinaUndecided]),
+    today: "2026-06-07",
+    languages: ["en-GB"],
+  });
+
+  await loaded(screen);
+  const box = screen.getByRole("complementary", { name: "Reminder" });
+  await expect.element(box).toBeVisible();
+  await expect.element(box.getByText("Remember to register by Wed 10 Jun.")).toBeVisible();
+});
+
+test("EventPage — pas d'encadré pour un coureur inscrit, ni après la date limite", async () => {
+  // Alice is registered: nothing to remind her of.
+  const registered = await renderPage({ event: withDeadline, today: "2026-06-07" });
+  await loaded(registered.screen);
+  await expect.element(registrationLine(registered.screen)).toBeVisible();
+  await expect.element(reminder(registered.screen)).not.toBeInTheDocument();
+  await registered.screen.unmount();
+
+  // Bob is interested, but the deadline is over.
+  signIn("bob");
+  const late = await renderPage({ event: withDeadline, today: "2026-06-11" });
+  await loaded(late.screen);
+  await expect.element(registrationLine(late.screen)).toBeVisible();
+  await expect.element(reminder(late.screen)).not.toBeInTheDocument();
+  await late.screen.unmount();
+
+  // Bob is interested, and the event has no deadline.
+  const none = await renderPage({ today: "2026-06-07" });
+  await loaded(none.screen);
+  await expect.element(reminder(none.screen)).not.toBeInTheDocument();
+});
+
+test("EventPage — pas d'encadré pour qui n'a aucune participation intéressée, ni pour un non partant", async () => {
+  // Nina is on none of the formats.
+  signIn("nina");
+  const nobody = await renderPage({ event: withDeadline, today: "2026-06-07" });
+  await loaded(nobody.screen);
+  await expect.element(reminder(nobody.screen)).not.toBeInTheDocument();
+  await nobody.screen.unmount();
+
+  // Bob does not start.
+  signIn("bob");
+  const dnsBob = await renderPage({
+    event: {
+      ...withDeadline,
+      expand: {
+        ...withDeadline.expand,
+        participations_via_event: [{ ...p2, status: "dns" }, p1, p3],
+      },
+    },
+    today: "2026-06-07",
+  });
+  await loaded(dnsBob.screen);
+  await expect.element(reminder(dnsBob.screen)).not.toBeInTheDocument();
 });
 
 // --- The formats and their participants ---

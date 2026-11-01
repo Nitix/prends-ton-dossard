@@ -3,12 +3,13 @@ import type { Formatters } from "../../lib/format";
 import type { FormatRecord } from "../../lib/types";
 
 /**
- * The fields of a format that its name and its measures come from. The API
- * sends `""` and `0` for what is not set: an empty value counts as absent.
+ * The fields of a format that its name, its measures and its price come from.
+ * The API sends `""` and `0` for what is not set: an empty value counts as
+ * absent.
  */
 type FormatFields = Pick<
   FormatRecord,
-  "name" | "distance_km" | "duration_min" | "time_limit_min" | "elevation_gain_m"
+  "name" | "distance_km" | "duration_min" | "time_limit_min" | "elevation_gain_m" | "price_eur"
 >;
 
 /**
@@ -28,7 +29,7 @@ function mainMeasure(format: FormatFields, f: Formatters, t: Messages): string |
  * 48h"). A format with no measure is called by its type.
  */
 export function formatDisplayName(
-  format: Omit<FormatFields, "elevation_gain_m">,
+  format: Omit<FormatFields, "elevation_gain_m" | "price_eur">,
   raceTypeLabel: string,
   f: Formatters,
   t: Messages,
@@ -41,12 +42,13 @@ export function formatDisplayName(
 
 /**
  * The parts of the line that describes a format on a card, to be joined with
- * a separator: its name, its elevation gain and its time limit.
+ * a separator: its name, its elevation gain, its time limit and its price.
  *
  * A format that has a name of its own also says what it is made of ("Marathon
  * de Lyon · Route 42,2 km"), leaving out its type when the name has it already
  * ("Trail court · 15 km"). The time limit is only added when the name does not
- * already say it, that is when there is a distance or a duration too.
+ * already say it, that is when there is a distance or a duration too. The
+ * price, when there is one, comes last.
  */
 export function formatMeasures(
   format: FormatFields,
@@ -71,5 +73,6 @@ export function formatMeasures(
   if (format.time_limit_min && (format.distance_km || format.duration_min)) {
     parts.push(t.format.max(f.duration(format.time_limit_min)));
   }
+  if (format.price_eur) parts.push(f.price(format.price_eur));
   return parts;
 }

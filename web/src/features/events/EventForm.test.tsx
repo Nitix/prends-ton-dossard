@@ -22,6 +22,8 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  f15,
+  f42,
   roadType,
   trailType,
 } from "./testFixture";
@@ -188,6 +190,8 @@ const name = (screen: Screen) => screen.getByLabelText(fr.form.name);
 const location = (screen: Screen) => screen.getByLabelText(fr.form.location);
 const startDate = (screen: Screen) => screen.getByLabelText(fr.form.startDate);
 const endDate = (screen: Screen) => screen.getByLabelText(fr.form.endDate);
+const registrationDeadline = (screen: Screen) =>
+  screen.getByLabelText(fr.form.registrationDeadline);
 const notes = (screen: Screen) => screen.getByLabelText(fr.form.notes);
 const save = (screen: Screen) => screen.getByRole("button", { name: fr.common.save });
 const addFormat = (screen: Screen) => screen.getByRole("button", { name: fr.form.addFormat });
@@ -204,6 +208,7 @@ const distance = (row: Row) => row.getByLabelText(fr.form.distance);
 const hoursOf = (row: Row, label: string) => row.getByLabelText(`${label}, ${fr.form.hours}`);
 const minutesOf = (row: Row, label: string) => row.getByLabelText(`${label}, ${fr.form.minutes}`);
 const elevation = (row: Row) => row.getByLabelText(fr.form.elevation);
+const price = (row: Row) => row.getByLabelText(fr.format.price);
 const formatDate = (row: Row) => row.getByLabelText(fr.form.formatDate);
 
 /** The event of the fixture's second example: a name, a place, one day, one 42 km trail. */
@@ -412,6 +417,7 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
     start_date: "2026-06-13",
     end_date: "2026-06-14",
     registration_url: "https://trail.example.test/inscription",
+    registration_deadline: "",
     notes: "Parking à l'arrivée.",
   });
   expect(one?.body).toMatchObject({
@@ -443,6 +449,27 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
   expect(keys).toContainEqual(["event", eventId]);
   await expect.element(screen.getByText(`Fiche de ${eventId}`)).toBeVisible();
   await expect.element(screen.getByText(fr.form.saved)).toBeVisible();
+});
+
+test("EventForm — la date limite et le prix sont envoyés", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await registrationDeadline(screen).fill("2026-06-10");
+  await price(format(screen, 1)).fill("42.5");
+  await addFormat(screen).click();
+  await raceType(format(screen, 2)).selectOptions(roadType.id);
+  await distance(format(screen, 2)).fill("10");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+  const [event, one, two] = mocks.calls;
+  expect(event?.body).toMatchObject({ registration_deadline: "2026-06-10" });
+  expect(one?.body).toMatchObject({ price_eur: 42.5 });
+  // A format with no price sends 0, which is how it is cleared.
+  expect(two?.body).toMatchObject({ price_eur: 0 });
 });
 
 test("EventForm — « Je participe » décoché : pas de participation", async () => {
@@ -569,6 +596,44 @@ test("EventForm — une erreur end_before_start s'affiche sous la date de fin, l
   const joined = optionsOf(joinFormat(screen).element()).findIndex((option) => option.selected);
   expect(joined).toBe(1);
   await expect.element(screen.getByLabelText(fr.participation.status)).toHaveValue("dns");
+});
+
+test("EventForm — un refus registration_deadline_after_start s'affiche sous la date limite", async () => {
+  mocks.send.mockRejectedValue(
+    refused(0, 400, { registration_deadline: field("registration_deadline_after_start") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await registrationDeadline(screen).fill("2026-06-20");
+
+  await save(screen).click();
+
+  const message = screen.getByText(fr.errors.registration_deadline_after_start);
+  await expect.element(message).toBeVisible();
+  // Linked to the deadline, not to the start date, and what was typed stays.
+  expect(registrationDeadline(screen).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  expect(registrationDeadline(screen).element().getAttribute("aria-invalid")).toBe("true");
+  expect(startDate(screen).element().getAttribute("aria-invalid")).toBe("false");
+  await expect.element(registrationDeadline(screen)).toHaveValue("2026-06-20");
+});
+
+test("EventForm — le refus d'un prix s'affiche sous le prix de son épreuve", async () => {
+  // Request 0 is the event, 1 the first format.
+  mocks.send.mockRejectedValue(refused(1, 400, { price_eur: field("price_invalid") }));
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await price(format(screen, 1)).fill("12.34");
+
+  await save(screen).click();
+
+  const message = screen.getByText(fr.errors.price_invalid);
+  await expect.element(message).toBeVisible();
+  expect(price(format(screen, 1)).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  await expect.element(price(format(screen, 1))).toHaveValue(12.34);
 });
 
 test("EventForm — l'erreur d'une épreuve s'affiche dans cette épreuve, pas dans l'autre", async () => {
@@ -773,6 +838,33 @@ test("EventForm — à la modification : les valeurs de l'événement, ses épre
   await expect.element(formatDate(format(screen, 2))).toHaveValue("2026-06-14");
   await expect.element(raceType(format(screen, 2))).toHaveValue(trailType.id);
   expect(screen.container.textContent).not.toContain(fr.form.join);
+});
+
+test("EventForm — à la modification, la date limite et le prix sont préremplis", async () => {
+  mocks.getOne.mockResolvedValue({
+    ...eventRecord,
+    registration_deadline: "2026-06-10",
+    expand: {
+      ...eventRecord.expand,
+      formats_via_event: [
+        { ...f42, price_eur: 65 },
+        { ...f15, price_eur: 42.5 },
+      ],
+    },
+  });
+  const { screen } = await renderEdit();
+
+  await expect.element(registrationDeadline(screen)).toHaveValue("2026-06-10");
+  // F15 is the first format, F42 the second.
+  await expect.element(price(format(screen, 1))).toHaveValue(42.5);
+  await expect.element(price(format(screen, 2))).toHaveValue(65);
+});
+
+test("EventForm — à la modification, sans date limite ni prix, les champs sont vides", async () => {
+  const { screen } = await renderEdit();
+
+  await expect.element(registrationDeadline(screen)).toHaveValue("");
+  await expect.element(price(format(screen, 1))).toHaveValue(null);
 });
 
 test("EventForm — enregistre la modification par id, sans l'événement dans les épreuves, et va à la fiche", async () => {
@@ -1088,6 +1180,7 @@ test("EventForm — les champs et les boutons font au moins 44 px de haut", asyn
     location(screen),
     startDate(screen),
     endDate(screen),
+    registrationDeadline(screen),
     notes(screen),
     save(screen),
     addFormat(screen),
@@ -1098,6 +1191,7 @@ test("EventForm — les champs et les boutons font au moins 44 px de haut", asyn
     hoursOf(format(screen, 1), fr.form.duration),
     minutesOf(format(screen, 2), fr.form.timeLimit),
     elevation(format(screen, 2)),
+    price(format(screen, 2)),
     formatDate(format(screen, 2)),
     screen.getByLabelText(fr.participation.status),
   ];

@@ -120,6 +120,26 @@ describe("formatMeasures", () => {
     expect(measures({ name: "Route des vins" }, "Route")).toEqual(["Route des vins"]);
   });
 
+  test("formatMeasures — le prix vient en dernier, absent quand il vaut 0", () => {
+    expect(
+      measures(
+        { distance_km: 42, elevation_gain_m: 2400, time_limit_min: 600, price_eur: 65 },
+        "Trail",
+      ),
+    ).toEqual(["Trail 42 km", "2 400 m D+", "max 10h", "65 €"]);
+    expect(measures({ distance_km: 10, price_eur: 12.5 }, "Route")).toEqual([
+      "Route 10 km",
+      "12,50 €",
+    ]);
+    // A named format: the price still closes the line.
+    expect(
+      measures({ name: "Marathon de Lyon", distance_km: 42.195, price_eur: 90 }, "Route"),
+    ).toEqual(["Marathon de Lyon", "Route 42,2 km", "90 €"]);
+    // 0 is how the API says "no price".
+    expect(measures({ distance_km: 10, price_eur: 0 }, "Route")).toEqual(["Route 10 km"]);
+    expect(measures({ distance_km: 10 }, "Route")).toEqual(["Route 10 km"]);
+  });
+
   test("what is not set (0) adds nothing", () => {
     expect(
       measures(

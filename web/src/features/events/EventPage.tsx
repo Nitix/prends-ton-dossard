@@ -5,6 +5,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Avatar } from "../../components/Avatar";
 import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
+import { webAddress } from "../../lib/url";
+import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { AddSomeoneDialog } from "../participations/AddSomeoneDialog";
 import { JoinDialog } from "../participations/JoinDialog";
@@ -18,9 +20,13 @@ import {
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { formatDisplayName, formatMeasures } from "./formatName";
-import { joinOptions, nonStarters, starters, type NonStarter } from "./participants";
+import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
+import { registrationLabel, registrationState } from "./registration";
 
 const SEPARATOR = " · ";
+
+/** The days that are counted next to the deadline: a week or less. */
+const DAYS_LEFT_SHOWN = 7;
 
 /** The box of a section of the page: the interested, a format, those who do not start. */
 const SECTION = "rounded-lg border border-neutral-200 bg-white p-3";
@@ -104,17 +110,6 @@ export function EventPage({ id }: { id: string }) {
   return <output>{t.common.loading}</output>;
 }
 
-/** The address, if it is a web address: the field is free text for whoever writes the event, and `javascript:` is one. */
-function webAddress(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  try {
-    const { protocol } = new URL(raw);
-    return protocol === "https:" || protocol === "http:" ? raw : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 type Opened = "join" | "add" | "delete";
 
 /**
@@ -168,8 +163,25 @@ function useFocusAfterDeparture(view: EventView) {
   return { root, setDeparture };
 }
 
+/** The link to the official page of the registration: it opens in another tab, without giving it access to this one. */
+function RegisterLink({ href, className }: { href: string; className?: string }) {
+  const { t } = useI18n();
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${PRIMARY} inline-flex items-center self-start ${className ?? ""}`}
+    >
+      {t.event.register}
+    </a>
+  );
+}
+
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const { t, f } = useI18n();
+  const today = useToday();
   const { event, formats, start, end } = view;
   const [opened, setOpened] = useState<Opened | null>(null);
   const close = () => {
@@ -182,6 +194,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   };
   const severalDays = !start.equals(end);
   const registration = webAddress(event.registration_url);
+  const deadline = registrationState(event, today);
+  // A runner who is only interested is told to register before it is too late.
+  const reminded = deadline?.kind === "open" && !!me && isInterested(view, me.runnerId);
   // "I'm in" is for what is left to choose: a format where the member has no
   // participation yet, or "not decided yet".
   const options = me && joinOptions(view, me.runnerId);
@@ -198,18 +213,24 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
           {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
         </p>
         <p>{event.location}</p>
-        {event.notes && <p className="mt-2 whitespace-pre-line">{event.notes}</p>}
-        {registration && (
-          <a
-            href={registration}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${PRIMARY} mt-2 inline-flex items-center self-start`}
-          >
-            {t.event.register}
-          </a>
+        {deadline && (
+          <p>
+            {registrationLabel(deadline, f, t)}
+            {deadline.kind === "open" &&
+              deadline.daysLeft <= DAYS_LEFT_SHOWN &&
+              `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
+          </p>
         )}
+        {event.notes && <p className="mt-2 whitespace-pre-line">{event.notes}</p>}
+        {registration && <RegisterLink href={registration} className="mt-2" />}
       </header>
+
+      {reminded && (
+        <aside aria-label={t.event.reminderTitle} className={`flex flex-col gap-2 ${SECTION}`}>
+          <p>{t.event.reminder(f.date(deadline.deadline))}</p>
+          {registration && <RegisterLink href={registration} />}
+        </aside>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {canJoin && (

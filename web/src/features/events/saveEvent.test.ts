@@ -170,6 +170,7 @@ describe("buildBatch, creation", () => {
       start_date: "2026-06-13",
       end_date: "",
       registration_url: "",
+      registration_deadline: "",
       notes: "",
     });
     expect(ops[2]?.body).toEqual({
@@ -180,8 +181,21 @@ describe("buildBatch, creation", () => {
       duration_min: 0,
       time_limit_min: 0,
       elevation_gain_m: 700,
+      price_eur: 0,
       date: "",
     });
+  });
+
+  test("the deadline and the price are sent when they are filled in", () => {
+    const draft = newDraft({ registration_deadline: "2026-06-10" });
+    const [first] = draft.formats;
+    if (first) first.price_eur = 42.5;
+
+    const { ops } = buildBatch(draft, undefined, ME);
+
+    expect(ops[0]?.body).toMatchObject({ registration_deadline: "2026-06-10" });
+    expect(ops[1]?.body).toMatchObject({ price_eur: 42.5 });
+    expect(ops[2]?.body).toMatchObject({ price_eur: 0 });
   });
 
   test("a format that comes with an id keeps it", () => {

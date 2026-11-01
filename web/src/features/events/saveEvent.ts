@@ -33,6 +33,8 @@ export type EventDraft = {
   start_date: string;
   end_date?: string;
   registration_url?: string;
+  /** The last day to register, a `YYYY-MM-DD` text, never after `start_date`. */
+  registration_deadline?: string;
   notes?: string;
   formats: {
     id?: string;
@@ -42,6 +44,8 @@ export type EventDraft = {
     duration_min?: number;
     time_limit_min?: number;
     elevation_gain_m?: number;
+    /** In euros, to the cent. */
+    price_eur?: number;
     date?: string;
   }[];
   /** The member takes part in the format at `formatIndex` of `formats`. Only when the event is created. */
@@ -60,6 +64,7 @@ function eventBody(draft: EventDraft): Record<string, unknown> {
     start_date: draft.start_date,
     end_date: draft.end_date ?? "",
     registration_url: draft.registration_url ?? "",
+    registration_deadline: draft.registration_deadline ?? "",
     notes: draft.notes ?? "",
   };
 }
@@ -72,6 +77,7 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
     duration_min: format.duration_min ?? 0,
     time_limit_min: format.time_limit_min ?? 0,
     elevation_gain_m: format.elevation_gain_m ?? 0,
+    price_eur: format.price_eur ?? 0,
     date: format.date ?? "",
   };
 }

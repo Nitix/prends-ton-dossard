@@ -174,6 +174,23 @@ export function FormatFieldset({
         )}
       </Field>
 
+      <Field label={t.format.price} error={message("price_eur")}>
+        {(control) => (
+          <input
+            {...control}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            value={row.price}
+            onChange={(event) => {
+              onChange({ price: event.target.value });
+            }}
+            className={INPUT}
+          />
+        )}
+      </Field>
+
       <Field label={t.form.formatDate} hint={t.form.formatDateHint} error={message("date")}>
         {(control) => (
           <input

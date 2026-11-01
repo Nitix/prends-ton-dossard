@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { toEventView } from "./api";
 import { hasMeasure, initialDraft, joinRowOf, toEventDraft, type FormatRow } from "./formDraft";
-import { eventRecord } from "./testFixture";
+import { eventRecord, f42 } from "./testFixture";
 
 const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   key: "k1",
@@ -10,6 +10,7 @@ const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   raceType: "trail0000000000",
   distanceKm: "",
   elevation: "",
+  price: "",
   date: "",
   ...extra,
 });
@@ -51,6 +52,7 @@ describe("initialDraft", () => {
       startDate: "2026-06-13",
       endDate: "2026-06-14",
       registrationUrl: "",
+      registrationDeadline: "",
       notes: "",
       join: false,
     });
@@ -64,9 +66,23 @@ describe("initialDraft", () => {
       duration: undefined,
       timeLimit: undefined,
       elevation: "700",
+      price: "",
       date: "",
     });
     expect(draft.rows[1]).toMatchObject({ timeLimit: 600, date: "2026-06-14" });
+  });
+
+  test("the deadline and the price of an event being edited are in the fields", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        registration_deadline: "2026-06-10",
+        expand: { formats_via_event: [{ ...f42, price_eur: 42.5 }] },
+      }),
+    );
+
+    expect(draft.registrationDeadline).toBe("2026-06-10");
+    expect(draft.rows[0]?.price).toBe("42.5");
   });
 });
 
@@ -100,6 +116,7 @@ describe("toEventDraft", () => {
       start_date: "2026-06-13",
       end_date: undefined,
       registration_url: undefined,
+      registration_deadline: undefined,
       notes: undefined,
       formats: [
         {
@@ -110,11 +127,25 @@ describe("toEventDraft", () => {
           duration_min: undefined,
           time_limit_min: undefined,
           elevation_gain_m: undefined,
+          price_eur: undefined,
           date: undefined,
         },
       ],
       join: undefined,
     });
+  });
+
+  test("the deadline and the price go as a date and a number", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      registrationDeadline: "2026-06-10",
+      rows: [row({ distanceKm: "42", price: "42.50" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.registration_deadline).toBe("2026-06-10");
+    expect(saved.formats[0]?.price_eur).toBe(42.5);
   });
 
   test("joins the format that was chosen, by its place in the list", () => {

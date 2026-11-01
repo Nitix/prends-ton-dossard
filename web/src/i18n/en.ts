@@ -114,6 +114,11 @@ export const en = {
     interestedTitle: "Interested, race to pick",
     formatToChoose: "Race to pick",
     nonStarters: (n: number) => `Did not start (${n})`,
+    registrationUntil: (date: string) => `Registration until ${date}`,
+    registrationClosed: "Registration closed",
+    daysLeft: (n: number) => (n === 0 ? "last day" : n === 1 ? "1 day left" : `${n} days left`),
+    reminderTitle: "Reminder",
+    reminder: (date: string) => `Remember to register by ${date}.`,
   },
   participation: {
     join: "I'm in",
@@ -138,6 +143,7 @@ export const en = {
   format: {
     max: (duration: string) => `max ${duration}`,
     elevation: (height: string) => `${height} gain`,
+    price: "Price (€)",
   },
   form: {
     createTitle: "Create an event",
@@ -150,6 +156,7 @@ export const en = {
     endDateHint: "Only if the event lasts several days.",
     registrationUrl: "Registration link",
     registrationUrlHint: "Optional: the address of the registration page.",
+    registrationDeadline: "Registration deadline",
     notes: "Notes",
     formatsTitle: "Races",
     formatTitle: (n: number) => `Race ${n}`,

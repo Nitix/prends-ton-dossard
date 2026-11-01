@@ -53,6 +53,19 @@ export function isOnEvent(view: EventView, runnerId: string): boolean {
   );
 }
 
+/** Whether the runner has an "interested" participation in the event, on a format or on the event alone. */
+export function isInterested(view: EventView, runnerId: string): boolean {
+  const interested = (list: ParticipationView[]) =>
+    list.some(
+      ({ participation, runner }) =>
+        runner.id === runnerId && participation.status === "interested",
+    );
+  return (
+    interested(view.interested) ||
+    view.formats.some(({ participations }) => interested(participations))
+  );
+}
+
 /** What a runner can still choose when they join an event. */
 export type JoinOptions = {
   /** The formats where the runner has no participation yet, of any status, in the order of the formats. */

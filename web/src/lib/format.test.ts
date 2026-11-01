@@ -69,6 +69,18 @@ describe("distances", () => {
   });
 });
 
+describe("price", () => {
+  test("price — deux décimales sauf pour un prix rond", () => {
+    const fr = createFormatters("fr-FR");
+    expect(plain(fr.price(65))).toBe("65 €");
+    expect(plain(fr.price(42.5))).toBe("42,50 €");
+    expect(plain(fr.price(19.99))).toBe("19,99 €");
+    const gb = createFormatters("en-GB");
+    expect(plain(gb.price(65))).toBe("€65");
+    expect(plain(gb.price(42.5))).toBe("€42.50");
+  });
+});
+
 describe("list", () => {
   test("joins names with a conjunction", () => {
     const names = ["Alice", "Paul", "Julie"];

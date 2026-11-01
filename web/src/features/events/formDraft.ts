@@ -21,6 +21,8 @@ export type FormatRow = {
   /** In minutes. */
   timeLimit?: number;
   elevation: string;
+  /** In euros, as it is typed. */
+  price: string;
   date: string;
 };
 
@@ -30,6 +32,8 @@ export type FormDraft = {
   startDate: string;
   endDate: string;
   registrationUrl: string;
+  /** A `YYYY-MM-DD` day, or empty. */
+  registrationDeadline: string;
   notes: string;
   rows: FormatRow[];
   /** Whether the member takes part (a new event only). */
@@ -47,6 +51,7 @@ export function emptyRow(raceType = ""): FormatRow {
     raceType,
     distanceKm: "",
     elevation: "",
+    price: "",
     date: "",
   };
 }
@@ -66,6 +71,7 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
       startDate: "",
       endDate: "",
       registrationUrl: "",
+      registrationDeadline: "",
       notes: "",
       rows: [row],
       join: true,
@@ -83,6 +89,7 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     duration: format.duration_min || undefined,
     timeLimit: format.time_limit_min || undefined,
     elevation: typed(format.elevation_gain_m),
+    price: typed(format.price_eur),
     date: format.date ?? "",
   }));
   // An event has at least one format: one that has none (which only a write
@@ -94,6 +101,7 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     startDate: event.start_date,
     endDate: event.end_date ?? "",
     registrationUrl: event.registration_url ?? "",
+    registrationDeadline: event.registration_deadline ?? "",
     notes: event.notes ?? "",
     rows,
     join: false,
@@ -137,6 +145,7 @@ export function toEventDraft(
     start_date: draft.startDate,
     end_date: draft.endDate || undefined,
     registration_url: draft.registrationUrl.trim() || undefined,
+    registration_deadline: draft.registrationDeadline || undefined,
     notes: draft.notes.trim() || undefined,
     formats: draft.rows.map((row) => ({
       id: row.id,
@@ -146,6 +155,7 @@ export function toEventDraft(
       duration_min: row.duration,
       time_limit_min: row.timeLimit,
       elevation_gain_m: numberOf(row.elevation),
+      price_eur: numberOf(row.price),
       date: row.date || undefined,
     })),
     join:

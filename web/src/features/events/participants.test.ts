@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { toEventView, type EventView, type ParticipationView } from "./api";
 import {
   hasStarters,
+  isInterested,
   isOnEvent,
   isStarter,
   joinOptions,
@@ -202,5 +203,28 @@ describe("isOnEvent", () => {
   test("false for a runner who is nowhere", () => {
     expect(isOnEvent(event(), nina.id)).toBe(false);
     expect(isOnEvent(event2(), alice.id)).toBe(false);
+  });
+});
+
+describe("isInterested", () => {
+  test("true for a runner interested in a format: Bob on F42 (whether he confirmed or not)", () => {
+    expect(isInterested(event(), bob.id)).toBe(true);
+    expect(isInterested(eventWith([{ ...p2, confirmed: true }]), bob.id)).toBe(true);
+  });
+
+  test("true for Nina, interested with no format", () => {
+    expect(isInterested(eventWith([pNinaUndecided]), nina.id)).toBe(true);
+  });
+
+  test("false for a runner who is registered, did not start, or is nowhere", () => {
+    expect(isInterested(event(), alice.id)).toBe(false);
+    expect(isInterested(eventWith([as(p2, "dns")]), bob.id)).toBe(false);
+    expect(isInterested(event(), nina.id)).toBe(false);
+  });
+
+  test("true when one of several participations of the runner is interested", () => {
+    const view = eventWith([p1, { ...p1, id: "p1b", format: "f15", status: "interested" }]);
+
+    expect(isInterested(view, alice.id)).toBe(true);
   });
 });

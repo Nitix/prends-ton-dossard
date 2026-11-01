@@ -19,6 +19,8 @@ export type Formatters = {
   km(n: number): string;
   /** Meters, no decimal: "2 400 m". */
   meters(n: number): string;
+  /** A price in euros, with cents unless it is a round amount: "65 €", "42,50 €", "€42.50". */
+  price(eur: number): string;
   /** Names joined with a conjunction: "Alice, Paul et Julie". */
   list(names: string[]): string;
   /** A number of minutes as hours and minutes, narrow style: "46h 30min". Meant for positive durations. */
@@ -48,6 +50,11 @@ export function createFormatters(locale: string): Formatters {
     unit: "meter",
     maximumFractionDigits: 0,
   });
+  const euros = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "EUR",
+    trailingZeroDisplay: "stripIfInteger",
+  });
   const conjunction = new Intl.ListFormat(locale, { type: "conjunction" });
   const narrowDuration = new Intl.DurationFormat(locale, { style: "narrow" });
 
@@ -66,6 +73,7 @@ export function createFormatters(locale: string): Formatters {
     inDays: (n) => relativeTime.format(n, "day"),
     km: (n) => kilometers.format(n),
     meters: (n) => meters.format(n),
+    price: (eur) => euros.format(eur),
     list: (names) => conjunction.format(names),
     // A unit that is zero is left out: 2880 minutes is "48h".
     duration: (minutes) =>
