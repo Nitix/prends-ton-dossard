@@ -19,10 +19,12 @@ type MergeResult struct {
 	// MovedFormats is the number of formats that went to the kept event.
 	MovedFormats int `json:"movedFormats"`
 	// MovedParticipations is the number of participations that went to the kept
-	// format, or that are carried by the formats that went to the kept event.
+	// format, that are carried by the formats that went to the kept event, or
+	// that have no format and went to the kept event.
 	MovedParticipations int `json:"movedParticipations"`
 	// DroppedParticipations is the number of participations that were deleted
-	// because their runner was already on the kept format.
+	// because their runner was already on the kept format, or already in the
+	// kept event for participations that have no format.
 	DroppedParticipations int `json:"droppedParticipations"`
 	// ClearedFormatDates is the number of formats that lost their date, which
 	// was outside the range of the kept event.
@@ -32,6 +34,17 @@ type MergeResult struct {
 // MergeEvents moves the formats of the event mergeID to the event keepID, then
 // deletes the event mergeID. A moved format whose date is outside the range of
 // the kept event loses its date, since a format stays inside its event.
+//
+// The participations follow, in this order:
+//
+//  1. Those on a moved format go to the kept event with their format (they
+//     count as moved).
+//  2. Those of the kept event that have no format are deleted when their runner
+//     now is on a moved format: the runner has chosen (they count as dropped).
+//  3. Those of the merged event that have no format are deleted when the runner
+//     already is in the kept event, with no format or on a format, kept or
+//     moved (they count as dropped). Otherwise they go to the kept event (they
+//     count as moved).
 //
 // With dryRun it only computes the result: nothing is written. Otherwise
 // everything is written in one transaction, so a failure leaves the database as
@@ -56,6 +69,30 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			return err
 		}
 
+		// What decides which participations stay is read before anything is
+		// written, so that a dry run and a real run count the same.
+		inKeptEvent, err := tx.FindAllRecords("participations", dbx.HashExp{"event": keep.Id})
+		if err != nil {
+			return err
+		}
+		mergedUndecided, err := tx.FindAllRecords("participations",
+			dbx.HashExp{"event": merged.Id, "format": ""})
+		if err != nil {
+			return err
+		}
+		// The runners that are in the kept event, with or without a format, and
+		// the participations of the kept event that have no format.
+		keptRunners := make(map[string]bool, len(inKeptEvent))
+		var keptUndecided []*core.Record
+		for _, p := range inKeptEvent {
+			keptRunners[p.GetString("runner")] = true
+			if p.GetString("format") == "" {
+				keptUndecided = append(keptUndecided, p)
+			}
+		}
+		// The runners that are on a moved format.
+		movedRunners := make(map[string]bool)
+
 		start, end := keep.GetString("start_date"), keep.GetString("end_date")
 		for _, format := range formats {
 			carried, err := tx.FindAllRecords("participations", dbx.HashExp{"format": format.Id})
@@ -64,6 +101,10 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			}
 			result.MovedFormats++
 			result.MovedParticipations += len(carried)
+			for _, p := range carried {
+				keptRunners[p.GetString("runner")] = true
+				movedRunners[p.GetString("runner")] = true
+			}
 
 			format.Set("event", keep.Id)
 			// The date is cleared before the save: the validation of a format
@@ -78,8 +119,9 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 			if err := tx.Save(format); err != nil {
 				return err
 			}
-			// A participation is in the event of its format: they follow it,
-			// or the deletion of the event below would delete them.
+			// A participation is in the event of its format, which the
+			// validation checks: it follows the format, once that one has
+			// moved.
 			for _, p := range carried {
 				p.Set("event", keep.Id)
 				if err := tx.Save(p); err != nil {
@@ -87,11 +129,54 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 				}
 			}
 		}
+
+		// A participation of the kept event that has no format is replaced by
+		// the one on a moved format.
+		for _, p := range keptUndecided {
+			if !movedRunners[p.GetString("runner")] {
+				continue
+			}
+			result.DroppedParticipations++
+			if dryRun {
+				continue
+			}
+			if err := tx.Delete(p); err != nil {
+				return err
+			}
+		}
+
+		// A participation of the merged event that has no format is dropped when
+		// its runner already is in the kept event: on a format (kept or moved),
+		// or with no format either. The deletions come before the moves: the
+		// unique index on (runner, event) with no format allows one of them in
+		// the kept event.
+		var moving []*core.Record
+		for _, p := range mergedUndecided {
+			if keptRunners[p.GetString("runner")] {
+				result.DroppedParticipations++
+				if dryRun {
+					continue
+				}
+				if err := tx.Delete(p); err != nil {
+					return err
+				}
+				continue
+			}
+			result.MovedParticipations++
+			moving = append(moving, p)
+		}
 		if dryRun {
 			return nil
 		}
-		// Nothing is left to cascade to: every format has moved, with its
-		// participations.
+		for _, p := range moving {
+			p.Set("event", keep.Id)
+			if err := tx.Save(p); err != nil {
+				return err
+			}
+		}
+
+		// Nothing is left to cascade to: the formats have moved, and the
+		// participations of the event are in the kept event or deleted.
 		return tx.Delete(merged)
 	})
 	if err != nil {

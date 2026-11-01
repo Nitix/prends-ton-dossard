@@ -8,6 +8,7 @@ import (
 	"sort"
 	"testing"
 
+	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
 
@@ -158,6 +159,41 @@ func participate(t testing.TB, app core.App, runner, format *core.Record, status
 	return p
 }
 
+// undecided adds a participation of runner in the event only, without a format:
+// the runner is interested and has not chosen yet. The runner added it.
+func undecided(t testing.TB, app core.App, runner, event *core.Record, confirmed bool) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId("participations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := core.NewRecord(collection)
+	p.Set("runner", runner.Id)
+	p.Set("event", event.Id)
+	p.Set("status", "interested")
+	p.Set("confirmed", confirmed)
+	p.Set("added_by", runner.Id)
+	if err := app.Save(p); err != nil {
+		t.Fatalf("adding a participation without a format: %v", err)
+	}
+	return p
+}
+
+// undecidedOf returns the participation of the runner in the event only, as it
+// is in the database, or nil when the runner has none.
+func undecidedOf(t testing.TB, app core.App, runner, event *core.Record) *core.Record {
+	t.Helper()
+	found, err := app.FindAllRecords("participations",
+		dbx.HashExp{"runner": runner.Id, "event": event.Id, "format": ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) == 0 {
+		return nil
+	}
+	return found[0]
+}
+
 // setFields saves values on the record that has that id.
 func setFields(t testing.TB, app core.App, collection, id string, values map[string]any) {
 	t.Helper()
@@ -223,6 +259,28 @@ func TestMergeEvents(t *testing.T) {
 	// An event whose range holds the whole of Event, for the formats that must
 	// keep their date.
 	var wide *core.Record
+
+	// The participations that the rows below set up, for what they check after.
+	var sam, movedUndecided, keptUndecided, droppedUndecided, onLyon *core.Record
+	// Admin is interested in Event2, without a format.
+	adminUndecidedOnEvent2 := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		movedUndecided = undecided(t, app, fx.AdminRunner, fx.Event2, false)
+	}
+	// Bob is on F42, and interested in Event2 without a format.
+	bobUndecidedOnEvent2 := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		droppedUndecided = undecided(t, app, fx.BobRunner, fx.Event2, false)
+	}
+	// Admin is interested in Event and in Event2, without a format in both.
+	adminUndecidedOnBoth := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		keptUndecided = undecided(t, app, fx.AdminRunner, fx.Event, false)
+		droppedUndecided = undecided(t, app, fx.AdminRunner, fx.Event2, false)
+	}
+	// Admin is interested in Event without a format, and is on FLyon: the merge
+	// gives Admin a format of Event.
+	adminUndecidedOnEventAndOnLyon := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		droppedUndecided = undecided(t, app, fx.AdminRunner, fx.Event, false)
+		onLyon = participate(t, app, fx.AdminRunner, fx.FLyon, "interested", false)
+	}
 
 	testutil.RunRows(t, []testutil.Row{
 		unchanged(testutil.Row{
@@ -326,6 +384,146 @@ func TestMergeEvents(t *testing.T) {
 				gone(t, app, "events", fx.Event)
 			},
 		},
+		{
+			Name: "the participations of the moved formats follow them",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				sam = participate(t, app, fx.SamRunner, fx.FLyon, "interested", false)
+			},
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 0, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				got := mustStore(t, app, "participations", sam.Id)
+				if got.GetString("event") != fx.Event.Id || got.GetString("format") != fx.FLyon.Id {
+					t.Errorf("Sam is in the event %q on the format %q, want %q and FLyon %q",
+						got.GetString("event"), got.GetString("format"), fx.Event.Id, fx.FLyon.Id)
+				}
+				inEvent, err := app.FindAllRecords("participations", dbx.HashExp{"event": fx.Event.Id})
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, p := range inEvent {
+					found = found || p.Id == sam.Id
+				}
+				if !found {
+					t.Errorf("the participations of the event %s do not hold the one of Sam", fx.Event.Id)
+				}
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		{
+			Name:     "a participation without a format moves to the kept event",
+			Before:   adminUndecidedOnEvent2,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 0, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				got := mustStore(t, app, "participations", movedUndecided.Id)
+				if got.GetString("event") != fx.Event.Id || got.GetString("format") != "" {
+					t.Errorf("the participation is in the event %q on the format %q, want %q and none",
+						got.GetString("event"), got.GetString("format"), fx.Event.Id)
+				}
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the participation without a format that would move",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 0, 0)},
+		}, adminUndecidedOnEvent2),
+		{
+			Name:     "a participation without a format is dropped when its runner is on a format of the kept event",
+			Before:   bobUndecidedOnEvent2,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 0, 1, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				gone(t, app, "participations", droppedUndecided)
+				p2 := mustStore(t, app, "participations", fx.P2.Id)
+				if p2.GetString("event") != fx.Event.Id || p2.GetString("format") != fx.F42.Id {
+					t.Errorf("P2 changed: %v", p2.FieldsData())
+				}
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the participation without a format that would be dropped for a format",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 0, 1, 0)},
+		}, bobUndecidedOnEvent2),
+		{
+			Name:     "a runner without a format in both events keeps the participation of the kept event",
+			Before:   adminUndecidedOnBoth,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 0, 1, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				mustStore(t, app, "participations", keptUndecided.Id)
+				gone(t, app, "participations", droppedUndecided)
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the participation without a format that would be dropped for another one",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 0, 1, 0)},
+		}, adminUndecidedOnBoth),
+		{
+			Name:     "a participation without a format of the kept event is dropped when its runner gets a format by the merge",
+			Before:   adminUndecidedOnEventAndOnLyon,
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 1, 0)},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := undecidedOf(t, app, fx.AdminRunner, fx.Event); got != nil {
+					t.Errorf("Admin still has a participation in the event only: %v", got.FieldsData())
+				}
+				gone(t, app, "participations", droppedUndecided)
+				lyon := mustStore(t, app, "participations", onLyon.Id)
+				if lyon.GetString("event") != fx.Event.Id || lyon.GetString("format") != fx.FLyon.Id {
+					t.Errorf("the participation of Admin is in the event %q on the format %q, want %q and FLyon %q",
+						lyon.GetString("event"), lyon.GetString("format"), fx.Event.Id, fx.FLyon.Id)
+				}
+				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testutil.Row{
+			Name:     "a dry run counts the participation without a format that a moved format would replace",
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event), id(event2), true),
+			Status:   http.StatusOK,
+			Contains: []string{result(1, 1, 1, 0)},
+		}, adminUndecidedOnEventAndOnLyon),
 		{
 			Name: "an event without formats merges too",
 			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
@@ -652,6 +850,33 @@ func TestMerge_RollsBackWhenAWriteFails(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("merge-events with participations", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		// Sam follows FLyon (the first save of a participation), then Admin,
+		// who is on Event2 without a format, moves to Event: that one fails.
+		sam := participate(t, app, fx.SamRunner, fx.FLyon, "interested", false)
+		adminUndecided := undecided(t, app, fx.AdminRunner, fx.Event2, false)
+		before := snapshot(t, app)
+		failOn(app, "participations", 2)
+
+		_, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, false)
+		if !errors.Is(err, boom) {
+			t.Fatalf("error = %v, want the failure of the write", err)
+		}
+
+		if got := snapshot(t, app); got != before {
+			t.Errorf("the database changed:\nbefore:\n%s\nafter:\n%s", before, got)
+		}
+		mustStore(t, app, "events", fx.Event2.Id)
+		if got := mustStore(t, app, "participations", sam.Id).GetString("event"); got != fx.Event2.Id {
+			t.Errorf("Sam is in the event %q, want Event2 %q", got, fx.Event2.Id)
+		}
+		if got := mustStore(t, app, "participations", adminUndecided.Id).GetString("event"); got != fx.Event2.Id {
+			t.Errorf("Admin is in the event %q, want Event2 %q", got, fx.Event2.Id)
+		}
+	})
 }
 
 // The functions answer with the same result whether they write or not.
@@ -677,6 +902,27 @@ func TestMerge_DryRunGivesTheResultOfTheRealRun(t *testing.T) {
 			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
 		}
 		if want := (admin.MergeResult{MovedFormats: 2, MovedParticipations: 4, ClearedFormatDates: 1}); results[1] != want {
+			t.Errorf("result = %+v, want %+v", results[1], want)
+		}
+	})
+
+	t.Run("events with undecided participations", func(t *testing.T) {
+		var results [2]admin.MergeResult
+		for i, dryRun := range []bool{true, false} {
+			app, fx := setup(t)
+			// Admin is without a format on Event, and on FLyon.
+			undecided(t, app, fx.AdminRunner, fx.Event, false)
+			participate(t, app, fx.AdminRunner, fx.FLyon, "interested", false)
+			got, err := admin.MergeEvents(app, fx.Event.Id, fx.Event2.Id, dryRun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			results[i] = got
+		}
+		if results[0] != results[1] {
+			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
+		}
+		if want := (admin.MergeResult{MovedFormats: 1, MovedParticipations: 1, DroppedParticipations: 1}); results[1] != want {
 			t.Errorf("result = %+v, want %+v", results[1], want)
 		}
 	})
