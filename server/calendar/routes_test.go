@@ -791,8 +791,11 @@ func TestCalendarFeed(t *testing.T) {
 }
 
 // A token in a path is in the request log of PocketBase unless the route keeps
-// it out. The feed does when it succeeds: an error is logged, with the token
-// that failed, which gives nobody access.
+// it out. The feed does when it succeeds. A failed request is still logged,
+// with its path, and the token in it can still be a valid one (see Register: a
+// path without the .ics suffix, a disabled account, a 500). The test checks
+// both halves: the success leaves no trace, and the failure of an unknown token
+// is logged.
 func TestCalendarFeed_ActivityLog(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)

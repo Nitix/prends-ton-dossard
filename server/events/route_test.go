@@ -362,11 +362,21 @@ func TestFormatRoute_FileReadableWithoutToken(t *testing.T) {
 		// NewApp already registered the cleanup.
 		DisableTestAppCleanup: true,
 		AfterTestFunc: func(t testing.TB, _ *tests.TestApp, res *http.Response) {
-			// PocketBase asks the browser to download the file rather than show
-			// it, which does not matter to the site: it fetches the file and
-			// parses the text.
 			if got := res.Header.Get("Content-Type"); got != "application/gpx+xml" {
 				t.Errorf("Content-Type = %q, want application/gpx+xml", got)
+			}
+			// What makes an unprotected file safe: a browser that opens the
+			// link downloads the file instead of showing it, and the policy
+			// forbids scripts and a page of its own, whatever the file holds.
+			// It is a PocketBase default (inlineServeContentTypes does not
+			// list XML), and the only guard here against an upgrade that
+			// changes it. The site does not mind: it fetches the file and
+			// parses the text.
+			if got := res.Header.Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+				t.Errorf("Content-Disposition = %q, want attachment", got)
+			}
+			if got := res.Header.Get("Content-Security-Policy"); !strings.Contains(got, "sandbox") {
+				t.Errorf("Content-Security-Policy = %q, want a sandbox", got)
 			}
 		},
 	}
