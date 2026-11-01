@@ -26,6 +26,7 @@ import {
   type Me,
 } from "../participations/permissions";
 import { resultParts } from "../results/resultText";
+import { RouteSection } from "../route/RouteSection";
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { formatDisplayName, formatMeasures } from "./formatName";
@@ -449,7 +450,7 @@ function statusLine(participation: ParticipationRecord, f: Formatters, t: Messag
   return [t.status[status], ...result].join(SEPARATOR);
 }
 
-/** A format: its measures, its day when the event has several, and the runners who start it. */
+/** A format: its measures, its day when the event has several, the runners who start it, and its course. */
 function FormatSection({
   eventId,
   formatView,
@@ -498,6 +499,7 @@ function FormatSection({
           ))}
         </ul>
       )}
+      <RouteSection format={format} />
     </section>
   );
 }

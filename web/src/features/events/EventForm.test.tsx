@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => ({
   getOne: vi.fn<(id: string, options: Rec) => Promise<unknown>>(),
   getList: vi.fn<(page: number, perPage: number, options: Rec) => Promise<unknown>>(),
   myRunner: vi.fn<(filter: string) => Promise<unknown>>(),
+  /** The update of a format on its own: that is how its track is sent, after the batch. */
+  updateFormat: vi.fn<(id: string, body: unknown) => Promise<unknown>>(),
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -68,6 +70,7 @@ vi.mock("../../lib/pb", () => ({
         race_types: { getFullList: mocks.raceTypes },
         events: { getOne: mocks.getOne, getList: mocks.getList },
         runners: { getFirstListItem: mocks.myRunner },
+        formats: { update: mocks.updateFormat },
       })[name],
   },
 }));
@@ -94,10 +97,18 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mocks.calls.length = 0;
-  for (const fn of [mocks.send, mocks.raceTypes, mocks.getOne, mocks.getList, mocks.myRunner]) {
+  for (const fn of [
+    mocks.send,
+    mocks.raceTypes,
+    mocks.getOne,
+    mocks.getList,
+    mocks.myRunner,
+    mocks.updateFormat,
+  ]) {
     fn.mockReset();
   }
   mocks.send.mockResolvedValue([]);
+  mocks.updateFormat.mockResolvedValue({});
   mocks.raceTypes.mockResolvedValue([trailType, roadType]);
   mocks.getOne.mockResolvedValue(eventRecord);
   mocks.getList.mockResolvedValue({ items: [] });
@@ -210,6 +221,8 @@ const minutesOf = (row: Row, label: string) => row.getByLabelText(`${label}, ${f
 const elevation = (row: Row) => row.getByLabelText(fr.form.elevation);
 const price = (row: Row) => row.getByLabelText(fr.format.price);
 const formatDate = (row: Row) => row.getByLabelText(fr.form.formatDate);
+const gpxField = (row: Row) => row.getByLabelText(fr.format.gpx, { exact: true });
+const routeUrl = (row: Row) => row.getByLabelText(fr.format.routeUrl, { exact: true });
 
 /** The event of the fixture's second example: a name, a place, one day, one 42 km trail. */
 async function fillEvent(screen: Screen) {
@@ -1211,4 +1224,383 @@ test("EventForm — en anglais, les textes sont anglais", async () => {
   await expect.element(screen.getByRole("group", { name: "Race 1", exact: true })).toBeVisible();
   await expect.element(screen.getByRole("checkbox", { name: "I'm taking part" })).toBeChecked();
   await expect.element(screen.getByRole("button", { name: "Add a race" })).toBeVisible();
+});
+
+// --- The track and the link of the course ---
+
+const GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1";
+
+/** 0.1° of latitude is 11.12 km: 22.2 km, 200 m up then 100 m down. */
+const GPX = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="${GPX_NAMESPACE}"><trk><trkseg>
+  <trkpt lat="45.0" lon="6"><ele>450</ele></trkpt>
+  <trkpt lat="45.1" lon="6"><ele>650</ele></trkpt>
+  <trkpt lat="45.2" lon="6"><ele>550</ele></trkpt>
+</trkseg></trk></gpx>`;
+
+/** The same, with no altitude. */
+const GPX_FLAT = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="${GPX_NAMESPACE}"><trk><trkseg>
+  <trkpt lat="45.0" lon="6"/><trkpt lat="45.1" lon="6"/><trkpt lat="45.2" lon="6"/>
+</trkseg></trk></gpx>`;
+
+const gpxFile = (text = GPX, filename = "trace.gpx") =>
+  new File([text], filename, { type: "application/gpx+xml" });
+
+/** The event of the fixture, whose 15 km (the first format of the form) has a track and a link. */
+function withTrack() {
+  mocks.getOne.mockResolvedValue({
+    ...eventRecord,
+    expand: {
+      ...eventRecord.expand,
+      formats_via_event: [
+        f42,
+        {
+          ...f15,
+          gpx: "trace_ab12cd.gpx",
+          route_url: "https://www.openrunner.com/route-details/1",
+        },
+      ],
+    },
+  });
+}
+
+/** What the update number `n` of a format on its own was given: the id, and the file of its form. */
+function uploaded(n = 0): { id: string; file: File } {
+  const [id, body] = mocks.updateFormat.mock.calls[n] ?? [];
+  const file = body instanceof FormData ? body.get("gpx") : undefined;
+  if (typeof id !== "string" || !(file instanceof File)) {
+    throw new Error("the format was not updated with a file");
+  }
+  return { id, file };
+}
+
+/** How many files a file field holds: the browser forgets one that was refused. */
+function filesIn(input: { element(): Element }): number {
+  const element = input.element();
+  if (!(element instanceof HTMLInputElement)) throw new Error("not an input");
+  return element.files?.length ?? 0;
+}
+
+const reuse = (row: Row) => row.getByRole("button", { name: fr.format.gpxReuse });
+const removeTrack = (row: Row) =>
+  row.getByRole("button", { name: fr.format.gpxRemove, exact: true });
+/** The line that says what a chosen file holds. */
+const trackRead = (row: Row) => row.getByText(/^(Trace|Track) ?: /);
+
+/** Waits for the page of the event that has just been saved. */
+async function savedEvent(router: Awaited<ReturnType<typeof renderForm>>["router"]) {
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+}
+
+test("EventForm — une trace choisie affiche sa distance et son D+, « Reprendre ces valeurs » les recopie", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+  await distance(row).fill("20");
+  await elevation(row).fill("500");
+
+  await gpxField(row).upload(gpxFile());
+
+  // What the file says is read in the browser, and shown: the fields are not touched yet.
+  const read = row.getByText(/^Trace : /);
+  await expect.element(read).toBeVisible();
+  expect(plain(read.element().textContent)).toBe("Trace : 22,2 km, 200 m D+");
+  await expect.element(distance(row)).toHaveValue(20);
+  await expect.element(elevation(row)).toHaveValue(500);
+
+  await reuse(row).click();
+
+  await expect.element(distance(row)).toHaveValue(22.2);
+  await expect.element(elevation(row)).toHaveValue(200);
+});
+
+test("EventForm — une trace sans altitude ne remplit que la distance, et ne dit pas de D+", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+  await elevation(row).fill("500");
+
+  await gpxField(row).upload(gpxFile(GPX_FLAT));
+
+  const read = row.getByText(/^Trace : /);
+  await expect.element(read).toBeVisible();
+  expect(plain(read.element().textContent)).toBe("Trace : 22,2 km");
+  await reuse(row).click();
+  await expect.element(distance(row)).toHaveValue(22.2);
+  // The elevation typed by the user is not erased by a track that has none.
+  await expect.element(elevation(row)).toHaveValue(500);
+});
+
+test("EventForm — une trace illisible est refusée avec un message, et n'est pas gardée", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+
+  await gpxField(row).upload(gpxFile("ceci n'est pas une trace", "notes.gpx"));
+
+  const message = row.getByText(fr.route.unreadable);
+  await expect.element(message).toBeVisible();
+  // The message is linked to the field, which says that it is invalid.
+  expect(gpxField(row).element().getAttribute("aria-describedby")).toContain(message.element().id);
+  expect(gpxField(row).element().getAttribute("aria-invalid")).toBe("true");
+  // The file is not kept: the field is empty, and no reading is shown.
+  expect(filesIn(gpxField(row))).toBe(0);
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  await expect.element(reuse(row)).not.toBeInTheDocument();
+  // Saving sends no track.
+  await save(screen).click();
+  await savedEvent(router);
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — après une trace illisible, un bon fichier efface le message", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+  await gpxField(row).upload(gpxFile("ceci n'est pas une trace", "notes.gpx"));
+  await expect.element(row.getByText(fr.route.unreadable)).toBeVisible();
+
+  await gpxField(row).upload(gpxFile());
+
+  await expect.element(trackRead(row)).toBeVisible();
+  await expect.element(row.getByText(fr.route.unreadable)).not.toBeInTheDocument();
+});
+
+test("EventForm — une trace illisible après une bonne ne laisse pas la bonne partir", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await gpxField(row).upload(gpxFile());
+  await expect.element(trackRead(row)).toBeVisible();
+
+  await gpxField(row).upload(gpxFile("ceci n'est pas une trace", "notes.gpx"));
+
+  await expect.element(row.getByText(fr.route.unreadable)).toBeVisible();
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  await save(screen).click();
+  await savedEvent(router);
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — la trace choisie part après le lot, pour l'épreuve que le lot crée, puis on va à la fiche", async () => {
+  const { screen, router, invalidate } = await renderForm();
+  await fillEvent(screen);
+  await gpxField(format(screen, 1)).upload(gpxFile());
+  await expect.element(trackRead(format(screen, 1))).toBeVisible();
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  // The track is not in the batch: it is sent on its own, once the format exists.
+  const created = mocks.calls.find(({ collection }) => collection === "formats");
+  expect(created?.body).not.toHaveProperty("gpx");
+  expect(mocks.updateFormat).toHaveBeenCalledOnce();
+  const { id, file } = uploaded();
+  expect(id).toBe(created?.body?.id);
+  expect(file.name).toBe("trace.gpx");
+  expect(await file.text()).toBe(GPX);
+  // The page of the event is asked for again, to have the track.
+  const eventId = router.state.location.pathname.split("/").pop();
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["event", eventId]);
+  await expect.element(screen.getByText(fr.form.saved)).toBeVisible();
+});
+
+test("EventForm — une trace qui ne part pas : l'événement est enregistré, on va à la fiche avec un message qui nomme l'épreuve", async () => {
+  mocks.updateFormat.mockRejectedValue(new Error("offline"));
+  const { screen, router, invalidate } = await renderForm();
+  await fillEvent(screen);
+  await gpxField(format(screen, 1)).upload(gpxFile());
+  await expect.element(trackRead(format(screen, 1))).toBeVisible();
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.send).toHaveBeenCalledOnce();
+  const eventId = router.state.location.pathname.split("/").pop();
+  await expect.element(screen.getByText(`Fiche de ${eventId}`)).toBeVisible();
+  // The format is named as the page names it, by its type and its distance.
+  const failed = screen.getByText(/mais la trace de /);
+  await expect.element(failed).toBeVisible();
+  expect(plain(failed.element().textContent)).toBe(fr.form.traceFailed("Trail 42 km"));
+  expect(screen.container.textContent).not.toContain(fr.form.saved);
+  // The event is saved all the same: its lists are asked for again.
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["event", eventId]);
+});
+
+test("EventForm — le lien du parcours est envoyé", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await addFormat(screen).click();
+  await raceType(format(screen, 2)).selectOptions(roadType.id);
+  await distance(format(screen, 2)).fill("10");
+  await routeUrl(format(screen, 1)).fill("  https://www.openrunner.com/route-details/123 ");
+  await expect.element(routeUrl(format(screen, 1))).toHaveAttribute("type", "url");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  const [, one, two] = mocks.calls;
+  expect(one?.body).toMatchObject({ route_url: "https://www.openrunner.com/route-details/123" });
+  // A format with no link sends an empty one, which is how it is cleared.
+  expect(two?.body).toMatchObject({ route_url: "" });
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — un refus validation_invalid_mime_type sur gpx dit « Ce fichier n'est pas une trace GPX. »", async () => {
+  // Request 0 is the event, 1 the first format.
+  mocks.send.mockRejectedValue(refused(1, 400, { gpx: field("validation_invalid_mime_type") }));
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+
+  await save(screen).click();
+
+  const message = screen.getByText("Ce fichier n'est pas une trace GPX.");
+  await expect.element(message).toBeVisible();
+  expect(gpxField(format(screen, 1)).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  // Not the message of the photo of a runner.
+  expect(screen.container.textContent).not.toContain(fr.errors.validation_invalid_mime_type);
+});
+
+test("EventForm — un refus validation_file_size_limit sur gpx dit que la trace est trop lourde", async () => {
+  mocks.send.mockRejectedValue(refused(1, 400, { gpx: field("validation_file_size_limit") }));
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+
+  await save(screen).click();
+
+  await expect.element(screen.getByText("La trace est trop lourde : 10 Mo maximum.")).toBeVisible();
+  expect(screen.container.textContent).not.toContain(fr.errors.validation_file_size_limit);
+});
+
+test("EventForm — le refus du lien du parcours s'affiche sous son champ", async () => {
+  mocks.send.mockRejectedValue(refused(1, 400, { route_url: field("validation_invalid_url") }));
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await routeUrl(format(screen, 1)).fill("https://parcours.example.test/1");
+
+  await save(screen).click();
+
+  const message = screen.getByText(fr.errors.validation_invalid_url);
+  await expect.element(message).toBeVisible();
+  expect(routeUrl(format(screen, 1)).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  await expect.element(routeUrl(format(screen, 1))).toHaveValue("https://parcours.example.test/1");
+});
+
+test("EventForm — à la modification, « Retirer la trace » n'est proposé qu'à l'épreuve qui a une trace, et le lien est prérempli", async () => {
+  withTrack();
+  const { screen } = await renderEdit();
+
+  // F15 is the first format, F42 the second.
+  await expect.element(removeTrack(format(screen, 1))).toBeVisible();
+  await expect.element(removeTrack(format(screen, 2))).not.toBeInTheDocument();
+  await expect
+    .element(routeUrl(format(screen, 1)))
+    .toHaveValue("https://www.openrunner.com/route-details/1");
+  await expect.element(routeUrl(format(screen, 2))).toHaveValue("");
+  // Nothing to reuse until a file is chosen.
+  await expect.element(reuse(format(screen, 1))).not.toBeInTheDocument();
+});
+
+test("EventForm — « Retirer la trace » enlève la trace après le lot, et le focus va au titre de l'épreuve", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+  const row = format(screen, 1);
+
+  await removeTrack(row).click();
+
+  // The button is gone with the track: the focus is on the title of its format, not lost.
+  await expect.element(removeTrack(row)).not.toBeInTheDocument();
+  await expect.element(row.getByText(fr.form.formatTitle(1), { exact: true })).toHaveFocus();
+  // Nothing is sent before the form is.
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).toHaveBeenCalledExactlyOnceWith("f15", { gpx: null });
+  // It went after the batch.
+  expect(mocks.send.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.updateFormat.mock.invocationCallOrder[0] ?? 0,
+  );
+});
+
+test("EventForm — « Retirer la trace » sur un fichier choisi mais pas encore envoyé le laisse de côté, sans rien envoyer", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await gpxField(row).upload(gpxFile());
+  await expect.element(trackRead(row)).toBeVisible();
+
+  await removeTrack(row).click();
+
+  await expect.element(trackRead(row)).not.toBeInTheDocument();
+  await expect.element(removeTrack(row)).not.toBeInTheDocument();
+  expect(filesIn(gpxField(row))).toBe(0);
+  await save(screen).click();
+  await savedEvent(router);
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — une nouvelle trace remplace celle qui est enregistrée : un seul envoi, le fichier", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+  const row = format(screen, 1);
+
+  await gpxField(row).upload(gpxFile(GPX, "nouvelle.gpx"));
+  await expect.element(trackRead(row)).toBeVisible();
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).toHaveBeenCalledOnce();
+  const { id, file } = uploaded();
+  expect(id).toBe("f15");
+  expect(file.name).toBe("nouvelle.gpx");
+});
+
+test("EventForm — sans trace choisie ni retirée, rien n'est envoyé à part le lot", async () => {
+  withTrack();
+  const { screen, router } = await renderEdit();
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.updateFormat).not.toHaveBeenCalled();
+});
+
+test("EventForm — le champ de la trace et ses boutons font au moins 44 px de haut", async () => {
+  withTrack();
+  const { screen } = await renderEdit();
+  const row = format(screen, 1);
+  await gpxField(row).upload(gpxFile());
+  await expect.element(reuse(row)).toBeVisible();
+
+  for (const target of [gpxField(row), routeUrl(row), reuse(row), removeTrack(row)]) {
+    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+  expect(gpxField(row).element().getAttribute("accept")).toBe(".gpx,application/gpx+xml");
+});
+
+test("EventForm — en anglais, les textes de la trace sont anglais", async () => {
+  const { screen } = await renderForm({ languages: ["en-GB"], heading: "Create an event" });
+
+  await expect.element(screen.getByLabelText("GPX track", { exact: true })).toBeVisible();
+  await expect.element(screen.getByLabelText("Course link", { exact: true })).toBeVisible();
+  await screen.getByLabelText("GPX track", { exact: true }).upload(gpxFile());
+  const read = screen.getByText(/^Track: /);
+  await expect.element(read).toBeVisible();
+  expect(plain(read.element().textContent)).toBe("Track: 22.2 km, 200 m gain");
+  await expect.element(screen.getByRole("button", { name: "Use these values" })).toBeVisible();
+  await expect.element(screen.getByRole("button", { name: "Remove the track" })).toBeVisible();
 });

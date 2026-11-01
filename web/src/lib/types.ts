@@ -67,6 +67,10 @@ export type FormatRecord = BaseRecord & {
   elevation_gain_m?: number;
   /** The price of the registration, in euros: 0 without a price. */
   price_eur?: number;
+  /** The GPX track of the format: the name of the file on the server, empty without one. */
+  gpx?: string;
+  /** A link to the course on a website (any address: show it only through `webAddress`). */
+  route_url?: string;
   /** The day of the format when it differs from the start of its event. */
   date?: string;
 };

@@ -161,6 +161,40 @@ describe("avatar texts", () => {
   });
 });
 
+describe("track texts", () => {
+  test("French", () => {
+    expect(fr.format.gpx).toBe("Trace GPX");
+    expect(fr.format.gpxRemove).toBe("Retirer la trace");
+    expect(fr.format.gpxRead("42,2 km", "2 400 m")).toBe("Trace : 42,2 km, 2 400 m D+");
+    expect(fr.format.gpxReadDistance("42,2 km")).toBe("Trace : 42,2 km");
+    expect(fr.format.gpxReuse).toBe("Reprendre ces valeurs");
+    expect(fr.format.routeUrl).toBe("Lien du parcours");
+    expect(fr.format.gpxNotGpx).toBe("Ce fichier n'est pas une trace GPX.");
+    expect(fr.format.gpxTooBig).toBe("La trace est trop lourde : 10 Mo maximum.");
+    expect(fr.route.download).toBe("Télécharger la trace");
+    expect(fr.route.open).toBe("Voir le parcours");
+    expect(fr.form.traceFailed("Trail 42 km")).toBe(
+      "L'événement est enregistré, mais la trace de Trail 42 km n'a pas pu être envoyée.",
+    );
+  });
+
+  test("English", () => {
+    expect(en.format.gpx).toBe("GPX track");
+    expect(en.format.gpxRemove).toBe("Remove the track");
+    expect(en.format.gpxRead("42.2 km", "2,400 m")).toBe("Track: 42.2 km, 2,400 m gain");
+    expect(en.format.gpxReadDistance("42.2 km")).toBe("Track: 42.2 km");
+    expect(en.format.gpxReuse).toBe("Use these values");
+    expect(en.format.routeUrl).toBe("Course link");
+    expect(en.format.gpxNotGpx).toBe("This file is not a GPX track.");
+    expect(en.format.gpxTooBig).toBe("The track is too big: 10 MB at most.");
+    expect(en.route.download).toBe("Download the track");
+    expect(en.route.open).toBe("See the course");
+    expect(en.form.traceFailed("Trail 42 km")).toBe(
+      "The event is saved, but the track of Trail 42 km could not be sent.",
+    );
+  });
+});
+
 describe("site name", () => {
   test("French", () => {
     expect(fr.common.appName).toBe("Prends ton dossard");

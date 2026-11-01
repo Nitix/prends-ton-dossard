@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { toEventView } from "./api";
 import { hasMeasure, initialDraft, joinRowOf, toEventDraft, type FormatRow } from "./formDraft";
-import { eventRecord, f42 } from "./testFixture";
+import { eventRecord, f15, f42 } from "./testFixture";
 
 const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   key: "k1",
@@ -11,6 +11,9 @@ const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   distanceKm: "",
   elevation: "",
   price: "",
+  routeUrl: "",
+  hasTrack: false,
+  gpx: { kind: "keep" },
   date: "",
   ...extra,
 });
@@ -72,6 +75,28 @@ describe("initialDraft", () => {
     expect(draft.rows[1]).toMatchObject({ timeLimit: 600, date: "2026-06-14" });
   });
 
+  test("the link of the course and whether the format has a track are in the fields; the track itself is kept as it is", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        expand: {
+          formats_via_event: [
+            { ...f42, route_url: "https://example.test/parcours", gpx: "trace_ab12cd.gpx" },
+            f15,
+          ],
+        },
+      }),
+    );
+
+    // F15 is the first format, F42 the second.
+    expect(draft.rows[0]).toMatchObject({ routeUrl: "", hasTrack: false, gpx: { kind: "keep" } });
+    expect(draft.rows[1]).toMatchObject({
+      routeUrl: "https://example.test/parcours",
+      hasTrack: true,
+      gpx: { kind: "keep" },
+    });
+  });
+
   test("the deadline and the price of an event being edited are in the fields", () => {
     const draft = initialDraft(
       toEventView({
@@ -128,11 +153,48 @@ describe("toEventDraft", () => {
           time_limit_min: undefined,
           elevation_gain_m: undefined,
           price_eur: undefined,
+          route_url: undefined,
+          gpx: { kind: "keep" },
+          label: undefined,
           date: undefined,
         },
       ],
       join: undefined,
     });
+  });
+
+  test("the link of the course is trimmed, and the track to send or take off goes along", () => {
+    const file = new File(["<gpx/>"], "trace.gpx");
+    const draft = {
+      ...initialDraft(undefined),
+      rows: [
+        row({
+          distanceKm: "42",
+          routeUrl: " https://example.test/parcours ",
+          gpx: { kind: "new", file },
+        }),
+        row({ distanceKm: "10", routeUrl: "  ", gpx: { kind: "remove" } }),
+      ],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.formats[0]).toMatchObject({
+      route_url: "https://example.test/parcours",
+      gpx: { kind: "new", file },
+    });
+    expect(saved.formats[1]).toMatchObject({ route_url: undefined, gpx: { kind: "remove" } });
+  });
+
+  test("the name that tells a format apart in a message comes from the caller, by the place of the row", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      rows: [row({ distanceKm: "42" }), row({ distanceKm: "10" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false, (_row, index) => `Épreuve ${index + 1}`);
+
+    expect(saved.formats.map((format) => format.label)).toEqual(["Épreuve 1", "Épreuve 2"]);
   });
 
   test("the deadline and the price go as a date and a number", () => {

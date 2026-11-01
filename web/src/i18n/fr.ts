@@ -326,6 +326,18 @@ export const fr = {
     elevation: (height: string) => `${height} D+`,
     // The label of the field of the price of a format, in the form.
     price: "Prix (€)",
+    // The track of a format in the form: the file, what is read in it, what to do with it, the link.
+    gpx: "Trace GPX",
+    gpxRemove: "Retirer la trace",
+    // The distance and the elevation gain of the chosen file, already formatted: "Trace : 42,2 km, 2 400 m D+".
+    gpxRead: (km: string, gain: string) => `Trace : ${km}, ${gain} D+`,
+    // A file with no altitude: only its distance is said, and reused.
+    gpxReadDistance: (km: string) => `Trace : ${km}`,
+    gpxReuse: "Reprendre ces valeurs",
+    routeUrl: "Lien du parcours",
+    // What the server refuses in the file of a track (see translateFieldError).
+    gpxNotGpx: "Ce fichier n'est pas une trace GPX.",
+    gpxTooBig: "La trace est trop lourde : 10 Mo maximum.",
   },
   // The track of a race: its numbers, and the two drawings (see features/route).
   route: {
@@ -341,6 +353,9 @@ export const fr = {
     start: "Départ",
     finish: "Arrivée",
     unreadable: "Cette trace n'a pas pu être lue.",
+    // The links of the course: the file of the track, and the page of the course on a website.
+    download: "Télécharger la trace",
+    open: "Voir le parcours",
   },
   // The form that creates or edits an event and its formats (see features/events/EventForm.tsx).
   form: {
@@ -386,6 +401,9 @@ export const fr = {
     // Above the events that may be the one being typed.
     duplicateQuestion: "Cet événement existe peut-être déjà :",
     saved: "Événement enregistré.",
+    // The event is saved, but not the track of these formats (already named and joined: "Trail 42 km et Route 10 km").
+    traceFailed: (names: string) =>
+      `L'événement est enregistré, mais la trace de ${names} n'a pas pu être envoyée.`,
   },
   // The filters of the list and of the calendar.
   filters: {

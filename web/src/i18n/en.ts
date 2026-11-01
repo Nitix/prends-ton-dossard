@@ -253,6 +253,14 @@ export const en = {
     max: (duration: string) => `max ${duration}`,
     elevation: (height: string) => `${height} gain`,
     price: "Price (€)",
+    gpx: "GPX track",
+    gpxRemove: "Remove the track",
+    gpxRead: (km: string, gain: string) => `Track: ${km}, ${gain} gain`,
+    gpxReadDistance: (km: string) => `Track: ${km}`,
+    gpxReuse: "Use these values",
+    routeUrl: "Course link",
+    gpxNotGpx: "This file is not a GPX track.",
+    gpxTooBig: "The track is too big: 10 MB at most.",
   },
   route: {
     title: "Course",
@@ -263,6 +271,8 @@ export const en = {
     start: "Start",
     finish: "Finish",
     unreadable: "This track could not be read.",
+    download: "Download the track",
+    open: "See the course",
   },
   form: {
     createTitle: "Create an event",
@@ -303,6 +313,8 @@ export const en = {
     join: "I'm taking part",
     duplicateQuestion: "This event may already exist:",
     saved: "Event saved.",
+    traceFailed: (names: string) =>
+      `The event is saved, but the track of ${names} could not be sent.`,
   },
   filters: {
     title: "Filters",

@@ -12,6 +12,11 @@ import type { EventView } from "./api";
 // it is saved or none of it is. The ids of what is created are chosen here,
 // which lets the formats and the participation point to what the same batch
 // creates.
+//
+// The GPX tracks do not go in the batch: a file is a form, and the formats it
+// belongs to must exist. Each track that is new or taken off is sent by a
+// request of its own once the batch is saved (`uploadTraces`), and one that
+// fails leaves the event saved.
 
 /** One request of the batch. A `create` carries its own id, which the client chose. */
 export type BatchOp = {
@@ -20,6 +25,12 @@ export type BatchOp = {
   id: string;
   body?: Record<string, unknown>;
 };
+
+/**
+ * What the form does with the GPX track of a format: leaves it as it is (the one
+ * it has, or none), sends the file that was chosen, or takes the track off.
+ */
+export type GpxChange = { kind: "keep" } | { kind: "new"; file: File } | { kind: "remove" };
 
 /**
  * What the form holds, as the server stores it: dates are `YYYY-MM-DD` texts,
@@ -46,6 +57,12 @@ export type EventDraft = {
     elevation_gain_m?: number;
     /** In euros, to the cent. */
     price_eur?: number;
+    /** A link to the course on a website. */
+    route_url?: string;
+    /** What to do with the track, once the batch is saved. None is `keep`. */
+    gpx?: GpxChange;
+    /** What the message that says a track was not sent calls the format. It defaults to its name. */
+    label?: string;
     date?: string;
   }[];
   /** The member takes part in the format at `formatIndex` of `formats`. Only when the event is created. */
@@ -78,6 +95,7 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
     time_limit_min: format.time_limit_min ?? 0,
     elevation_gain_m: format.elevation_gain_m ?? 0,
     price_eur: format.price_eur ?? 0,
+    route_url: format.route_url ?? "",
     date: format.date ?? "",
   };
 }
@@ -177,6 +195,71 @@ export function buildBatch(
   return { ops, eventId, formatIds };
 }
 
+/**
+ * The event is saved, but the track of some of its formats was not sent or not
+ * taken off. `formats` names them, in the order of the form, and `eventId` is
+ * the event that was saved, for the caller to go on with it.
+ */
+export class TraceUploadError extends Error {
+  constructor(
+    public readonly formats: string[],
+    public readonly eventId = "",
+  ) {
+    super(`the track of ${formats.join(", ")} was not sent`);
+    this.name = "TraceUploadError";
+  }
+}
+
+/** The start of a document that has its XML declaration, after blanks (`text()` has dropped any BOM). */
+const XML_DECLARATION = /^\s*<\?xml/;
+
+/**
+ * PocketBase tells the type of a file from what it holds, and does not take a
+ * GPX file that has no XML declaration for XML (it says `text/plain` and refuses
+ * it). A file that starts with the declaration goes as it is; any other gets
+ * one, in UTF-8.
+ */
+async function withXmlDeclaration(file: File): Promise<File> {
+  const text = await file.text();
+  if (XML_DECLARATION.test(text)) return file;
+  return new File([`<?xml version="1.0" encoding="UTF-8"?>\n${text}`], file.name, {
+    type: "application/gpx+xml",
+  });
+}
+
+/**
+ * Sends the track of each format that has a new one, and takes off those that
+ * are to be. `formatIds` is the id of each format, and `rows` what to do with
+ * each, in the same order. The requests go one after the other, in that order,
+ * and one that fails does not stop the others.
+ *
+ * @throws {TraceUploadError} naming the formats whose request failed.
+ */
+export async function uploadTraces(
+  formatIds: string[],
+  rows: { gpx?: GpxChange; label?: string; name?: string }[],
+): Promise<void> {
+  const failed: string[] = [];
+  for (const [i, row] of rows.entries()) {
+    const id = formatIds[i];
+    const change = row.gpx;
+    if (id === undefined || change === undefined || change.kind === "keep") continue;
+    try {
+      if (change.kind === "remove") {
+        await pb.collection("formats").update(id, { gpx: null });
+      } else {
+        const body = new FormData();
+        const file = await withXmlDeclaration(change.file);
+        body.append("gpx", file, file.name);
+        await pb.collection("formats").update(id, body);
+      }
+    } catch {
+      failed.push(row.label ?? (row.name || id));
+    }
+  }
+  if (failed.length > 0) throw new TraceUploadError(failed);
+}
+
 /** What a failed request of the batch was about, to show its error where the user can fix it. */
 export type SaveTarget =
   | { kind: "event" }
@@ -262,7 +345,9 @@ function toSaveError(
  * Saves the event in one batch and gives its id. `myRunnerId` is the runner of
  * the member, needed for `draft.join`. A batch that the server refuses for one
  * of its requests throws a `SaveEventError`; any other failure (a network
- * failure, say) is thrown as it came.
+ * failure, say) is thrown as it came. Once the batch is saved, the tracks are
+ * sent: those that cannot be make a `TraceUploadError`, which has the id of the
+ * event that is saved all the same.
  */
 export async function saveEvent(
   draft: EventDraft,
@@ -282,6 +367,12 @@ export async function saveEvent(
     await batch.send();
   } catch (err) {
     throw toSaveError(err, ops, formatIds) ?? err;
+  }
+  try {
+    await uploadTraces(formatIds, draft.formats);
+  } catch (err) {
+    if (err instanceof TraceUploadError) throw new TraceUploadError(err.formats, eventId);
+    throw err;
   }
   return eventId;
 }

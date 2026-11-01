@@ -1,7 +1,7 @@
 import { newId } from "../../lib/ids";
 import type { Status } from "../../lib/types";
 import type { EventView } from "./api";
-import type { EventDraft } from "./saveEvent";
+import type { EventDraft, GpxChange } from "./saveEvent";
 
 // What the form of an event holds while it is being filled in. Everything the
 // user types is a text, so that what is half typed ("42.", "") is left alone;
@@ -23,6 +23,12 @@ export type FormatRow = {
   elevation: string;
   /** In euros, as it is typed. */
   price: string;
+  /** A link to the course on a website, as it is typed. */
+  routeUrl: string;
+  /** Whether the format has a GPX track on the server: the form only needs to know that, to offer to take it off. */
+  hasTrack: boolean;
+  /** What is done with the track when the form is saved: the file chosen, or taking it off. */
+  gpx: GpxChange;
   date: string;
 };
 
@@ -52,6 +58,9 @@ export function emptyRow(raceType = ""): FormatRow {
     distanceKm: "",
     elevation: "",
     price: "",
+    routeUrl: "",
+    hasTrack: false,
+    gpx: { kind: "keep" },
     date: "",
   };
 }
@@ -90,6 +99,9 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     timeLimit: format.time_limit_min || undefined,
     elevation: typed(format.elevation_gain_m),
     price: typed(format.price_eur),
+    routeUrl: format.route_url ?? "",
+    hasTrack: !!format.gpx,
+    gpx: { kind: "keep" },
     date: format.date ?? "",
   }));
   // An event has at least one format: one that has none (which only a write
@@ -130,12 +142,15 @@ export function joinRowOf(draft: FormDraft): FormatRow | undefined {
 
 /**
  * What to save. `existing` is the event being edited, which gives its id;
- * `join` is whether the member takes part, which only the creation offers.
+ * `join` is whether the member takes part, which only the creation offers;
+ * `label` names a row (by its place in the form, from 0) in the message that
+ * says its track was not sent: the form gives the name the page would show.
  */
 export function toEventDraft(
   draft: FormDraft,
   existing: EventView | undefined,
   join: boolean,
+  label?: (row: FormatRow, index: number) => string,
 ): EventDraft {
   const joinRow = joinRowOf(draft);
   return {
@@ -147,7 +162,7 @@ export function toEventDraft(
     registration_url: draft.registrationUrl.trim() || undefined,
     registration_deadline: draft.registrationDeadline || undefined,
     notes: draft.notes.trim() || undefined,
-    formats: draft.rows.map((row) => ({
+    formats: draft.rows.map((row, index) => ({
       id: row.id,
       name: row.name.trim() || undefined,
       race_type: row.raceType,
@@ -156,6 +171,9 @@ export function toEventDraft(
       time_limit_min: row.timeLimit,
       elevation_gain_m: numberOf(row.elevation),
       price_eur: numberOf(row.price),
+      route_url: row.routeUrl.trim() || undefined,
+      gpx: row.gpx,
+      label: label?.(row, index),
       date: row.date || undefined,
     })),
     join:

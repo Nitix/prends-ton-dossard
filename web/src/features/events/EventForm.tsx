@@ -24,7 +24,7 @@ import {
   toEventDraft,
   type FormatRow,
 } from "./formDraft";
-import { saveEvent, SaveEventError } from "./saveEvent";
+import { saveEvent, SaveEventError, TraceUploadError } from "./saveEvent";
 
 /**
  * What the last attempt to save was refused for, as codes of the server (or
@@ -59,6 +59,8 @@ const FORMAT_FIELDS: readonly string[] = [
   "time_limit_min",
   "elevation_gain_m",
   "price_eur",
+  "gpx",
+  "route_url",
   "date",
 ];
 
@@ -229,15 +231,22 @@ function EventFields({
       return { ...NO_ERRORS, rows };
     }
 
+    // What the message about a track that was not sent calls a format: what the page will call it.
+    const named = (row: FormatRow, index: number) =>
+      displayName(row) ?? t.form.formatTitle(index + 1);
     let id: string;
+    // The formats whose track was not sent: the event is saved all the same.
+    let unsent: string[] = [];
     try {
       const join = joinOffered && draft.join;
-      id = await saveEvent(toEventDraft(draft, initial, join), initial, runner?.id);
+      id = await saveEvent(toEventDraft(draft, initial, join, named), initial, runner?.id);
     } catch (err) {
-      return refusal(err, draft.rows);
+      if (!(err instanceof TraceUploadError)) return refusal(err, draft.rows);
+      id = err.eventId;
+      unsent = err.formats;
     }
     await invalidateEvents(queryClient, id);
-    toast.show(t.form.saved);
+    toast.show(unsent.length > 0 ? t.form.traceFailed(f.list(unsent)) : t.form.saved);
     await navigate({ to: "/evenements/$id", params: { id } });
     return NO_ERRORS;
   }, NO_ERRORS);
@@ -247,11 +256,11 @@ function EventFields({
     return code === undefined ? null : translateError(t, code);
   };
 
-  /** What the choice of the format to join says of a row: its place, and what it is when it has begun to be filled in. */
-  function rowLabel(row: FormatRow, number: number): string {
+  /** What a row is called, as the page of the event will call it: none until it has a type. */
+  function displayName(row: FormatRow): string | undefined {
     const raceType = raceTypes.find(({ id }) => id === row.raceType);
-    if (!raceType) return t.form.formatTitle(number);
-    const name = formatDisplayName(
+    if (!raceType) return undefined;
+    return formatDisplayName(
       {
         name: row.name,
         distance_km: Number(row.distanceKm) || undefined,
@@ -262,7 +271,14 @@ function EventFields({
       f,
       t,
     );
-    return `${t.form.formatTitle(number)} · ${name}`;
+  }
+
+  /** What the choice of the format to join says of a row: its place, and what it is when it has begun to be filled in. */
+  function rowLabel(row: FormatRow, number: number): string {
+    const name = displayName(row);
+    return name === undefined
+      ? t.form.formatTitle(number)
+      : `${t.form.formatTitle(number)} · ${name}`;
   }
 
   return (

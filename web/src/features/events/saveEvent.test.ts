@@ -2,7 +2,15 @@ import { ClientResponseError } from "pocketbase";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { toEventView, type EventView } from "./api";
-import { buildBatch, saveEvent, SaveEventError, type BatchOp, type EventDraft } from "./saveEvent";
+import {
+  buildBatch,
+  saveEvent,
+  SaveEventError,
+  TraceUploadError,
+  uploadTraces,
+  type BatchOp,
+  type EventDraft,
+} from "./saveEvent";
 import { eventRecord, f15, f42, trailType } from "./testFixture";
 
 type Rec = Record<string, unknown>;
@@ -10,7 +18,10 @@ type Call = { action: string; collection: string; id?: string; body?: Rec };
 
 const mocks = vi.hoisted(() => ({
   calls: [] as Call[],
+  /** What the server was asked, in order: the batch, then each format that is updated on its own. */
+  order: [] as string[],
   send: vi.fn<() => Promise<unknown>>(),
+  update: vi.fn<(id: string, body: unknown) => Promise<unknown>>(),
 }));
 
 vi.mock("../../lib/pb", () => ({
@@ -22,14 +33,25 @@ vi.mock("../../lib/pb", () => ({
           mocks.calls.push({ action: "update", collection, id, body }),
         delete: (id: string) => mocks.calls.push({ action: "delete", collection, id }),
       }),
-      send: mocks.send,
+      send: () => {
+        mocks.order.push("batch");
+        return mocks.send();
+      },
+    }),
+    collection: (collection: string) => ({
+      update: (id: string, body: unknown) => {
+        mocks.order.push(`update ${collection} ${id}`);
+        return mocks.update(id, body);
+      },
     }),
   },
 }));
 
 beforeEach(() => {
   mocks.calls.length = 0;
+  mocks.order.length = 0;
   mocks.send.mockReset().mockResolvedValue([]);
+  mocks.update.mockReset().mockResolvedValue({});
 });
 
 const ME = "aliceRunner0000";
@@ -182,8 +204,24 @@ describe("buildBatch, creation", () => {
       time_limit_min: 0,
       elevation_gain_m: 700,
       price_eur: 0,
+      route_url: "",
       date: "",
     });
+  });
+
+  test("the link of the course is sent when it is filled in, empty otherwise (which clears it)", () => {
+    const draft = newDraft();
+    const [first] = draft.formats;
+    if (first) first.route_url = "https://www.openrunner.com/route-details/123";
+
+    const { ops } = buildBatch(draft, undefined, ME);
+
+    expect(ops[1]?.body).toMatchObject({
+      route_url: "https://www.openrunner.com/route-details/123",
+    });
+    expect(ops[2]?.body).toMatchObject({ route_url: "" });
+    // The track itself never goes in the batch: it is a file, sent afterwards.
+    expect(ops[1]?.body).not.toHaveProperty("gpx");
   });
 
   test("the deadline and the price are sent when they are filled in", () => {
@@ -649,5 +687,209 @@ describe("saveEvent, a refused batch", () => {
     mocks.send.mockRejectedValue(odd);
 
     await expect(saveEvent(newDraft(), undefined, ME)).rejects.toBe(odd);
+  });
+});
+
+// --- The tracks, sent after the batch ---
+
+const DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>';
+const GPX_BODY =
+  '<gpx version="1.1" creator="tests" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45" lon="6"><ele>450</ele></trkpt></trkseg></trk></gpx>';
+const GPX = `${DECLARATION}\n${GPX_BODY}`;
+/** The mark that some editors put at the start of a UTF-8 file. */
+const BOM = String.fromCodePoint(0xfeff);
+
+/** A GPX file as the user picks it. */
+const gpxFile = (text = GPX, filename = "trace.gpx") =>
+  new File([text], filename, { type: "application/gpx+xml" });
+
+/** What the request number `n` to the server sent as the track (a file), or the body when it is not a form. */
+function sentTo(n: number): { id: unknown; body: unknown } {
+  const [id, body] = mocks.update.mock.calls[n] ?? [];
+  return { id, body };
+}
+
+function sentFile(n: number): File {
+  const { body } = sentTo(n);
+  if (!(body instanceof FormData)) throw new Error("the track was not sent as a form");
+  const file = body.get("gpx");
+  if (!(file instanceof File)) throw new Error("the form has no file");
+  return file;
+}
+
+/** The error that a call fails with, which has to be a `TraceUploadError`. */
+async function unsent(call: Promise<unknown>): Promise<TraceUploadError> {
+  try {
+    await call;
+  } catch (err) {
+    if (err instanceof TraceUploadError) return err;
+    throw err;
+  }
+  throw new Error("every track was sent");
+}
+
+describe("uploadTraces", () => {
+  test("uploadTraces — envoie les nouvelles traces après le lot, retire celles à retirer", async () => {
+    const trace = gpxFile();
+    const draft = editDraft();
+    const [big, small] = draft.formats;
+    if (!big || !small) throw new Error("the draft has two formats");
+    draft.formats = [
+      { ...big, gpx: { kind: "new", file: trace } },
+      { ...small, gpx: { kind: "remove" } },
+    ];
+
+    await saveEvent(draft, existing(), ME);
+
+    // The batch first: the formats of the tracks exist (or are updated) by then.
+    expect(mocks.order).toEqual(["batch", "update formats f42", "update formats f15"]);
+    expect(sentTo(0).id).toBe("f42");
+    const sent = sentFile(0);
+    expect(sent.name).toBe("trace.gpx");
+    expect(await sent.text()).toBe(GPX);
+    // A track that is taken off is a field set to null, which is how PocketBase clears a file.
+    expect(mocks.update).toHaveBeenNthCalledWith(2, "f15", { gpx: null });
+  });
+
+  test("uploadTraces — une trace gardée, ou un champ sans trace, n'envoie rien", async () => {
+    const draft = editDraft();
+    draft.formats = draft.formats.map((one, i) =>
+      i === 0 ? { ...one, gpx: { kind: "keep" } } : one,
+    );
+
+    await saveEvent(draft, existing(), ME);
+
+    expect(mocks.order).toEqual(["batch"]);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  test("uploadTraces — la trace d'une épreuve créée par le lot part avec l'identifiant choisi pour elle", async () => {
+    const draft = newDraft();
+    const [first] = draft.formats;
+    if (first) first.gpx = { kind: "new", file: gpxFile() };
+
+    await saveEvent(draft, undefined, ME);
+
+    // The id of the first format is the one of the request that creates it.
+    const created = mocks.calls.filter(({ collection }) => collection === "formats");
+    expect(sentTo(0).id).toBe(created[0]?.body?.id);
+    expect(mocks.update).toHaveBeenCalledOnce();
+  });
+
+  test("uploadTraces — un fichier sans déclaration XML en reçoit une, que PocketBase reconnaît comme du XML", async () => {
+    const bare = gpxFile(GPX_BODY, "sans-declaration.gpx");
+
+    await uploadTraces(["f42"], [{ gpx: { kind: "new", file: bare } }]);
+
+    const sent = sentFile(0);
+    expect(await sent.text()).toBe(`${DECLARATION}\n${GPX_BODY}`);
+    expect(sent.name).toBe("sans-declaration.gpx");
+    expect(sent.type).toBe("application/gpx+xml");
+  });
+
+  test("uploadTraces — des espaces avant la balise ne font pas oublier la déclaration", async () => {
+    await uploadTraces(["a"], [{ gpx: { kind: "new", file: gpxFile(`\n  ${GPX_BODY}`) } }]);
+
+    expect(await sentFile(0).text()).toBe(`${DECLARATION}\n\n  ${GPX_BODY}`);
+  });
+
+  test("uploadTraces — une marque d'ordre des octets sans déclaration : la déclaration est la première chose du fichier envoyé", async () => {
+    await uploadTraces(["a"], [{ gpx: { kind: "new", file: gpxFile(`${BOM}${GPX_BODY}`) } }]);
+
+    const sent = sentFile(0);
+    expect(await sent.text()).toBe(`${DECLARATION}\n${GPX_BODY}`);
+    // Not even the mark in front of it, which an XML parser would refuse after it.
+    expect(new Uint8Array(await sent.arrayBuffer()).slice(0, 5)).toEqual(
+      new TextEncoder().encode("<?xml"),
+    );
+  });
+
+  test("uploadTraces — un fichier qui a déjà sa déclaration part tel quel, marque d'ordre des octets comprise", async () => {
+    const trace = gpxFile(`${BOM}${GPX}`, "ma-trace.gpx");
+
+    await uploadTraces(["f42"], [{ gpx: { kind: "new", file: trace } }]);
+
+    const sent = sentFile(0);
+    expect(sent.name).toBe("ma-trace.gpx");
+    expect(await sent.arrayBuffer()).toEqual(await trace.arrayBuffer());
+  });
+
+  test("uploadTraces — un échec lève TraceUploadError avec le nom de l'épreuve, les autres traces partent quand même", async () => {
+    mocks.update.mockImplementation((id) =>
+      id === "f42" ? Promise.reject(new Error("offline")) : Promise.resolve({}),
+    );
+
+    const error = await unsent(
+      uploadTraces(
+        ["f42", "f15", "f10"],
+        [
+          { label: "Trail 42 km", gpx: { kind: "new", file: gpxFile() } },
+          { label: "Trail 15 km", gpx: { kind: "remove" } },
+          { label: "Trail 10 km", gpx: { kind: "new", file: gpxFile() } },
+        ],
+      ),
+    );
+
+    expect(error.formats).toEqual(["Trail 42 km"]);
+    // The failure of one does not stop the others.
+    expect(mocks.update).toHaveBeenCalledTimes(3);
+  });
+
+  test("uploadTraces — plusieurs échecs sont tous nommés, dans l'ordre du formulaire", async () => {
+    mocks.update.mockRejectedValue(new Error("offline"));
+
+    const error = await unsent(
+      uploadTraces(
+        ["a", "b"],
+        [
+          { label: "Trail 42 km", gpx: { kind: "new", file: gpxFile() } },
+          { label: "Trail 15 km", gpx: { kind: "remove" } },
+        ],
+      ),
+    );
+
+    expect(error.formats).toEqual(["Trail 42 km", "Trail 15 km"]);
+  });
+
+  test("uploadTraces — une épreuve sans libellé est nommée par son nom, sinon par son identifiant", async () => {
+    mocks.update.mockRejectedValue(new Error("offline"));
+
+    const error = await unsent(
+      uploadTraces(
+        ["a", "b"],
+        [{ name: "Marathon", gpx: { kind: "remove" } }, { gpx: { kind: "remove" } }],
+      ),
+    );
+
+    expect(error.formats).toEqual(["Marathon", "b"]);
+  });
+
+  test("saveEvent — la trace qui n'est pas partie laisse l'événement enregistré, et dit lequel", async () => {
+    mocks.update.mockRejectedValue(new Error("offline"));
+    const draft = editDraft();
+    const [big, small] = draft.formats;
+    if (!big || !small) throw new Error("the draft has two formats");
+    draft.formats = [
+      { ...big, label: "Trail 42 km", gpx: { kind: "new", file: gpxFile() } },
+      small,
+    ];
+
+    const error = await unsent(saveEvent(draft, existing(), ME));
+
+    expect(error.formats).toEqual(["Trail 42 km"]);
+    expect(error.eventId).toBe("event");
+    // The batch went through: the event is saved.
+    expect(mocks.send).toHaveBeenCalledOnce();
+  });
+
+  test("saveEvent — un lot refusé n'envoie aucune trace", async () => {
+    mocks.send.mockRejectedValue(refused(0, 400, { name: field("validation_required") }));
+    const draft = newDraft();
+    const [first] = draft.formats;
+    if (first) first.gpx = { kind: "new", file: gpxFile() };
+
+    await expect(saveEvent(draft, undefined, ME)).rejects.toBeInstanceOf(SaveEventError);
+
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 });

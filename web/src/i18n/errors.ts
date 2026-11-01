@@ -95,3 +95,16 @@ export function translateError(t: Messages, code: string | undefined): string {
   const message = code !== undefined && Object.hasOwn(messages, code) ? messages[code] : undefined;
   return message ?? t.errors.generic;
 }
+
+/**
+ * The message for the code of a field. Most codes say the same whatever the
+ * field is; the two refusals of a file say what the file is for: the photo of
+ * a runner (`errors`) is not the GPX track of a format (`gpx`).
+ */
+export function translateFieldError(t: Messages, field: string, code: string | undefined): string {
+  if (field === "gpx") {
+    if (code === "validation_invalid_mime_type") return t.format.gpxNotGpx;
+    if (code === "validation_file_size_limit") return t.format.gpxTooBig;
+  }
+  return translateError(t, code);
+}

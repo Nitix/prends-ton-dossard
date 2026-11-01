@@ -9,7 +9,7 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
-import { beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
 
@@ -2213,4 +2213,128 @@ test("EventPage — pas de Saisir le résultat sur la participation d'un autre q
   await expect
     .element(screen.getByRole("button", { name: fr.results.enter, exact: true }))
     .not.toBeInTheDocument();
+});
+
+// --- The course of a format ---
+
+const TRACK_URL = "https://pb.example.test/api/files/formats/f42/trace_ab12cd.gpx";
+const COURSE_URL = "https://www.openrunner.com/route-details/123";
+
+/** 2.2 km, 200 m up then 50 m down, between 450 and 650 m. */
+const CLIMB = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+  <trkpt lat="45.00" lon="6"><ele>450</ele></trkpt>
+  <trkpt lat="45.01" lon="6"><ele>650</ele></trkpt>
+  <trkpt lat="45.02" lon="6"><ele>600</ele></trkpt>
+</trkseg></trk></gpx>`;
+
+/** The event of the fixture, where the 42 km has what the test says of its course. */
+function withCourse(course: { gpx?: string; route_url?: string }) {
+  const formats = eventRecord.expand.formats_via_event.map((one) =>
+    one.id === "f42" ? { ...one, ...course } : one,
+  );
+  return { ...eventRecord, expand: { ...eventRecord.expand, formats_via_event: formats } };
+}
+
+/** What the server answers when a file is asked for: the text, as a new answer every time. */
+function serveTrack(text: string, status = 200) {
+  mocks.getURL.mockImplementation((_record, filename) =>
+    filename.endsWith(".gpx") ? TRACK_URL : pixelURL(),
+  );
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(() => Promise.resolve(new Response(text, { status })));
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+test("EventPage — la partie Parcours est dans l'épreuve qui a une trace, après les participants, et pas dans l'autre", async () => {
+  const fetching = serveTrack(CLIMB);
+  const { screen } = await renderPage({
+    event: withCourse({ gpx: "trace_ab12cd.gpx", route_url: COURSE_URL }),
+  });
+  await loaded(screen);
+
+  const trail42 = format(screen, /^Trail 42/);
+  await expect.element(trail42.getByRole("heading", { name: fr.route.title })).toBeVisible();
+  await expect
+    .element(trail42.getByRole("img", { name: new RegExp(`^${fr.route.trackLabel}`) }))
+    .toBeVisible();
+  await expect
+    .element(trail42.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) }))
+    .toBeVisible();
+  await expect
+    .element(trail42.getByRole("link", { name: fr.route.download }))
+    .toHaveAttribute("href", TRACK_URL);
+  await expect
+    .element(trail42.getByRole("link", { name: fr.route.open }))
+    .toHaveAttribute("href", COURSE_URL);
+  // After the runners of the format.
+  const participants = trail42.getByRole("list", { name: fr.event.participants }).element();
+  const course = trail42.getByRole("heading", { name: fr.route.title }).element();
+  expect(
+    participants.compareDocumentPosition(course) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  // The 15 km has neither: no title, and only the one file was asked for.
+  await expect
+    .element(format(screen, /^Trail 15/).getByRole("heading", { name: fr.route.title }))
+    .not.toBeInTheDocument();
+  expect(fetching).toHaveBeenCalledOnce();
+});
+
+test("EventPage — une trace illisible affiche un message, pas d'erreur", async () => {
+  serveTrack("ceci n'est pas une trace");
+  const { screen } = await renderPage({
+    event: withCourse({ gpx: "trace_ab12cd.gpx", route_url: COURSE_URL }),
+  });
+  await loaded(screen);
+
+  const trail42 = format(screen, /^Trail 42/);
+  await expect.element(trail42.getByText(fr.route.unreadable)).toBeVisible();
+  // No drawing, but the links stay.
+  expect(trail42.element().querySelector("svg")).toBeNull();
+  await expect.element(trail42.getByRole("link", { name: fr.route.download })).toBeVisible();
+  await expect.element(trail42.getByRole("link", { name: fr.route.open })).toBeVisible();
+  // The rest of the page is there, and says nothing went wrong.
+  await expect.element(trail42.getByText("Alice", { exact: true })).toBeVisible();
+  await expect.element(format(screen, /^Trail 15/).getByText("Sam", { exact: true })).toBeVisible();
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+  expect(screen.container.textContent).not.toContain(fr.errors.generic);
+});
+
+test("EventPage — un fichier de trace que le serveur ne donne pas n'empêche pas la page", async () => {
+  serveTrack("not found", 404);
+  const { screen } = await renderPage({ event: withCourse({ gpx: "trace_ab12cd.gpx" }) });
+  await loaded(screen);
+
+  await expect.element(format(screen, /^Trail 42/).getByText(fr.route.unreadable)).toBeVisible();
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+});
+
+test("EventPage — un lien de parcours sans trace s'affiche seul, et rien n'est demandé au serveur de fichiers", async () => {
+  const fetching = serveTrack(CLIMB);
+  const { screen } = await renderPage({ event: withCourse({ route_url: COURSE_URL }) });
+  await loaded(screen);
+
+  const trail42 = format(screen, /^Trail 42/);
+  await expect
+    .element(trail42.getByRole("link", { name: fr.route.open }))
+    .toHaveAttribute("href", COURSE_URL);
+  await expect
+    .element(trail42.getByRole("link", { name: fr.route.download }))
+    .not.toBeInTheDocument();
+  expect(fetching).not.toHaveBeenCalled();
+});
+
+test("EventPage — sans trace ni lien, aucune partie Parcours", async () => {
+  const fetching = serveTrack(CLIMB);
+  const { screen } = await renderPage();
+  await loaded(screen);
+
+  await expect
+    .element(screen.getByRole("heading", { name: fr.route.title }))
+    .not.toBeInTheDocument();
+  expect(fetching).not.toHaveBeenCalled();
 });

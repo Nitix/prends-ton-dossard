@@ -4,7 +4,7 @@ import { ClientResponseError } from "pocketbase";
 import { describe, expect, test } from "vitest";
 
 import { en } from "./en";
-import { ERROR_CODES, errorCode, fieldErrors, translateError } from "./errors";
+import { ERROR_CODES, errorCode, fieldErrors, translateError, translateFieldError } from "./errors";
 import { fr } from "./fr";
 
 // The server's own list of codes: the front end must know every one of them.
@@ -83,6 +83,39 @@ describe("translateError", () => {
     expect(translateError(fr, "invitation_invalid")).toBe(
       "Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau à l'admin.",
     );
+  });
+});
+
+describe("translateFieldError", () => {
+  test("a track is not a photo: the refusals of the file of a track have their own words", () => {
+    expect(translateFieldError(fr, "gpx", "validation_invalid_mime_type")).toBe(
+      "Ce fichier n'est pas une trace GPX.",
+    );
+    expect(translateFieldError(fr, "gpx", "validation_file_size_limit")).toBe(
+      "La trace est trop lourde : 10 Mo maximum.",
+    );
+    expect(translateFieldError(en, "gpx", "validation_invalid_mime_type")).toBe(
+      "This file is not a GPX track.",
+    );
+    expect(translateFieldError(en, "gpx", "validation_file_size_limit")).toBe(
+      "The track is too big: 10 MB at most.",
+    );
+  });
+
+  test("the same codes on another field keep their message (the photo of a runner)", () => {
+    expect(translateFieldError(fr, "avatar", "validation_invalid_mime_type")).toBe(
+      fr.errors.validation_invalid_mime_type,
+    );
+    expect(translateFieldError(fr, "avatar", "validation_file_size_limit")).toBe(
+      fr.errors.validation_file_size_limit,
+    );
+  });
+
+  test("any other code of the track is said as everywhere else", () => {
+    expect(translateFieldError(fr, "gpx", "validation_required")).toBe(
+      fr.errors.validation_required,
+    );
+    expect(translateFieldError(fr, "gpx", undefined)).toBe(fr.errors.generic);
   });
 });
 
