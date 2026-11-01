@@ -13,6 +13,11 @@ services:
     env_file: .env
     environment:
       - TZ=Europe/Paris
+      # PocketBase decodes the whole source image to make a thumb. 16777216 is
+      # 4096 x 4096 pixels: it caps that memory on the home server. The site only
+      # ever sends photos of 512 px at most, so only an upload that goes around
+      # it is affected: its original is served instead of a thumb.
+      - PB_THUMBS_MAX_SOURCE_PIXELS=16777216
     volumes:
       - pb_data:/pb_data
     healthcheck:
