@@ -15,7 +15,10 @@ const TrackMap = lazy(() => import("./TrackMap"));
 /**
  * A map that fails (its chunk does not load, after a deploy or with the network
  * gone, or Leaflet throws) is no map: the page keeps the numbers, the profile
- * and the links, rather than the error screen of the router.
+ * and the links, rather than the error screen of the router, and a line says
+ * the map is not there (the chunk is only kept for offline once it has been
+ * loaded: on a first visit with no network, a map that vanishes with no word
+ * would look like a page that is missing something).
  */
 class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   override state = { failed: false };
@@ -25,8 +28,14 @@ class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }
   }
 
   override render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? <MapUnavailable /> : this.props.children;
   }
+}
+
+/** What stands in the place of a map that failed: one line, which is not an alert, since the page is all there. */
+function MapUnavailable() {
+  const { t } = useI18n();
+  return <p className="text-sm text-neutral-600">{t.route.mapUnavailable}</p>;
 }
 
 /** What stands in the place of the map while it loads: a box of its size, so that the page does not jump. */

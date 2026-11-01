@@ -46,7 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("RouteSection — if the map cannot be loaded, the numbers, the profile and the links stay", async () => {
+test("RouteSection — if the map cannot be loaded, a line says so, and the numbers, the profile and the links stay", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(TRACK)));
   // React says in the console that an error boundary caught the failure: it is expected.
   const logged = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -66,8 +66,10 @@ test("RouteSection — if the map cannot be loaded, the numbers, the profile and
     .toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.route.download })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.route.open })).toBeVisible();
-  // ... the map is not, and nothing waits for it, or says that something went wrong.
+  // ... the map is not, and one line says it, rather than a map that is gone with
+  // no word (a first visit offline): no alert, no error screen, and nothing waits for it.
   await expect.element(screen.getByRole("region", { name: fr.route.map })).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.route.mapUnavailable)).toBeVisible();
   await expect.element(screen.getByText(fr.common.loading)).not.toBeInTheDocument();
   await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
   expect(logged).toHaveBeenCalled();

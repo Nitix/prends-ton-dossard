@@ -131,8 +131,11 @@ export function noFormatChoice(
  *
  * On a format, « Terminé » and « Abandon » are only offered once its race has
  * started (`started`, see `raceStarted`): nobody has finished a race that has
- * not happened. The current `value` stays in the list all the same; a form
- * that lets the format change under it gives `allowedStatus` back as the value.
+ * not happened. Until then a sentence under the field says so (`afterRaceHint`,
+ * read with it), since two choices that are missing, or a status that went
+ * back to « Intéressé » with the format, would go without a word. The current
+ * `value` stays in the list all the same; a form that lets the format change
+ * under it gives `allowedStatus` back as the value.
  */
 export function StatusField({
   value,
@@ -159,7 +162,7 @@ export function StatusField({
       label={t.participation.status}
       value={lock ? lock.status : value}
       disabled={lock !== undefined}
-      hint={lock ? t.participation[lock.hint] : undefined}
+      hint={lock ? t.participation[lock.hint] : started ? undefined : t.participation.afterRaceHint}
       onChange={(next) => {
         if (isStatus(next)) onChange(next);
       }}

@@ -454,6 +454,34 @@ test("JoinDialog — avant le jour de la course, ni « Terminé » ni « Abandon
   expect(statusesOf(screen)).toEqual(BEFORE_RACES);
 });
 
+test("JoinDialog — avant le jour de la course, une phrase dit que « Terminé » et « Abandon » viendront, et décrit le champ du statut", async () => {
+  const { screen } = await renderDialog(nina, view, "2026-06-12");
+
+  // Without it, the two choices that are not there are missing with no word of why.
+  const hint = screen.getByText(fr.participation.afterRaceHint);
+  await expect.element(hint).toBeVisible();
+  expect(statusSelect(screen).element().getAttribute("aria-describedby")).toBe(hint.element().id);
+});
+
+test("JoinDialog — la phrase suit l'épreuve choisie : absente quand sa course a commencé, et quand le statut est verrouillé", async () => {
+  const { screen } = await renderDialog(nina, view, "2026-06-13");
+
+  // F15 is today: every status is offered, nothing to explain.
+  await expect.element(formatSelect(screen)).toHaveValue("f15");
+  expect(screen.container.textContent).not.toContain(fr.participation.afterRaceHint);
+  expect(statusSelect(screen).element().getAttribute("aria-describedby")).toBeNull();
+
+  // F42 is tomorrow.
+  await formatSelect(screen).selectOptions("f42");
+  await expect.element(screen.getByText(fr.participation.afterRaceHint)).toBeVisible();
+
+  // No race: the status is locked, and it is the sentence of the lock that
+  // goes with it, not this one.
+  await formatSelect(screen).selectOptions(UNDECIDED);
+  await expect.element(screen.getByText(fr.participation.undecidedHint)).toBeVisible();
+  expect(screen.container.textContent).not.toContain(fr.participation.afterRaceHint);
+});
+
 test("JoinDialog — le jour de la course, tous les statuts sont proposés", async () => {
   const { screen } = await renderDialog(nina, view, "2026-06-13");
 

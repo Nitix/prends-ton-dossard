@@ -230,6 +230,8 @@ export const fr = {
     supportOther: "Vient encourager",
     // Under the status when it cannot be chosen: a supporter comes to cheer without running.
     supportHint: "Un supporteur vient encourager sans courir.",
+    // Under the status of a race that has not started: the two choices that are missing.
+    afterRaceHint: "Terminé et Abandon seront proposés le jour de la course.",
     // The item of the menu of a participation on the event alone, and the title of its dialog.
     chooseFormat: "Choisir l'épreuve",
     chooseFormatTitle: "Choisir l'épreuve",
@@ -402,6 +404,8 @@ export const fr = {
     start: "Départ",
     finish: "Arrivée",
     unreadable: "Cette trace n'a pas pu être lue.",
+    // In the place of the map when it cannot be loaded (a first visit with no network, or a file that a deploy replaced).
+    mapUnavailable: "La carte n'est pas disponible pour l'instant.",
     // The links of the course: the file of the track, and the page of the course on a website.
     download: "Télécharger la trace",
     open: "Voir le parcours",

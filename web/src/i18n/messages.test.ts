@@ -375,3 +375,15 @@ describe("runner texts", () => {
     expect(en.runner.title).toBe("Runner");
   });
 });
+
+describe("the hint under the status of a race that has not started", () => {
+  test("French", () => {
+    expect(fr.participation.afterRaceHint).toBe(
+      "Terminé et Abandon seront proposés le jour de la course.",
+    );
+  });
+
+  test("English", () => {
+    expect(en.participation.afterRaceHint).toBe("Finished and DNF are offered on race day.");
+  });
+});
