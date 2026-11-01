@@ -185,39 +185,77 @@ Le tableau de bord dont parle cette section s'ouvre par le tunnel SSH (voir « T
 
 À tester une fois, sur des données de test, avant d'ouvrir le site au groupe.
 
-### Depuis le tableau de bord
+### Depuis le tableau de bord (à préférer)
 
-Quand l'application démarre encore :
+Quand l'application démarre encore, c'est le chemin le plus sûr : PocketBase décompresse l'archive à part et ne remplace les données que si elle est lisible, et il ne touche pas aux sauvegardes locales.
 
 1. Ouvrir le tableau de bord par le tunnel SSH (`http://localhost:8090/_/`, voir « Tableau de bord PocketBase »), sous Settings puis Backups.
-2. Choisir la sauvegarde dans la liste (elle vient du bucket si S3 est activé), puis « Restore », et confirmer en tapant son nom.
+2. Choisir la sauvegarde dans la liste (elle vient du bucket si S3 est activé), puis « Restore », et confirmer en tapant son nom. Une archive venue d'ailleurs (téléchargée du bucket, ou d'une autre machine) s'ajoute d'abord à la liste avec le bouton d'envoi de la même page.
 3. PocketBase remplace les données et redémarre seul.
 4. Vérifier (voir plus bas).
 
 ### À la main
 
-Quand l'application ne démarre plus, ou que le volume est perdu :
+Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les commandes se lancent dans le dossier de `compose.yaml`. Rien n'est effacé : les sauvegardes locales restent en place, et le contenu actuel du volume est mis de côté dans le volume même, dans `/pb_data/.before-restore/`.
 
-1. **Récupérer l'archive** (`.zip`) : depuis le bucket, ou, si S3 n'était pas activé, depuis le dossier `backups` du volume (`docker compose cp courses:/pb_data/backups/<fichier>.zip ./restore/`). La poser hors du volume, par exemple dans `./restore/` à côté de `compose.yaml`.
-2. **Arrêter le conteneur.**
+1. **Préparer un dossier hors du volume**, et y mettre une copie des sauvegardes locales (si le dossier `backups` existe dans le volume ; le conteneur doit exister, même arrêté) :
+
+   ```sh
+   mkdir -p restore
+   docker compose cp courses:/pb_data/backups ./restore/
+   ls restore/backups
+   ```
+
+2. **Poser l'archive à restaurer** (`.zip`) dans `restore/` : téléchargée depuis le bucket, ou copiée depuis `restore/backups/` si S3 n'était pas activé.
+
+3. **Arrêter le conteneur.**
 
    ```sh
    docker compose stop courses
    ```
-3. **Remplacer le contenu du volume par l'archive décompressée.** La commande vide le volume (sauvegardes locales comprises), décompresse l'archive, puis rend les fichiers à l'utilisateur du programme :
+
+4. **Tester l'archive, sans toucher au volume.** La commande la décompresse dans le `/tmp` d'un conteneur jetable, ce qui vérifie chaque fichier (une archive tronquée ou abîmée s'arrête sur une erreur, `crc error` ou `short read` par exemple), puis liste ce qu'elle contient :
+
+   ```sh
+   docker compose run --rm --no-deps --entrypoint sh \
+     -v "$PWD/restore:/restore:ro" courses \
+     -c 'unzip -q /restore/<fichier>.zip -d /tmp/check && ls -l /tmp/check'
+   ```
+
+   La liste doit montrer au moins `data.db` et `auxiliary.db`. Au moindre message d'erreur, s'arrêter là et prendre une autre archive : le volume n'a pas changé.
+
+5. **Mettre l'ancien contenu de côté et décompresser l'archive.** La commande crée `/pb_data/.before-restore/`, y déplace tout le contenu du volume sauf `backups/`, décompresse l'archive dans le volume, puis rend les fichiers à l'utilisateur du programme. Elle refuse de commencer si `.before-restore` existe déjà (reste d'une restauration précédente : le vider ou le renommer d'abord).
 
    ```sh
    docker compose run --rm --no-deps --user root --entrypoint sh \
-     -v "$PWD/restore:/restore:ro" courses \
-     -c 'rm -rf /pb_data/* && unzip /restore/<fichier>.zip -d /pb_data && chown -R courses /pb_data'
+     -v "$PWD/restore:/restore:ro" courses -c '
+       set -e
+       cd /pb_data
+       mkdir .before-restore
+       for f in *; do
+         [ -e "$f" ] || continue
+         [ "$f" = backups ] || mv "$f" .before-restore/
+       done
+       unzip -q /restore/<fichier>.zip -d /pb_data
+       chown -R courses /pb_data'
    ```
-4. **Redémarrer.**
+
+6. **Redémarrer.**
 
    ```sh
    docker compose up -d
    docker compose ps          # "healthy"
    ```
-5. **Vérifier** (voir ci-dessous).
+
+7. **Vérifier** (voir ci-dessous).
+
+8. **Faire le ménage**, une fois la restauration vérifiée. `.before-restore` est dans le volume : sans ce ménage, il entrerait dans les sauvegardes suivantes.
+
+   ```sh
+   docker compose exec courses rm -rf /pb_data/.before-restore
+   ```
+
+   Garder `restore/backups/` tant qu'une nouvelle sauvegarde n'a pas été faite. Si la restauration n'est pas bonne, l'ancien contenu est intact dans `/pb_data/.before-restore/` : arrêter le conteneur, mettre de côté le contenu restauré de la même façon (étape 5, avec un autre nom de dossier), puis remettre l'ancien avec `mv /pb_data/.before-restore/* /pb_data/`.
 
 ### Vérifier la restauration
 
