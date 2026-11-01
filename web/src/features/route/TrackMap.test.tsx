@@ -87,9 +87,9 @@ test("TrackMap — the track is drawn without tiles", async () => {
 
 test("TrackMap — the map is fitted to the track, with room around it", async () => {
   // 0.0279° of latitude are about 230 px at the zoom 13, in the 286 px of the
-  // map: it fits with 16 px all around (254 px), but not with the room that the
-  // labels and the attribution need above and below (202 px), so the map has to
-  // go down to the zoom 12.
+  // map: it fits with 16 px above and below (254 px), but not with the room that
+  // the labels and the attribution need (32 above and 52 below, 202 px left), so
+  // the map has to go down to the zoom 12.
   const tight = toTrack([
     { lat: 45, lon: 6 },
     { lat: 45.0279, lon: 6 },
@@ -98,9 +98,9 @@ test("TrackMap — the map is fitted to the track, with room around it", async (
 
   const map = screen.getByRole("region", { name: fr.route.map }).element().getBoundingClientRect();
   const track = part(screen, "path.track-line").getBoundingClientRect();
-  // All of the track is in the map, with room around it: 16 px at the sides, 32
-  // above and 52 below (the border is 1 px)...
-  expect(track.left).toBeGreaterThanOrEqual(map.left + 15);
+  // All of the track is in the map, with room around it: 72 px on the left (the
+  // zoom buttons), 16 on the right, 32 above and 52 below (the border is 1 px)...
+  expect(track.left).toBeGreaterThanOrEqual(map.left + 71);
   expect(track.right).toBeLessThanOrEqual(map.right - 15);
   expect(track.top).toBeGreaterThanOrEqual(map.top + 31);
   expect(track.bottom).toBeLessThanOrEqual(map.bottom - 51);
