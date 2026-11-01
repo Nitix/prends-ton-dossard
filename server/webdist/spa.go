@@ -26,6 +26,10 @@ import (
 // The service worker script and the manifest are files of the same kind (see
 // rootFiles): a 404 when they are missing, and the headers that the browser
 // needs when they are there.
+//
+// A built file that exists is sent with a year-long, immutable Cache-Control
+// (see fileDirs). Only a file that exists gets it: a browser that kept a 404
+// for a year would not see the chunk again when a rollback brings it back.
 func Register(app core.App, fsys fs.FS) {
 	spa := apis.Static(fsys, true)
 	files := apis.Static(fsys, false)
@@ -47,7 +51,12 @@ func Register(app core.App, fsys fs.FS) {
 				}
 				return files(re)
 			}
-			if inFileDir(path) {
+			if headers, ok := fileDirHeaders(path); ok {
+				if len(headers) > 0 && isFile(fsys, path) {
+					for name, value := range headers {
+						re.Response.Header().Set(name, value)
+					}
+				}
 				return files(re)
 			}
 			return spa(re)
@@ -58,19 +67,34 @@ func Register(app core.App, fsys fs.FS) {
 }
 
 // fileDirs are the directories, with their trailing slash and without the
-// leading one, where only files are served: the built files that Vite writes,
-// and the icons (public/icons).
-var fileDirs = []string{"assets/", "icons/"}
+// leading one, where only files are served, each with the headers that a file
+// that exists there is sent with.
+var fileDirs = map[string]map[string]string{
+	// The built files that Vite writes. It puts a hash of their content in
+	// their names, so a name never serves another content: browsers may keep
+	// them for a year.
+	"assets/": {"Cache-Control": "public, max-age=31536000, immutable"},
+	// The icons (public/icons). Their names carry no hash: a new icon replaces
+	// the old one, so they get no header.
+	"icons/": nil,
+}
 
-// inFileDir reports whether path, without its leading slash, is under one of
-// fileDirs.
-func inFileDir(path string) bool {
-	for _, dir := range fileDirs {
+// fileDirHeaders reports whether path, without its leading slash, is under one
+// of fileDirs, and returns the headers of that directory.
+func fileDirHeaders(path string) (map[string]string, bool) {
+	for dir, headers := range fileDirs {
 		if strings.HasPrefix(path, dir) {
-			return true
+			return headers, true
 		}
 	}
-	return false
+	return nil, false
+}
+
+// isFile reports whether path, without its leading slash, is a file of fsys
+// and not a directory.
+func isFile(fsys fs.FS, path string) bool {
+	info, err := fs.Stat(fsys, path)
+	return err == nil && !info.IsDir()
 }
 
 // rootFiles are the files at the root that the browser asks for by name, with

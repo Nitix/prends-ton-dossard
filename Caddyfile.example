@@ -16,10 +16,10 @@ courses.example.fr {
 	@pbadmin path /_/* /api/collections/_superusers/* /api/collections/pbc_3142635823/*
 	respond @pbadmin 404
 
-	# Vite puts a hash of their content in the names of the built files, so a
-	# name never serves another content: browsers may keep them for a year.
-	@assets path /assets/*
-	header @assets Cache-Control "public, max-age=31536000, immutable"
+	# No Cache-Control rule for /assets/* here: the program sets the year-long
+	# "immutable" header itself, only on a built file that exists. A rule on
+	# the path would also cover the 404 of a missing chunk, which a browser
+	# could then keep for a year.
 
 	reverse_proxy 127.0.0.1:8090
 }

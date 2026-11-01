@@ -104,9 +104,6 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
    	@pbadmin path /_/* /api/collections/_superusers/* /api/collections/pbc_3142635823/*
    	respond @pbadmin 404
 
-   	@assets path /assets/*
-   	header @assets Cache-Control "public, max-age=31536000, immutable"
-
    	reverse_proxy 127.0.0.1:8090
    }
    ```
@@ -117,7 +114,7 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
    curl -s -o /dev/null -w '%{http_code}\n' https://courses.example.fr/_/       # 404
    ```
 
-   Caddy obtient et renouvelle seul le certificat HTTPS. Le bloc compresse les réponses, laisse les navigateurs garder un an les fichiers de `/assets/` (leur nom change à chaque version), et **cache d'Internet le tableau de bord de PocketBase et la connexion de ses super-admins** : ils répondent 404 sur le domaine public, et s'ouvrent par un tunnel SSH (voir « Tableau de bord PocketBase », plus bas). `pbc_3142635823` est l'identifiant de la collection `_superusers` : l'API accepte l'identifiant d'une collection à la place de son nom, il faut donc bloquer les deux (un test du serveur vérifie cet identifiant).
+   Caddy obtient et renouvelle seul le certificat HTTPS. Le bloc compresse les réponses (le programme règle lui-même le `Cache-Control` d'un an des fichiers de `/assets/`, dont le nom change à chaque version, et seulement quand le fichier existe : une règle Caddy sur ce chemin s'appliquerait aussi au 404 d'un fichier absent), et **cache d'Internet le tableau de bord de PocketBase et la connexion de ses super-admins** : ils répondent 404 sur le domaine public, et s'ouvrent par un tunnel SSH (voir « Tableau de bord PocketBase », plus bas). `pbc_3142635823` est l'identifiant de la collection `_superusers` : l'API accepte l'identifiant d'une collection à la place de son nom, il faut donc bloquer les deux (un test du serveur vérifie cet identifiant).
 
    Le programme se fie à l'en-tête `X-Forwarded-For` (une migration le règle) pour reconnaître chaque visiteur : c'est ce qui donne à chacun sa propre limite de requêtes sur la connexion et les invitations, au lieu d'une limite partagée par tout le groupe. C'est sûr parce que le port du conteneur n'est publié que sur `127.0.0.1` et que Caddy remplace cet en-tête. **Ne jamais publier ce port sur une interface publique** (garder `127.0.0.1` dans `compose.yaml`) : n'importe qui pourrait alors choisir l'adresse qu'il présente, et contourner les limites.
 

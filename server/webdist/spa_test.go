@@ -274,6 +274,85 @@ func TestSPA_ServiceWorkerHeaders(t *testing.T) {
 	}
 }
 
+func TestSPA_AssetsCacheHeader(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":                    {Data: []byte(`<div id="root"></div>`)},
+		"assets/index-1a2b3c4d.js":      {Data: []byte("x")},
+		"assets/fonts/inter-9f8e.woff2": {Data: []byte("font")},
+		"icons/icon-192.png":            {Data: []byte("png-bytes")},
+	}
+
+	// cacheControl checks the Cache-Control header of the response.
+	cacheControl := func(want string) func(testing.TB, *tests.TestApp, *http.Response) {
+		return func(tb testing.TB, _ *tests.TestApp, res *http.Response) {
+			if got := res.Header.Get("Cache-Control"); got != want {
+				tb.Errorf("Cache-Control = %q, want %q", got, want)
+			}
+		}
+	}
+	const immutable = "public, max-age=31536000, immutable"
+
+	scenarios := []tests.ApiScenario{
+		{
+			// Vite puts a hash of the content in the name: browsers may keep
+			// the file for a year.
+			Name:            "an existing built file is kept for a year",
+			Method:          http.MethodGet,
+			URL:             "/assets/index-1a2b3c4d.js",
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"x"},
+			AfterTestFunc:   cacheControl(immutable),
+		},
+		{
+			Name:            "an existing nested built file is kept for a year",
+			Method:          http.MethodGet,
+			URL:             "/assets/fonts/inter-9f8e.woff2",
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"font"},
+			AfterTestFunc:   cacheControl(immutable),
+		},
+		{
+			// A browser that keeps a 404 for a year would not see the chunk
+			// again when a rollback brings it back.
+			Name:               "a missing built file is a 404 that is not kept",
+			Method:             http.MethodGet,
+			URL:                "/assets/old-chunk-1234.js",
+			ExpectedStatus:     http.StatusNotFound,
+			NotExpectedContent: []string{`id="root"`},
+			AfterTestFunc:      cacheControl(""),
+		},
+		{
+			// Their names carry no hash: a new icon replaces the old one.
+			Name:            "an icon is not kept for a year",
+			Method:          http.MethodGet,
+			URL:             "/icons/icon-192.png",
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"png-bytes"},
+			AfterTestFunc:   cacheControl(""),
+		},
+		{
+			Name:            "the app shell is not kept for a year",
+			Method:          http.MethodGet,
+			URL:             "/",
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{`id="root"`},
+			AfterTestFunc:   cacheControl(""),
+		},
+	}
+
+	for _, scenario := range scenarios {
+		scenario.TestAppFactory = func(tb testing.TB) *tests.TestApp {
+			app, err := tests.NewTestApp(tb.TempDir())
+			if err != nil {
+				tb.Fatalf("creating the test app: %v", err)
+			}
+			webdist.Register(app, fsys)
+			return app
+		}
+		scenario.Test(t)
+	}
+}
+
 func TestDist(t *testing.T) {
 	// The embedded directory always holds at least the .gitkeep placeholder,
 	// so that go:embed compiles on a fresh checkout. Dist must be rooted at
