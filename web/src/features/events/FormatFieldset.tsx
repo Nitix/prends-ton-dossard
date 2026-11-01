@@ -134,8 +134,13 @@ export function FormatFieldset({
     }
   }
 
-  /** « Annuler » under the track that is to be taken off: it stays. Its button is gone, the focus goes to the title of the format. */
+  /**
+   * « Annuler » under the track that is to be taken off: it stays. Its button is
+   * gone, the focus goes to the title of the format. The refusal of a file, which
+   * was about the choice that came with the removal, has nothing left to say.
+   */
   function keepTrack() {
+    setRefused(null);
     onChange({ gpx: { kind: "keep" } });
     title.current?.focus();
   }
@@ -280,8 +285,14 @@ export function FormatFieldset({
             />
           )}
         </Field>
-        {/* Always there, so that a screen reader says what is written in it when that changes. */}
-        <output id={statusId} className="text-sm text-neutral-700 empty:hidden">
+        {/*
+          Always in the page, and never `display: none`: such an element is not
+          in the accessibility tree, and a text that comes with its element is
+          often not read out, while this line is the only feedback that the file
+          was read. Empty, it is out of the flow (`sr-only`), so that it takes no
+          room, not even the gap of the column.
+        */}
+        <output id={statusId} className="text-sm text-neutral-700 empty:sr-only">
           {row.gpx.kind === "new" && read !== null
             ? read.min === undefined
               ? t.format.gpxReadDistance(f.km(read.km))

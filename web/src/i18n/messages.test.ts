@@ -336,6 +336,13 @@ describe("route texts", () => {
   });
 });
 
+describe("result texts", () => {
+  test("the number of finishers has a name of its own, in both languages", () => {
+    expect(fr.results.rankTotal).toBe("Nombre de classés");
+    expect(en.results.rankTotal).toBe("Number of finishers");
+  });
+});
+
 describe("install texts", () => {
   test("French", () => {
     expect(fr.install).toEqual({

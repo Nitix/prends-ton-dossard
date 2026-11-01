@@ -190,6 +190,7 @@ export const en = {
     secondsName: "seconds",
     rank: "Rank",
     rankOf: "out of",
+    rankTotal: "Number of finishers",
     note: "Note",
     noteHint: "Category, number of laps, why you stopped…",
     rankText: (rank: string, of?: string) => (of === undefined ? rank : `${rank} out of ${of}`),

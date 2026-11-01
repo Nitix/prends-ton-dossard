@@ -284,7 +284,7 @@ function ResultForm({
                 onChange={(event) => {
                   change({ rankOf: event.target.value });
                 }}
-                aria-label={`${t.results.rank}, ${t.results.rankOf}`}
+                aria-label={t.results.rankTotal}
                 aria-describedby={rankDescribedBy}
                 aria-invalid={error("rank_of") !== null}
                 className={`${INPUT} w-24`}

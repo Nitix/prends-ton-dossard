@@ -242,6 +242,8 @@ export const fr = {
     rank: "Classement",
     // Between the rank and the number of people ranked: "12e sur 340".
     rankOf: "sur",
+    // The accessible name of the field of that number: « sur » alone says nothing to a screen reader, and the field is not in the legend's words.
+    rankTotal: "Nombre de classés",
     note: "Note",
     noteHint: "Catégorie, nombre de boucles, raison d'un abandon…",
     // On the row: the rank is already an ordinal ("12e"); the number of people ranked is not always known.

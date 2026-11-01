@@ -1,3 +1,4 @@
+import type { Lang } from "../../i18n/detect";
 import type { EventView } from "../events/api";
 
 // The calendar file of one event, made in the browser for a calendar app to
@@ -110,9 +111,16 @@ function stampValue(instant: Temporal.Instant): string {
 /**
  * The iCalendar file of an event: one `VEVENT` on its days, with its place and
  * the address of its page on the site at `appURL`, as of the moment `now`,
- * which is its `DTSTAMP`. An empty place is left out.
+ * which is its `DTSTAMP`. An empty place is left out. `lang` is the language
+ * of the site, which the `PRODID` says (`FR` or `EN`), as the feed of the
+ * server does.
  */
-export function eventIcs(view: EventView, appURL: string, now: Temporal.Instant): string {
+export function eventIcs(
+  view: EventView,
+  appURL: string,
+  now: Temporal.Instant,
+  lang: Lang,
+): string {
   const { event, start, end } = view;
   const address = `${appURL}/evenements/${event.id}`;
   const lines: string[] = [];
@@ -125,8 +133,7 @@ export function eventIcs(view: EventView, appURL: string, now: Temporal.Instant)
 
   line("BEGIN", "VCALENDAR");
   line("VERSION", "2.0");
-  // The language of the texts: there is none that the site wrote.
-  line("PRODID", "-//Prends ton dossard//");
+  line("PRODID", `-//Prends ton dossard//${lang.toUpperCase()}`);
   line("CALSCALE", "GREGORIAN");
   line("BEGIN", "VEVENT");
   line("UID", textValue(uid(event.id)));
@@ -160,10 +167,11 @@ export function icsFileName(eventName: string, fallback: string): string {
 /**
  * Saves the calendar file of the event: the browser is handed a file made on
  * the spot, through a link that is clicked and let go. `fallbackName` names the
- * file when the name of the event gives nothing (see `icsFileName`).
+ * file when the name of the event gives nothing (see `icsFileName`), and `lang`
+ * is the language of the site (see `eventIcs`).
  */
-export function downloadEventIcs(view: EventView, fallbackName: string): void {
-  const ics = eventIcs(view, location.origin, Temporal.Now.instant());
+export function downloadEventIcs(view: EventView, fallbackName: string, lang: Lang): void {
+  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang);
   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;

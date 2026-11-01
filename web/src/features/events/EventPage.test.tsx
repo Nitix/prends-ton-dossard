@@ -1120,6 +1120,7 @@ test("EventPage — « Ajouter à mon agenda » télécharge un .ics", async () 
   expect(lines).toEqual(
     expect.arrayContaining([
       "BEGIN:VCALENDAR",
+      "PRODID:-//Prends ton dossard//FR",
       "BEGIN:VEVENT",
       "UID:event-event@prends-ton-dossard",
       "DTSTART;VALUE=DATE:20260613",
@@ -1155,6 +1156,18 @@ test("EventPage — le fichier d'un événement dont le nom n'a rien d'utilisabl
   await loaded(english.screen, "???");
   await english.screen.getByRole("button", { name: "Add to my calendar" }).click();
   expect(downloads.map(({ name }) => name)).toEqual(["evenement.ics", "event.ics"]);
+});
+
+test("EventPage — en anglais, le fichier .ics a le PRODID //EN", async () => {
+  const downloads = watchDownloads();
+  const { screen } = await renderPage({ languages: ["en-GB"] });
+  await loaded(screen);
+
+  await screen.getByRole("button", { name: "Add to my calendar" }).click();
+
+  expect(downloads).toHaveLength(1);
+  const response = await fetch(downloads[0]?.href ?? "");
+  expect((await response.text()).split("\r\n")).toContain("PRODID:-//Prends ton dossard//EN");
 });
 
 test("EventPage — les boutons d'action font au moins 44 px", async () => {

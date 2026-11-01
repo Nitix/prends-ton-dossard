@@ -197,7 +197,7 @@ function RegisterLink({ href, className }: { href: string; className?: string })
 }
 
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
-  const { t, f } = useI18n();
+  const { t, f, lang } = useI18n();
   const today = useToday();
   // The title describes « Ajouter quelqu'un » of the page, which the offers have a button of the same name to put someone in a car.
   const titleId = useId();
@@ -278,7 +278,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
         <button
           type="button"
           onClick={() => {
-            downloadEventIcs(view, t.event.calendarFileName);
+            downloadEventIcs(view, t.event.calendarFileName, lang);
           }}
           className={SECONDARY}
         >

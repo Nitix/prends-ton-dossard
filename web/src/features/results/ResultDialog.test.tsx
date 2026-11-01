@@ -91,8 +91,7 @@ const minutes = (screen: Screen) =>
 const seconds = (screen: Screen) =>
   screen.getByLabelText(`${fr.results.time}, ${fr.results.secondsName}`);
 const rank = (screen: Screen) => screen.getByLabelText(fr.results.rank, { exact: true });
-const rankOf = (screen: Screen) =>
-  screen.getByLabelText(`${fr.results.rank}, ${fr.results.rankOf}`, { exact: true });
+const rankOf = (screen: Screen) => screen.getByLabelText(fr.results.rankTotal, { exact: true });
 const note = (screen: Screen) => screen.getByLabelText(fr.results.note, { exact: true });
 const save = (screen: Screen) => screen.getByRole("button", { name: fr.results.save });
 
@@ -117,6 +116,32 @@ async function fillWholeResult(screen: Screen) {
   await rankOf(screen).fill("340");
   await note(screen).fill("3e V1H");
 }
+
+test("ResultDialog — les deux champs du classement ont un nom qui se comprend seul, « sur » reste affiché", async () => {
+  const { screen } = await renderDialog();
+
+  // « Classement, sur » read out says nothing: the second field is the number of finishers.
+  expect(fr.results.rankTotal).toBe("Nombre de classés");
+  await expect
+    .element(screen.getByRole("spinbutton", { name: "Classement", exact: true }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("spinbutton", { name: "Nombre de classés", exact: true }))
+    .toBeVisible();
+  // The words between the two fields are for the eyes only: the layout is the same.
+  await expect.element(screen.getByText(fr.results.rankOf, { exact: true })).toBeVisible();
+  expect(screen.getByRole("spinbutton", { name: /sur/ }).elements()).toHaveLength(0);
+});
+
+test("ResultDialog — en anglais, « Number of finishers »", async () => {
+  const { screen } = await renderDialog({ languages: ["en"] });
+
+  await expect.element(screen.getByRole("spinbutton", { name: "Rank", exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByRole("spinbutton", { name: "Number of finishers", exact: true }))
+    .toBeVisible();
+  await expect.element(screen.getByText("out of", { exact: true })).toBeVisible();
+});
 
 test("ResultDialog — envoie statut, temps, rang, nombre et note", async () => {
   const { screen, onClose, invalidate } = await renderDialog();
@@ -488,12 +513,12 @@ test("ResultDialog — une participation introuvable (404) le dit dans un messag
   expect(keys).toContainEqual(["event", "event"]);
 });
 
-test("ResultDialog — en anglais : Time, Rank, out of, Note", async () => {
+test("ResultDialog — en anglais : Time, Rank, Number of finishers, Note", async () => {
   const { screen } = await renderDialog({ participation: finished, languages: ["en"] });
 
   await expect.element(screen.getByLabelText("Time, hours")).toHaveValue(4);
   await expect.element(screen.getByLabelText("Rank", { exact: true })).toHaveValue(12);
-  await expect.element(screen.getByLabelText("Rank, out of")).toHaveValue(340);
+  await expect.element(screen.getByLabelText("Number of finishers")).toHaveValue(340);
   await expect.element(screen.getByLabelText("Note", { exact: true })).toHaveValue("3e V1H");
   await expect.element(screen.getByRole("button", { name: "Save" })).toBeVisible();
 });

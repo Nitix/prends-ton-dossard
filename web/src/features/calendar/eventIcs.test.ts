@@ -29,7 +29,7 @@ function unfold(ics: string): string[] {
 
 /** The DTSTAMP of the file of an event, made at that instant. */
 function stamp(instant: string): string | undefined {
-  return properties(eventIcs(viewOf(), APP_URL, Temporal.Instant.from(instant))).DTSTAMP;
+  return properties(eventIcs(viewOf(), APP_URL, Temporal.Instant.from(instant), "fr")).DTSTAMP;
 }
 
 /** The value of each property of the event, by name, after unfolding. */
@@ -44,14 +44,14 @@ function properties(ics: string): Record<string, string> {
 
 describe("eventIcs", () => {
   test("eventIcs — un VEVENT sur les jours de l'événement, avec son adresse", () => {
-    const ics = eventIcs(viewOf(), APP_URL, now());
+    const ics = eventIcs(viewOf(), APP_URL, now(), "fr");
 
     // The event runs on the 13th and the 14th: the end is the day after, since
     // the end of an event of whole days is exclusive.
     expect(ics).toBe(
       "BEGIN:VCALENDAR\r\n" +
         "VERSION:2.0\r\n" +
-        "PRODID:-//Prends ton dossard//\r\n" +
+        "PRODID:-//Prends ton dossard//FR\r\n" +
         "CALSCALE:GREGORIAN\r\n" +
         "BEGIN:VEVENT\r\n" +
         "UID:event-event@prends-ton-dossard\r\n" +
@@ -67,9 +67,19 @@ describe("eventIcs", () => {
     );
   });
 
+  test("eventIcs — la langue est celle du PRODID : FR ou EN, comme dans le flux du serveur", () => {
+    expect(properties(eventIcs(viewOf(), APP_URL, now(), "fr")).PRODID).toBe(
+      "-//Prends ton dossard//FR",
+    );
+    const english = eventIcs(viewOf(), APP_URL, now(), "en");
+    expect(properties(english).PRODID).toBe("-//Prends ton dossard//EN");
+    // Nothing else depends on the language: the texts are the event's own.
+    expect(english.replace("//EN", "//FR")).toBe(eventIcs(viewOf(), APP_URL, now(), "fr"));
+  });
+
   test("eventIcs — un événement d'un jour s'arrête le lendemain, même au passage d'une année", () => {
     // No end date: one day, which ends on the next.
-    const oneDay = properties(eventIcs(viewOf({}, event2Record), APP_URL, now()));
+    const oneDay = properties(eventIcs(viewOf({}, event2Record), APP_URL, now(), "fr"));
     expect(oneDay["DTSTART;VALUE=DATE"]).toBe("20260622");
     expect(oneDay["DTEND;VALUE=DATE"]).toBe("20260623");
     expect(oneDay.SUMMARY).toBe("10 km de Lyon");
@@ -77,7 +87,7 @@ describe("eventIcs", () => {
     expect(oneDay.URL).toBe("https://courses.example.test/evenements/event2");
 
     const overTheYear = properties(
-      eventIcs(viewOf({ start_date: "2026-12-30", end_date: "2026-12-31" }), APP_URL, now()),
+      eventIcs(viewOf({ start_date: "2026-12-30", end_date: "2026-12-31" }), APP_URL, now(), "fr"),
     );
     expect(overTheYear["DTSTART;VALUE=DATE"]).toBe("20261230");
     expect(overTheYear["DTEND;VALUE=DATE"]).toBe("20270101");
@@ -89,7 +99,7 @@ describe("eventIcs", () => {
   });
 
   test("eventIcs — sans lieu, pas de LOCATION", () => {
-    const ics = eventIcs(viewOf({ location: "" }), APP_URL, now());
+    const ics = eventIcs(viewOf({ location: "" }), APP_URL, now(), "fr");
 
     expect(ics).not.toContain("LOCATION");
     // The rest is still there.
@@ -104,6 +114,7 @@ describe("eventIcs", () => {
       }),
       APP_URL,
       now(),
+      "fr",
     );
 
     // A comma, a semicolon, a backslash and a line break would split the value
@@ -120,7 +131,7 @@ describe("eventIcs", () => {
     // 'é' is 2 octets, '·' 2, '🏃' 4 (a pair of UTF-16 units) and the space 1: the
     // cut falls at several places of the title, inside a character if it is not careful.
     const name = `Trail des Crêtes ${"é·🏃 ".repeat(40)}fin`;
-    const ics = eventIcs(viewOf({ name }), APP_URL, now());
+    const ics = eventIcs(viewOf({ name }), APP_URL, now(), "fr");
 
     const encoder = new TextEncoder();
     const physical = lines(ics);
@@ -136,13 +147,13 @@ describe("eventIcs", () => {
   test("eventIcs — une ligne de 75 octets pile n'est pas repliée, une de 76 l'est", () => {
     // "SUMMARY:" is 8 octets: 67 more make 75.
     const name = "x".repeat(67);
-    const ics = eventIcs(viewOf({ name }), APP_URL, now());
+    const ics = eventIcs(viewOf({ name }), APP_URL, now(), "fr");
 
     expect(lines(ics)).toContain(`SUMMARY:${name}`);
     expect(properties(ics).SUMMARY).toBe(name);
 
     // One octet too many: the last character goes to a line of its own.
-    const longer = eventIcs(viewOf({ name: `${name}y` }), APP_URL, now());
+    const longer = eventIcs(viewOf({ name: `${name}y` }), APP_URL, now(), "fr");
     expect(lines(longer)).toContain(`SUMMARY:${name}`);
     expect(lines(longer)).toContain(" y");
     expect(properties(longer).SUMMARY).toBe(`${name}y`);
@@ -155,6 +166,7 @@ describe("eventIcs", () => {
       viewOf({ name: "a\u0000b\u0007c\u007Fd\te\rf", location: "g\u001Bh" }),
       APP_URL,
       now(),
+      "fr",
     );
 
     const found = properties(ics);
@@ -171,14 +183,14 @@ describe("eventIcs", () => {
   test("eventIcs — l'adresse ne peut pas ouvrir une propriété de plus, ni garder une tabulation", () => {
     // The URL of the page is a value that is not escaped: a line break in the
     // address of the site would start a line of its own.
-    const ics = eventIcs(viewOf(), "https://courses.example.test\t\r\nATTENDEE:evil", now());
+    const ics = eventIcs(viewOf(), "https://courses.example.test\t\r\nATTENDEE:evil", now(), "fr");
 
     expect(unfold(ics).some((line) => line.startsWith("ATTENDEE"))).toBe(false);
     expect(properties(ics).URL).toBe("https://courses.example.testATTENDEE:evil/evenements/event");
   });
 
   test("eventIcs — la moitié d'une paire de substitution devient U+FFFD, comme un octet de travers côté serveur", () => {
-    const ics = eventIcs(viewOf({ name: "Trail \uD83C" }), APP_URL, now());
+    const ics = eventIcs(viewOf({ name: "Trail \uD83C" }), APP_URL, now(), "fr");
 
     expect(properties(ics).SUMMARY).toBe("Trail �");
   });

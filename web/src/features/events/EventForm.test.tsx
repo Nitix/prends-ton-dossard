@@ -1856,6 +1856,45 @@ test("EventForm — choisir un fichier puis « Retirer la trace » garde la trac
   expect(mocks.updateFormat).not.toHaveBeenCalled();
 });
 
+test("EventForm — le message de la trace est dans la page dès le départ, vide mais pas masqué, pour être annoncé quand il s'écrit", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+
+  // Found by its role: an element that is not drawn (display: none) is not in
+  // the accessibility tree, and a text that comes with its element is often not
+  // read out. The message is the only feedback that the file was read.
+  const status = row.getByRole("status");
+  await expect.element(status).toBeInTheDocument();
+  const element = status.element();
+  expect(getComputedStyle(element).display).not.toBe("none");
+  expect(element.textContent).toBe("");
+  // Empty, it takes no room: the gaps of the fields around it are the same.
+  expect(element.getBoundingClientRect().height).toBeLessThanOrEqual(1);
+
+  await gpxField(row).upload(gpxFile());
+
+  // The reading is written in the same element, which is what a screen reader watches.
+  await expect.element(trackRead(row)).toBeVisible();
+  expect(row.getByRole("status").element()).toBe(element);
+  expect(element.textContent).toMatch(/^(Trace|Track) ?: /);
+});
+
+test("EventForm — « Annuler » sous un retrait en attente efface aussi le message d'un fichier refusé", async () => {
+  withTrack();
+  const { screen } = await renderEdit();
+  const row = format(screen, 1);
+  await removeTrack(row).click();
+  await gpxField(row).upload(gpxFile("ceci n'est pas une trace", "notes.gpx"));
+  await expect.element(row.getByText(fr.route.unreadable)).toBeVisible();
+
+  await undo(row).click();
+
+  // The removal is cancelled, and a refusal of a file that is not there any more has nothing to say.
+  await expect.element(row.getByText(fr.route.unreadable)).not.toBeInTheDocument();
+  await expect.element(row.getByText(fr.format.gpxRemoved)).not.toBeInTheDocument();
+  await expect.element(formatTitleOf(row)).toHaveFocus();
+});
+
 test("EventForm — un fichier illisible, ou trop lourd, laisse le retrait en attente comme il était", async () => {
   withTrack();
   const { screen, router } = await renderEdit();
