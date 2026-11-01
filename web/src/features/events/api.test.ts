@@ -1,6 +1,15 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "vitest";
 
-import { applyFilters, eventsFilter, sortEvents, toEventViews, type EventView } from "./api";
+import { RESULTS_KEY } from "../stats/stats";
+import {
+  applyFilters,
+  eventsFilter,
+  invalidateEvents,
+  sortEvents,
+  toEventViews,
+  type EventView,
+} from "./api";
 import {
   bobRunner as bob,
   event2Record as event2,
@@ -296,5 +305,21 @@ describe("applyFilters", () => {
 
   test("an empty criterion is no criterion", () => {
     expect(ids(applyFilters(views(), { personne: "", type: "" }))).toEqual(["event", "event2"]);
+  });
+});
+
+describe("invalidateEvents", () => {
+  test("invalidateEvents — les résultats des statistiques et des pages de coureurs sont redemandés", async () => {
+    const queryClient = new QueryClient();
+    const keys = [
+      [...RESULTS_KEY, "all"],
+      [...RESULTS_KEY, bob.id],
+    ];
+    for (const key of keys) queryClient.setQueryData(key, []);
+
+    // A result entered, or a status changed, changes the totals of the year and the history of the runner.
+    await invalidateEvents(queryClient, "event");
+
+    expect(keys.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toEqual([true, true]);
   });
 });

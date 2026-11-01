@@ -223,6 +223,32 @@ export const fr = {
     dnf: "Abandon",
     dns: "Pas parti",
   },
+  // The statistics of a year, worked out from the results (see features/stats).
+  stats: {
+    title: "Statistiques",
+    yearTitle: (year: number) => `Statistiques ${year}`,
+    // The accessible names of the two arrows around the year.
+    previousYear: "Année précédente",
+    nextYear: "Année suivante",
+    // The headers of the columns of the tables (here, and the year by year of a runner).
+    year: "Année",
+    runner: "Coureur",
+    finished: "Terminées",
+    dnf: "Abandons",
+    km: "Km",
+    elevation: "D+",
+    time: "Temps",
+    empty: "Aucun résultat cette année.",
+    // The link to the page, from the profile and from the list of the past events.
+    link: "Statistiques",
+  },
+  // The page of a runner: what is to come, the years, and what was run (see features/runners).
+  runner: {
+    upcoming: "À venir",
+    years: "Bilan par année",
+    history: "Historique",
+    noHistory: "Pas encore de résultat.",
+  },
   // The comments of an event, at the bottom of its page (see features/comments).
   comments: {
     // The title while the comments load or fail to load (the count is not known), and with the count.

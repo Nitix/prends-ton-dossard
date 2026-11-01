@@ -127,8 +127,13 @@ async function renderList(url = "/liste", languages = ["fr"], today = TODAY) {
     path: "/evenements/$id",
     component: () => <p>Fiche</p>,
   });
+  const stats = createRoute({
+    getParentRoute: () => root,
+    path: "/stats",
+    component: () => <p>Page des statistiques</p>,
+  });
   const router = createRouter({
-    routeTree: root.addChildren([list, eventPage]),
+    routeTree: root.addChildren([list, eventPage, stats]),
     history: createMemoryHistory({ initialEntries: [url] }),
   });
   const screen = await render(
@@ -208,6 +213,36 @@ test("ListPage — les événements passés vont du plus récent au plus ancien"
   const options = mocks.events.mock.calls[0]?.[0];
   expect(options?.sort).toBe("-start_date");
   expect(options?.filter).toContain("start_date < {:t}");
+});
+
+test("ListPage — le lien « Statistiques » est en haut de la vue « passées », et pas dans la vue à venir", async () => {
+  mocks.events.mockResolvedValue([pastEvent]);
+
+  const past = await renderList("/liste?periode=passees");
+  await expect.element(past.screen.getByText("Cross de Mai")).toBeVisible();
+  const link = past.screen.getByRole("link", { name: fr.stats.link });
+  expect(link.element().getAttribute("href")).toBe("/stats");
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  // At the top: before the filters and the events.
+  const title = past.screen.getByRole("heading", { level: 1 }).element();
+  const filters = past.screen.getByRole("group").element();
+  expect(
+    title.compareDocumentPosition(link.element()) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    link.element().compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  await link.click();
+  await expect.element(past.screen.getByText("Page des statistiques")).toBeVisible();
+  await past.screen.unmount();
+
+  // The events to come have nothing to count yet.
+  mocks.events.mockResolvedValue([eventRecord, event2Record]);
+  const upcoming = await renderList();
+  await expect.element(upcoming.screen.getByText("Trail des Crêtes")).toBeVisible();
+  await expect
+    .element(upcoming.screen.getByRole("link", { name: fr.stats.link }))
+    .not.toBeInTheDocument();
 });
 
 test("ListPage — les mois passés sont du plus récent au plus ancien", async () => {

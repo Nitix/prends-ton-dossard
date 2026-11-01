@@ -598,7 +598,16 @@ function ParticipantRow({
           className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
         />
         <div className="min-w-0">
-          <p className="font-medium break-words">{runner.name}</p>
+          {/* The name leads to the page of the runner, with their results. */}
+          <p className="font-medium break-words">
+            <Link
+              to="/coureurs/$id"
+              params={{ id: runner.id }}
+              className="flex min-h-11 items-center underline-offset-2 hover:underline"
+            >
+              {runner.name}
+            </Link>
+          </p>
           {detail !== undefined && <p className="text-sm break-words text-neutral-600">{detail}</p>}
           {!confirmed && (
             <p className="text-sm text-neutral-600">

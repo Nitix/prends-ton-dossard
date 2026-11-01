@@ -69,11 +69,6 @@ function upcomingOf(views: EventView[], runnerId: string, today: Temporal.PlainD
  * « Mes prochaines courses »: what the runner of the user is down for in the
  * events that are to come, with the days left. `runnerId` is not known while
  * the runner of the user loads.
- *
- * A participation the user has not confirmed is here too, dashed and said in
- * words: it is part of their plans until they refuse it. So is one with no
- * format yet, which says « Format à choisir » where the format would be, and a
- * supporter, who has no format to choose: its status says it all.
  */
 export function MyUpcoming({
   views,
@@ -83,19 +78,54 @@ export function MyUpcoming({
   runnerId: string | undefined;
 }) {
   const { t } = useI18n();
+
+  return (
+    <UpcomingSection
+      views={views}
+      runnerId={runnerId}
+      title={t.home.upcomingTitle}
+      empty={t.home.upcomingEmpty}
+    />
+  );
+}
+
+/**
+ * The races a runner is down for in the events that are to come, with the days
+ * left, under `title`. `empty` is what is said when there are none: without
+ * it, a runner who has none has no section (the page of another runner has
+ * nothing to tell the user to do about it).
+ *
+ * A participation the runner has not confirmed is here too, dashed and said in
+ * words: it is part of their plans until they refuse it. So is one with no
+ * format yet, which says « Format à choisir » where the format would be, and a
+ * supporter, who has no format to choose: its status says it all.
+ */
+export function UpcomingSection({
+  views,
+  runnerId,
+  title,
+  empty,
+}: {
+  views: EventView[];
+  runnerId: string | undefined;
+  title: string;
+  empty?: string;
+}) {
+  const { t } = useI18n();
   const today = useToday();
   const headingId = useId();
   const rows = runnerId === undefined ? undefined : upcomingOf(views, runnerId, today);
+  if (rows?.length === 0 && empty === undefined) return null;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
       <h2 id={headingId} className="text-lg font-semibold">
-        {t.home.upcomingTitle}
+        {title}
       </h2>
       {rows === undefined ? (
         <output>{t.common.loading}</output>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-neutral-600">{t.home.upcomingEmpty}</p>
+        <p className="text-sm text-neutral-600">{empty}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (

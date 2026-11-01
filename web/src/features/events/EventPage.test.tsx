@@ -194,8 +194,13 @@ async function renderPage(
     path: "/liste",
     component: () => <p>Page de la liste</p>,
   });
+  const runnerPage = createRoute({
+    getParentRoute: () => root,
+    path: "/coureurs/$id",
+    component: () => <p>Page d'un coureur</p>,
+  });
   const router = createRouter({
-    routeTree: root.addChildren([eventPage, edit, list]),
+    routeTree: root.addChildren([eventPage, edit, list, runnerPage]),
     history: createMemoryHistory({ initialEntries: [`/evenements/${id}`] }),
   });
   const screen = await render(
@@ -611,6 +616,62 @@ test("EventPage — une ligne de participant montre la photo à côté du nom, a
   // The row still says that it is not confirmed, in words and in dashes.
   await expect.element(bobRow.getByText("ajouté par Alice · non confirmé")).toBeVisible();
   expect(getComputedStyle(bobRow.element()).borderStyle).toBe("dashed");
+});
+
+test("EventPage — le nom d'un participant mène à sa page", async () => {
+  const { screen, router } = await renderPage();
+  await loaded(screen);
+
+  // Each runner of the formats is a link, on their name: a tap target of its own.
+  const link = row(screen, "Alice").getByRole("link", { name: "Alice" });
+  await expect.element(link).toHaveAttribute("href", `/coureurs/${aliceRunner.id}`);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  await expect
+    .element(row(screen, "Bob").getByRole("link", { name: "Bob" }))
+    .toHaveAttribute("href", `/coureurs/${bobRunner.id}`);
+  // What the row says besides the name is not part of the link.
+  await expect
+    .element(row(screen, "Bob").getByRole("link", { name: /non confirmé/ }))
+    .not.toBeInTheDocument();
+
+  await link.click();
+
+  await expect.element(screen.getByText("Page d'un coureur")).toBeVisible();
+  expect(router.state.location.pathname).toBe(`/coureurs/${aliceRunner.id}`);
+});
+
+test("EventPage — le nom d'un participant est un lien dans chaque liste: intéressés, supporteurs et non partants", async () => {
+  const dora = { ...base, id: "doraRunner00000", name: "Dora", user: "" };
+  const pDora = {
+    ...pNinaSupporter,
+    id: "pDora",
+    runner: dora.id,
+    added_by: dora.id,
+    expand: { runner: dora, added_by: dora },
+  };
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        // Sam does not start; Nina is interested with no format; Dora comes to cheer.
+        participations_via_event: [p1, p2, { ...p3, status: "dns" }, pNinaUndecided, pDora],
+      },
+    },
+  });
+  await loaded(screen);
+
+  // The list of those who do not start is closed: its links are in the page all the same.
+  const hrefs = [...screen.container.querySelectorAll("a")]
+    .map((link) => link.getAttribute("href") ?? "")
+    .filter((href) => href.startsWith("/coureurs/"));
+  // One link a runner, none twice.
+  expect(hrefs).toHaveLength(5);
+  expect(new Set(hrefs)).toEqual(
+    new Set(
+      [aliceRunner, bobRunner, samRunner, ninaRunner, dora].map(({ id }) => `/coureurs/${id}`),
+    ),
+  );
 });
 
 test("EventPage — sans photo, la ligne a les initiales avant le nom, cachées aux lecteurs d'écran", async () => {

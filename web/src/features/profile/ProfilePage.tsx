@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { RecordAuthResponse } from "pocketbase";
 import { useActionState } from "react";
 
 import { AvatarPicker } from "../../components/AvatarPicker";
+import { SECONDARY } from "../../components/buttons";
 import { TextField } from "../../components/TextField";
 import { useToast } from "../../components/Toast";
 import { translateError } from "../../i18n/errors";
@@ -19,8 +21,9 @@ const BUTTON =
 
 /**
  * The profile of the signed-in user: the photo and the name the group sees,
- * the email and the password of the account, the passkeys, and the sign-out.
- * The app shell around it owns the page's `<main>`.
+ * the email and the password of the account, the passkeys, the link to the
+ * statistics, and the sign-out. The app shell around it owns the page's
+ * `<main>`.
  */
 export function ProfilePage() {
   const { t } = useI18n();
@@ -51,6 +54,9 @@ export function ProfilePage() {
         <PasswordForm user={user} />
       </Section>
       <PasskeyList userId={user.id} />
+      <Link to="/stats" className={`${SECONDARY} inline-flex items-center self-start`}>
+        {t.stats.link}
+      </Link>
       <button
         type="button"
         onClick={logout}

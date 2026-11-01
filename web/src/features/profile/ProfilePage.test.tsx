@@ -1,4 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
 import { beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
@@ -140,18 +148,38 @@ function fieldRefusal(field: string, code: string) {
   return refusal(400, { [field]: { code, message: "…" } });
 }
 
-async function renderProfile() {
-  const screen = await render(
+/** The page, in a router that knows the page of the statistics, which it links to. */
+function mountProfile() {
+  const root = createRootRoute({ component: Outlet });
+  const profile = createRoute({
+    getParentRoute: () => root,
+    path: "/profil",
+    component: ProfilePage,
+  });
+  const stats = createRoute({
+    getParentRoute: () => root,
+    path: "/stats",
+    component: () => <p>Page des statistiques</p>,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([profile, stats]),
+    history: createMemoryHistory({ initialEntries: ["/profil"] }),
+  });
+  return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <I18nProvider languages={["fr"]}>
         <ToastProvider>
-          <ProfilePage />
+          <RouterProvider router={router} />
         </ToastProvider>
       </I18nProvider>
     </QueryClientProvider>,
   );
+}
+
+async function renderProfile() {
+  const screen = await mountProfile();
   // Once the runner is there, the name form is.
   await expect
     .element(screen.getByLabelText(fr.profile.name, { exact: true }))
@@ -201,6 +229,30 @@ test("ProfilePage — montre le nom, l'email actuel et les sections", async () =
   await expect.element(section(screen, fr.passkeys.title)).toBeVisible();
 });
 
+test("ProfilePage — le lien « Statistiques » est avant la déconnexion", async () => {
+  const screen = await renderProfile();
+
+  const link = screen.getByRole("link", { name: fr.stats.link });
+  await expect.element(link).toBeVisible();
+  expect(link.element().getAttribute("href")).toBe("/stats");
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  // Last of the page but the sign-out button.
+  const logout = screen.getByRole("button", { name: fr.profile.logout }).element();
+  expect(link.element().compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  const lastButtons = screen
+    .getByRole("button")
+    .elements()
+    .filter(
+      (button) => link.element().compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  expect(lastButtons).toEqual([logout]);
+
+  await link.click();
+  await expect.element(screen.getByText("Page des statistiques")).toBeVisible();
+});
+
 test("ProfilePage — se déconnecter vide la session", async () => {
   const screen = await renderProfile();
 
@@ -230,17 +282,7 @@ test("ProfilePage — les boutons et les champs font au moins 44 px de haut", as
 test("ProfilePage — la section Photo propose de changer ma photo, et pas de bouton tant que mon coureur charge", async () => {
   // The runner of the session is not there yet.
   mocks.getFirstListItem.mockReturnValue(new Promise(() => {}));
-  const screen = await render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <I18nProvider languages={["fr"]}>
-        <ToastProvider>
-          <ProfilePage />
-        </ToastProvider>
-      </I18nProvider>
-    </QueryClientProvider>,
-  );
+  const screen = await mountProfile();
 
   const photo = section(screen, fr.avatar.title);
   await expect.element(photo.getByText(fr.common.loading)).toBeVisible();

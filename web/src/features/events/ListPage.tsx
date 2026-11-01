@@ -1,5 +1,7 @@
+import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { groupByMonth } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
@@ -22,7 +24,15 @@ export function ListPage({ search }: { search: ListSearch }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t.nav.list}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{t.nav.list}</h1>
+        {/* The past events are the ones that have results: the statistics are one tap away. */}
+        {period === "passees" && (
+          <Link to="/stats" className={`${SECONDARY} inline-flex items-center`}>
+            {t.stats.link}
+          </Link>
+        )}
+      </div>
       <Filters search={search} />
       {events.isError ? (
         <div className="flex flex-col gap-3">
