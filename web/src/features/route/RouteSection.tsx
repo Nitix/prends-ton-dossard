@@ -66,7 +66,9 @@ function Track({ points }: { points: TrackPoint[] }) {
   const altitude =
     min === undefined || max === undefined ? null : t.route.altitude(f.meters(min), f.meters(max));
 
-  // The numbers as tiles; the separators stay in the text, for a screen reader.
+  // The numbers as tiles; the separators stay in the text, for a screen reader,
+  // and so does the space before "D+" (at the start of its line in the tile, the
+  // space does not show).
   const parts = summary.split(SEPARATOR);
 
   return (
@@ -84,7 +86,7 @@ function Track({ points }: { points: TrackPoint[] }) {
                 {value}
               </span>
               {suffix !== undefined && (
-                <span className="text-xs font-bold text-iris-700">{suffix.trim()}</span>
+                <span className="text-xs font-bold text-iris-700">{suffix}</span>
               )}
             </span>
           );
