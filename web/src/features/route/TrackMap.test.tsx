@@ -1,5 +1,5 @@
 import { Map as LeafletMap } from "leaflet";
-import type { ComponentProps } from "react";
+import { StrictMode, type ComponentProps } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
@@ -115,6 +115,31 @@ test("TrackMap — the map is fitted to the track, with room around it", async (
   expect(track.height / (map.height - 84)).toBeGreaterThan(0.5);
 });
 
+const overlap = (a: DOMRect, b: DOMRect) =>
+  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+test("TrackMap — the zoom buttons never cover the start or the finish", async () => {
+  // 0.0824° of longitude are about 240 px at the zoom 12, in a map of 340 px: the
+  // track fits with 16 px at the sides, and its north-west end would be 49 px from
+  // the left edge, under the buttons, which cover the corner. The map has to
+  // leave room for them.
+  const northWest = { lat: 45.02, lon: 6 };
+  const southEast = { lat: 45, lon: 6.0824 };
+
+  for (const [mark, points] of [
+    ["start", toTrack([northWest, southEast])],
+    ["finish", toTrack([southEast, northWest])],
+  ] as const) {
+    const screen = await render(<div style={{ width: 340 }}>{mapOf({ points })}</div>);
+    await expect.element(screen.getByRole("region", { name: fr.route.map })).toBeVisible();
+
+    const buttons = part(screen, ".leaflet-control-zoom").getBoundingClientRect();
+    const dot = part(screen, `path.track-${mark}`).getBoundingClientRect();
+    expect(overlap(dot, buttons), `the ${mark} is under the zoom buttons`).toBe(false);
+    await screen.unmount();
+  }
+});
+
 test("TrackMap — the track stays drawn when no tile can be loaded", async () => {
   // A picture that cannot be read: every tile fails, as when the phone is offline.
   const screen = await renderMap({ tileUrl: "data:image/png;base64,AAAA" });
@@ -204,15 +229,21 @@ test("TrackMap — a named region with the attribution", async () => {
 
   // The region is the map; the attribution of the tiles is in it, with its links.
   const region = screen.getByRole("region", { name: fr.route.map });
+  const openStreetMap = region.getByRole("link", { name: "OpenStreetMap" });
+  const openTopoMap = region.getByRole("link", { name: "OpenTopoMap" });
+  const license = region.getByRole("link", { name: "CC-BY-SA" });
+  for (const link of [openStreetMap, openTopoMap, license]) {
+    await expect.element(link).toBeVisible();
+  }
   await expect
-    .element(region.getByRole("link", { name: "OpenStreetMap" }))
+    .element(openStreetMap)
     .toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
+  await expect.element(openTopoMap).toHaveAttribute("href", "https://opentopomap.org");
   await expect
-    .element(region.getByRole("link", { name: "OpenTopoMap" }))
-    .toHaveAttribute("href", "https://opentopomap.org");
-  await expect
-    .element(region.getByRole("link", { name: "CC-BY-SA" }))
+    .element(license)
     .toHaveAttribute("href", expect.stringContaining("creativecommons.org/licenses/by-sa"));
+  // Leaflet's own link (in English, in the same tab) is not there: the attribution is the tiles'.
+  await expect.element(region.getByRole("link", { name: "Leaflet" })).not.toBeInTheDocument();
   expect(region.element().querySelector(".leaflet-control-attribution")?.textContent).toContain(
     "© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)",
   );
@@ -299,4 +330,79 @@ test("TrackMap — in English, the texts are English", async () => {
   await expect.element(region.getByRole("button", { name: "Zoom out" })).toBeVisible();
   await expect.element(region.getByText("Start", { exact: true })).toBeVisible();
   await expect.element(region.getByText("Finish", { exact: true })).toBeVisible();
+});
+
+test("TrackMap — in StrictMode, there is one map and no error", async () => {
+  // StrictMode runs the effect, cleans it up, and runs it again: the second map
+  // must be made on the container that the first one left.
+  const error = vi.spyOn(console, "error");
+  const screen = await render(<StrictMode>{mapOf()}</StrictMode>);
+  await expect.element(screen.getByRole("region", { name: fr.route.map })).toBeVisible();
+
+  expect(screen.container.querySelectorAll(".leaflet-container")).toHaveLength(1);
+  part(screen, "path.track-line");
+  part(screen, "path.track-start");
+  part(screen, "path.track-finish");
+  expect(error).not.toHaveBeenCalled();
+});
+
+/** The browser says that the user asks for less motion, or not. */
+function prefersReducedMotion(reduced: boolean) {
+  const matchMedia = window.matchMedia.bind(window);
+  // The answer is a real list of media queries: one that always (`all`) or never (`not all`) matches.
+  vi.spyOn(window, "matchMedia").mockImplementation((query) =>
+    matchMedia(
+      query.includes("prefers-reduced-motion: reduce") ? (reduced ? "all" : "not all") : query,
+    ),
+  );
+}
+
+test("TrackMap — with reduced motion, the map does not animate", async () => {
+  prefersReducedMotion(true);
+  const screen = await renderMap();
+
+  // Leaflet marks what it animates: the fade of the tiles, the zoom, the zoom of the markers.
+  expect(part(screen, ".leaflet-container").classList.contains("leaflet-fade-anim")).toBe(false);
+  expect(screen.container.querySelectorAll(".leaflet-proxy")).toHaveLength(0);
+  expect(part(screen, ".leaflet-marker-pane").classList.contains("leaflet-zoom-hide")).toBe(true);
+
+  // The zoom is made at once: the track is bigger when the click is over.
+  const line = part(screen, "path.track-line");
+  const before = line.getBoundingClientRect().height;
+  await screen.getByRole("button", { name: fr.route.zoomIn }).click();
+  expect(line.getBoundingClientRect().height).toBeGreaterThan(before * 1.5);
+});
+
+test("TrackMap — without the preference, the map animates", async () => {
+  prefersReducedMotion(false);
+  const screen = await renderMap();
+
+  expect(part(screen, ".leaflet-container").classList.contains("leaflet-fade-anim")).toBe(true);
+  expect(screen.container.querySelectorAll(".leaflet-proxy")).toHaveLength(1);
+  expect(part(screen, ".leaflet-marker-pane").classList.contains("leaflet-zoom-hide")).toBe(false);
+});
+
+test("TrackMap — a map removed in the middle of a zoom leaves nothing that fails later", async () => {
+  // Leaflet ends an animated zoom with a timer of 250 ms that it does not cancel
+  // when the map is removed, and that then works on a map that is gone.
+  prefersReducedMotion(false);
+  const failures: string[] = [];
+  const onError = (event: ErrorEvent) => {
+    failures.push(event.message);
+    event.preventDefault();
+  };
+  window.addEventListener("error", onError);
+  try {
+    const screen = await renderMap();
+    await screen.getByRole("button", { name: fr.route.zoomIn }).click();
+    // The animation is on its way...
+    await expect.poll(() => screen.container.querySelector(".leaflet-zoom-anim")).not.toBeNull();
+    // ... when the map goes away (the person leaves the page): the timer is due after that.
+    await screen.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  } finally {
+    window.removeEventListener("error", onError);
+  }
+
+  expect(failures).toEqual([]);
 });

@@ -20,9 +20,8 @@ vi.mock("../../lib/pb", () => ({ pb: { files: { getURL: mocks.getURL } } }));
 
 // The map of a track is the real one, with blank tiles: no test asks a tile server for a tile.
 vi.mock("./TrackMap", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./TrackMap")>();
-  const { withBlankTiles } = await import("../../test/tiles");
-  return { ...actual, default: withBlankTiles(actual.default) };
+  const { blankTileModule } = await import("../../test/tiles");
+  return blankTileModule(importOriginal);
 });
 
 const TRACK_URL = "https://pb.example.test/api/files/formats/f42/trace_ab12cd.gpx";

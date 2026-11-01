@@ -13,6 +13,7 @@ import { useEffect, useRef } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
+import { TILE_HOST } from "./tileHost";
 
 // Leaflet and its styles are only imported here, and this module only by
 // `React.lazy` (see RouteSection): they make a chunk of their own, loaded on the
@@ -21,7 +22,7 @@ import "leaflet/dist/leaflet.css";
 import "./TrackMap.css";
 
 /** The tiles of OpenTopoMap: a topographic map, with contour lines. `{s}` is one of the `subdomains`. */
-export const TILE_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
+export const TILE_URL = `https://{s}.tile.${TILE_HOST}/{z}/{x}/{y}.png`;
 
 /**
  * What the map says about where it comes from, as HTML (Leaflet takes it so):
@@ -36,12 +37,20 @@ export const TILE_ATTRIBUTION = [
 /** OpenTopoMap has no tile closer than this. */
 const MAX_ZOOM = 17;
 
-// The room kept around the track when the map is fitted to it, in pixels: 16 on
-// the sides; more above, for the words beside the start, and below, for the
-// attribution (two lines on a phone) and the words beside the finish, which
-// would cover the end of the track.
-const PADDING_TOP_LEFT: PointTuple = [16, 32];
+// The room kept around the track when the map is fitted to it, in pixels:
+// - on the left, 72, for the zoom buttons: they end 60 px from the edge (a margin
+//   of 10, 44 of button, the borders), and the biggest dot, the finish (10 px and
+//   a ring of 1), must be clear of them, whichever end of the track is at the
+//   north-west;
+// - above, 32, for the words beside the start;
+// - below, 52, for the attribution (two lines on a phone) and the words beside
+//   the finish, which would cover the end of the track;
+// - on the right, 16.
+const PADDING_TOP_LEFT: PointTuple = [72, 32];
 const PADDING_BOTTOM_RIGHT: PointTuple = [16, 52];
+
+/** The user asks the system for less motion. */
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 // The colours of the track and of its two ends. The start and the finish also
 // differ by their size (the start is a dot in the ring of the finish, so both
@@ -94,12 +103,19 @@ export default function TrackMap({
     const last = points.at(-1);
     if (container === null || first === undefined || last === undefined) return undefined;
 
-    // The zoom control is added below, to be in the language of the page.
+    // The zoom control is added below, to be in the language of the page. With
+    // less motion asked for, nothing is animated: not the zoom, not the fade of
+    // the tiles, not the zoom of the markers (otherwise Leaflet decides for each browser).
+    const calm = window.matchMedia(REDUCED_MOTION).matches;
     const map = createMap(container, {
       scrollWheelZoom: false,
       maxZoom: MAX_ZOOM,
       zoomControl: false,
+      ...(calm ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {}),
     });
+    // Leaflet's own link (in English, and in the same tab) is left out: what the
+    // map says about itself is the attribution of its tiles.
+    map.attributionControl.setPrefix(false);
     control.zoom({ zoomInTitle: zoomIn, zoomOutTitle: zoomOut }).addTo(map);
     tileLayer(tileUrl, {
       subdomains: "abc",
@@ -134,6 +150,12 @@ export default function TrackMap({
       paddingBottomRight: PADDING_BOTTOM_RIGHT,
     });
     return () => {
+      // Leaflet 1.9.4 ends an animated zoom with a timer of 250 ms that
+      // `remove()` does not cancel, and that fails on the map once it is gone (the
+      // person leaves the page just after a click on a zoom button). The first
+      // thing that the timer looks at is the flag below: it does nothing without it.
+      // It is a private flag of that exact version, which the package.json pins.
+      Object.assign(map, { _animatingZoom: false });
       map.remove();
     };
   }, [points, tileUrl, zoomIn, zoomOut, start, finish]);

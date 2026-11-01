@@ -42,6 +42,10 @@ export default defineConfig({
       },
       {
         extends: true,
+        // Leaflet is only reached through the lazy map: without this, a cache made
+        // before it was installed finds it during a run, optimizes it, and reloads
+        // a test ("Vite unexpectedly reloaded a test").
+        optimizeDeps: { include: ["leaflet"] },
         test: {
           name: "browser",
           include: ["src/**/*.test.tsx"],

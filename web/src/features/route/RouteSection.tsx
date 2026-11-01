@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Component, lazy, Suspense, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -11,6 +11,23 @@ import { MAP_BOX } from "./mapBox";
 
 // The map brings Leaflet along: it is loaded when a track is shown, not with the page.
 const TrackMap = lazy(() => import("./TrackMap"));
+
+/**
+ * A map that fails (its chunk does not load, after a deploy or with the network
+ * gone, or Leaflet throws) is no map: the page keeps the numbers, the profile
+ * and the links, rather than the error screen of the router.
+ */
+class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 
 /** What stands in the place of the map while it loads: a box of its size, so that the page does not jump. */
 function MapLoading() {
@@ -41,9 +58,11 @@ function Track({ points }: { points: TrackPoint[] }) {
     <>
       <p>{summary}</p>
       {altitude !== null && <p className="text-sm text-neutral-600">{altitude}</p>}
-      <Suspense fallback={<MapLoading />}>
-        <TrackMap points={points} />
-      </Suspense>
+      <MapBoundary>
+        <Suspense fallback={<MapLoading />}>
+          <TrackMap points={points} />
+        </Suspense>
+      </MapBoundary>
       <ElevationProfile
         points={points}
         label={altitude === null ? t.route.profileLabel : `${t.route.profileLabel}, ${altitude}`}

@@ -12,13 +12,26 @@ export const BLANK_TILE =
 type MapProps = ComponentProps<typeof TrackMapComponent>;
 
 /**
- * The map of a track, drawing blank tiles. A test of a page that shows a track
- * mocks `./TrackMap` with it (`vi.mock`, using the original module), so that
- * the test still goes through the real map, loaded as it is in the app, but
- * never asks the tile server for a tile.
+ * The module `./TrackMap`, as a test of a page that shows a track has it: the
+ * real map, loaded as it is in the app, but drawing blank tiles, so that the
+ * test never asks the tile server for a tile. `original` is the
+ * `importOriginal` of the `vi.mock` factory, which cannot use an import (it is
+ * hoisted above them):
+ *
+ *     vi.mock("./TrackMap", async (importOriginal) => {
+ *       const { blankTileModule } = await import("../../test/tiles");
+ *       return blankTileModule(importOriginal);
+ *     });
  */
-export function withBlankTiles(TrackMap: ComponentType<MapProps>): ComponentType<MapProps> {
-  return function MapWithBlankTiles(props) {
-    return <TrackMap {...props} tileUrl={BLANK_TILE} />;
+export async function blankTileModule<M extends { default: ComponentType<MapProps> }>(
+  original: () => Promise<M>,
+): Promise<M> {
+  const actual = await original();
+  const TrackMap = actual.default;
+  return {
+    ...actual,
+    default: function MapWithBlankTiles(props: MapProps) {
+      return <TrackMap {...props} tileUrl={BLANK_TILE} />;
+    },
   };
 }

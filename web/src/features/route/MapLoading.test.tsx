@@ -23,10 +23,9 @@ vi.mock("../../lib/pb", () => ({
 // The real map, with blank tiles (no test asks a tile server for a tile), which
 // arrives when the test opens the gate.
 vi.mock("./TrackMap", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./TrackMap")>();
-  const { withBlankTiles } = await import("../../test/tiles");
+  const { blankTileModule } = await import("../../test/tiles");
   await gate.promise;
-  return { ...actual, default: withBlankTiles(actual.default) };
+  return blankTileModule(importOriginal);
 });
 
 const TRACK = `<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="45" lon="6"><ele>450</ele></trkpt><trkpt lat="45.01" lon="6"><ele>650</ele></trkpt></trkseg></trk></gpx>`;

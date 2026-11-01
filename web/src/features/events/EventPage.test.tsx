@@ -97,9 +97,8 @@ vi.mock("../../lib/pb", () => ({
 
 // The map of a track is the real one, with blank tiles: no test asks a tile server for a tile.
 vi.mock("../route/TrackMap", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../route/TrackMap")>();
-  const { withBlankTiles } = await import("../../test/tiles");
-  return { ...actual, default: withBlankTiles(actual.default) };
+  const { blankTileModule } = await import("../../test/tiles");
+  return blankTileModule(importOriginal);
 });
 
 const base = { created: "", updated: "", collectionId: "", collectionName: "" };
