@@ -15,6 +15,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { buttonOf, clickTwice } from "../../test/busyButton";
 import { pixelURL } from "../../test/images";
 import { EVENT_EXPAND } from "../events/api";
 import {
@@ -134,8 +135,14 @@ beforeEach(() => {
   mocks.results.mockResolvedValue(aliceResults);
 });
 
-async function renderRunner(id: string = aliceRunner.id) {
+/**
+ * `kept` is the list of the runners that an earlier page left in the cache of
+ * the app (it is good for 5 minutes): the page does not ask for it again, unless
+ * the runner it is about is not in it.
+ */
+async function renderRunner(id: string = aliceRunner.id, kept?: Rec[], ageMs = 0) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (kept) queryClient.setQueryData(["runners"], kept, { updatedAt: Date.now() - ageMs });
   const root = createRootRoute({ component: Outlet });
   const runner = createRoute({
     getParentRoute: () => root,
@@ -306,6 +313,57 @@ test("RunnerPage — un coureur inconnu", async () => {
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.not_found);
   await expect.element(screen.getByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  // The list was fetched for this page: it is not asked for again.
+  expect(mocks.runners).toHaveBeenCalledOnce();
+});
+
+test("RunnerPage — un coureur arrivé depuis la liste gardée : la liste est redemandée une fois, puis sa page s'affiche", async () => {
+  // Alice has joined since: the copy that was kept does not have her, the server does.
+  const { screen } = await renderRunner(aliceRunner.id, [bobRunner, samRunner]);
+
+  await expect.element(screen.getByRole("heading", { level: 1, name: "Alice" })).toBeVisible();
+  await expect.element(section(screen, fr.runner.history)).toBeVisible();
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+  expect(mocks.runners).toHaveBeenCalledOnce();
+});
+
+test("RunnerPage — pendant qu'on redemande la liste, la page se charge, elle ne dit pas « Introuvable »", async () => {
+  const answer = Promise.withResolvers<unknown>();
+  mocks.runners.mockReturnValue(answer.promise);
+
+  const { screen } = await renderRunner(aliceRunner.id, [bobRunner, samRunner]);
+
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+  answer.resolve([aliceRunner, bobRunner, samRunner]);
+  await expect.element(screen.getByRole("heading", { level: 1, name: "Alice" })).toBeVisible();
+});
+
+test("RunnerPage — toujours absent de la liste redemandée : « Introuvable », sans la redemander encore", async () => {
+  mocks.runners.mockResolvedValue([bobRunner, samRunner]);
+
+  const { screen } = await renderRunner(aliceRunner.id, [bobRunner, samRunner]);
+
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.not_found);
+  await expect.element(screen.getByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  expect(mocks.runners).toHaveBeenCalledOnce();
+});
+
+test("RunnerPage — une liste gardée trop vieille est déjà redemandée à l'ouverture : pas une demande de plus", async () => {
+  // Older than the 5 minutes it is good for: the page asks for it as it opens.
+  const { screen } = await renderRunner(aliceRunner.id, [bobRunner, samRunner], 10 * 60_000);
+
+  await expect.element(screen.getByRole("heading", { level: 1, name: "Alice" })).toBeVisible();
+  expect(mocks.runners).toHaveBeenCalledOnce();
+});
+
+test("RunnerPage — un coureur qui est dans la liste gardée ne la fait pas redemander", async () => {
+  mocks.results.mockResolvedValue([]);
+
+  const { screen } = await renderRunner(bobRunner.id, [aliceRunner, bobRunner]);
+
+  await expect.element(screen.getByRole("heading", { level: 1, name: "Bob" })).toBeVisible();
+  expect(mocks.runners).not.toHaveBeenCalled();
 });
 
 test("RunnerPage — le chargement se dit", async () => {
@@ -314,6 +372,10 @@ test("RunnerPage — le chargement se dit", async () => {
   const { screen } = await renderRunner();
 
   await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  // The page already has its title, which the focus can go to, whatever happens next.
+  await expect
+    .element(screen.getByRole("heading", { level: 1, name: fr.runner.title }))
+    .toBeVisible();
 });
 
 test("RunnerPage — une erreur sur les résultats se dit, avec « Réessayer », sous le nom", async () => {
@@ -337,4 +399,62 @@ test("RunnerPage — une erreur sur la liste des coureurs se dit aussi", async (
   mocks.runners.mockResolvedValue([aliceRunner]);
   await screen.getByRole("button", { name: fr.common.retry }).click();
   await expect.element(screen.getByRole("heading", { level: 1, name: "Alice" })).toBeVisible();
+});
+
+test("RunnerPage — « Réessayer » sur la liste des coureurs : le focus est sur le titre de la page, puis sur le nom", async () => {
+  mocks.runners.mockRejectedValue(new ClientResponseError({ status: 500, response: {} }));
+  const { screen } = await renderRunner();
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  // No name to show yet: the page has a title all the same, which takes the focus.
+  const title = screen.getByRole("heading", { level: 1 });
+  await expect.element(title).toHaveTextContent(fr.runner.title);
+  const answer = Promise.withResolvers<unknown>();
+  mocks.runners.mockReturnValue(answer.promise);
+
+  await screen.getByRole("button", { name: fr.common.retry }).click();
+
+  // The block goes with the request: the focus is on the title, not on the page.
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: fr.common.retry }))
+    .not.toBeInTheDocument();
+  await expect.element(title).toHaveFocus();
+  answer.resolve([aliceRunner]);
+  // It is the same title: it keeps the focus and takes the name of the runner.
+  await expect.element(title).toHaveTextContent("Alice");
+  await expect.element(title).toHaveFocus();
+  expect(title.element().getAttribute("tabindex")).toBe("-1");
+});
+
+test("RunnerPage — « Réessayer » sur les résultats : le focus est sur le nom du coureur", async () => {
+  mocks.results.mockRejectedValue(new ClientResponseError({ status: 500, response: {} }));
+  const { screen } = await renderRunner();
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  const title = screen.getByRole("heading", { level: 1, name: "Alice" });
+  const answer = Promise.withResolvers<unknown>();
+  mocks.results.mockReturnValue(answer.promise);
+
+  await screen.getByRole("button", { name: fr.common.retry }).click();
+
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  await expect.element(title).toHaveFocus();
+  answer.resolve(aliceResults);
+  await expect.element(section(screen, fr.runner.history)).toBeVisible();
+  await expect.element(title).toHaveFocus();
+});
+
+test("RunnerPage — « Réessayer » n'est pas désactivé et un double appui ne redemande qu'une fois", async () => {
+  mocks.runners.mockRejectedValue(new ClientResponseError({ status: 500, response: {} }));
+  const { screen } = await renderRunner();
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  const button = buttonOf(screen.getByRole("button", { name: fr.common.retry }));
+  expect(button.disabled).toBe(false);
+  expect(mocks.runners).toHaveBeenCalledOnce();
+  mocks.runners.mockReturnValue(new Promise(() => {}));
+
+  clickTwice(button);
+
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  // The first request, and one more.
+  expect(mocks.runners).toHaveBeenCalledTimes(2);
 });

@@ -15,6 +15,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { buttonOf, clickTwice } from "../../test/busyButton";
 import {
   aliceRunner,
   bobRunner,
@@ -236,6 +237,8 @@ test("StatsPage — « Aucun résultat cette année. »", async () => {
   const { screen } = await renderStats();
 
   await expect.element(screen.getByText(fr.stats.empty)).toBeVisible();
+  // Said to a screen reader, as the arrows change the year without moving the focus.
+  await expect.element(screen.getByRole("status")).toHaveTextContent(fr.stats.empty);
   // No table to read when there is nothing in it, but the arrows to go and look elsewhere.
   await expect.element(screen.getByRole("table")).not.toBeInTheDocument();
   await expect.element(screen.getByRole("link", { name: fr.stats.previousYear })).toBeVisible();
@@ -280,4 +283,57 @@ test("StatsPage — une erreur se dit, avec « Réessayer »", async () => {
   mocks.results.mockResolvedValue([alice42]);
   await screen.getByRole("button", { name: fr.common.retry }).click();
   await expect.element(screen.getByRole("table")).toBeVisible();
+});
+
+test("StatsPage — « Réessayer » donne le focus au titre de la page, avant et après la réponse", async () => {
+  mocks.results.mockRejectedValue(new ClientResponseError({ status: 500, response: {} }));
+  const { screen } = await renderStats();
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  const title = screen.getByRole("heading", { level: 1, name: fr.stats.yearTitle(2026) });
+  const answer = Promise.withResolvers<unknown>();
+  mocks.results.mockReturnValue(answer.promise);
+
+  await screen.getByRole("button", { name: fr.common.retry }).click();
+
+  // The block goes with the request: the focus is on the title, not on the page.
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: fr.common.retry }))
+    .not.toBeInTheDocument();
+  await expect.element(title).toHaveFocus();
+  answer.resolve([alice42]);
+  await expect.element(screen.getByRole("table")).toBeVisible();
+  await expect.element(title).toHaveFocus();
+  expect(title.element().getAttribute("tabindex")).toBe("-1");
+});
+
+test("StatsPage — « Réessayer » n'est pas désactivé et un double appui ne redemande qu'une fois", async () => {
+  mocks.results.mockRejectedValue(new ClientResponseError({ status: 500, response: {} }));
+  const { screen } = await renderStats();
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  const button = buttonOf(screen.getByRole("button", { name: fr.common.retry }));
+  expect(button.disabled).toBe(false);
+  expect(mocks.results).toHaveBeenCalledOnce();
+  mocks.results.mockReturnValue(new Promise(() => {}));
+
+  clickTwice(button);
+
+  await expect.element(screen.getByText(fr.common.loading)).toBeVisible();
+  // The first request, and one more.
+  expect(mocks.results).toHaveBeenCalledTimes(2);
+});
+
+test("StatsPage — une erreur qui revient après « Réessayer » se dit, avec le focus sur le titre", async () => {
+  mocks.results.mockRejectedValue(new ClientResponseError({ status: 500, response: {} }));
+  const { screen } = await renderStats();
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+
+  await screen.getByRole("button", { name: fr.common.retry }).click();
+
+  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expect.element(screen.getByRole("button", { name: fr.common.retry })).toBeVisible();
+  await expect
+    .element(screen.getByRole("heading", { level: 1, name: fr.stats.yearTitle(2026) }))
+    .toHaveFocus();
+  expect(mocks.results).toHaveBeenCalledTimes(2);
 });

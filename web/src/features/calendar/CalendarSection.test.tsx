@@ -349,6 +349,49 @@ test("CalendarSection — un statut qu'on n'a pas pu lire le dit, et on peut ré
   await expect.element(section(screen).getByRole("alert")).not.toBeInTheDocument();
 });
 
+test("CalendarSection — un statut illisible relu par la fenêtre, sans « Réessayer », ne déplace pas le focus", async () => {
+  mocks.send.mockRejectedValueOnce(new TypeError("network"));
+  const screen = await mount();
+  await expect.element(section(screen).getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  const heading = section(screen).getByRole("heading", { name: fr.calendar.title });
+
+  // The window gets the focus again: the status is read again by itself, and it comes.
+  serve({ exists: true });
+  window.dispatchEvent(new Event("visibilitychange"));
+
+  await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
+  // Nobody asked for it: the page is not scrolled to the title, which has not taken the focus.
+  expect(document.activeElement).not.toBe(heading.element());
+  expect(document.activeElement).toBe(document.body);
+});
+
+test("CalendarSection — « Réessayer » : le focus est sur le titre dès l'appui, un double appui ne redemande qu'une fois", async () => {
+  mocks.send.mockRejectedValueOnce(new TypeError("network"));
+  const screen = await mount();
+  await expect.element(section(screen).getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  const reads = () =>
+    mocks.send.mock.calls.filter(([, request]) => request.method === "GET").length;
+  expect(reads()).toBe(1);
+  const answer = Promise.withResolvers<unknown>();
+  mocks.send.mockReturnValue(answer.promise);
+  const retry = buttonOf(button(screen, fr.common.retry));
+  expect(retry.disabled).toBe(false);
+
+  clickTwice(retry);
+
+  await expect.element(section(screen).getByText(fr.common.loading)).toBeVisible();
+  await expect
+    .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
+    .toHaveFocus();
+  // The first read, and one more.
+  expect(reads()).toBe(2);
+  answer.resolve({ exists: true });
+  await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
+  await expect
+    .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
+    .toHaveFocus();
+});
+
 test("CalendarSection — créer : un seul envoi, le bouton dit qu'il travaille sans perdre le focus, et un refus se lit et se réessaie", async () => {
   serve({ exists: false });
   const screen = await mount();

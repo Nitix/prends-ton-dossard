@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } fr
 
 import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
+import { LoadFailure } from "../../components/LoadFailure";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
@@ -21,10 +22,12 @@ type Asking = "renew" | "remove";
  * delete it, each after a confirmation.
  *
  * The focus never falls to the page. A new link takes it, selected, as the
- * next thing to do is to copy it; when the link is deleted, or the status could
- * not be read and was asked for again, the button that had it goes, and the
- * title of the section takes it; cancelling a confirmation gives it back to the
- * button that opened it.
+ * next thing to do is to copy it; when the link is deleted, the button that had
+ * it goes, and the title of the section takes it; when the status could not be
+ * read and the member asks again, the title takes it as they tap (see
+ * `LoadFailure`), and not when the status comes back, which can be on its own
+ * when the window is focused again: the page must not scroll to the title then;
+ * cancelling a confirmation gives it back to the button that opened it.
  */
 export function CalendarSection() {
   const { t, lang } = useI18n();
@@ -56,8 +59,6 @@ export function CalendarSection() {
   useRestoreFocus(asking !== null, () =>
     opener.current?.isConnected ? opener.current : heading.current,
   );
-  // The button to read the status again is gone as soon as the request starts.
-  useRestoreFocus(unreadable, () => heading.current);
 
   const open = (event: { currentTarget: HTMLElement }, which: Asking) => {
     opener.current = event.currentTarget;
@@ -111,20 +112,7 @@ export function CalendarSection() {
         </>
       )}
       {link === null && status.data?.exists === false && <CreateLink make={makeLink} />}
-      {link === null && unreadable && (
-        <div className="flex flex-col gap-3">
-          <p role="alert" className="text-sm font-medium text-red-700">
-            {t.errors.generic}
-          </p>
-          <button
-            type="button"
-            onClick={() => void status.refetch()}
-            className={`${SECONDARY} self-start`}
-          >
-            {t.common.retry}
-          </button>
-        </div>
-      )}
+      {link === null && unreadable && <LoadFailure onRetry={status.refetch} heading={heading} />}
       {link === null && status.data === undefined && !unreadable && (
         <output>{t.common.loading}</output>
       )}

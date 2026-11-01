@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { useId } from "react";
+import { useEffect, useId, useRef, type RefObject } from "react";
 
 import { Avatar } from "../../components/Avatar";
-import { SECONDARY } from "../../components/buttons";
+import { LoadFailure } from "../../components/LoadFailure";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { RunnerRecord } from "../../lib/types";
 import { useToday } from "../../lib/useToday";
@@ -15,100 +15,111 @@ import { TotalsTable } from "../stats/TotalsTable";
 
 const SEPARATOR = " · ";
 
-/** A failed request: the message, and the button that asks again. */
-function Failure({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
-  const { t } = useI18n();
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p role="alert" className="text-sm font-medium text-red-700">
-        {t.errors.generic}
-      </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={retrying}
-        className={`${SECONDARY} self-start disabled:opacity-60`}
-      >
-        {t.common.retry}
-      </button>
-    </div>
-  );
-}
-
 /**
  * The page of a runner: their photo and name, what they are down for in the
  * events to come, their results year by year, then every race they started.
  * The runners come from the list the filters use, which everybody may read. The
  * app shell around it owns the page's `<main>`.
+ *
+ * The title is the one element that stays from the first draw to the last: the
+ * name of the runner once it is known, the word « Runner » before. A failure
+ * that is asked for again gives it the focus (see `LoadFailure`), so that the
+ * focus never falls to the page, whichever request failed.
  */
 export function RunnerPage({ id }: { id: string }) {
   const { t } = useI18n();
   const runners = useRunners();
+  const heading = useRef<HTMLHeadingElement>(null);
   const runner = runners.data?.find((candidate) => candidate.id === id);
 
-  // A refresh that fails keeps what the page already shows.
-  if (runner) return <RunnerContent runner={runner} />;
-  if (runners.isError) {
-    return (
-      <Failure
-        onRetry={() => {
-          void runners.refetch();
-        }}
-        retrying={runners.isFetching}
-      />
-    );
-  }
+  // The list is kept for a few minutes (see `useRunners`): a runner who joined
+  // since is not in the copy that was kept, and every name on the site is a link
+  // to their page. Ask again once before saying there is no such runner, unless
+  // the copy was fetched for this page, which makes it as fresh as it gets.
+  const outdated = runners.data !== undefined && !runner && !runners.isFetchedAfterMount;
+  const asked = useRef<string | null>(null);
+  const refetch = runners.refetch;
+  const fetching = runners.isFetching;
+  useEffect(() => {
+    // A copy that is too old is asked for as the page opens: that one is the request.
+    if (!outdated || fetching || asked.current === id) return;
+    asked.current = id;
+    void refetch();
+  }, [outdated, fetching, id, refetch]);
+
   // The list is there and the runner is not in it: gone, or never was.
-  if (runners.data) {
+  if (runners.data && !runner && !outdated && !runners.isError) {
     return (
       <p role="alert" className="text-sm font-medium text-red-700">
         {t.errors.not_found}
       </p>
     );
   }
-  return <output>{t.common.loading}</output>;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <header className="flex items-center gap-4">
+        {runner && (
+          <Avatar
+            runner={runner}
+            thumb="256x256"
+            className="size-24 shrink-0 bg-neutral-200 text-3xl font-semibold text-neutral-700"
+          />
+        )}
+        <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold break-words">
+          {runner ? runner.name : t.runner.title}
+        </h1>
+      </header>
+      {/* A refresh that fails keeps what the page already shows. */}
+      {runner ? (
+        <RunnerContent runner={runner} heading={heading} />
+      ) : runners.isError ? (
+        <LoadFailure onRetry={refetch} heading={heading} />
+      ) : (
+        <output>{t.common.loading}</output>
+      )}
+    </div>
+  );
 }
 
-function RunnerContent({ runner }: { runner: RunnerRecord }) {
+function RunnerContent({
+  runner,
+  heading,
+}: {
+  runner: RunnerRecord;
+  heading: RefObject<HTMLElement | null>;
+}) {
   const { t } = useI18n();
   const today = useToday();
   // The same request as the home page's: the events that are to come, shared.
   const events = useEvents({ period: "a-venir", today });
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="flex items-center gap-4">
-        <Avatar
-          runner={runner}
-          thumb="256x256"
-          className="size-24 shrink-0 bg-neutral-200 text-3xl font-semibold text-neutral-700"
-        />
-        <h1 className="text-2xl font-semibold break-words">{runner.name}</h1>
-      </header>
+    <>
       {/* Not worth a message when it fails: the races to come are on the pages of their events all the same. */}
       {events.data && (
         <UpcomingSection views={events.data} runnerId={runner.id} title={t.runner.upcoming} />
       )}
-      <Results runnerId={runner.id} />
-    </div>
+      <Results runnerId={runner.id} heading={heading} />
+    </>
   );
 }
 
 /** The year by year and the history of a runner: what they started, or that they have not yet. */
-function Results({ runnerId }: { runnerId: string }) {
+function Results({
+  runnerId,
+  heading,
+}: {
+  runnerId: string;
+  heading: RefObject<HTMLElement | null>;
+}) {
   const { t } = useI18n();
   const results = useResults(runnerId);
 
   // A refresh that fails keeps what the page already shows.
   if (!results.data) {
     return results.isError ? (
-      <Failure
-        onRetry={() => {
-          void results.refetch();
-        }}
-        retrying={results.isFetching}
-      />
+      <LoadFailure onRetry={results.refetch} heading={heading} />
     ) : (
       <output>{t.common.loading}</output>
     );

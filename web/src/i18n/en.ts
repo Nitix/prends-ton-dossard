@@ -215,6 +215,7 @@ export const en = {
     link: "Statistics",
   },
   runner: {
+    title: "Runner",
     upcoming: "Upcoming",
     years: "Year by year",
     history: "History",

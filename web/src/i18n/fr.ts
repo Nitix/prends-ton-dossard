@@ -275,6 +275,8 @@ export const fr = {
   },
   // The page of a runner: what is to come, the years, and what was run (see features/runners).
   runner: {
+    // The title of the page until the name of the runner is known.
+    title: "Coureur",
     upcoming: "À venir",
     years: "Bilan par année",
     history: "Historique",

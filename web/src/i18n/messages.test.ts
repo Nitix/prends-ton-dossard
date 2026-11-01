@@ -357,3 +357,10 @@ describe("install texts", () => {
     });
   });
 });
+
+describe("runner texts", () => {
+  test("the title of the page of a runner before its name is known", () => {
+    expect(fr.runner.title).toBe("Coureur");
+    expect(en.runner.title).toBe("Runner");
+  });
+});
