@@ -350,12 +350,10 @@ test("CalendarSection — un statut qu'on n'a pas pu lire le dit, et on peut ré
 });
 
 test("CalendarSection — créer : un seul envoi, le bouton dit qu'il travaille sans perdre le focus, et un refus se lit et se réessaie", async () => {
-  mocks.send.mockImplementation((_path, request) => {
-    if (request.method === "GET") return Promise.resolve({ exists: false });
-    return Promise.reject(new Error("not expected here"));
-  });
+  serve({ exists: false });
   const screen = await mount();
   await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  // From now on the server takes its time to answer.
   const pending = Promise.withResolvers<unknown>();
   mocks.send.mockImplementation((_path, request) =>
     request.method === "GET" ? Promise.resolve({ exists: false }) : pending.promise,
@@ -419,6 +417,7 @@ test("CalendarSection — Supprimer le lien refusé reste dans la fenêtre, qui 
   await expect.element(dialog(screen).getByRole("alert")).toHaveTextContent(fr.errors.generic);
   await expectAvailable(confirm);
   expect(changes()).toHaveLength(1);
-  // Nothing changed on the page behind it.
+  // The window stays, and the page behind it still says the link is active.
   await expect.element(dialog(screen)).toBeVisible();
+  await expect.element(section(screen).getByText(fr.calendar.exists)).toBeInTheDocument();
 });

@@ -23,8 +23,8 @@ const BUTTON =
 /**
  * The profile of the signed-in user: the photo and the name the group sees,
  * the email and the password of the account, the passkeys, the calendar link,
- * the link to the statistics, and the sign-out. The app shell around it owns the page's
- * `<main>`.
+ * the link to the statistics, and the sign-out. The app shell around it owns
+ * the page's `<main>`.
  */
 export function ProfilePage() {
   const { t } = useI18n();
