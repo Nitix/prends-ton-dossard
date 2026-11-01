@@ -275,6 +275,31 @@ func TestUsers_DisabledCannotSignIn(t *testing.T) {
 	})
 }
 
+// People do not expect an email address to depend on its capitals: the
+// sign-in ignores them (the email index of 7_users_email_nocase.go).
+func TestUsers_SignInIgnoresTheCaseOfTheEmail(t *testing.T) {
+	login := "/api/collections/users/auth-with-password"
+	rows := []testutil.Row{}
+	for _, email := range []string{"alice@example.test", "Alice@Example.test", "ALICE@EXAMPLE.TEST"} {
+		rows = append(rows, testutil.Row{
+			Name:     email,
+			Method:   http.MethodPost,
+			URL:      path(login),
+			Body:     payload(`{"identity":"` + email + `","password":"` + testutil.Password + `"}`),
+			Status:   http.StatusOK,
+			Contains: []string{`"token"`, `"email":"alice@example.test"`},
+		})
+	}
+	rows = append(rows, testutil.Row{
+		Name:   "the password still counts",
+		Method: http.MethodPost,
+		URL:    path(login),
+		Body:   payload(`{"identity":"Alice@Example.test","password":"wrong-pass-1"}`),
+		Status: http.StatusBadRequest,
+	})
+	testutil.RunRows(t, rows)
+}
+
 func TestDelete_Guards(t *testing.T) {
 	testutil.RunRows(t, []testutil.Row{
 		{
@@ -504,14 +529,26 @@ func TestMeEmail(t *testing.T) {
 			},
 		},
 		{
+			// Emails are kept in lowercase: the caller's own one in other
+			// letters changes nothing.
 			Name:     "the caller's own email in other letters",
 			As:       "alice",
 			Method:   http.MethodPost,
 			URL:      path(url),
 			Body:     payload(`{"email":"Alice@example.test","password":"` + testutil.Password + `"}`),
 			Status:   http.StatusOK,
-			Contains: []string{`"token"`, `"email":"Alice@example.test"`},
-			After:    emailIs(alice, "Alice@example.test"),
+			Contains: []string{`"token"`, `"email":"alice@example.test"`},
+			After:    emailIs(alice, "alice@example.test"),
+		},
+		{
+			Name:     "a new email in capitals is kept in lowercase",
+			As:       "alice",
+			Method:   http.MethodPost,
+			URL:      path(url),
+			Body:     payload(`{"email":"New.Address@Example.test","password":"` + testutil.Password + `"}`),
+			Status:   http.StatusOK,
+			Contains: []string{`"token"`, `"email":"new.address@example.test"`},
+			After:    emailIs(alice, "new.address@example.test"),
 		},
 	})
 }
@@ -520,25 +557,18 @@ func TestMeEmail(t *testing.T) {
 // the session that asked for the change: the response carries the one that
 // replaces it.
 func TestMeEmail_ReplacesTheSession(t *testing.T) {
-	for _, tc := range []struct{ name, email string }{
-		{"a new email", "new@example.test"},
-		{"the same email in other letters", "Alice@example.test"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			app := testutil.NewApp(t)
-			fx := testutil.Seed(t, app)
-			oldToken := testutil.Token(t, fx.Alice)
-			seq := testutil.NewSequence(t, app)
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	oldToken := testutil.Token(t, fx.Alice)
+	seq := testutil.NewSequence(t, app)
 
-			response := seq.Step("change the email", http.MethodPost, "/api/app/me/email", oldToken,
-				`{"email":"`+tc.email+`","password":"`+testutil.Password+`"}`,
-				http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
-			refresh := "/api/collections/users/auth-refresh"
-			seq.Step("the token issued before is refused", http.MethodPost, refresh, oldToken, "", http.StatusUnauthorized, `"status":401`)
-			newToken := testutil.TokenIn(t, response)
-			seq.Step("the token of the response is accepted", http.MethodPost, refresh, newToken, "", http.StatusOK, `"token"`, `"email":"`+tc.email+`"`)
-		})
-	}
+	response := seq.Step("change the email", http.MethodPost, "/api/app/me/email", oldToken,
+		`{"email":"new@example.test","password":"`+testutil.Password+`"}`,
+		http.StatusOK, `"token"`, `"email":"new@example.test"`)
+	refresh := "/api/collections/users/auth-refresh"
+	seq.Step("the token issued before is refused", http.MethodPost, refresh, oldToken, "", http.StatusUnauthorized, `"status":401`)
+	newToken := testutil.TokenIn(t, response)
+	seq.Step("the token of the response is accepted", http.MethodPost, refresh, newToken, "", http.StatusOK, `"token"`, `"email":"new@example.test"`)
 }
 
 func TestMeEmail_SignInWithTheNewEmail(t *testing.T) {

@@ -31,10 +31,17 @@ func ValidEmail(email string) bool {
 	return email != "" && is.EmailFormat.Validate(email) == nil
 }
 
+// NormalizeEmail returns email as the application stores it: in lowercase.
+// The sign-in ignores the capitals anyway (7_users_email_nocase.go); storing a
+// single form keeps what the account shows the same as what was compared.
+func NormalizeEmail(email string) string {
+	return strings.ToLower(email)
+}
+
 // EmailTaken reports whether an account other than the one of exceptID (none
-// when empty) already has email. The sign-in looks the email up as it is
-// written: two accounts that only differ by their letters would be confusing,
-// so the comparison ignores them.
+// when empty) already has email. Two accounts that only differ by their
+// capitals would be confusing, and the sign-in could not tell them apart, so
+// the comparison ignores them.
 func EmailTaken(app core.App, email, exceptID string) (bool, error) {
 	conditions := []dbx.Expression{
 		dbx.NewExp("LOWER([[email]]) = {:email}", dbx.Params{"email": strings.ToLower(email)}),
@@ -60,12 +67,14 @@ func changeEmail(e *core.RequestEvent) error {
 		return apperr.New(http.StatusBadRequest, apperr.CodeWrongPassword)
 	}
 
-	if !ValidEmail(body.Email) {
+	email := NormalizeEmail(body.Email)
+	if !ValidEmail(email) {
 		return apperr.New(http.StatusBadRequest, apperr.CodeEmailInvalid)
 	}
 
-	// The caller's own account does not count, which lets them change the case.
-	taken, err := EmailTaken(e.App, body.Email, account.Id)
+	// The caller's own account does not count: giving one's own email again
+	// changes nothing.
+	taken, err := EmailTaken(e.App, email, account.Id)
 	if err != nil {
 		return e.InternalServerError("", err)
 	}
@@ -73,7 +82,7 @@ func changeEmail(e *core.RequestEvent) error {
 		return apperr.New(http.StatusBadRequest, apperr.CodeEmailTaken)
 	}
 
-	account.SetEmail(body.Email)
+	account.SetEmail(email)
 	if err := e.App.Save(account); err != nil {
 		// Another account took the email since the check above.
 		var invalid validation.Errors

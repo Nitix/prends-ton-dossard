@@ -830,6 +830,19 @@ func TestInvitations_Accept(t *testing.T) {
 			After:    refused(samToken),
 		},
 		{
+			Name: "the email is kept in lowercase", Before: inviteSam(),
+			Method: http.MethodPost, URL: path(acceptURL),
+			Body:     acceptBody(samToken, "Sam.Martin@Example.test", testutil.Password, testutil.Password),
+			Status:   http.StatusOK,
+			Contains: []string{`"token"`, `"email":"sam.martin@example.test"`},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				runner := stored(t, app, "runners", fx.SamRunner.Id)
+				if got := stored(t, app, "users", runner.GetString("user")).Email(); got != "sam.martin@example.test" {
+					t.Errorf("email = %q, want sam.martin@example.test", got)
+				}
+			},
+		},
+		{
 			Name: "a text that is not an email is refused", Before: inviteSam(),
 			Method: http.MethodPost, URL: path(acceptURL),
 			Body:     acceptBody(samToken, "not-an-email", testutil.Password, testutil.Password),

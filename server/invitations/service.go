@@ -204,10 +204,11 @@ func Accept(app core.App, token string, in AcceptInput) (user *core.Record, err 
 
 // createAccount creates the account of an "invite" and links the runner to it.
 func createAccount(app core.App, inv, runner *core.Record, in AcceptInput) (*core.Record, error) {
-	if !accounts.ValidEmail(in.Email) {
+	email := accounts.NormalizeEmail(in.Email)
+	if !accounts.ValidEmail(email) {
 		return nil, apperr.New(http.StatusBadRequest, apperr.CodeEmailInvalid)
 	}
-	taken, err := accounts.EmailTaken(app, in.Email, "")
+	taken, err := accounts.EmailTaken(app, email, "")
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +221,7 @@ func createAccount(app core.App, inv, runner *core.Record, in AcceptInput) (*cor
 		return nil, err
 	}
 	user := core.NewRecord(collection)
-	user.SetEmail(in.Email)
+	user.SetEmail(email)
 	user.SetPassword(in.Password)
 	// Nothing is ever sent to this email, and the invitation is what proved who
 	// the person is.

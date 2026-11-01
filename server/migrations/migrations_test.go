@@ -3,10 +3,12 @@ package migrations_test
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	validation "ganigeorgiev.com/pocketbase/ozzo-validation/v4"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/dbutils"
 
 	"courses/server/testutil"
 )
@@ -195,6 +197,75 @@ func TestMigrations_UserEmailUnique(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("a second account with the same email must fail")
+	}
+}
+
+// The email index ignores the case, both for uniqueness and, because
+// PocketBase reads its collation, for the sign-in (see accounts tests).
+func TestMigrations_UserEmailUniqueIgnoresCase(t *testing.T) {
+	app := testutil.NewApp(t)
+	testutil.Seed(t, app) // contains alice@example.test
+
+	if _, err := trySave(app, "users", map[string]any{
+		"email": "ALICE@Example.test", "password": "1234567890", "role": "member",
+	}); err == nil {
+		t.Error(`saving "ALICE@Example.test" next to "alice@example.test" must fail`)
+	}
+	if _, err := app.FindAuthRecordByEmail("users", "Alice@Example.TEST"); err != nil {
+		t.Errorf("finding an account by its email in other letters: %v", err)
+	}
+}
+
+// emailIndexes returns the definitions of the unique indexes of users.email.
+func emailIndexes(t testing.TB, app core.App) []string {
+	t.Helper()
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []string
+	for _, index := range users.Indexes {
+		parsed := dbutils.ParseIndex(index)
+		if parsed.Unique && len(parsed.Columns) == 1 && strings.EqualFold(parsed.Columns[0].Name, "email") {
+			found = append(found, index)
+		}
+	}
+	return found
+}
+
+func TestMigrations_UsersEmailNoCaseDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+
+	var migration *core.Migration
+	for _, m := range core.AppMigrations.Items() {
+		if m.File == "7_users_email_nocase.go" {
+			migration = m
+		}
+	}
+	if migration == nil {
+		t.Fatal("the migration 7_users_email_nocase.go is not registered")
+	}
+
+	const (
+		nocase   = "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email` COLLATE NOCASE) WHERE `email` != ''"
+		original = "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+	)
+	if got := emailIndexes(t, app); !slices.Equal(got, []string{nocase}) {
+		t.Errorf("email indexes = %q, want [%q]", got, nocase)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	if got := emailIndexes(t, app); !slices.Equal(got, []string{original}) {
+		t.Errorf("after the rollback, email indexes = %q, want PocketBase's [%q]", got, original)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	if got := emailIndexes(t, app); !slices.Equal(got, []string{nocase}) {
+		t.Errorf("after applying again, email indexes = %q, want [%q]", got, nocase)
 	}
 }
 
