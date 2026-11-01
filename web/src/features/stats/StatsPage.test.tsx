@@ -188,26 +188,65 @@ test("StatsPage — le tableau de l'année, avec un lien par coureur", async () 
 });
 
 test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans défilement de côté ; dès sm, un tableau", async () => {
+  // A runner of ultras, with the others: the widest numbers a tile may have.
+  const ultra = { ...samRunner, name: "Marie-Claire Dupont-Lefèvre" };
+  const race = (id: string, km: number, elevation: number, day: string, participation: Rec) =>
+    result(
+      id,
+      ultra,
+      { ...f42, id, distance_km: km, elevation_gain_m: elevation },
+      day,
+      participation,
+    );
+  mocks.results.mockResolvedValue([
+    alice42,
+    alice15,
+    bob15,
+    bobDnf,
+    race("u500", 500, 20_000, "2026-05-01", { finish_time_s: 72_000 }),
+    race("u400", 400, 15_000, "2026-07-01", { finish_time_s: 64_800 }),
+    race("u334", 334, 10_230, "2026-08-01", { finish_time_s: 53_999 }),
+    race("u90", 90, 5_000, "2026-09-01", { status: "dnf" }),
+    race("u160", 160, 9_000, "2026-10-01", { status: "dnf" }),
+  ]);
   const titles = [fr.stats.finished, fr.stats.dnf, fr.stats.km, fr.stats.elevation, fr.stats.time];
   try {
-    for (const width of [320, 390]) {
+    // The room the page has between the gutters of the app shell (2 × 16 px) on a phone of 320 and of 390 px.
+    for (const width of [288, 358]) {
       await page.viewport(width, 844);
       const { screen } = await renderStats();
       await expect.element(screen.getByRole("table")).toBeVisible();
+      // Measured in the fonts of the site, not in those that stand in while they load.
+      await document.fonts.ready;
 
       // Still a table for a screen reader: the titles of its columns, a row for each runner.
       expect(screen.getByRole("columnheader").elements()).toHaveLength(6);
-      expect(rowsOf(screen)).toHaveLength(2);
+      expect(rowsOf(screen)).toEqual([
+        ["Marie-Claire Dupont-Lefèvre", "3", "2", "1 234 km", "45 230 m", "52h 59min 59s"],
+        ["Alice", "2", "0", "57 km", "3 100 m", "5h 42min 30s"],
+        ["Bob", "1", "1", "15 km", "700 m", "1h 15min"],
+      ]);
       // The header of the table is not shown: each tile shows the title of its column.
       expect(screen.getByRole("rowgroup").first().element().getBoundingClientRect().height).toBe(1);
       expect(tileTitles(screen).map((title) => title?.textContent)).toEqual(titles);
       for (const title of tileTitles(screen)) {
         expect(title?.getBoundingClientRect().height).toBeGreaterThan(0);
       }
-      // Every number whole, on the screen, and nothing that scrolls sideways.
-      for (const tile of tilesOf(screen)) {
-        expect(tile.scrollWidth).toBeLessThanOrEqual(tile.clientWidth);
-        expect(tile.getBoundingClientRect().right).toBeLessThanOrEqual(width);
+      // Every name and every number whole, on the screen, and nothing that scrolls sideways.
+      const cells = screen
+        .getByRole("row")
+        .elements()
+        .slice(1)
+        .flatMap((row) => [...row.querySelectorAll("th, td")]);
+      for (const cell of cells) {
+        const text = plain(spokenText(cell));
+        expect(cell.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(cell.clientWidth);
+        for (const part of cell.children) {
+          expect(part.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(part.clientWidth);
+        }
+        expect(cell.getBoundingClientRect().right, `${text} at ${width} px`).toBeLessThanOrEqual(
+          width,
+        );
       }
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
       await screen.unmount();

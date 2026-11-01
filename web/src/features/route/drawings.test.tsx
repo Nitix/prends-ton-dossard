@@ -191,10 +191,13 @@ describe("ElevationProfile", () => {
     // Before the cursor, the summit is named over the drawing.
     expect(pill(screen.container)).toBe("800 m");
 
-    // Tab reaches it, with a ring to show it; it starts at the start.
+    // Tab reaches it, with a ring to show it (drawn, wide and coloured); it starts at the start.
     await userEvent.tab();
     expect(document.activeElement).toBe(cursor.element());
-    expect(getComputedStyle(cursor.element()).outlineStyle).not.toBe("none");
+    const ring = getComputedStyle(cursor.element());
+    expect(ring.outlineStyle).not.toBe("none");
+    expect(Number.parseFloat(ring.outlineWidth)).toBeGreaterThan(0);
+    expect(ring.outlineColor).not.toMatch(/^(transparent|rgba\(.*,\s*0\))$/);
     expect(reading()).toBe("0 km, altitude 500 m, pente 0 %");
     expect(pill(screen.container)).toBe("0 km · 500 m · 0 %");
 
@@ -209,6 +212,31 @@ describe("ElevationProfile", () => {
     await userEvent.keyboard("{End}{Escape}");
     expect(pill(screen.container)).toBe("800 m");
     expect(document.activeElement).toBe(cursor.element());
+  });
+
+  test("ElevationProfile — sur le plat, le curseur dit « pente 0 % », jamais « -0 % »", async () => {
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </I18nProvider>,
+    );
+    const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
+    await userEvent.tab();
+
+    // An arrow moves the cursor by a hundredth of the range: positions that are
+    // not round, all on the flat (it ends at 2 km; the slope is read over 75 m
+    // on each side). What a screen reader hears, then what the pill shows.
+    const readings: string[] = [];
+    for (let step = 0; step < 60; step++) {
+      await userEvent.keyboard("{ArrowRight}");
+      readings.push(
+        `${seen(cursor.element().getAttribute("aria-valuetext"))} | ${pill(screen.container)}`,
+      );
+    }
+    expect(readings.filter((reading) => /[-−]\s*0/.test(reading))).toEqual([]);
+    expect(readings.filter((reading) => !/pente 0 % \| .* · 0 %$/.test(reading))).toEqual([]);
+    // The cursor did go along the flat.
+    expect(Number.parseFloat(readings.at(-1)?.replace(",", ".") ?? "")).toBeGreaterThan(1.5);
   });
 
   test("ElevationProfile — le curseur suit le pointeur, et s'en va avec lui", async () => {

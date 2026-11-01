@@ -230,7 +230,9 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
     const to = Math.min(lastKm, km + half);
     const slope = ((altitudeAt(drawn, to) - altitudeAt(drawn, from)) / ((to - from) * 1000)) * 100;
     const zone = runs.find((run) => km <= run.to)?.zone ?? slopeZone(slope);
-    return { km, ele, slope: Number.isFinite(slope) ? Math.round(slope) : 0, zone };
+    // A slope that rounds to nothing is 0: not "-0 %" (a gentle descent, or the
+    // noise of the floats on the flat). `+ 0` turns -0 into 0.
+    return { km, ele, slope: Number.isFinite(slope) ? Math.round(slope) + 0 : 0, zone };
   };
   const at = cursor === null ? null : reading(cursor);
   const said = at ?? reading(0);

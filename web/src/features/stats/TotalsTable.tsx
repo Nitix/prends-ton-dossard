@@ -19,9 +19,10 @@ const NONE = "–";
 // On a phone, a line is a card: its head across, then its numbers as tiles,
 // each with the title of its column (which a screen reader has from the
 // header of the column already: the title in the tile is hidden from it). From
-// `sm`, a table as usual.
+// `sm`, a table as usual. Under 360 px a tile is 84 px wide: its sides are
+// narrower there, for « 45 230 m » (67 px) and « ABANDONS » (65 px) to fit.
 const CELL =
-  "flex flex-col-reverse rounded-xl bg-neutral-50 px-2.5 py-2 text-left tabular-nums sm:table-cell sm:rounded-none sm:bg-transparent sm:px-2 sm:py-2.5 sm:text-right";
+  "flex flex-col-reverse rounded-xl bg-neutral-50 px-1.5 py-2 text-left tabular-nums min-[22.5rem]:px-2.5 sm:table-cell sm:rounded-none sm:bg-transparent sm:px-2 sm:py-2.5 sm:text-right";
 const VALUE =
   "font-display text-base font-extrabold text-ink sm:font-sans sm:text-sm sm:font-medium";
 const TILE_TITLE = "eyebrow text-[0.625rem] sm:hidden";
