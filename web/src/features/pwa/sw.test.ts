@@ -445,3 +445,16 @@ test("sw — l'activation supprime les autres caches et prend la main", async ()
   expect([...worker.stores.keys()]).toEqual([worker.cacheName]);
   expect(worker.claim).toHaveBeenCalledTimes(1);
 });
+
+test("sw — la v4 change de cache (ptd-2) : l'activation jette celui de la v3.1 et ses vieux fichiers", async () => {
+  // v4 is a new look: almost every hashed file of v3.1 (about 1 MB, kept in
+  // ptd-1) is replaced. A new name makes the next activation throw them away.
+  const worker = loadWorker();
+  expect(worker.cacheName).toBe("ptd-2");
+  worker.stores.set("ptd-1", new FakeCache());
+  worker.cache();
+
+  await worker.activate();
+
+  expect([...worker.stores.keys()]).toEqual(["ptd-2"]);
+});

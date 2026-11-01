@@ -38,3 +38,12 @@ test("index.html — la page et le manifeste portent le même nom", () => {
   expect(page).toContain(`<title>${NAME}</title>`);
   expect(page).toContain('rel="manifest"');
 });
+
+test("manifeste — l'écran de lancement a le violet de l'en-tête, de jour comme de nuit", () => {
+  // An installed app opens on a screen of background_color before its page is
+  // drawn. The header is the violet of the sky in both themes: the lilac sheet
+  // of the day would flash light before a dark page.
+  expect(field(manifest, "background_color")).toBe("#5e4ae3");
+  expect(field(manifest, "theme_color")).toBe("#5e4ae3");
+  expect(metaContent(page, "theme-color")).toBe("#5e4ae3");
+});

@@ -7,12 +7,13 @@
 // server/webdist/spa.go, which sends it with `Cache-Control: no-cache`).
 //
 // Old files of /assets/ stay in the cache of the current version: their names
-// carry a fingerprint, so they are never wrong, only unused, and a few
-// kilobytes each. Raising the number below throws every cache away at the next
-// activation; changing this file is also what makes browsers install the new
-// worker.
+// carry a fingerprint, so they are never wrong, only unused. Raising the number
+// below throws every cache away at the next activation; changing this file is
+// also what makes browsers install the new worker. It is raised when most of
+// the files change at once: ptd-2 for v4, a new look that left about 1 MB of
+// the files of v3.1 unused in ptd-1.
 
-const CACHE = "ptd-1";
+const CACHE = "ptd-2";
 
 // The key of the page. The app is a single page, and every route of it is the
 // same index.html: one copy serves them all.
