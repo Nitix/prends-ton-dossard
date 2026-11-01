@@ -113,7 +113,7 @@ func TestCheckMigrationNames(t *testing.T) {
 			"1_collections.go", "2_seed_race_types.go", "3_settings.go", "4_rules.go", "5_participation_rules.go",
 			"6_trusted_proxy.go", "7_users_email_nocase.go", "8_participation_event.go", "9_runner_avatar.go",
 			"9a_registration.go", "9b_supporter.go", "9c_comments.go", "9d_offers.go", "9e_results.go",
-			"9f_format_route.go",
+			"9f_format_route.go", "9g_calendar_feeds.go",
 		), 0},
 		{"a letter after 9 follows 9", sorted("1_a.go", "9_b.go", "9a_c.go", "9b_d.go"), 0},
 		{"two letters follow their first one", sorted("9_a.go", "9a_b.go", "9aa_c.go", "9b_d.go", "9z_e.go", "9za_f.go"), 0},

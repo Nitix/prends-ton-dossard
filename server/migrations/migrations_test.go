@@ -42,7 +42,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
-		"participations", "invitations", "passkeys", "comments", "offers", "offer_members",
+		"participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -822,7 +822,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 	}
 
 	for _, name := range []string{
-		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members",
+		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -1467,4 +1467,135 @@ func TestMigrations_FormatRouteDownThenUp(t *testing.T) {
 		t.Errorf("after applying again, F42 has gpx %q and route_url %q, want both empty", f42.GetString("gpx"), f42.GetString("route_url"))
 	}
 	saveRoute()
+}
+
+// The migration 9g creates the calendar link of an account: the table, its
+// unique index on the account and its rules, which are all null (only the
+// routes of the calendar package read and write it). Its rollback drops the
+// table, and applying it again gives it back, empty.
+func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9g_calendar_feeds.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("calendar_feeds")
+		if err != nil {
+			t.Fatalf("the collection calendar_feeds is missing: %v", err)
+		}
+		return c
+	}
+	// checkTable checks the fields, the index and the rules of the collection.
+	checkTable := func(when string) {
+		t.Helper()
+		c := collection()
+
+		// A link goes with its account.
+		user, ok := c.Fields.GetByName("user").(*core.RelationField)
+		if !ok {
+			t.Fatalf("%s: calendar_feeds.user must be a relation field, got %T", when, c.Fields.GetByName("user"))
+		}
+		users, err := app.FindCollectionByNameOrId("users")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if user.CollectionId != users.Id || user.MaxSelect != 1 || !user.Required || !user.CascadeDelete {
+			t.Errorf("%s: calendar_feeds.user = collection %q, maxSelect %d, required %v, cascade %v; want users, 1, true, true",
+				when, user.CollectionId, user.MaxSelect, user.Required, user.CascadeDelete)
+		}
+
+		// Only the hash of the token is kept, and no API response shows it.
+		hash, ok := c.Fields.GetByName("token_hash").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: calendar_feeds.token_hash must be a text field, got %T", when, c.Fields.GetByName("token_hash"))
+		}
+		if !hash.Required || !hash.Hidden {
+			t.Errorf("%s: calendar_feeds.token_hash = required %v, hidden %v; want required and hidden", when, hash.Required, hash.Hidden)
+		}
+
+		lang, ok := c.Fields.GetByName("lang").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: calendar_feeds.lang must be a select field, got %T", when, c.Fields.GetByName("lang"))
+		}
+		if !slices.Equal(lang.Values, []string{"fr", "en"}) || lang.MaxSelect != 1 || !lang.Required {
+			t.Errorf("%s: calendar_feeds.lang = values %q, maxSelect %d, required %v; want fr and en, 1, true",
+				when, lang.Values, lang.MaxSelect, lang.Required)
+		}
+
+		for _, name := range []string{"created", "updated"} {
+			if _, ok := c.Fields.GetByName(name).(*core.AutodateField); !ok {
+				t.Errorf("%s: calendar_feeds.%s must be a date field that PocketBase fills, got %T", when, name, c.Fields.GetByName(name))
+			}
+		}
+
+		// An account has one link: a new one replaces the old.
+		const index = "CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"
+		if len(c.Indexes) != 1 || c.Indexes[0] != index {
+			t.Errorf("%s: calendar_feeds.indexes = %q, want [%q]", when, c.Indexes, index)
+		}
+
+		// Every rule is null: nobody reads or writes the table through the
+		// collection API, not even its owner.
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got != nil {
+				t.Errorf("%s: calendar_feeds rule %d = %q, want null (superusers only)", when, i, *got)
+			}
+		}
+	}
+	saveFeed := func(user *core.Record) *core.Record {
+		t.Helper()
+		return mustSave(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": "a1b2", "lang": "fr"})
+	}
+
+	checkTable("as created")
+	saveFeed(fx.Alice)
+
+	// The index: a second link for the same account is refused, and one for
+	// another account is not.
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "c3d4", "lang": "en"}); err == nil {
+		t.Error("a second calendar link for the same account must be refused")
+	} else {
+		var invalid validation.Errors
+		if !errors.As(err, &invalid) || invalid["user"] == nil {
+			t.Errorf("the second link for an account: error %v, want a validation error on user", err)
+		}
+	}
+	saveFeed(fx.Bob)
+
+	// The link goes with its account.
+	account := mustSave(t, app, "users", map[string]any{"email": "zoe@example.test", "password": testutil.Password, "role": "member"})
+	saveFeed(account)
+	if err := app.Delete(account); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 2 {
+		t.Errorf("after deleting an account, %d links (error %v), want the 2 of Alice and Bob", got, err)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with links: %v", err)
+	}
+	if _, err := app.FindCollectionByNameOrId("calendar_feeds"); err == nil {
+		t.Error("the collection calendar_feeds must be gone after the rollback")
+	}
+	// What the table held went with it, and nothing else did.
+	for name, id := range map[string]string{"users": fx.Alice.Id, "runners": fx.AliceRunner.Id} {
+		if _, err := app.FindRecordById(name, id); err != nil {
+			t.Errorf("after the rollback, the %s %s is gone: %v", name, id, err)
+		}
+	}
+	// Rolling back again, with nothing left to drop, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d links (error %v), want an empty table", got, err)
+	}
+	saveFeed(fx.Alice)
 }
