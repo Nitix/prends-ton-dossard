@@ -49,7 +49,7 @@ var texts = map[string]words{
 			"dns":        "DNS",
 			"supporter":  "Supporter",
 		},
-		unconfirmed: "unconfirmed",
+		unconfirmed: "not confirmed",
 		deadline:    "Registration closes",
 		decimal:     ".",
 		minute:      "m",

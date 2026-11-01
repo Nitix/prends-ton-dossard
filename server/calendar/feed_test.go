@@ -201,6 +201,67 @@ func TestFeed_Folding(t *testing.T) {
 			t.Errorf("a line of 76 octets must go on in a line that holds its last octet:\n%q", got)
 		}
 	})
+
+	// A member can store a text that is not valid UTF-8 (a form-urlencoded
+	// request is not checked), or that holds control characters. The file must
+	// stay one a calendar app reads, and building it must end.
+	t.Run("a text that is not valid UTF-8 or has control characters", func(t *testing.T) {
+		for name, tt := range map[string]struct{ text, want string }{
+			// A run of bytes that start no character has nowhere to be cut.
+			"stray continuation bytes": {strings.Repeat("\x80", 200), "�"},
+			"a cut character among valid ones": {
+				strings.Repeat("é", 40) + "\xe2\x82" + strings.Repeat("é", 40),
+				strings.Repeat("é", 40) + "�" + strings.Repeat("é", 40),
+			},
+			// NUL, VT, FF, ESC and DEL go, the tab stays, and a CR is not a line break.
+			"control characters": {
+				"a\x00b\x0bc\x0cd\x1be\x7ff\tg\rh" + strings.Repeat("x", 100),
+				"abcdef\tgh" + strings.Repeat("x", 100),
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				feed := calendar.Feed([]calendar.Entry{{
+					UID: "u\x00@prends-ton-dossard", Summary: tt.text, Description: tt.text, Location: tt.text,
+					URL:   "https://example.test/\x80a\x00b\x0bc\td",
+					Start: "2026-06-14", End: "2026-06-15",
+				}}, "fr", now)
+
+				if !utf8.ValidString(feed) {
+					t.Errorf("the feed is not valid UTF-8:\n%q", feed)
+				}
+				for _, line := range lines(t, feed) {
+					if len(line) > 75 {
+						t.Errorf("a line of %d octets, want 75 at most: %q", len(line), line)
+					}
+				}
+				// Without its CRLFs, the file has no control character but the
+				// tab of a text.
+				if strings.ContainsFunc(strings.ReplaceAll(feed, "\r\n", ""), func(r rune) bool {
+					return (r < 0x20 && r != '\t') || r == 0x7f
+				}) {
+					t.Errorf("the feed has a control character that is not a line break:\n%q", feed)
+				}
+
+				got := map[string]string{}
+				for _, line := range unfold(feed) {
+					name, value, _ := strings.Cut(line, ":")
+					got[name] = value
+				}
+				for _, name := range []string{"SUMMARY", "DESCRIPTION", "LOCATION"} {
+					if got[name] != tt.want {
+						t.Errorf("%s = %q, want %q", name, got[name], tt.want)
+					}
+				}
+				if got["UID"] != "u@prends-ton-dossard" {
+					t.Errorf("UID = %q, want the control character taken out", got["UID"])
+				}
+				// A URI has no tab either.
+				if want := "https://example.test/�abcd"; got["URL"] != want {
+					t.Errorf("URL = %q, want %q", got["URL"], want)
+				}
+			})
+		}
+	})
 }
 
 // An event of one or several whole days: DTEND is the day after the last one,

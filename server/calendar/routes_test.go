@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
@@ -67,7 +68,7 @@ func feeds(t testing.TB, app core.App) []*core.Record {
 	return records
 }
 
-// hashOf is what the table stores for the token t.
+// hashOf gives what the table stores for a token: its hash.
 var hashOf = invitations.Hash
 
 // linkOf stores a calendar link for the user, whose token is token.
@@ -598,7 +599,7 @@ func TestCalendarFeed(t *testing.T) {
 		eventURL := appURL + "/evenements/" + fx.Event.Id
 		for _, tt := range []struct{ uid, name, want string }{
 			{uid(a.registered), "DESCRIPTION", `Registered\n` + eventURL},
-			{uid(a.lyon), "DESCRIPTION", `Interested · unconfirmed\n` + appURL + "/evenements/" + a.lyonEvent.Id},
+			{uid(a.lyon), "DESCRIPTION", `Interested · not confirmed\n` + appURL + "/evenements/" + a.lyonEvent.Id},
 			{uid(a.supporter), "DESCRIPTION", `Supporter\n` + appURL + "/evenements/" + a.festival.Id},
 			{deadlineUID(a.lyonEvent, fx.AliceRunner), "SUMMARY", "Registration closes · 10 km de Lyon"},
 			{uid(a.short), "SUMMARY", `Course\, des\; Crêtes · Route 6h`},
@@ -753,6 +754,39 @@ func TestCalendarFeed(t *testing.T) {
 		if events := parseFeed(t, feed); len(events) != 0 {
 			t.Errorf("%d events in the feed of an account without a runner, want none", len(events))
 		}
+	})
+
+	// A request that is not JSON is not checked for UTF-8, so a member can
+	// name an event with bytes that are no text. The feed of whoever is in it
+	// must still be read, and be text: a feed that never ends would take the
+	// server down.
+	t.Run("an event with a name that is not valid UTF-8", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		event := save(t, app, "events", map[string]any{
+			"name": "a" + strings.Repeat("\x80", 100) + "\x00b", "location": "Lyon\x0b", "start_date": "2026-07-04",
+			"created_by": fx.AliceRunner.Id,
+		})
+		supporter := save(t, app, "participations", map[string]any{
+			"runner": fx.AliceRunner.Id, "event": event.Id, "status": "supporter", "added_by": fx.AliceRunner.Id,
+		})
+
+		_, feed := request(t, app, http.MethodGet, subscribe(t, app, fx.Alice, "fr"), nil, "", http.StatusOK)
+		if !utf8.ValidString(feed) {
+			t.Errorf("the feed is not valid UTF-8:\n%q", feed)
+		}
+		for _, e := range parseFeed(t, feed) {
+			if e["UID"] == uid(supporter) {
+				if want := "a�b"; e["SUMMARY"] != want {
+					t.Errorf("SUMMARY = %q, want %q", e["SUMMARY"], want)
+				}
+				if want := "Lyon"; e["LOCATION"] != want {
+					t.Errorf("LOCATION = %q, want %q", e["LOCATION"], want)
+				}
+				return
+			}
+		}
+		t.Errorf("no event %s in the feed", uid(supporter))
 	})
 }
 

@@ -36,28 +36,52 @@ const maxLineOctets = 75
 const stampLayout = "20060102T150405Z"
 
 // textEscaper escapes what a TEXT value cannot hold as it is (RFC 5545, 3.3.11):
-// the backslash, the semicolon and the comma, and every line break, which
-// becomes the two characters \n. The pairs are tried in this order, so that a
-// CRLF is one line break.
+// the backslash, the semicolon and the comma, and the line break, which becomes
+// the two characters \n. It runs on a text that printable has cleaned, where
+// the only line break left is the LF.
 var textEscaper = strings.NewReplacer(
 	`\`, `\\`,
 	";", `\;`,
 	",", `\,`,
-	"\r\n", `\n`,
 	"\n", `\n`,
-	"\r", `\n`,
 )
 
-// uriCleaner takes the line breaks out of a URI value, which is not escaped
-// (its commas and semicolons stay as they are) and so could not otherwise
-// keep a line break from starting a property of its own.
-var uriCleaner = strings.NewReplacer("\r", "", "\n", "")
+// printable returns v as something that can be written in a file: what is not
+// valid UTF-8 becomes U+FFFD, and the control characters (C0 and DEL) are
+// dropped, except the ones in keep. The texts of a feed are typed by the
+// members, and a form request that is not JSON is not checked for UTF-8: a
+// byte that starts no character cannot be cut or read, and a control character
+// is refused by the calendar apps, or ends the line.
+func printable(v, keep string) string {
+	v = strings.ToValidUTF8(v, "�")
+	return strings.Map(func(r rune) rune {
+		if (r < 0x20 || r == 0x7f) && !strings.ContainsRune(keep, r) {
+			return -1
+		}
+		return r
+	}, v)
+}
+
+// textValue is a value of type TEXT, as it is written: cleaned, except for the
+// tab and the line break, which are legal in a text (a CR is not a line break:
+// a CRLF is one LF), then escaped.
+func textValue(v string) string {
+	return textEscaper.Replace(printable(v, "\t\n"))
+}
+
+// uriValue is a value of type URI, as it is written. It is not escaped (its
+// commas and semicolons stay as they are), and holds no control character at
+// all, so that no line break can start a property of its own.
+func uriValue(v string) string {
+	return printable(v, "")
+}
 
 // Feed returns the iCalendar file of the entries, in the order they are given,
 // as of the moment now, which is the DTSTAMP of every event. The texts of the
 // entries are already in the language lang ("fr" or "en"), which the file
 // declares with its product, as RFC 5545 has it (3.7.3). An empty value is
-// left out, except for the dates and the summary.
+// left out, except for the dates and the summary. The texts are cleaned of what
+// a file cannot hold (see printable), whatever the entries hold.
 func Feed(entries []Entry, lang string, now time.Time) string {
 	var b strings.Builder
 	line := func(name, value string) {
@@ -79,14 +103,14 @@ func Feed(entries []Entry, lang string, now time.Time) string {
 	stamp := now.UTC().Format(stampLayout)
 	for _, entry := range entries {
 		line("BEGIN", "VEVENT")
-		line("UID", textEscaper.Replace(entry.UID))
+		line("UID", textValue(entry.UID))
 		line("DTSTAMP", stamp)
 		line("DTSTART;VALUE=DATE", date(entry.Start))
 		line("DTEND;VALUE=DATE", date(entry.End))
-		line("SUMMARY", textEscaper.Replace(entry.Summary))
-		optional("DESCRIPTION", textEscaper.Replace(entry.Description))
-		optional("LOCATION", textEscaper.Replace(entry.Location))
-		optional("URL", uriCleaner.Replace(entry.URL))
+		line("SUMMARY", textValue(entry.Summary))
+		optional("DESCRIPTION", textValue(entry.Description))
+		optional("LOCATION", textValue(entry.Location))
+		optional("URL", uriValue(entry.URL))
 		line("END", "VEVENT")
 	}
 	line("END", "VCALENDAR")
@@ -101,6 +125,9 @@ func date(day string) string {
 // fold cuts a content line into lines of at most 75 octets, each one after the
 // first starting with the space that marks it as a continuation, which counts
 // in its length (RFC 5545, 3.1). It never cuts a character in two.
+//
+// It always moves forward: a line with no place to cut a character (a run of
+// bytes that start none, so not valid UTF-8) is cut at the limit.
 func fold(line string) string {
 	var b strings.Builder
 	limit := maxLineOctets
@@ -109,6 +136,9 @@ func fold(line string) string {
 		// line[cut] starts the next piece: it must start a character.
 		for cut > 0 && !utf8.RuneStart(line[cut]) {
 			cut--
+		}
+		if cut == 0 {
+			cut = limit
 		}
 		b.WriteString(line[:cut])
 		b.WriteString("\r\n ")
