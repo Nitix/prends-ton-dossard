@@ -37,8 +37,8 @@ type Opened = "remove" | "choose" | "result";
  * Nobody has finished a race, or given up on it, before its day: until the race
  * has `started`, the menu offers neither « Finished » nor « DNF » nor the
  * result, the server refusing them (`status_before_race`). What the participation
- * is stays in the list, and its result can still be changed, when it is one of
- * them already (a race that moved to a later day).
+ * is stays in the list, and its result can still be changed (with that status
+ * only), when it is one of them already (a race that moved to a later day).
  *
  * Who may do what is the page's call: it only shows this to those who may
  * edit the participation, and passes `canConfirm` for the runner it is about.
@@ -59,7 +59,7 @@ export function ParticipationMenu({
   runner,
   label,
   formatsOf,
-  started = false,
+  started,
   canConfirm,
   onRemoved,
 }: {
@@ -71,8 +71,8 @@ export function ParticipationMenu({
   label: string;
   /** Given for a participation on the event alone: the event, whose formats it can take. */
   formatsOf?: EventView;
-  /** Given for a participation on a format: its race has started, the day of the format being today or past. Not read on the event alone. */
-  started?: boolean;
+  /** The race of the participation has started: the day of its format is today or past. Not read for a participation on the event alone (`formatsOf`), which has no race. */
+  started: boolean;
   canConfirm: boolean;
   /** The participation has just left its row (removed, moved to another list, or found gone): this menu is about to go away. */
   onRemoved: () => void;
@@ -253,6 +253,7 @@ export function ParticipationMenu({
           onGone={removed}
           eventId={eventId}
           participation={participation}
+          started={started}
         />
       )}
       {formatsOf && (

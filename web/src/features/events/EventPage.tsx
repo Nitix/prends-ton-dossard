@@ -434,6 +434,8 @@ function EventSection({
             participationView={participationView}
             label={view.event.name}
             formatsOf={view}
+            // On the event alone, there is no race: not read.
+            started={false}
             source={focus}
             me={me}
             onDeparture={onDeparture}
@@ -589,8 +591,8 @@ function ParticipantRow({
   label: string;
   /** Given for a participation on the event alone: see `ParticipationMenu`. */
   formatsOf?: EventView;
-  /** Given for a participation on a format: its race has started. See `ParticipationMenu`. */
-  started?: boolean;
+  /** The race of the participation has started. See `ParticipationMenu`. */
+  started: boolean;
   /** The title of the section of this row: where the focus goes if the participation is removed. */
   source: string;
   me: Me | null;

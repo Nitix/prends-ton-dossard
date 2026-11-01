@@ -152,9 +152,10 @@ export function joinStarted(draft: FormDraft, today: Temporal.PlainDate): boolea
   if (!row) return false;
   try {
     return raceStarted({ date: row.date }, { start_date: draft.startDate }, today);
-  } catch {
-    // A RangeError: the day is empty, or half typed.
-    return false;
+  } catch (error) {
+    // The day is empty, or half typed: Temporal refuses it with a RangeError.
+    if (error instanceof RangeError) return false;
+    throw error;
   }
 }
 

@@ -46,6 +46,8 @@ async function renderDialog(
     initialStatus?: "finished" | "dnf";
     languages?: string[];
     withCallbacks?: boolean;
+    /** The race has started: the case of most tests. */
+    started?: boolean;
   } = {},
 ) {
   const {
@@ -53,6 +55,7 @@ async function renderDialog(
     initialStatus,
     languages = ["fr"],
     withCallbacks = false,
+    started = true,
   } = options;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -71,6 +74,7 @@ async function renderDialog(
             eventId="event"
             participation={participation}
             initialStatus={initialStatus}
+            started={started}
           />
         </ToastProvider>
       </I18nProvider>
@@ -429,6 +433,49 @@ test("ResultDialog — le statut ne propose que Terminé et Abandon", async () =
     fr.status.finished,
     fr.status.dnf,
   ]);
+});
+
+// A result entered before its race moved to a later day: nobody has finished a race that has
+// not started, so the status cannot be chosen again, only kept.
+const retired: ParticipationRecord = {
+  ...finished,
+  status: "dnf",
+  finish_time_s: 0,
+  rank: 0,
+  rank_of: 0,
+  result_note: "crampes",
+};
+
+test("ResultDialog — avant le jour de la course, le statut proposé est celui de la participation, et lui seul", async () => {
+  for (const [participation, only] of [
+    [finished, "finished"],
+    [retired, "dnf"],
+  ] as const) {
+    const { screen } = await renderDialog({ participation, started: false });
+
+    const select = status(screen).element();
+    if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
+    expect(Array.from(select.options).map((option) => option.value)).toEqual([only]);
+    await expect.element(status(screen)).toHaveValue(only);
+    await screen.unmount();
+  }
+});
+
+test("ResultDialog — avant le jour de la course, la note d'un résultat déjà saisi s'enregistre avec le même statut", async () => {
+  const { screen } = await renderDialog({ participation: finished, started: false });
+
+  await note(screen).fill("3e V2H");
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p1", {
+      status: "finished",
+      finish_time_s: 15150,
+      rank: 12,
+      rank_of: 340,
+      result_note: "3e V2H",
+    });
+  });
 });
 
 test("ResultDialog — le classement et le nombre sont des nombres d'au moins 1, la note de 200 caractères au plus", async () => {

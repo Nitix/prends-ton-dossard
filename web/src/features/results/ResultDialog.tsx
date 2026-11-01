@@ -17,8 +17,11 @@ import { SelectField } from "../participations/fields";
 /** The two statuses a result goes with: the server keeps no time or rank on any other. */
 type ResultStatus = "finished" | "dnf";
 
+/** In the order they are offered. */
+const RESULT_STATUSES: readonly ResultStatus[] = ["finished", "dnf"];
+
 function isResultStatus(value: string): value is ResultStatus {
-  return value === "finished" || value === "dnf";
+  return RESULT_STATUSES.some((status) => status === value);
 }
 
 /** The fields of the form that the server may refuse, by the name it gives them. */
@@ -117,6 +120,11 @@ function refusalOf(err: unknown, attempt: number): Refusal {
  * result is on its way, the button says it is busy and is not disabled: it
  * would lose the focus, and a refusal that is not about a field would not give
  * it back; a second tap is ignored.
+ *
+ * Nobody has finished a race, or given up on it, before its day (the server
+ * refuses it): until the race has `started`, the status select offers only the
+ * status the participation has, which is how a result entered before the race
+ * moved to a later day can still be changed.
  */
 export function ResultDialog({
   open,
@@ -126,6 +134,7 @@ export function ResultDialog({
   eventId,
   participation,
   initialStatus,
+  started,
 }: {
   open: boolean;
   onClose: () => void;
@@ -137,6 +146,8 @@ export function ResultDialog({
   eventId: string;
   participation: ParticipationRecord;
   initialStatus?: ResultStatus;
+  /** The race of the participation has started: its day is today or past. */
+  started: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -145,6 +156,7 @@ export function ResultDialog({
         eventId={eventId}
         participation={participation}
         initialStatus={initialStatus}
+        started={started}
         onClose={onClose}
         onSaved={onSaved}
         onGone={onGone}
@@ -157,6 +169,7 @@ function ResultForm({
   eventId,
   participation,
   initialStatus,
+  started,
   onClose,
   onSaved,
   onGone,
@@ -164,6 +177,7 @@ function ResultForm({
   eventId: string;
   participation: ParticipationRecord;
   initialStatus: ResultStatus | undefined;
+  started: boolean;
   onClose: () => void;
   onSaved: (() => void) | undefined;
   onGone: (() => void) | undefined;
@@ -233,8 +247,13 @@ function ResultForm({
           if (isResultStatus(status)) change({ status });
         }}
       >
-        <option value="finished">{t.status.finished}</option>
-        <option value="dnf">{t.status.dnf}</option>
+        {RESULT_STATUSES.filter((choice) => started || choice === participation.status).map(
+          (choice) => (
+            <option key={choice} value={choice}>
+              {t.status[choice]}
+            </option>
+          ),
+        )}
       </SelectField>
       {draft.status === "finished" && (
         <>

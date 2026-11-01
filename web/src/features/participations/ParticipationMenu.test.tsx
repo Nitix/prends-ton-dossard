@@ -265,6 +265,16 @@ test("ParticipationMenu — le statut actuel reste dans la liste même s'il n'es
     .toHaveAttribute("aria-current", "true");
 });
 
+test("ParticipationMenu — avant le jour de la course, le dialogue du résultat d'un coureur qui a terminé ne propose que son statut", async () => {
+  const { screen } = await renderMenu({ participation: bobFinished, started: false });
+  await trigger(screen).click();
+  await editResult(screen).click();
+
+  const select = resultDialog(screen).getByLabelText(fr.participation.status).element();
+  if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
+  expect(Array.from(select.options).map((option) => option.value)).toEqual(["finished"]);
+});
+
 test("ParticipationMenu — changer le statut met la participation à jour, ferme le menu et invalide les listes", async () => {
   const { screen, invalidate } = await renderMenu();
   await open(screen);

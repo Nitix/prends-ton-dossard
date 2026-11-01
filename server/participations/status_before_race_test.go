@@ -87,6 +87,19 @@ func finishedAndMoved(status string, days int) before {
 	}
 }
 
+// holds is a Before: the participation has that status ("finished" or "dnf"),
+// which its race allows at this point of the test.
+func holds(of record, status string) before {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		r := of(fx)
+		r.Set("status", status)
+		if err := app.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // A runner cannot finish a race, or give up, before its day: the status is
 // refused with status_before_race, whoever asks. The day itself counts, and so
 // does the day of the format, which beats the first day of the event. A
@@ -357,6 +370,86 @@ func TestParticipations_StatusBeforeRace(t *testing.T) {
 			Body:   change("registered"),
 			Status: http.StatusOK,
 			After:  statusIs(p1, "registered"),
+		},
+
+		// a status that moves to another race is checked against that race
+		// The event runs from three days ago to in three days: the 15 km (Sam) is
+		// on its first day, which is over, and the 42 km has the day of the row.
+		{
+			Name:     "a finisher moved to a race to come is refused",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p3),
+			Before:   both(raceOn(theDay(-3), theDay(3), theDay(1)), holds(p3, "finished")),
+			Body:     body(`{"format":%q}`, f42),
+			Status:   http.StatusBadRequest,
+			Contains: beforeRace,
+			After: storedIs(p3, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "finished", "format": fx.F15.Id}
+			}),
+		},
+		{
+			Name:     "a retirement moved to a race to come is refused",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      participations(p3),
+			Before:   both(raceOn(theDay(-3), theDay(3), theDay(1)), holds(p3, "dnf")),
+			Body:     body(`{"format":%q}`, f42),
+			Status:   http.StatusBadRequest,
+			Contains: beforeRace,
+			After: storedIs(p3, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "dnf", "format": fx.F15.Id}
+			}),
+		},
+		{
+			Name:   "a finisher moved to another race that has started is accepted",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p3),
+			Before: both(raceOn(theDay(-3), theDay(3), theDay(-1)), holds(p3, "finished")),
+			Body:   body(`{"format":%q}`, f42),
+			Status: http.StatusOK,
+			After: storedIs(p3, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "finished", "format": fx.F42.Id}
+			}),
+		},
+		{
+			Name:   "a finisher moved to a race that takes place today is accepted",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p3),
+			Before: both(raceOn(theDay(-3), theDay(3), theDay(0)), holds(p3, "finished")),
+			Body:   body(`{"format":%q}`, f42),
+			Status: http.StatusOK,
+			After: storedIs(p3, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "finished", "format": fx.F42.Id}
+			}),
+		},
+		{
+			Name:   "a participation that has not finished may move to a race to come",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    participations(p3),
+			Before: raceOn(theDay(-3), theDay(3), theDay(1)),
+			Body:   body(`{"format":%q}`, f42),
+			Status: http.StatusOK,
+			After: storedIs(p3, func(fx testutil.Fixture) map[string]any {
+				return map[string]any{"status": "interested", "format": fx.F42.Id}
+			}),
+		},
+
+		// the batch route runs the same hooks
+		{
+			Name:   "a batch cannot set finished on a race to come",
+			As:     "alice",
+			Method: http.MethodPost,
+			URL:    func(testutil.Fixture) string { return "/api/batch" },
+			Before: raceOn(theDay(-1), theDay(3), theDay(1)),
+			Body: body(`{"requests":[{"method":"PATCH","url":"/api/collections/participations/records/%s",`+
+				`"body":{"status":"finished"}}]}`, p1),
+			Status:   http.StatusBadRequest,
+			Contains: []string{`"code":"batch_request_failed"`},
+			After:    statusIs(p1, "registered"),
 		},
 	})
 }

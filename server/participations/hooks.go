@@ -238,23 +238,29 @@ func validate(app core.App, p *core.Record) error {
 // Paris: the day of its format, or the first day of its event when the format
 // has none. The day itself counts.
 //
-// It only looks at a status that is being set: on a new participation, or when
-// the status changes. A participation that already has the status is left
-// alone, so that its note, its time and its rank can be changed even when its
-// event has moved later since. Moving from "finished" to "dnf" is a new status,
-// which is checked. A format or an event that cannot be found, or a day that is
-// not one, are not this check's to report: it lets them pass.
+// It only looks at what is being put on a race: a new participation, a status
+// that changes, or a format that changes (a finisher moved to a race to come
+// would finish it before its day). A participation that already has the status
+// on the same race is left alone, so that its note, its time and its rank can
+// be changed even when its event has moved later since. Moving from "finished"
+// to "dnf" is a new status, which is checked.
+//
+// It runs once validate has found the format and the event, and has refused a
+// status of a race when there is no format: they are not looked for again.
 func validateStarted(app core.App, p *core.Record) error {
 	status := p.GetString("status")
 	if status != statusFinished && status != statusDNF {
 		return nil
 	}
-	if !p.IsNew() && p.Original().GetString("status") == status {
-		return nil
+	if !p.IsNew() {
+		original := p.Original()
+		if original.GetString("status") == status && original.GetString("format") == p.GetString("format") {
+			return nil
+		}
 	}
 
-	day, found, err := raceDay(app, p)
-	if err != nil || !found {
+	day, err := raceDay(app, p)
+	if err != nil {
 		return err
 	}
 	year, month, dayOfMonth := now().In(paris).Date()
@@ -266,33 +272,24 @@ func validateStarted(app core.App, p *core.Record) error {
 
 // raceDay returns the day of the race that the participation is on: the day of
 // its format, or the first day of its event when the format has none. It is
-// midnight UTC of that day. The day is not found when the participation has no
-// format, or when the format, the event or the day cannot be read.
-func raceDay(app core.App, p *core.Record) (time.Time, bool, error) {
-	if p.GetString("format") == "" {
-		return time.Time{}, false, nil
-	}
+// midnight UTC of that day. The days of formats and events are checked when
+// they are saved, so one that is not a day is not looked for here: it would be
+// the zero time, which is not after any day.
+func raceDay(app core.App, p *core.Record) (time.Time, error) {
 	format, err := app.FindRecordById("formats", p.GetString("format"))
-	if errors.Is(err, sql.ErrNoRows) {
-		return time.Time{}, false, nil
-	}
 	if err != nil {
-		return time.Time{}, false, err
+		return time.Time{}, err
 	}
-
 	text := format.GetString("date")
 	if text == "" {
 		event, err := app.FindRecordById("events", p.GetString("event"))
-		if errors.Is(err, sql.ErrNoRows) {
-			return time.Time{}, false, nil
-		}
 		if err != nil {
-			return time.Time{}, false, err
+			return time.Time{}, err
 		}
 		text = event.GetString("start_date")
 	}
-	day, ok := events.ParseDay(text)
-	return day, ok, nil
+	day, _ := events.ParseDay(text)
+	return day, nil
 }
 
 // clearResult empties the parts of the result that the status of the

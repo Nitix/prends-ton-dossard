@@ -231,6 +231,8 @@ function ResultRow({
         eventId={event.id}
         participation={participation}
         initialStatus="finished"
+        // Its race is over: that is what puts it in this list.
+        started
       />
     </li>
   );
