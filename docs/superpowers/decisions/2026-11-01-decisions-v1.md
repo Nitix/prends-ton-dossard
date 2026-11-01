@@ -189,7 +189,7 @@ Détail dans `.superpowers/sdd/2026-10-31-courses-v1/final-review-report.md` et 
 - La CI ne se lance que sur `push` (pas sur les demandes de fusion) et n'a pas de `timeout-minutes`.
 - Le magasin de sessions WebAuthn n'a pas de plafond global (les limites par IP le bornent déjà).
 - `/api/app/me/email` n'est protégée contre les essais de mot de passe que par la limite générique de `/api/`.
-- Version `gabriel-vasile/mimetype` v1.4.15 (dépendance indirecte) retirée par son auteur : à mettre à jour avant la photo de profil de la v1.1 (le rapport l'écartait faute de champ fichier).
+- Version `gabriel-vasile/mimetype` v1.4.15 (dépendance indirecte) retirée par son auteur : **fait**, mise à jour en v1.4.16 avant la photo de profil de la v1.1 (commit 4ac36df).
 
 **Front**
 

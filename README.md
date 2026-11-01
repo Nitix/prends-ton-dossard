@@ -289,6 +289,10 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] Créer une passkey avec Face ID ou Touch ID, puis se déconnecter et se connecter avec la passkey.
 - [ ] Dans Safari, parcourir l'accueil, la liste, l'agenda et la fiche d'un événement : tout s'affiche et se manipule correctement.
 - [ ] Partager un lien d'invitation avec la feuille de partage de l'iPhone (Web Share).
+- [ ] Changer sa photo depuis le profil (« Changer la photo ») en **prenant une photo** avec l'appareil : elle s'affiche dans le bon sens (orientation), puis sur une carte de la liste et sur la fiche d'un événement où le coureur participe.
+- [ ] Changer sa photo en la choisissant dans la **photothèque** (une photo existante, de préférence en portrait) : même vérification. Si le téléphone ne la lit pas, un message le dit et rien n'est envoyé.
+- [ ] Sur un événement à plusieurs épreuves, cliquer sur « J'y vais » en laissant « Pas encore décidé » : le coureur apparaît dans « Intéressés, format à choisir ». Depuis le menu de sa participation, « Choisir l'épreuve » : choisir une épreuve et un statut, et vérifier qu'il passe dans la liste de cette épreuve.
+- [ ] Mettre quelqu'un en « Non partant » depuis le menu de sa participation : il quitte les listes et apparaît dans la section repliée « Non partants » (l'ouvrir pour le voir). Le remettre dans un autre statut le fait revenir dans les listes.
 - [ ] Désactiver le compte de test.
 
 ## Feuille de route

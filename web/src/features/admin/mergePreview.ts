@@ -15,7 +15,13 @@ export type MergeResult = {
    * format wins a duplicate it counts here, and the other one as dropped.
    */
   movedParticipations: number;
-  /** The participations deleted because their runner was already on the kept format. */
+  /**
+   * The participations deleted as duplicates. Merging formats: the one that
+   * loses, for a runner who is on both formats. Merging events: the one with
+   * no format of a runner who already is in the kept event on a format, or who
+   * gets a format by the merge; and, for a runner with no format in both events,
+   * the one that loses.
+   */
   droppedParticipations: number;
   /** The formats that lost their own date, which fell outside the dates of the kept event. */
   clearedFormatDates: number;
