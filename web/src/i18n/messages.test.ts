@@ -343,6 +343,7 @@ describe("install texts", () => {
       button: "Installer",
       ios: "Sur iPhone : touche Partager, puis « Sur l'écran d'accueil ».",
       other: "Ton navigateur propose l'installation depuis son menu.",
+      done: "L'appli est installée.",
     });
   });
 
@@ -352,6 +353,7 @@ describe("install texts", () => {
       button: "Install",
       ios: "On iPhone: tap Share, then “Add to Home Screen”.",
       other: "Your browser offers to install it from its menu.",
+      done: "The app is installed.",
     });
   });
 });

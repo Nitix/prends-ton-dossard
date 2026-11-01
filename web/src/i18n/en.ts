@@ -111,6 +111,7 @@ export const en = {
     button: "Install",
     ios: "On iPhone: tap Share, then “Add to Home Screen”.",
     other: "Your browser offers to install it from its menu.",
+    done: "The app is installed.",
   },
   status: {
     interested: "Interested",

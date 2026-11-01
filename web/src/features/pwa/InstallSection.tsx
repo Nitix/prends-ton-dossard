@@ -4,12 +4,20 @@ import { PRIMARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Section } from "../profile/Section";
 import { detectEnvironment, type InstallEnvironment } from "./environment";
-import { installPrompt, subscribeInstallPrompt, takeInstallPrompt } from "./installPrompt";
+import {
+  installPrompt,
+  isInstalled,
+  subscribeInstallPrompt,
+  takeInstallPrompt,
+} from "./installPrompt";
 
 /**
  * "App" on the profile page: how to put the site on the home screen.
  *
- * - Installed already: nothing, the section is not there.
+ * - Running installed already: nothing, the section is not there.
+ * - Installed since the page was opened (`appinstalled`): the section stays,
+ *   and says so. It would be wrong to send somebody to their browser's menu to
+ *   install what is installed.
  * - The browser made its offer (see installPrompt.ts): the button that shows
  *   its install dialog. The offer can be used once, so the button goes with the
  *   tap. It can also go with `appinstalled`, when the site is installed some
@@ -27,6 +35,7 @@ export function InstallSection({
 }) {
   const { t } = useI18n();
   const offer = useSyncExternalStore(subscribeInstallPrompt, installPrompt);
+  const installed = useSyncExternalStore(subscribeInstallPrompt, isInstalled);
   const heading = useRef<HTMLHeadingElement>(null);
   const { standalone, ios } = environment();
 
@@ -52,7 +61,9 @@ export function InstallSection({
 
   return (
     <Section title={t.install.title} headingRef={heading}>
-      {offer !== null ? (
+      {installed ? (
+        <p>{t.install.done}</p>
+      ) : offer !== null ? (
         <button
           ref={giveFocusBack}
           type="button"

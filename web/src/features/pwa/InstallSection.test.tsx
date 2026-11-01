@@ -112,10 +112,49 @@ test("InstallSection — l'appli installée, le bouton disparaît sans prendre l
   window.dispatchEvent(new Event("appinstalled"));
 
   await expect.element(installButton(screen)).not.toBeInTheDocument();
-  await expect.element(screen.getByText(fr.install.other)).toBeVisible();
+  await expect.element(screen.getByText(fr.install.done)).toBeVisible();
   // The focus was somewhere else, and stays there.
   expect(document.activeElement).toBe(elsewhere);
   elsewhere.remove();
+});
+
+test("InstallSection — l'appli installée dans cet onglet : le titre reste et le dit, plus la phrase du menu", async () => {
+  listen();
+  offer();
+  const screen = await mount();
+  await expect.element(installButton(screen)).toBeVisible();
+
+  window.dispatchEvent(new Event("appinstalled"));
+
+  // « Installed », not « your browser offers to install it from its menu ».
+  await expect.element(screen.getByText(fr.install.done)).toBeVisible();
+  await expect.element(screen.getByRole("region", { name: fr.install.title })).toBeVisible();
+  await expect.element(title(screen)).toBeVisible();
+  await expect.element(installButton(screen)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.install.other)).not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.install.ios)).not.toBeInTheDocument();
+});
+
+test("InstallSection — installée dans cet onglet, aussi sur iOS et sans offre du navigateur", async () => {
+  listen();
+  const screen = await mount({ standalone: false, ios: true });
+  await expect.element(screen.getByText(fr.install.ios)).toBeVisible();
+
+  window.dispatchEvent(new Event("appinstalled"));
+
+  await expect.element(screen.getByText(fr.install.done)).toBeVisible();
+  await expect.element(screen.getByText(fr.install.ios)).not.toBeInTheDocument();
+});
+
+test("InstallSection — la section ouverte après l'installation la dit aussi", async () => {
+  // The profile is opened after the event, which came while nobody was looking.
+  listen();
+  window.dispatchEvent(new Event("appinstalled"));
+
+  const screen = await mount();
+
+  await expect.element(screen.getByText(fr.install.done)).toBeVisible();
+  await expect.element(title(screen)).toBeVisible();
 });
 
 test("InstallSection — l'appli installée pendant que le bouton a le focus, le titre le prend", async () => {
@@ -131,6 +170,8 @@ test("InstallSection — l'appli installée pendant que le bouton a le focus, le
 
   await expect.element(installButton(screen)).not.toBeInTheDocument();
   await expect.element(title(screen)).toHaveFocus();
+  // And the section says why the button is gone.
+  await expect.element(screen.getByText(fr.install.done)).toBeVisible();
 });
 
 test("InstallSection — une nouvelle offre redessine la page sans enlever le focus au bouton", async () => {
@@ -161,6 +202,17 @@ test("InstallSection — rien quand le site est installé", async () => {
   expect(screen.container.textContent).toBe("");
 });
 
+test("InstallSection — rien non plus quand le site est installé, même si l'événement arrive", async () => {
+  // Already running installed: the section is not there, and the event does not bring it.
+  listen();
+  const screen = await mount({ standalone: true, ios: false });
+
+  window.dispatchEvent(new Event("appinstalled"));
+
+  await expect.element(screen.getByText(fr.install.done)).not.toBeInTheDocument();
+  expect(screen.container.textContent).toBe("");
+});
+
 test("InstallSection — la phrase iPhone sur iOS", async () => {
   listen();
 
@@ -182,4 +234,8 @@ test("InstallSection — en anglais", async () => {
   await expect.element(other.getByText(en.install.other)).toBeVisible();
   offer();
   await expect.element(other.getByRole("button", { name: en.install.button })).toBeVisible();
+
+  window.dispatchEvent(new Event("appinstalled"));
+  await expect.element(other.getByText(en.install.done)).toBeVisible();
+  expect(en.install.done).toBe("The app is installed.");
 });

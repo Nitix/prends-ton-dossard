@@ -1,12 +1,14 @@
 // The offer to install the site, which Chromium sends once, as the page loads
 // (`beforeinstallprompt`), long before anybody opens the profile. The app
 // listens from the start (see main.tsx) and keeps the event here, until the
-// profile asks for it.
+// profile asks for it. It also remembers that the site has been installed
+// (`appinstalled`) since this page was opened.
 
 /** What Chromium adds to the event: the function that shows its own install dialog. */
 export type InstallPromptEvent = Event & { prompt(): Promise<unknown> };
 
 let waiting: InstallPromptEvent | null = null;
+let installed = false;
 const subscribers = new Set<() => void>();
 
 function isInstallPrompt(event: Event): event is InstallPromptEvent {
@@ -25,6 +27,7 @@ function onPrompt(event: Event) {
 }
 
 function onInstalled() {
+  installed = true;
   keep(null);
 }
 
@@ -32,7 +35,7 @@ function onInstalled() {
  * Starts keeping the install offer of the browser. The mini-bar of the
  * browser is held back, since the profile has a button for it. The offer is
  * forgotten when the site is installed. Returns the function that stops, and
- * forgets the offer.
+ * forgets the offer and that the site was installed.
  */
 export function captureInstallPrompt(target: EventTarget = window): () => void {
   target.addEventListener("beforeinstallprompt", onPrompt);
@@ -40,6 +43,7 @@ export function captureInstallPrompt(target: EventTarget = window): () => void {
   return () => {
     target.removeEventListener("beforeinstallprompt", onPrompt);
     target.removeEventListener("appinstalled", onInstalled);
+    installed = false;
     keep(null);
   };
 }
@@ -47,6 +51,15 @@ export function captureInstallPrompt(target: EventTarget = window): () => void {
 /** The offer that the browser made and nobody has used, or null. For `useSyncExternalStore`. */
 export function installPrompt(): InstallPromptEvent | null {
   return waiting;
+}
+
+/**
+ * Whether the site was installed while this page was open (`appinstalled`).
+ * A page that is opened from an installed app is told by `detectEnvironment`
+ * instead. For `useSyncExternalStore`.
+ */
+export function isInstalled(): boolean {
+  return installed;
 }
 
 /** For `useSyncExternalStore`. Returns the function that unsubscribes. */

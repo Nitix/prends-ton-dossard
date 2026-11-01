@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import {
   captureInstallPrompt,
   installPrompt,
+  isInstalled,
   subscribeInstallPrompt,
   takeInstallPrompt,
 } from "./installPrompt";
@@ -75,6 +76,26 @@ test("installPrompt — l'appli installée, l'événement est oublié", () => {
 
   expect(installPrompt()).toBeNull();
   expect(changed).toHaveBeenCalledTimes(1);
+});
+
+test("installPrompt — l'appli installée, on s'en souvient jusqu'à l'arrêt de l'écoute", () => {
+  listen();
+  const changed = vi.fn<() => void>();
+  subscribeInstallPrompt(changed);
+  expect(isInstalled()).toBe(false);
+
+  target.dispatchEvent(new Event("appinstalled"));
+
+  expect(isInstalled()).toBe(true);
+  // One notice for the offer that is forgotten and the installation together.
+  expect(changed).toHaveBeenCalledTimes(1);
+  // An offer, which the browser would not make for an installed app, does not undo it.
+  offer();
+  expect(isInstalled()).toBe(true);
+
+  stop?.();
+  stop = undefined;
+  expect(isInstalled()).toBe(false);
 });
 
 test("installPrompt — qui se désabonne n'est plus prévenu", () => {

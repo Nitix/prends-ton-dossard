@@ -127,6 +127,8 @@ export const fr = {
     ios: "Sur iPhone : touche Partager, puis « Sur l'écran d'accueil ».",
     // Where the browser offers it from its own menu.
     other: "Ton navigateur propose l'installation depuis son menu.",
+    // Once the site has been installed, in the page that was open at the time.
+    done: "L'appli est installée.",
   },
   // The labels of the participation statuses.
   status: {
