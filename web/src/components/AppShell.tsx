@@ -29,7 +29,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="on-dawn relative overflow-hidden bg-dawn-sky text-white">
         <DawnSky sun={!withHero} />
         <div className="relative mx-auto flex max-w-5xl items-center px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-16 md:h-40 md:items-start md:pt-[1.625rem] md:pb-0">
-          <BrandMark />
+          {/* The name of the app leads home, as on most sites. */}
+          <Link
+            to="/"
+            className="-m-1.5 flex min-h-11 items-center rounded-2xl p-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <BrandMark />
+          </Link>
         </div>
       </header>
       <TabBar isAdmin={isAdmin} />

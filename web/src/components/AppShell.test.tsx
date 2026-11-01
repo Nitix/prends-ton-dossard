@@ -114,6 +114,15 @@ test("AppShell — les onglets et le bouton + mènent aux bonnes pages, et la pa
   }
 });
 
+test("AppShell — le nom de l'appli dans l'en-tête mène à l'accueil, avec une zone de 44 px", async () => {
+  const screen = await renderShell();
+
+  const name = screen.getByRole("banner").getByRole("link", link(fr.common.appName));
+  await expect.element(name).toHaveAttribute("href", "/");
+  const box = name.element().getBoundingClientRect();
+  expect(box.height).toBeGreaterThanOrEqual(44);
+});
+
 test("AppShell — la page courante est marquée aria-current", async () => {
   const screen = await renderShell();
 
