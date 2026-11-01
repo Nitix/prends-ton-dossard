@@ -36,13 +36,29 @@ export function createParticipation(input: {
 }
 
 /**
- * Changes a participation: its status, its format (of the same event), or
- * confirms it (`confirmed: true`, which only its runner may do). The runner
- * of a participation is never changed.
+ * What a change of a participation may carry: its status, its format (of the
+ * same event), the confirmation (`confirmed: true`, which only its runner may
+ * give), and its result. A result is sent whole, the unset parts as 0 and an
+ * empty note: the server stores what it gets, and clears what does not go with
+ * the status.
+ */
+export type ParticipationPatch = {
+  status?: Status;
+  format?: string;
+  confirmed?: true;
+  finish_time_s?: number;
+  rank?: number;
+  rank_of?: number;
+  result_note?: string;
+};
+
+/**
+ * Changes a participation (see `ParticipationPatch`). The runner of a
+ * participation is never changed.
  */
 export function updateParticipation(
   id: string,
-  patch: { status?: Status; format?: string; confirmed?: true },
+  patch: ParticipationPatch,
 ): Promise<ParticipationRecord> {
   return pb.collection("participations").update<ParticipationRecord>(id, patch);
 }
@@ -69,11 +85,7 @@ export function useCreateParticipation(
 
 export function useUpdateParticipation(
   eventId: string,
-): UseMutationResult<
-  ParticipationRecord,
-  Error,
-  { id: string; patch: Parameters<typeof updateParticipation>[1] }
-> {
+): UseMutationResult<ParticipationRecord, Error, { id: string; patch: ParticipationPatch }> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }) => updateParticipation(id, patch),

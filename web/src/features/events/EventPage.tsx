@@ -5,7 +5,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Avatar } from "../../components/Avatar";
 import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { SECTION } from "../../components/section";
+import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
+import type { Formatters } from "../../lib/format";
+import type { ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
@@ -22,6 +25,7 @@ import {
   canEditParticipation,
   type Me,
 } from "../participations/permissions";
+import { resultParts } from "../results/resultText";
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { formatDisplayName, formatMeasures } from "./formatName";
@@ -433,6 +437,18 @@ function EventSection({
   );
 }
 
+/**
+ * What the row of a participation under a format says: its status, and for a
+ * finish or a DNF what is known of the result after it ("Terminé · 4h 12min 30s
+ * · 12e sur 340 · 3e V1H"). The server clears a result when the status changes;
+ * the page still shows none for the other statuses.
+ */
+function statusLine(participation: ParticipationRecord, f: Formatters, t: Messages): string {
+  const { status } = participation;
+  const result = status === "finished" || status === "dnf" ? resultParts(participation, f, t) : [];
+  return [t.status[status], ...result].join(SEPARATOR);
+}
+
 /** A format: its measures, its day when the event has several, and the runners who start it. */
 function FormatSection({
   eventId,
@@ -473,7 +489,7 @@ function FormatSection({
               key={participationView.participation.id}
               eventId={eventId}
               participationView={participationView}
-              detail={t.status[participationView.participation.status]}
+              detail={statusLine(participationView.participation, f, t)}
               label={formatDisplayName(format, raceType.label, f, t)}
               source={formatTitle(format.id)}
               me={me}
@@ -583,7 +599,7 @@ function ParticipantRow({
         />
         <div className="min-w-0">
           <p className="font-medium break-words">{runner.name}</p>
-          {detail !== undefined && <p className="text-sm text-neutral-600">{detail}</p>}
+          {detail !== undefined && <p className="text-sm break-words text-neutral-600">{detail}</p>}
           {!confirmed && (
             <p className="text-sm text-neutral-600">
               {addedBy ? t.event.addedByUnconfirmed(addedBy.name) : t.event.unconfirmed}

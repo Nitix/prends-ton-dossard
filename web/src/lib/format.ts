@@ -36,6 +36,13 @@ export type Formatters = {
   list(names: string[]): string;
   /** A number of minutes as hours and minutes, narrow style: "46h 30min". Meant for positive durations. */
   duration(minutes: number): string;
+  /**
+   * A race time given in seconds, narrow style like `duration`: "4h 12min 30s", "4h 12m 30s".
+   * A unit that is zero is left out, unless it is between two others: "1h 0min 5s", not "1h 5s".
+   */
+  raceTime(seconds: number): string;
+  /** A rank in words, agreeing with its number: "1er", "12e" in French, "1st", "12th" in English. */
+  ordinal(n: number): string;
   /** The first day of the week, from 1 (Monday) to 7 (Sunday). Monday when the engine cannot tell. */
   firstDayOfWeek(): number;
 };
@@ -48,6 +55,20 @@ type WeekInfoLocale = {
 };
 
 const MONDAY = 1;
+
+const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_MINUTE = 60;
+
+// The ending of an ordinal number for each form of the plural rules of the
+// language: "1er", "2e" in French (only 1 has a form of its own), "1st", "2nd",
+// "3rd" and "4th" in English.
+const ORDINAL_ENDINGS: Record<
+  "fr" | "en",
+  Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }
+> = {
+  fr: { one: "er", other: "e" },
+  en: { one: "st", two: "nd", few: "rd", other: "th" },
+};
 
 export function createFormatters(locale: string): Formatters {
   const relativeTime = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
@@ -69,6 +90,14 @@ export function createFormatters(locale: string): Formatters {
   });
   const conjunction = new Intl.ListFormat(locale, { type: "conjunction" });
   const narrowDuration = new Intl.DurationFormat(locale, { style: "narrow" });
+  // The same, with the minutes told even when there are none.
+  const narrowDurationWithMinutes = new Intl.DurationFormat(locale, {
+    style: "narrow",
+    minutesDisplay: "always",
+  });
+  const ordinals = new Intl.PluralRules(locale, { type: "ordinal" });
+  // The app is in French or in English, and the locale may be a regional one (`fr-CA`): its language says which.
+  const endings = ORDINAL_ENDINGS[new Intl.Locale(locale).language === "fr" ? "fr" : "en"];
 
   // The date goes through `toLocaleString`, which works with the native
   // Temporal as well as with the polyfill.
@@ -94,6 +123,18 @@ export function createFormatters(locale: string): Formatters {
     // A unit that is zero is left out: 2880 minutes is "48h".
     duration: (minutes) =>
       narrowDuration.format({ hours: Math.floor(minutes / 60), minutes: minutes % 60 }),
+    raceTime: (seconds) => {
+      const hours = Math.floor(seconds / SECONDS_PER_HOUR);
+      const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+      const rest = seconds % SECONDS_PER_MINUTE;
+      const zeroInTheMiddle = hours > 0 && minutes === 0 && rest > 0;
+      return (zeroInTheMiddle ? narrowDurationWithMinutes : narrowDuration).format({
+        hours,
+        minutes,
+        seconds: rest,
+      });
+    },
+    ordinal: (n) => `${n}${endings[ordinals.select(n)] ?? endings.other}`,
     firstDayOfWeek: () => {
       const intlLocale: WeekInfoLocale = new Intl.Locale(locale);
       const info = intlLocale.getWeekInfo?.() ?? intlLocale.weekInfo;

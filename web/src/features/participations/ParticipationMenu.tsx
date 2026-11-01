@@ -7,6 +7,8 @@ import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { ParticipationRecord, RunnerRecord, Status } from "../../lib/types";
 import { invalidateEvents, type EventView } from "../events/api";
+import { ResultDialog } from "../results/ResultDialog";
+import { hasResult } from "../results/resultText";
 import { EVENT_STATUSES, STATUSES, useDeleteParticipation, useUpdateParticipation } from "./api";
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 import { isNotFound, participationError } from "./errors";
@@ -15,7 +17,7 @@ const ITEM =
   "flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left hover:bg-neutral-100";
 
 /** Which dialog the menu has opened, if any. */
-type Opened = "remove" | "choose";
+type Opened = "remove" | "choose" | "result";
 
 /**
  * The actions on a participation: change its status, confirm it, remove it.
@@ -24,7 +26,8 @@ type Opened = "remove" | "choose";
  * « Supporter »), then « Pick the race ». It is a menu of the browser (the
  * Popover API): the button opens it, and it closes with Esc, with a click
  * outside, and with a click on one of its actions, with no script. Removing
- * asks first, in a dialog.
+ * asks first, in a dialog. On a format, it also opens the dialog of the result
+ * (« Enter the result », « Edit the result » when there is one).
  *
  * Who may do what is the page's call: it only shows this to those who may
  * edit the participation, and passes `canConfirm` for the runner it is about.
@@ -32,11 +35,12 @@ type Opened = "remove" | "choose";
  * Where the focus goes (a keyboard or screen reader user must not restart from
  * the top of the page): a status change or a confirmation gives it back to the
  * button of the menu (the browser does, when the popover closes); so does a
- * dialog that is cancelled; and a removal that goes through, like a format that
- * is given or a status that moves the participation to another list (to or
- * from the "did not start" list, or from interested to supporter and back),
- * calls `onRemoved`, since this menu goes away with its row: the page puts the
- * focus somewhere that stays.
+ * dialog that is cancelled, or that saves a result that leaves the row where
+ * it is; and a removal that goes through, like a format that is given or a
+ * status that moves the participation to another list (to or from the "did not
+ * start" list, or from interested to supporter and back, a result for someone
+ * who did not start included), calls `onRemoved`, since this menu goes away
+ * with its row: the page puts the focus somewhere that stays.
  */
 export function ParticipationMenu({
   eventId,
@@ -169,6 +173,22 @@ export function ParticipationMenu({
               </button>
             </li>
           )}
+          {/* A participation on the event alone has started nothing: it has no result. */}
+          {!formatsOf && (
+            <li>
+              <button
+                type="button"
+                popoverTarget={menuId}
+                popoverTargetAction="hide"
+                onClick={() => {
+                  setOpened("result");
+                }}
+                className={ITEM}
+              >
+                {hasResult(participation) ? t.results.edit : t.results.enter}
+              </button>
+            </li>
+          )}
           {canConfirm && !participation.confirmed && (
             <li>
               <button
@@ -207,6 +227,17 @@ export function ParticipationMenu({
           onRemoved={removed}
         />
       </Dialog>
+      {!formatsOf && (
+        <ResultDialog
+          open={opened === "result"}
+          onClose={dismiss}
+          // A result puts someone who did not start among the starters of the format: their row moves.
+          onSaved={participation.status === "dns" ? removed : dismiss}
+          onGone={removed}
+          eventId={eventId}
+          participation={participation}
+        />
+      )}
       {formatsOf && (
         <ChooseFormatDialog
           open={opened === "choose"}

@@ -194,6 +194,29 @@ export const fr = {
     chooseFormat: "Choisir l'épreuve",
     chooseFormatTitle: "Choisir l'épreuve",
   },
+  // The result of a participation: entered in a dialog from its menu, shown on its row (see features/results).
+  results: {
+    // The items of the menu of a participation on a format.
+    enter: "Saisir le résultat",
+    edit: "Modifier le résultat",
+    title: "Résultat",
+    time: "Temps",
+    // The three parts of a time: the unit written next to its field, and its name for a screen reader.
+    hours: "h",
+    minutes: "min",
+    seconds: "s",
+    hoursName: "heures",
+    minutesName: "minutes",
+    secondsName: "secondes",
+    rank: "Classement",
+    // Between the rank and the number of people ranked: "12e sur 340".
+    rankOf: "sur",
+    note: "Note",
+    noteHint: "Catégorie, nombre de boucles, raison d'un abandon…",
+    // On the row: the rank is already an ordinal ("12e"); the number of people ranked is not always known.
+    rankText: (rank: string, of?: string) => (of === undefined ? rank : `${rank} sur ${of}`),
+    save: "Enregistrer",
+  },
   // The comments of an event, at the bottom of its page (see features/comments).
   comments: {
     // The title while the comments load or fail to load (the count is not known), and with the count.

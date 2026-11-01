@@ -716,3 +716,207 @@ test("ParticipationMenu — après un changement de statut, le focus est sur le 
   });
   expect(focused()).toBe(trigger(screen).element());
 });
+
+// --- The result ---
+//
+// On a format only: a participation on the event alone has not started anything.
+
+const enterResult = (screen: Screen) =>
+  screen.getByRole("button", { name: fr.results.enter, exact: true });
+const editResult = (screen: Screen) =>
+  screen.getByRole("button", { name: fr.results.edit, exact: true });
+const resultDialog = (screen: Screen) => screen.getByRole("dialog", { name: fr.results.title });
+
+// Bob has finished: his result is known.
+const bobFinished: ParticipationRecord = {
+  ...bobParticipation,
+  status: "finished",
+  finish_time_s: 15150,
+  rank: 12,
+  rank_of: 340,
+  result_note: "3e V1H",
+};
+
+test("ParticipationMenu — « Saisir le résultat » pour qui peut modifier, « Modifier le résultat » s'il y en a un", async () => {
+  const none = await renderMenu();
+  await open(none.screen);
+  await expect.element(enterResult(none.screen)).toBeVisible();
+  await expect.element(editResult(none.screen)).not.toBeInTheDocument();
+  expect(enterResult(none.screen).element().getBoundingClientRect().height).toBeGreaterThanOrEqual(
+    44,
+  );
+  // After the statuses, with the other actions: it is not a status.
+  expect(itemsOf(trigger(none.screen).element())).toEqual([
+    fr.status.interested,
+    fr.status.registered,
+    fr.status.finished,
+    fr.status.dnf,
+    fr.status.dns,
+    fr.results.enter,
+    fr.common.remove,
+  ]);
+  await none.screen.unmount();
+
+  const known = await renderMenu({ participation: bobFinished });
+  await open(known.screen);
+  await expect.element(editResult(known.screen)).toBeVisible();
+  await expect.element(enterResult(known.screen)).not.toBeInTheDocument();
+});
+
+test("ParticipationMenu — « Modifier le résultat » aussi pour une simple note, ou un rang seul", async () => {
+  for (const result of [{ result_note: "abandon au km 30" }, { rank: 3 }, { finish_time_s: 60 }]) {
+    const { screen } = await renderMenu({ participation: { ...bobParticipation, ...result } });
+    await open(screen);
+    await expect.element(editResult(screen)).toBeVisible();
+    await screen.unmount();
+  }
+  // A number of people ranked alone is no result.
+  const { screen } = await renderMenu({ participation: { ...bobParticipation, rank_of: 340 } });
+  await open(screen);
+  await expect.element(enterResult(screen)).toBeVisible();
+});
+
+test("ParticipationMenu — rien pour une participation à l'événement", async () => {
+  for (const supporter of [false, true]) {
+    const { screen } = await renderOnEventAlone({ supporter });
+    await ninaMenu(screen).click();
+    await expect.element(chooseFormat(screen)).toBeVisible();
+
+    await expect.element(enterResult(screen)).not.toBeInTheDocument();
+    await expect.element(editResult(screen)).not.toBeInTheDocument();
+    await screen.unmount();
+  }
+});
+
+test("ParticipationMenu — « Saisir le résultat » ouvre le dialogue du résultat, menu refermé, avec le statut Terminé", async () => {
+  const { screen } = await renderMenu();
+  await open(screen);
+
+  await enterResult(screen).click();
+
+  await expect.element(resultDialog(screen)).toBeVisible();
+  await expect
+    .element(resultDialog(screen).getByLabelText(fr.participation.status))
+    .toHaveValue("finished");
+  expect(popoverOf(trigger(screen).element()).matches(":popover-open")).toBe(false);
+});
+
+test("ParticipationMenu — « Modifier le résultat » montre le résultat qu'il y a", async () => {
+  const { screen } = await renderMenu({ participation: bobFinished });
+  await open(screen);
+
+  await editResult(screen).click();
+
+  const dialog = resultDialog(screen);
+  await expect
+    .element(dialog.getByLabelText(fr.results.note, { exact: true }))
+    .toHaveValue("3e V1H");
+  await expect
+    .element(dialog.getByLabelText(`${fr.results.time}, ${fr.results.hoursName}`))
+    .toHaveValue(4);
+});
+
+test("ParticipationMenu — enregistrer un résultat envoie la modification de la participation, ferme le dialogue et rend le focus au bouton du menu", async () => {
+  const { screen, invalidate, onRemoved } = await renderMenu();
+  await open(screen);
+  await enterResult(screen).click();
+  const dialog = resultDialog(screen);
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.hoursName}`).fill("4");
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.minutesName}`).fill("12");
+  await dialog.getByLabelText(fr.results.rank, { exact: true }).fill("12");
+
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p2", {
+      status: "finished",
+      finish_time_s: 15120,
+      rank: 12,
+      rank_of: 0,
+      result_note: "",
+    });
+  });
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(focused()).toBe(trigger(screen).element());
+  });
+  // The row stays where it is: the page has nothing to place.
+  expect(onRemoved).not.toHaveBeenCalled();
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["event", "event"]);
+});
+
+test("ParticipationMenu — Annuler, Échap ou Fermer dans le dialogue du résultat rendent le focus au bouton du menu", async () => {
+  const { screen, onRemoved } = await renderMenu();
+  for (const close of [
+    () => resultDialog(screen).getByRole("button", { name: fr.common.cancel }).click(),
+    () => userEvent.keyboard("{Escape}"),
+    () => resultDialog(screen).getByRole("button", { name: fr.common.close }).click(),
+  ]) {
+    await open(screen);
+    await enterResult(screen).click();
+    await expect.element(resultDialog(screen)).toBeVisible();
+
+    await close();
+
+    await expect.element(resultDialog(screen)).not.toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(focused()).toBe(trigger(screen).element());
+    });
+  }
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(onRemoved).not.toHaveBeenCalled();
+});
+
+test("ParticipationMenu — le résultat d'un non partant le sort de la liste des non partants : la page en est prévenue", async () => {
+  const { screen, onRemoved } = await renderMenu({
+    participation: { ...bobParticipation, status: "dns" },
+  });
+  await open(screen);
+  await enterResult(screen).click();
+  const dialog = resultDialog(screen);
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.minutesName}`).fill("42");
+  expect(onRemoved).not.toHaveBeenCalled();
+
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p2", {
+      status: "finished",
+      finish_time_s: 2520,
+      rank: 0,
+      rank_of: 0,
+      result_note: "",
+    });
+  });
+  await vi.waitFor(() => {
+    expect(onRemoved).toHaveBeenCalledOnce();
+  });
+  await expect.element(dialog).not.toBeInTheDocument();
+  // The row is about to move: the focus is the page's to place, the menu does not take it.
+  expect(focused()).not.toBe(trigger(screen).element());
+});
+
+test("ParticipationMenu — un résultat sur une participation introuvable (404) le dit, et prévient la page", async () => {
+  mocks.update.mockRejectedValue(
+    new ClientResponseError({
+      status: 404,
+      response: { status: 404, message: "The requested resource wasn't found.", data: {} },
+    }),
+  );
+  const { screen, onRemoved, invalidate } = await renderMenu();
+  await open(screen);
+  await enterResult(screen).click();
+  const dialog = resultDialog(screen);
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.minutesName}`).fill("42");
+
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  await vi.waitFor(() => {
+    expect(onRemoved).toHaveBeenCalledOnce();
+  });
+  await expect.element(dialog).not.toBeInTheDocument();
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["event", "event"]);
+});

@@ -1972,3 +1972,184 @@ test("EventPage — une autre erreur donne le message générique, et on peut r�
 
   await loaded(screen);
 });
+
+// --- The result of a participation ---
+
+/** Bob, finished: with his time, his rank, how many were ranked, and a note. */
+const bobFinished = {
+  ...p2,
+  status: "finished",
+  finish_time_s: 15150,
+  rank: 12,
+  rank_of: 340,
+  result_note: "3e V1H",
+};
+
+test("EventPage — une ligne terminée montre son temps, son rang et sa note", async () => {
+  const { screen } = await renderPage({ event: eventWith([bobFinished, p1, p3]) });
+  await loaded(screen);
+
+  // Under the name, after the status, with the separator of the page.
+  expect(plain(textOfRow(row(screen, "Bob").element()))).toContain(
+    "Terminé · 4h 12min 30s · 12e sur 340 · 3e V1H",
+  );
+  // The others have nothing to add.
+  expect(plain(textOfRow(row(screen, "Alice").element()))).not.toContain("·");
+});
+
+test("EventPage — le résultat suit la langue : temps, rang en lettres et « out of »", async () => {
+  const { screen } = await renderPage({
+    event: eventWith([bobFinished, p1, p3]),
+    languages: ["en-GB"],
+  });
+  await loaded(screen);
+
+  expect(plain(textOfRow(row(screen, "Bob").element()))).toContain(
+    "Finished · 4h 12m 30s · 12th out of 340 · 3e V1H",
+  );
+});
+
+test("EventPage — un rang sans nombre de classés, un temps seul, une note seule", async () => {
+  const { screen } = await renderPage({
+    event: eventWith([
+      { ...p2, status: "finished", rank: 1 },
+      { ...p1, status: "finished", finish_time_s: 2520 },
+      { ...p3, status: "dnf", result_note: "abandon au km 30" },
+    ]),
+  });
+  await loaded(screen);
+
+  expect(plain(textOfRow(row(screen, "Bob").element()))).toContain("Terminé · 1er");
+  expect(plain(textOfRow(row(screen, "Alice").element()))).toContain("Terminé · 42min");
+  expect(plain(textOfRow(row(screen, "Sam").element()))).toContain("Abandon · abandon au km 30");
+});
+
+test("EventPage — une ligne terminée sans résultat ne dit que son statut", async () => {
+  // PocketBase sends 0 and "" for what is not given.
+  const empty = { status: "finished", finish_time_s: 0, rank: 0, rank_of: 0, result_note: "" };
+  const { screen } = await renderPage({ event: eventWith([p2, { ...p1, ...empty }, p3]) });
+  await loaded(screen);
+
+  await expect.element(row(screen, "Alice").getByText(fr.status.finished)).toBeVisible();
+  expect(plain(textOfRow(row(screen, "Alice").element()))).not.toContain("·");
+});
+
+test("EventPage — le résultat n'est montré qu'aux statuts Terminé et Abandon", async () => {
+  // The server clears a result when the status changes: a record that still has one is not shown.
+  const stale = { finish_time_s: 3600, rank: 3, rank_of: 10, result_note: "ancien" };
+  const { screen } = await renderPage({
+    event: eventWith([{ ...p2, ...stale }, { ...p1, ...stale }, p3]),
+  });
+  await loaded(screen);
+
+  expect(plain(textOfRow(row(screen, "Bob").element()))).not.toContain("ancien");
+  expect(plain(textOfRow(row(screen, "Bob").element()))).not.toContain("1h");
+  expect(plain(textOfRow(row(screen, "Alice").element()))).not.toContain("ancien");
+});
+
+test("EventPage — la note d'un résultat s'affiche telle quelle, balises comprises", async () => {
+  const { screen } = await renderPage({
+    event: eventWith([{ ...p2, status: "finished", result_note: "<b>V1H</b>" }, p1, p3]),
+  });
+  await loaded(screen);
+
+  expect(textOfRow(row(screen, "Bob").element())).toContain("<b>V1H</b>");
+  expect(row(screen, "Bob").element().querySelector("b")).toBeNull();
+});
+
+test("EventPage — Saisir le résultat : la page recharge, la ligne montre le résultat, et le focus reste sur le bouton du menu", async () => {
+  const { screen } = await renderPage();
+  await loaded(screen);
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([
+        { ...p2, status: "finished", finish_time_s: 2520, result_note: "3e V1H" },
+        p1,
+        p3,
+      ]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Bob").click();
+  await screen.getByRole("button", { name: fr.results.enter, exact: true }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.results.title });
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.minutesName}`).fill("42");
+  await dialog.getByLabelText(fr.results.note, { exact: true }).fill("3e V1H");
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p2", {
+      status: "finished",
+      finish_time_s: 2520,
+      rank: 0,
+      rank_of: 0,
+      result_note: "3e V1H",
+    });
+  });
+  await expect.element(dialog).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(plain(textOfRow(row(screen, "Bob").element()))).toContain("Terminé · 42min · 3e V1H");
+  });
+  // The row stays in its format: the button of its menu has the focus.
+  await vi.waitFor(() => {
+    expect(focused()).toBe(menuOf(screen, "Bob").element());
+  });
+  // And the menu now offers to edit it.
+  await menuOf(screen, "Bob").click();
+  await expect
+    .element(screen.getByRole("button", { name: fr.results.edit, exact: true }))
+    .toBeVisible();
+});
+
+test("EventPage — le résultat d'un non partant le remet dans son épreuve, et le focus va au titre de l'épreuve", async () => {
+  const { screen } = await renderPage({ event: eventWith([dns(p2), p1, p3]) });
+  await loaded(screen);
+  await nonStartersSummary(screen).click();
+  mocks.update.mockImplementation(() => {
+    mocks.getOne.mockResolvedValue(
+      eventWith([{ ...p2, status: "finished", finish_time_s: 2520 }, p1, p3]),
+    );
+    return Promise.resolve({});
+  });
+
+  await menuOf(screen, "Bob").click();
+  await screen.getByRole("button", { name: fr.results.enter, exact: true }).click();
+  const dialog = screen.getByRole("dialog", { name: fr.results.title });
+  await dialog.getByLabelText(`${fr.results.time}, ${fr.results.minutesName}`).fill("42");
+  await dialog.getByRole("button", { name: fr.results.save }).click();
+
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith("p2", {
+      status: "finished",
+      finish_time_s: 2520,
+      rank: 0,
+      rank_of: 0,
+      result_note: "",
+    });
+  });
+  await expect.element(format(screen, /^Trail 42/).getByText("Bob", { exact: true })).toBeVisible();
+  expect(screen.container.querySelector("details")).toBeNull();
+  // The list of those who do not start is gone with its only runner: the focus is where Bob is.
+  const heading = screen.getByRole("heading", { level: 2, name: /^Trail 42/ });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(heading.element());
+  });
+});
+
+test("EventPage — pas de Saisir le résultat sur la participation d'un autre qui est confirmée, ni dans le menu d'un intéressé sans épreuve", async () => {
+  signIn("bob");
+  const { screen } = await renderPage({ event: withParticipations(eventRecord, [pZoe]) });
+  await loaded(screen);
+
+  // Bob has no menu on Alice's participation, which she has confirmed.
+  await expect.element(menuOf(screen, "Alice")).not.toBeInTheDocument();
+  // Zoe is on the event alone: her menu has no result.
+  await menuOf(screen, "Zoe").click();
+  await expect
+    .element(screen.getByRole("button", { name: fr.participation.chooseFormat }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: fr.results.enter, exact: true }))
+    .not.toBeInTheDocument();
+});

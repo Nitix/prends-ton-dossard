@@ -82,6 +82,16 @@ export type ParticipationRecord = BaseRecord & {
   added_by: string;
   /** Whether the runner agrees: computed by the server. */
   confirmed: boolean;
+  // The result. The server keeps the time, the rank and the number of people
+  // ranked at the status `finished` only, and the note at `finished` and `dnf`:
+  // it clears them when the status changes. 0 is "not given".
+  /** The final time, in seconds. */
+  finish_time_s?: number;
+  /** The place in the general ranking. */
+  rank?: number;
+  /** How many people were ranked. */
+  rank_of?: number;
+  result_note?: string;
 };
 
 export type InvitationKind = "invite" | "reset";

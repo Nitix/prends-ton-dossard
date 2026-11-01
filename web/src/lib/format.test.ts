@@ -107,6 +107,62 @@ describe("duration", () => {
   });
 });
 
+describe("raceTime", () => {
+  test("raceTime — heures, minutes, secondes", () => {
+    // Narrow style, like `duration`: Intl.DurationFormat writes no space between a number and its unit.
+    expect(plain(createFormatters("fr-FR").raceTime(15130))).toBe("4h 12min 10s");
+    expect(plain(createFormatters("en-GB").raceTime(15150))).toBe("4h 12m 30s");
+  });
+
+  test("raceTime — une unité qui est zéro est omise, sauf entre deux autres", () => {
+    const fr = createFormatters("fr-FR");
+    expect(plain(fr.raceTime(14400))).toBe("4h");
+    expect(plain(fr.raceTime(2520))).toBe("42min");
+    expect(plain(fr.raceTime(125))).toBe("2min 5s");
+    expect(plain(fr.raceTime(59))).toBe("59s");
+    // 1 h 0 min 5 s, not "1h 5s": a zero in the middle is told.
+    expect(plain(fr.raceTime(3605))).toBe("1h 0min 5s");
+    expect(plain(createFormatters("en-US").raceTime(3605))).toBe("1h 0m 5s");
+  });
+
+  test("raceTime — plus de 24 heures, sans passer aux jours", () => {
+    expect(plain(createFormatters("fr-FR").raceTime(100 * 3600 + 30 * 60))).toBe("100h 30min");
+  });
+});
+
+describe("ordinal", () => {
+  test("ordinal — 1er, 2e, 12e / 1st, 2nd, 12th", () => {
+    const fr = createFormatters("fr-FR");
+    expect([1, 2, 3, 12, 21, 100].map((n) => fr.ordinal(n))).toEqual([
+      "1er",
+      "2e",
+      "3e",
+      "12e",
+      "21e",
+      "100e",
+    ]);
+    const gb = createFormatters("en-GB");
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101].map((n) => gb.ordinal(n))).toEqual([
+      "1st",
+      "2nd",
+      "3rd",
+      "4th",
+      "11th",
+      "12th",
+      "13th",
+      "21st",
+      "22nd",
+      "23rd",
+      "101st",
+    ]);
+  });
+
+  test("ordinal — la langue est celle de la région : fr-CA est français, en-US anglais", () => {
+    expect(createFormatters("fr-CA").ordinal(1)).toBe("1er");
+    expect(createFormatters("en-US").ordinal(2)).toBe("2nd");
+  });
+});
+
 describe("firstDayOfWeek", () => {
   test.each([
     { locale: "fr-FR", expected: 1 },
