@@ -1,6 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ClientResponseError } from "pocketbase";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
@@ -9,15 +8,10 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { invalidateEvents } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
 import { useDeleteParticipation, useUpdateParticipation } from "../participations/api";
-import { participationError } from "../participations/errors";
+import { isNotFound, participationError } from "../participations/errors";
 import { PENDING_KEY, usePending, type PendingView } from "./pending";
 
 const SEPARATOR = " · ";
-
-/** The record is not there any more: somebody else deleted it (its event, its format, the participation itself). */
-function isNotFound(err: unknown): boolean {
-  return err instanceof ClientResponseError && err.status === 404;
-}
 
 /**
  * « À confirmer »: the participations that somebody else added for the user,
@@ -155,7 +149,7 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
     try {
       await update.mutateAsync({ id: participation.id, patch: { confirmed: true } });
     } catch (err) {
-      toast.show(isNotFound(err) ? t.errors.not_found : participationError(t, err));
+      toast.show(participationError(t, err));
       await refreshAfterFailure();
       return;
     }

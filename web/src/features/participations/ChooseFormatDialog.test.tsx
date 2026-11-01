@@ -223,3 +223,43 @@ test("ChooseFormatDialog — champs et boutons d'au moins 44 px", async () => {
     expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   }
 });
+
+/** What PocketBase answers for a record that is not there any more. */
+function notFound() {
+  return new ClientResponseError({
+    status: 404,
+    response: { status: 404, message: "The requested resource wasn't found.", data: {} },
+  });
+}
+
+test("ChooseFormatDialog — une participation introuvable (404, convertie ou supprimée entre-temps) le dit, rafraîchit les listes et ferme", async () => {
+  mocks.update.mockRejectedValue(notFound());
+  const { screen, onClose, invalidate } = await renderDialog();
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+  // The lists were asked for again before the dialog closed, on a page that is up to date.
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["events"]);
+  expect(keys).toContainEqual(["event", "event"]);
+  expect(keys).toContainEqual(["pending"]);
+  // Said in a toast, which stays when the dialog is gone; not the generic message.
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  expect(screen.container.textContent).not.toContain(fr.errors.generic);
+});
+
+test("ChooseFormatDialog — avec onChosen, une participation introuvable (404) le dit à sa place : la ligne est partie", async () => {
+  mocks.update.mockRejectedValue(notFound());
+  const { screen, onClose, onChosen } = await renderDialog({ withOnChosen: true });
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(onChosen).toHaveBeenCalledOnce();
+  });
+  expect(onClose).not.toHaveBeenCalled();
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+});

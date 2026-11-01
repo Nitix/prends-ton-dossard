@@ -494,6 +494,29 @@ test("ParticipationMenu — un changement de statut refusé s'affiche en message
   await expect.element(screen.getByText(fr.errors.forbidden)).toBeVisible();
 });
 
+test("ParticipationMenu — un changement de statut sur une participation introuvable (404) le dit, rafraîchit les listes et prévient la page", async () => {
+  mocks.update.mockRejectedValue(
+    new ClientResponseError({
+      status: 404,
+      response: { status: 404, message: "The requested resource wasn't found.", data: {} },
+    }),
+  );
+  const { screen, invalidate, onRemoved } = await renderMenu();
+  await open(screen);
+
+  await screen.getByRole("button", { name: fr.status.dnf }).click();
+
+  await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+  // The row is gone: what the page shows is asked for again, and the page places the focus.
+  await vi.waitFor(() => {
+    expect(onRemoved).toHaveBeenCalledOnce();
+  });
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(["events"]);
+  expect(keys).toContainEqual(["event", "event"]);
+  expect(keys).toContainEqual(["pending"]);
+});
+
 // --- Where the focus goes ---
 //
 // The removal dialog is opened from an item of the popover, which closes at the

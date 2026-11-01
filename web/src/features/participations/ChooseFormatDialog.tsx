@@ -1,16 +1,18 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
+import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Status } from "../../lib/types";
-import type { EventView, ParticipationView } from "../events/api";
+import { invalidateEvents, type EventView, type ParticipationView } from "../events/api";
 import { useUpdateParticipation } from "./api";
-import { participationError } from "./errors";
+import { isNotFound, participationError } from "./errors";
 import { FormatField, StatusField } from "./fields";
 
 /**
- * "Pick the format": gives a format, and a status, to a participation that is
+ * "Pick the race": gives a format, and a status, to a participation that is
  * on the event alone. All the formats of the event are offered: the runner is
  * on none of them, which the server requires of a participation with no format.
  * The participation then moves to its format, and the status can be more than
@@ -27,8 +29,10 @@ export function ChooseFormatDialog({
   onClose: () => void;
   /**
    * The format has been given and saved, the participation is about to move to
-   * its format. Called in place of `onClose` (which is then for the user who
-   * cancels): a caller who has a row to move has more to do than close.
+   * its format; or the participation is not there any more (somebody else gave
+   * it a format or removed it), and its row is about to go. Called in place of
+   * `onClose` (which is then for the user who cancels): a caller who has a row
+   * to move has more to do than close.
    */
   onChosen?: () => void;
   view: EventView;
@@ -59,6 +63,8 @@ function ChooseForm({
   onChosen?: () => void;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const update = useUpdateParticipation(view.event.id);
   const { participation, runner } = participationView;
 
@@ -77,6 +83,16 @@ function ChooseForm({
     try {
       await update.mutateAsync({ id: participation.id, patch: { format: formatId, status } });
     } catch (err) {
+      if (isNotFound(err)) {
+        // The participation is not on the event alone any more (somebody gave
+        // it a format, or removed it) or is gone: the dialog is about nothing.
+        // It says so in a toast, which stays once the dialog is closed, and
+        // the lists are asked for again before it closes, as after a success.
+        toast.show(participationError(t, err));
+        await invalidateEvents(queryClient, view.event.id);
+        (onChosen ?? onClose)();
+        return;
+      }
       setMessage(participationError(t, err));
       return;
     }

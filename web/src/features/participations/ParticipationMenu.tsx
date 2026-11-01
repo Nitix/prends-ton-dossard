@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { DANGER, SECONDARY } from "../../components/buttons";
@@ -5,10 +6,10 @@ import { Dialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { ParticipationRecord, RunnerRecord, Status } from "../../lib/types";
-import type { EventView } from "../events/api";
+import { invalidateEvents, type EventView } from "../events/api";
 import { STATUSES, useDeleteParticipation, useUpdateParticipation } from "./api";
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
-import { participationError } from "./errors";
+import { isNotFound, participationError } from "./errors";
 
 const ITEM =
   "flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left hover:bg-neutral-100";
@@ -19,7 +20,7 @@ type Opened = "remove" | "choose";
 /**
  * The actions on a participation: change its status, confirm it, remove it.
  * For a participation on the event alone (`formatsOf`), it offers « Pick the
- * format » in place of the statuses: with no format the status can only be
+ * race » in place of the statuses: with no format the status can only be
  * « Interested ». It is a menu of the browser (the Popover API): the button
  * opens it, and it closes with Esc, with a click outside, and with a click on
  * one of its actions, with no script. Removing asks first, in a dialog.
@@ -53,11 +54,12 @@ export function ParticipationMenu({
   /** Given for a participation on the event alone: the event, whose formats it can take. */
   formatsOf?: EventView;
   canConfirm: boolean;
-  /** The participation has just left its row (removed, or moved to another list): this menu is about to go away. */
+  /** The participation has just left its row (removed, moved to another list, or found gone): this menu is about to go away. */
   onRemoved: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const menuId = useId();
   const update = useUpdateParticipation(eventId);
   const [opened, setOpened] = useState<Opened | null>(null);
@@ -88,6 +90,13 @@ export function ParticipationMenu({
       await update.mutateAsync({ id: participation.id, patch });
     } catch (err) {
       toast.show(participationError(t, err));
+      if (isNotFound(err)) {
+        // The participation is gone (removed, or given a format by somebody
+        // else, which is another row): what the page shows is out of date. It
+        // is asked for again, and the row goes, with this menu.
+        await invalidateEvents(queryClient, eventId);
+        onRemoved();
+      }
       return;
     }
     // The page lists those who do not start apart from the others: the row moves.
