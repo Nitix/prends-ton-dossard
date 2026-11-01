@@ -1501,6 +1501,68 @@ test("Résultats à saisir — zones tactiles d'au moins 44 px", async () => {
   await page.viewport(414, 896);
 });
 
+// ---- Une inscription non confirmée, à saisir ou à confirmer
+
+/** A race 3 days ago (27 April): inside the window of the results. */
+const lastWeek = {
+  ...eventRecord,
+  id: "lastWeek",
+  name: "Trail de la Semaine",
+  start_date: "2026-04-27",
+  end_date: "",
+};
+const lastWeekFormat = { ...springFormat, id: "fLastWeek", event: "lastWeek" };
+
+/**
+ * The registration that a friend made for Bob, and that he has not confirmed:
+ * what the server sends for « À confirmer », which has the runner and who added
+ * it, and for « Résultats à saisir », which asks for every registered one.
+ */
+function unconfirmed(registered: ReturnType<typeof registeredFor>) {
+  const { event, format } = registered.expand;
+  return {
+    ...registered,
+    confirmed: false,
+    added_by: aliceRunner.id,
+    expand: { runner: bobRunner, added_by: aliceRunner, event, format },
+  };
+}
+
+const lastWeekUnconfirmed = unconfirmed(registeredFor("p-last-week", lastWeek, lastWeekFormat));
+const ancientUnconfirmed = unconfirmed(ancientRegistered);
+
+test("À confirmer — une inscription non confirmée d'il y a 3 jours est à saisir, pas aussi à confirmer", async () => {
+  // Both blocks are asked for it, as the server answers both: a friend registered Bob.
+  mocks.pending.mockResolvedValue([lastWeekUnconfirmed, ancientUnconfirmed]);
+  mocks.toEnter.mockResolvedValue([lastWeekUnconfirmed, ancientUnconfirmed]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  const titles = (block: ReturnType<typeof resultsBlock>) =>
+    block
+      .getByRole("listitem")
+      .elements()
+      .map((row) => row.querySelector("h3")?.textContent);
+  // To enter: the race of 3 days ago. To confirm: the one that is too old to be asked its result.
+  expect(titles(resultsBlock(screen))).toEqual(["Trail de la Semaine"]);
+  expect(titles(pendingBlock(screen))).toEqual(["Cross d'antan"]);
+  // Once on the page, not twice.
+  expect(screen.getByRole("link", { name: "Trail de la Semaine" }).elements()).toHaveLength(1);
+});
+
+test("À confirmer — pas de bloc quand tout ce qui est à confirmer est à saisir", async () => {
+  mocks.pending.mockResolvedValue([lastWeekUnconfirmed]);
+  mocks.toEnter.mockResolvedValue([lastWeekUnconfirmed]);
+
+  const { screen, queryClient } = await renderHome();
+
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  await settled(queryClient);
+  await expect.element(screen.getByText(fr.home.pendingTitle)).not.toBeInTheDocument();
+});
+
 // ---- Mes prochaines courses
 
 test("MyUpcoming — affiche « dans 45 jours » pour F42", async () => {

@@ -11,6 +11,7 @@ import type {
 } from "../../lib/types";
 import { useSession } from "../auth/session";
 import { toParticipationView, type ParticipationView } from "../events/api";
+import { isResultToEnter } from "../results/resultsToEnter";
 
 /**
  * A participation the user has not confirmed: who it is for and who added it
@@ -76,6 +77,20 @@ function toPendingViews(records: ExpandedPending[]): PendingView[] {
         a.event.name.localeCompare(b.event.name) ||
         a.participation.id.localeCompare(b.participation.id),
     );
+}
+
+/**
+ * The participations to confirm: the views without the ones that « Résultats à
+ * saisir » shows (see `isResultToEnter`). A friend who registers the user for
+ * a race that is over would otherwise have it twice on the page, with five
+ * buttons; entering the result confirms it anyway. Once the race is past the
+ * window of the results, nothing else asks, so it stays here. `views` is left
+ * as it is.
+ */
+export function pendingOf(views: PendingView[], today: Temporal.PlainDate): PendingView[] {
+  return views.filter(
+    ({ participation, date }) => !isResultToEnter(participation.status, date, today),
+  );
 }
 
 /**

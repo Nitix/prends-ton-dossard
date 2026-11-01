@@ -56,18 +56,30 @@ export function toEnterRow(record: RegisteredRecord): ToEnter {
 }
 
 /**
- * The races whose result is to enter: the ones that are over (the day of a
- * race is not: it may still be on) and not over for more than
- * `RESULTS_WINDOW_DAYS` days. The latest comes first, then the name of the
- * event, then the id of the participation (so that the order never depends on
- * the server's). `rows` is left as it is.
+ * Whether the result of a participation is to enter: it is « Registered » and
+ * its race is over (the day of a race is not: it may still be on) for no more
+ * than `RESULTS_WINDOW_DAYS` days. `date` is the day of the race
+ * (`effectiveDate`). « Résultats à saisir » shows these, and « À confirmer »
+ * leaves them out (see `pendingOf`): both ask this, so they cannot disagree.
+ */
+export function isResultToEnter(
+  status: ParticipationRecord["status"],
+  date: Temporal.PlainDate,
+  today: Temporal.PlainDate,
+): boolean {
+  if (status !== "registered") return false;
+  const daysAgo = daysBetween(date, today);
+  return daysAgo >= 1 && daysAgo <= RESULTS_WINDOW_DAYS;
+}
+
+/**
+ * The races whose result is to enter (`isResultToEnter`). The latest comes
+ * first, then the name of the event, then the id of the participation (so that
+ * the order never depends on the server's). `rows` is left as it is.
  */
 export function toEnterOf(rows: ToEnter[], today: Temporal.PlainDate): ToEnter[] {
   return rows
-    .filter(({ date }) => {
-      const daysAgo = daysBetween(date, today);
-      return daysAgo >= 1 && daysAgo <= RESULTS_WINDOW_DAYS;
-    })
+    .filter(({ participation, date }) => isResultToEnter(participation.status, date, today))
     .toSorted(
       (a, b) =>
         Temporal.PlainDate.compare(b.date, a.date) ||

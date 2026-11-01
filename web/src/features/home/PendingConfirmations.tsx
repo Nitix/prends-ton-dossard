@@ -5,11 +5,12 @@ import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
+import { useToday } from "../../lib/useToday";
 import { invalidateEvents } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
 import { useDeleteParticipation, useUpdateParticipation } from "../participations/api";
 import { isNotFound, participationError } from "../participations/errors";
-import { PENDING_KEY, usePending, type PendingView } from "./pending";
+import { PENDING_KEY, pendingOf, usePending, type PendingView } from "./pending";
 
 const SEPARATOR = " · ";
 
@@ -17,7 +18,8 @@ const SEPARATOR = " · ";
  * « À confirmer »: the participations that somebody else added for the user,
  * who agrees (Confirmer) or refuses (Retirer, which deletes it at once: the
  * participation is not the user's yet). The block is not there when there is
- * nothing to confirm.
+ * nothing to confirm. A race that « Résultats à saisir » shows is not here too
+ * (see `pendingOf`): it would be on the page twice, with five buttons.
  *
  * A row goes away once it is dealt with, and the button that was pressed with
  * it, so the focus is given back to something that stays (a keyboard or screen
@@ -31,6 +33,7 @@ export function PendingConfirmations({
   pageHeading: RefObject<HTMLHeadingElement | null>;
 }) {
   const { t } = useI18n();
+  const today = useToday();
   const query = usePending();
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -59,7 +62,7 @@ export function PendingConfirmations({
       </div>
     );
   }
-  const rows = query.data ?? [];
+  const rows = pendingOf(query.data ?? [], today);
   if (rows.length === 0) return null;
 
   return (

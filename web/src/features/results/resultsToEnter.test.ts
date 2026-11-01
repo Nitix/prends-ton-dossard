@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import type { ParticipationRecord } from "../../lib/types";
 import { eventRecord, f42, p1, trailType } from "../events/testFixture";
-import { RESULTS_WINDOW_DAYS, toEnterOf, type ToEnter } from "./resultsToEnter";
+import { RESULTS_WINDOW_DAYS, isResultToEnter, toEnterOf, type ToEnter } from "./resultsToEnter";
 
 const date = (s: string) => Temporal.PlainDate.from(s);
 const TODAY = "2026-04-30";
@@ -65,5 +65,36 @@ describe("toEnterOf", () => {
       "a",
       "b-1",
     ]);
+  });
+});
+
+const isToEnter = (status: ParticipationRecord["status"], day: string, today = TODAY) =>
+  isResultToEnter(status, date(day), date(today));
+
+describe("isResultToEnter", () => {
+  test("isResultToEnter — inscrit, la course est finie depuis 1 à 60 jours", () => {
+    // To come, and today: the race is not over yet.
+    expect(isToEnter("registered", "2026-05-01")).toBe(false);
+    expect(isToEnter("registered", "2026-04-30")).toBe(false);
+    // Yesterday, and exactly 60 days ago: over, and still asked for.
+    expect(isToEnter("registered", "2026-04-29")).toBe(true);
+    expect(isToEnter("registered", "2026-03-01")).toBe(true);
+    // 61 days ago: left alone.
+    expect(isToEnter("registered", "2026-02-28")).toBe(false);
+  });
+
+  test("isResultToEnter — une autre participation n'est pas à saisir, même passée depuis 3 jours", () => {
+    for (const status of ["interested", "supporter", "finished", "dnf", "dns"] as const) {
+      expect(isToEnter(status, "2026-04-27")).toBe(false);
+    }
+  });
+
+  test("isResultToEnter — toEnterOf garde exactement ce qu'il dit", () => {
+    // The block and the predicate cannot drift apart: the block is the predicate.
+    const days = ["2026-05-01", "2026-04-30", "2026-04-29", "2026-03-01", "2026-02-28"];
+    const rows = days.map((day) => rowOf(day, day));
+    expect(ids(rows)).toEqual(
+      days.filter((day) => isToEnter("registered", day)).toSorted((a, b) => b.localeCompare(a)),
+    );
   });
 });
