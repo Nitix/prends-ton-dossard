@@ -503,7 +503,7 @@ func TestSeedCommand_Password(t *testing.T) {
 	seed := func(t *testing.T, args ...string) core.App {
 		t.Helper()
 		app := testutil.NewApp(t)
-		command := cmd.NewSeedCommand(app)
+		command := cmd.NewSeedCommand(app, testConfig(t))
 		var out bytes.Buffer
 		command.SetOut(&out)
 		command.SetArgs(args)
@@ -536,11 +536,71 @@ func TestSeedCommand_Password(t *testing.T) {
 func TestSeedCommand_RefusesTwice(t *testing.T) {
 	app := testutil.NewApp(t)
 	for i, wantErr := range []bool{false, true} {
-		command := cmd.NewSeedCommand(app)
+		command := cmd.NewSeedCommand(app, testConfig(t))
 		command.SetOut(&bytes.Buffer{})
 		command.SetArgs(nil)
 		if err := command.Execute(); (err != nil) != wantErr {
 			t.Fatalf("run %d: err = %v, want an error: %v", i+1, err, wantErr)
 		}
+	}
+}
+
+// configFor is the configuration of a program whose APP_URL is appURL.
+func configFor(t testing.TB, appURL string) config.Config {
+	t.Helper()
+	cfg, err := config.Load(func(key string) string {
+		if key == "APP_URL" {
+			return appURL
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+// The demo accounts have a published password: the command only fills the
+// database of a program that runs on the machine of a developer, unless --force
+// says otherwise.
+func TestSeedCommand_OnlyOnLocalhost(t *testing.T) {
+	for _, tc := range []struct {
+		name, appURL string
+		args         []string
+		wantErr      bool
+	}{
+		{"localhost", "http://localhost:5173", nil, false},
+		{"127.0.0.1", "http://127.0.0.1:8090", nil, false},
+		{"the public site", "https://courses.example.fr", nil, true},
+		{"a host that only starts like localhost", "https://localhost.example.fr", nil, true},
+		{"the public site, forced", "https://courses.example.fr", []string{"--force"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SEED_PASSWORD", "")
+			app := testutil.NewApp(t)
+			command := cmd.NewSeedCommand(app, configFor(t, tc.appURL))
+			var out bytes.Buffer
+			command.SetOut(&out)
+			command.SetArgs(tc.args)
+
+			err := command.Execute()
+
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, want an error: %v", err, tc.wantErr)
+			}
+			want := 3
+			if tc.wantErr {
+				want = 0
+				if !strings.Contains(err.Error(), "--force") {
+					t.Errorf("the error %q does not say how to go on anyway", err)
+				}
+				if out.Len() != 0 {
+					t.Errorf("stdout = %q, want nothing", out.String())
+				}
+			}
+			if got := count(t, app, "users"); got != want {
+				t.Errorf("%d accounts, want %d", got, want)
+			}
+		})
 	}
 }

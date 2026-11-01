@@ -41,7 +41,7 @@ Remplir une base vide avec des données de démonstration :
 go run ./server seed
 ```
 
-La commande crée trois comptes (`admin@example.test`, `alice@example.test` et `bob@example.test`, mot de passe `courses-dev-password`, ou celui de `--password` ou de `SEED_PASSWORD`), des coureurs, des événements et des participations. Elle refuse de s'exécuter si des comptes existent déjà.
+La commande crée trois comptes (`admin@example.test`, `alice@example.test` et `bob@example.test`, mot de passe `courses-dev-password`, ou celui de `--password` ou de `SEED_PASSWORD`), des coureurs, des événements et des participations. Elle refuse de s'exécuter si des comptes existent déjà, et si `APP_URL` n'est pas une adresse locale (`localhost` ou `127.0.0.1`) : le binaire de production contient aussi la commande, et ce mot de passe est public. `--force` passe outre ce second refus.
 
 Pour tester le tableau de bord de PocketBase (`http://127.0.0.1:8090/_/`), créer un super-admin : `go run ./server superuser upsert <email> <mot de passe>`.
 

@@ -4,10 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"github.com/spf13/cobra"
+
+	"courses/server/config"
 )
 
 const (
@@ -39,23 +42,40 @@ var demoAccounts = []struct{ email, role, runner string }{
 // adds them to the races they take part in.
 var demoRunnersWithoutAccount = []string{runnerSam, runnerJulie}
 
-// NewSeedCommand returns the command "seed [--password]": it fills an empty
-// database with demo data, for development and the end-to-end tests. The
+// localHosts are the hosts of APP_URL on which seed runs without --force: the
+// machine of a developer.
+var localHosts = []string{"localhost", "127.0.0.1", "::1"}
+
+// NewSeedCommand returns the command "seed [--password] [--force]": it fills an
+// empty database with demo data, for development and the end-to-end tests. The
 // password of the accounts is the one of --password, else the one of the
 // environment variable SEED_PASSWORD, else DefaultSeedPassword.
-func NewSeedCommand(app core.App) *cobra.Command {
-	var password string
+//
+// The binary that runs the site has the command too, and the default password
+// is published: it refuses unless the host of APP_URL (cfg) is the machine
+// itself, or --force is given.
+func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
+	var (
+		password string
+		force    bool
+	)
 
 	command := &cobra.Command{
-		Use:   "seed [--password]",
+		Use:   "seed [--password] [--force]",
 		Short: "Fill an empty database with demo accounts, events and participations",
 		Long: "Fill an empty database with demo accounts, events and participations.\n" +
 			"The password of the accounts is the value of --password, else of the\n" +
-			"environment variable SEED_PASSWORD, else \"" + DefaultSeedPassword + "\".",
+			"environment variable SEED_PASSWORD, else \"" + DefaultSeedPassword + "\".\n" +
+			"It refuses to run unless APP_URL is on localhost, or --force is given.",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(command *cobra.Command, _ []string) error {
+			if !force && !slices.Contains(localHosts, cfg.RPID) {
+				return fmt.Errorf("APP_URL is %s, not a local address: the demo accounts would be "+
+					"on a real site (use --force to fill this database anyway)", cfg.AppURL)
+			}
+
 			secret, isDefault := password, false
 			if !command.Flags().Changed("password") {
 				if secret = os.Getenv("SEED_PASSWORD"); secret == "" {
@@ -85,6 +105,7 @@ func NewSeedCommand(app core.App) *cobra.Command {
 	}
 	command.Flags().StringVar(&password, "password", "",
 		`password of the demo accounts (default: $SEED_PASSWORD, else "`+DefaultSeedPassword+`")`)
+	command.Flags().BoolVar(&force, "force", false, "fill the database although APP_URL is not on localhost")
 	return command
 }
 

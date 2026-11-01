@@ -37,7 +37,7 @@ func main() {
 
 	app.RootCmd.AddCommand(
 		cmd.NewBootstrapAdminCommand(app, cfg),
-		cmd.NewSeedCommand(app),
+		cmd.NewSeedCommand(app, cfg),
 	)
 
 	if err := app.Start(); err != nil {
