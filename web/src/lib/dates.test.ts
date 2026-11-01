@@ -9,6 +9,7 @@ import {
   groupByMonth,
   isUpcoming,
   monthGrid,
+  msUntilTomorrow,
   overlaps,
   parseDate,
   today,
@@ -83,6 +84,33 @@ describe("today", () => {
     const after = Temporal.Now.instant().toZonedDateTimeISO(PARIS).toPlainDate();
 
     expect(result.equals(before) || result.equals(after)).toBe(true);
+  });
+});
+
+describe("msUntilTomorrow", () => {
+  test("is one minute at 23:59 in Paris in winter (UTC+1)", () => {
+    expect(msUntilTomorrow(Temporal.Instant.from("2026-11-01T22:59:00Z"))).toBe(60_000);
+  });
+
+  test("is thirty seconds at 23:59:30 in Paris in summer (UTC+2)", () => {
+    expect(msUntilTomorrow(Temporal.Instant.from("2026-06-13T21:59:30Z"))).toBe(30_000);
+  });
+
+  test("is a whole day at midnight in Paris", () => {
+    expect(msUntilTomorrow(Temporal.Instant.from("2026-06-13T22:00:00Z"))).toBe(86_400_000);
+  });
+
+  test("is 23 hours on the day the clocks go forward", () => {
+    // Midnight in Paris on 29 March 2026, the day of the change to summer time.
+    expect(msUntilTomorrow(Temporal.Instant.from("2026-03-28T23:00:00Z"))).toBe(23 * 3_600_000);
+  });
+
+  test("ends where today() changes", () => {
+    const now = Temporal.Instant.from("2026-11-01T10:15:00Z");
+    const midnight = now.add({ milliseconds: msUntilTomorrow(now) });
+
+    expect(iso(today(midnight.subtract({ milliseconds: 1 })))).toBe("2026-11-01");
+    expect(iso(today(midnight))).toBe("2026-11-02");
   });
 });
 

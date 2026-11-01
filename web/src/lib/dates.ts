@@ -16,6 +16,19 @@ export function today(now?: Temporal.Instant): Temporal.PlainDate {
   return (now ?? Temporal.Now.instant()).toZonedDateTimeISO(PARIS).toPlainDate();
 }
 
+/**
+ * Milliseconds from `now` to the next midnight in Paris: the instant when
+ * `today()` changes. A day is 23 or 25 hours long when the clocks change.
+ */
+export function msUntilTomorrow(now: Temporal.Instant): number {
+  const midnight = now
+    .toZonedDateTimeISO(PARIS)
+    .toPlainDate()
+    .add({ days: 1 })
+    .toZonedDateTime({ timeZone: PARIS });
+  return midnight.epochMilliseconds - now.epochMilliseconds;
+}
+
 /** Reads a `YYYY-MM-DD` string. Throws a RangeError when it is not a real date. */
 export function parseDate(s: string): Temporal.PlainDate {
   return Temporal.PlainDate.from(s);
