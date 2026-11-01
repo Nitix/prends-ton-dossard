@@ -5,9 +5,12 @@ import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/button
 import { Dialog } from "../../components/Dialog";
 import { Field, INPUT } from "../../components/Field";
 import { SECTION } from "../../components/section";
+import { useToast } from "../../components/Toast";
+import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { CommentRecord } from "../../lib/types";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
+import { isNotFound } from "../participations/errors";
 import { canDeleteComment, canEditComment, type Me } from "../participations/permissions";
 import { describeError } from "../profile/forms";
 import {
@@ -31,15 +34,34 @@ import { RelativeTime } from "./RelativeTime";
  * button: it goes to the title of the section, which is not in the tab order
  * (it only receives the focus from here). `me` is null while the runner of the
  * user loads: the comments can be read, not written.
+ *
+ * A comment that somebody else has deleted in the meantime is gone from the
+ * list when the member changes or deletes it (those requests ask for the list
+ * again, refused or not), and the member is told so (`commentError`). The text
+ * field goes with the comment, so a toast says it, and the title of the section
+ * has the focus.
  */
 export function CommentsSection({ eventId, me }: { eventId: string; me: Me | null }) {
   const { t } = useI18n();
+  const toast = useToast();
   const query = useComments(eventId);
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   // The comment the open confirmation is about.
   const [removing, setRemoving] = useState<string | null>(null);
   useRestoreFocus(removing !== null, () => heading.current);
+
+  /**
+   * The comment that was being edited is not there any more: its field goes
+   * with it. The title of the section takes the focus, if the member has not
+   * gone on to something else in the meantime.
+   */
+  function gone(form: HTMLFormElement | null) {
+    toast.show(t.errors.not_found);
+    const active = document.activeElement;
+    const lost = !active || active === document.body || !active.isConnected;
+    if (lost || form?.contains(active)) heading.current?.focus();
+  }
 
   // A refresh that fails keeps what the section already shows. While the
   // comments load, or when they could not, the section is there all the same,
@@ -65,6 +87,7 @@ export function CommentsSection({ eventId, me }: { eventId: string; me: Me | nul
                 onRemove={() => {
                   setRemoving(view.comment.id);
                 }}
+                onGone={gone}
               />
             ))}
           </ol>
@@ -108,6 +131,15 @@ export function CommentsSection({ eventId, me }: { eventId: string; me: Me | nul
   );
 }
 
+/**
+ * The message for a refused change of a comment: one that is not there any
+ * more (somebody else deleted it) says so, which the 404 of PocketBase has no
+ * code for; any other refusal gets the message of its code.
+ */
+function commentError(t: Messages, err: unknown): string {
+  return isNotFound(err) ? t.errors.not_found : describeError(t, err);
+}
+
 /** Ctrl+Enter, or Cmd+Enter on a Mac, in a text area: sends it, where Enter alone goes to the next line. */
 function sendOnCtrlEnter(send: () => void) {
   return (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -128,11 +160,14 @@ function CommentItem({
   eventId,
   me,
   onRemove,
+  onGone,
 }: {
   view: CommentView;
   eventId: string;
   me: Me | null;
   onRemove: () => void;
+  /** The comment turned out to be gone while its text was being changed: its form says which, to take the focus. */
+  onGone: (form: HTMLFormElement | null) => void;
 }) {
   const { t } = useI18n();
   const { comment, author } = view;
@@ -183,6 +218,7 @@ function CommentItem({
           onClose={() => {
             setEditing(false);
           }}
+          onGone={onGone}
         />
       ) : (
         <>
@@ -219,10 +255,12 @@ function EditForm({
   comment,
   eventId,
   onClose,
+  onGone,
 }: {
   comment: CommentRecord;
   eventId: string;
   onClose: () => void;
+  onGone: (form: HTMLFormElement | null) => void;
 }) {
   const { t } = useI18n();
   const update = useUpdateComment(eventId);
@@ -230,6 +268,7 @@ function EditForm({
   const [message, setMessage] = useState<string | null>(null);
   // Set on the spot: the state of the mutation is there after a render only, and two taps can come before it.
   const sending = useRef(false);
+  const form = useRef<HTMLFormElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -258,7 +297,9 @@ function EditForm({
       await update.mutateAsync({ id: comment.id, body: text });
       onClose();
     } catch (err) {
-      setMessage(describeError(t, err));
+      // The list has been asked for again: the comment, and this form with it, may be gone already.
+      if (isNotFound(err)) onGone(form.current);
+      else setMessage(commentError(t, err));
     } finally {
       sending.current = false;
     }
@@ -270,7 +311,7 @@ function EditForm({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
+    <form ref={form} onSubmit={submit} className="flex flex-col gap-2">
       <Field label={t.comments.editLabel} error={message}>
         {(control) => (
           <textarea
@@ -383,7 +424,7 @@ function DeleteForm({
     try {
       await remove.mutateAsync(commentId);
     } catch (err) {
-      setMessage(describeError(t, err));
+      setMessage(commentError(t, err));
       return;
     }
     onClose();

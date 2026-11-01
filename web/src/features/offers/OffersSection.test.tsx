@@ -747,6 +747,25 @@ describe("taking and leaving a place", () => {
     expect(focused()).toBe(document.body);
   });
 
+  test("OffersSection — un serveur qui ne répond pas : l'échec est dit sans attendre la relecture de la liste", async () => {
+    const { screen } = await renderSection({ me: meNina });
+    const one = offerOf(screen, "Alice");
+    await expect.element(button(one, fr.offers.take.ride)).toBeVisible();
+    // The list cannot be read again for a while (the client retries it): the failure does not wait for it.
+    mocks.list.mockReturnValue(new Promise(() => {}));
+    mocks.take.mockRejectedValueOnce(new ClientResponseError({ status: 500, response: {} }));
+
+    await button(one, fr.offers.take.ride).click();
+
+    await expect.element(one.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+    // The button is back with the focus for another try, and the list was asked for again all the same.
+    await expect
+      .element(button(one, fr.offers.take.ride))
+      .not.toHaveAttribute("aria-disabled", "true");
+    await expect.element(button(one, fr.offers.take.ride)).toHaveFocus();
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+  });
+
   test("OffersSection — un refus inconnu donne le message générique, dans l'offre qui l'a reçu seulement", async () => {
     mocks.take.mockRejectedValueOnce(new Error("boom"));
     rows = [offer("r1", "ride", alice, { seats: 2 }), offer("r2", "ride", sam, { seats: 2 })];

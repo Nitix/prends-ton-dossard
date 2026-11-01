@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import { pb } from "../../lib/pb";
+import { refreshWhenSettled } from "../../lib/refresh";
 import type { OfferKind, OfferMemberRecord, OfferRecord, RunnerRecord } from "../../lib/types";
 
 // The places that members offer for an event, with the runner who offers them
@@ -80,7 +81,8 @@ export function useOffers(eventId: string): UseQueryResult<OfferView[]> {
 // next (moving the focus, closing a window) is done on the new list. A request
 // that is refused refreshes the list as well, and waits for it just the same: a
 // place can be refused because somebody took it while the page was open, and
-// the page then has to show the answer with the refusal.
+// the page then has to show the answer with the refusal. Any other failure (the
+// server is down) does not wait for it: see `refreshWhenSettled`.
 
 /**
  * The options that every mutation of the offers shares: once the request is
@@ -89,9 +91,7 @@ export function useOffers(eventId: string): UseQueryResult<OfferView[]> {
  * data. A list that cannot be read again keeps what it showed.
  */
 function refreshing(queryClient: QueryClient, eventId: string) {
-  return {
-    onSettled: () => queryClient.invalidateQueries({ queryKey: offersKey(eventId) }),
-  };
+  return refreshWhenSettled(() => queryClient.invalidateQueries({ queryKey: offersKey(eventId) }));
 }
 
 /**

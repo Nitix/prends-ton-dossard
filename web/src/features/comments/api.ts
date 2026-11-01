@@ -9,6 +9,7 @@ import {
 
 import { instantOf } from "../../lib/dates";
 import { pb } from "../../lib/pb";
+import { refreshWhenSettled } from "../../lib/refresh";
 import type { CommentRecord, EventRecord, RunnerRecord } from "../../lib/types";
 
 // The comments of the events: the page of an event shows its own, in the order
@@ -104,7 +105,9 @@ export function useLatestComments(): UseQueryResult<LatestComment[]> {
 // The hooks below run a request, then make the two lists ask for the comments
 // again (the page of the event, and the home page). The mutation lasts until
 // they have the new data, so that the field that sent a comment is emptied when
-// the comment is on the page.
+// the comment is on the page. A change or a deletion refreshes them whether the
+// server did it or refused: the comment may have been deleted elsewhere in the
+// meantime (see `refreshWhenSettled`). A new comment does it once it is written.
 
 /** Resolves once the lists that are on screen have their new data. */
 function refresh(queryClient: QueryClient, eventId: string): Promise<unknown> {
@@ -130,7 +133,7 @@ export function useUpdateComment(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }) => pb.collection("comments").update<CommentRecord>(id, { body }),
-    onSuccess: () => refresh(queryClient, eventId),
+    ...refreshWhenSettled(() => refresh(queryClient, eventId)),
   });
 }
 
@@ -141,6 +144,6 @@ export function useDeleteComment(eventId: string): UseMutationResult<void, Error
     mutationFn: async (id) => {
       await pb.collection("comments").delete(id);
     },
-    onSuccess: () => refresh(queryClient, eventId),
+    ...refreshWhenSettled(() => refresh(queryClient, eventId)),
   });
 }

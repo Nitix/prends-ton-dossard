@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page, userEvent } from "vitest/browser";
 
+import { ToastProvider } from "../../components/Toast";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -126,7 +127,9 @@ async function renderSection(options: { me?: Me | null; languages?: string[] } =
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
         <TodayProvider value={Temporal.PlainDate.from("2026-11-01")} now={clock}>
-          <CommentsSection eventId="event1" me={me} />
+          <ToastProvider>
+            <CommentsSection eventId="event1" me={me} />
+          </ToastProvider>
         </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>,
@@ -164,6 +167,14 @@ function bodyError(code: string): ClientResponseError {
       message: "Failed to create record.",
       data: { body: { code, message: "…" } },
     },
+  });
+}
+
+/** What the SDK throws for a comment that is not there any more (deleted by somebody else). */
+function notFound(): ClientResponseError {
+  return new ClientResponseError({
+    status: 404,
+    response: { status: 404, message: "The requested resource wasn't found.", data: {} },
   });
 }
 
@@ -615,6 +626,90 @@ describe("editing and deleting", () => {
 
     await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.generic);
     await expect.element(screen.getByText("Je viens avec Paul.")).toBeVisible();
+  });
+});
+
+describe("a comment that is gone, or a server that does not answer", () => {
+  test("CommentsSection — modifier un commentaire que quelqu'un a supprimé : la liste se rafraîchit, le toast le dit, le focus va au titre", async () => {
+    mocks.update.mockImplementationOnce(() => {
+      rows = rows.filter((row) => row.id !== "c1");
+      return Promise.reject(notFound());
+    });
+    const { screen } = await renderSection();
+    await expect.element(heading(screen, 2)).toBeVisible();
+    await edit(screen, "Alice").click();
+    await item(screen, "Alice").getByLabelText(fr.comments.editLabel).fill("Corrigé");
+
+    await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
+
+    // The list was asked for again: the comment is gone, and the text field with it.
+    await expect.element(heading(screen, 1)).toBeVisible();
+    await expect.element(screen.getByText("Je viens avec Paul.")).not.toBeInTheDocument();
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+    // The message is the translated one, and the focus is on the title, never on the page.
+    await expect.element(screen.getByText(fr.errors.not_found)).toBeVisible();
+    await expect.element(heading(screen, 1)).toHaveFocus();
+  });
+
+  test("CommentsSection — supprimer un commentaire déjà supprimé : la liste se rafraîchit, la fenêtre le dit", async () => {
+    mocks.remove.mockImplementationOnce(() => {
+      rows = rows.filter((row) => row.id !== "c1");
+      return Promise.reject(notFound());
+    });
+    const { screen } = await renderSection();
+    await expect.element(heading(screen, 2)).toBeVisible();
+
+    await remove(screen, "Alice").click();
+    const dialog = screen.getByRole("dialog", { name: fr.comments.removeConfirm });
+    await dialog.getByRole("button", { name: fr.comments.remove }).click();
+
+    await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.not_found);
+    // The comment is not on the page any more, whoever deleted it.
+    await expect.element(heading(screen, 1)).toBeVisible();
+    await expect.element(screen.getByText("Je viens avec Paul.")).not.toBeInTheDocument();
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+    // Closing the window: its button is gone, the title has the focus.
+    await dialog.getByRole("button", { name: fr.comments.cancel }).click();
+    await expect.element(heading(screen, 1)).toHaveFocus();
+  });
+
+  test("CommentsSection — un refus qui change la liste (400) la rafraîchit aussi, et le champ reste ouvert", async () => {
+    mocks.update.mockRejectedValueOnce(bodyError("validation_max_text_constraint"));
+    const { screen } = await renderSection();
+    await expect.element(heading(screen, 2)).toBeVisible();
+    await edit(screen, "Alice").click();
+    await item(screen, "Alice").getByLabelText(fr.comments.editLabel).fill("x".repeat(2001));
+
+    await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
+
+    await expect
+      .element(item(screen, "Alice").getByRole("alert"))
+      .toHaveTextContent("Ce texte est trop long.");
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+  });
+
+  test("CommentsSection — un serveur qui ne répond pas : le refus est dit sans attendre la relecture de la liste", async () => {
+    const { screen } = await renderSection();
+    await expect.element(heading(screen, 2)).toBeVisible();
+    // The list cannot be read again for a while (the client retries): the refusal does not wait for it.
+    mocks.list.mockReturnValue(new Promise(() => {}));
+    mocks.update.mockRejectedValueOnce(new Error("boom"));
+    mocks.remove.mockRejectedValueOnce(new ClientResponseError({ status: 500, response: {} }));
+
+    await edit(screen, "Alice").click();
+    await item(screen, "Alice").getByLabelText(fr.comments.editLabel).fill("Corrigé");
+    await item(screen, "Alice").getByRole("button", { name: fr.comments.save }).click();
+    await expect
+      .element(item(screen, "Alice").getByRole("alert"))
+      .toHaveTextContent(fr.errors.generic);
+    await item(screen, "Alice").getByRole("button", { name: fr.comments.cancel }).click();
+
+    await remove(screen, "Alice").click();
+    const dialog = screen.getByRole("dialog", { name: fr.comments.removeConfirm });
+    await dialog.getByRole("button", { name: fr.comments.remove }).click();
+    await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+    // The list was asked for again all the same, in the background.
+    expect(mocks.list).toHaveBeenCalledTimes(3);
   });
 });
 
