@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
+import { CountdownRing } from "../../components/Dawn";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { webAddress } from "../../lib/url";
@@ -55,7 +56,7 @@ export function RegistrationTodoBlock({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="text-lg font-semibold">
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title">
         {t.home.todoTitle}
       </h2>
       <ul className="flex flex-col gap-3">
@@ -130,14 +131,14 @@ function TodoItem({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border-2 border-neutral-200 bg-white p-3">
+    <li className="card flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
-          <h3 id={titleId} className="text-base font-semibold">
+          <h3 id={titleId} className="card-title">
             <Link
               to="/evenements/$id"
               params={{ id: event.id }}
-              className="flex min-h-11 items-center underline-offset-2 hover:underline"
+              className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
             >
               {event.name}
             </Link>
@@ -145,8 +146,11 @@ function TodoItem({
           <p className="text-sm">{what}</p>
           <p className="text-sm text-neutral-600">{t.home.todoBefore(f.date(deadline))}</p>
         </div>
-        {/* The words are the countdown: nothing here is told by a colour. */}
-        <p className="shrink-0 pt-3 text-sm font-medium">{f.inDays(daysLeft)}</p>
+        {/* The words are the countdown: nothing here is told by a colour. The ring only shows it. */}
+        <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
+          <CountdownRing days={daysLeft} />
+          <p className="text-xs font-semibold text-neutral-700">{f.inDays(daysLeft)}</p>
+        </div>
       </div>
       {(site || formatView) && (
         // The name of the event describes the actions, which the rows repeat.

@@ -83,7 +83,7 @@ export function ResultsToEnter({ pageHeading }: { pageHeading: RefObject<HTMLEle
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="text-lg font-semibold">
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title">
         {t.results.toEnterTitle}
       </h2>
       <ul className="flex flex-col gap-3">
@@ -171,13 +171,13 @@ function ResultRow({
   const busyClass = busy ? "opacity-60" : "";
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border-2 border-neutral-200 bg-white p-3">
+    <li className="card flex flex-col gap-3 p-4">
       <div className="flex flex-col">
-        <h3 id={titleId} className="text-base font-semibold">
+        <h3 id={titleId} className="card-title">
           <Link
             to="/evenements/$id"
             params={{ id: event.id }}
-            className="flex min-h-11 items-center underline-offset-2 hover:underline"
+            className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
           >
             {event.name}
           </Link>

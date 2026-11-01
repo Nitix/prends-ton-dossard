@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
+import { DownloadIcon, ExternalIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
@@ -11,6 +12,8 @@ import { MAP_BOX } from "./mapBox";
 
 // The map brings Leaflet along: it is loaded when a track is shown, not with the page.
 const TrackMap = lazy(() => import("./TrackMap"));
+
+const SEPARATOR = " · ";
 
 /**
  * A map that fails (its chunk does not load, after a deploy or with the network
@@ -63,9 +66,30 @@ function Track({ points }: { points: TrackPoint[] }) {
   const altitude =
     min === undefined || max === undefined ? null : t.route.altitude(f.meters(min), f.meters(max));
 
+  // The numbers as tiles; the separators stay in the text, for a screen reader.
+  const parts = summary.split(SEPARATOR);
+
   return (
     <>
-      <p>{summary}</p>
+      <p className="flex gap-2">
+        {parts.map((part, i) => {
+          const [, value, suffix] = /^(.*?)( D[+−-])?$/u.exec(part) ?? [part, part, undefined];
+          return (
+            <span
+              key={part}
+              className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-2xl bg-neutral-50 px-2 py-2.5 text-center ring-1 ring-neutral-100"
+            >
+              {i > 0 && <span className="sr-only">{SEPARATOR}</span>}
+              <span className="font-display text-[1.0625rem] leading-tight font-extrabold tracking-tight text-ink">
+                {value}
+              </span>
+              {suffix !== undefined && (
+                <span className="text-xs font-bold text-iris-700">{suffix.trim()}</span>
+              )}
+            </span>
+          );
+        })}
+      </p>
       {altitude !== null && <p className="text-sm text-neutral-600">{altitude}</p>}
       <MapBoundary>
         <Suspense fallback={<MapLoading />}>
@@ -95,8 +119,8 @@ export function RouteSection({ format }: { format: FormatRecord }) {
   if (file === undefined && course === null) return null;
 
   return (
-    <div className="flex flex-col gap-2 border-t border-neutral-200 pt-2">
-      <h3 className="text-base font-semibold">{t.route.title}</h3>
+    <div className="mt-1 flex flex-col gap-3 border-t border-neutral-100 pt-4">
+      <h3 className="card-title">{t.route.title}</h3>
       {file !== undefined && track.isPending && <output>{t.common.loading}</output>}
       {file !== undefined && track.isError && (
         <output className="text-sm text-neutral-700">{t.route.unreadable}</output>
@@ -104,7 +128,8 @@ export function RouteSection({ format }: { format: FormatRecord }) {
       {track.data && <Track points={track.data} />}
       <div className="flex flex-wrap gap-2">
         {file !== undefined && (
-          <a href={file} download className={`${SECONDARY} inline-flex items-center`}>
+          <a href={file} download className={`${SECONDARY} inline-flex items-center gap-2`}>
+            <DownloadIcon className="size-[1.125rem] shrink-0 text-iris-600" />
             {t.route.download}
           </a>
         )}
@@ -113,8 +138,9 @@ export function RouteSection({ format }: { format: FormatRecord }) {
             href={course}
             target="_blank"
             rel="noopener noreferrer"
-            className={`${SECONDARY} inline-flex items-center`}
+            className={`${SECONDARY} inline-flex items-center gap-2`}
           >
+            <ExternalIcon className="size-4 shrink-0 text-iris-600" />
             {t.route.open}
           </a>
         )}

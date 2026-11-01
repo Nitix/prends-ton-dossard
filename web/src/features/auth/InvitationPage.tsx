@@ -3,6 +3,8 @@ import { useRouter } from "@tanstack/react-router";
 import type { RecordAuthResponse } from "pocketbase";
 import { useActionState, useEffect, useId, useState } from "react";
 
+import { PRIMARY } from "../../components/buttons";
+import { INPUT } from "../../components/Field";
 import { errorCode, fieldErrors, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
@@ -132,13 +134,13 @@ export function InvitationPage() {
     // Reloading the page would lose the token, which is not in the address
     // any more: trying again is up to the button.
     return (
-      <div className="flex flex-col gap-4 pt-8">
+      <div className="flex flex-col gap-4">
         <Invalid message={translateError(t, code)} />
         <button
           type="button"
           onClick={() => void lookup.refetch()}
           disabled={lookup.isFetching}
-          className="min-h-11 rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60"
+          className={PRIMARY}
         >
           {t.common.retry}
         </button>
@@ -151,7 +153,7 @@ export function InvitationPage() {
 
 function Invalid({ message }: { message: string }) {
   return (
-    <p role="alert" className="pt-8 text-base font-medium text-red-700">
+    <p role="alert" className="text-base font-medium text-red-700">
       {message}
     </p>
   );
@@ -198,8 +200,8 @@ function InvitationForm({ token, invitation }: { token: string; invitation: Invi
   const messageFor = (field: Field): string | null => (failure?.field === field ? message : null);
 
   return (
-    <form action={submit} className="flex flex-col gap-4 pt-8">
-      <h1 className="text-2xl font-semibold">
+    <form action={submit} className="flex flex-col gap-4">
+      <h1 className="page-title">
         {isInvite
           ? t.auth.welcome(invitation.runnerName)
           : t.auth.resetTitle(invitation.runnerName)}
@@ -237,11 +239,7 @@ function InvitationForm({ token, invitation }: { token: string; invitation: Invi
           {message}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-11 rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60"
-      >
+      <button type="submit" disabled={pending} className={PRIMARY}>
         {pending ? t.auth.saving : isInvite ? t.auth.createAccount : t.auth.changePassword}
       </button>
     </form>
@@ -293,7 +291,7 @@ function TextField({
         defaultValue={defaultValue}
         aria-invalid={error !== null}
         aria-describedby={describedBy === "" ? undefined : describedBy}
-        className="min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base font-normal"
+        className={`${INPUT} font-normal`}
       />
       {hint !== undefined && (
         <p id={hintId} className="text-sm text-neutral-600">

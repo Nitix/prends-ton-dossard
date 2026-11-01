@@ -49,7 +49,7 @@ export function MembersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 ref={title} tabIndex={-1} className="text-2xl font-semibold">
+      <h1 ref={title} tabIndex={-1} className="page-title">
         {t.admin.membersTitle}
       </h1>
       <button

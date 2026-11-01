@@ -55,9 +55,11 @@ const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 // The colours of the track and of its two ends. The start and the finish also
 // differ by their size (the start is a dot in the ring of the finish, so both
 // show when the race ends where it starts) and are named in words.
-const LINE_COLOR = "#dc2626";
-const START_COLOR = "#15803d";
-const FINISH_COLOR = "#171717";
+// The line is painted with the gradient of the dawn (see TrackMap.css): this
+// colour is what a browser without it shows.
+const LINE_COLOR = "#d6336f";
+const START_COLOR = "#5e4ae3";
+const FINISH_COLOR = "#241b35";
 const START_RADIUS = 6;
 const FINISH_RADIUS = 10;
 
@@ -125,10 +127,22 @@ export default function TrackMap({
 
     // What is drawn does not take the touches, so that a finger that starts on
     // the track still moves the map.
-    const line = polyline(
-      points.map((p): LatLngTuple => [p.lat, p.lon]),
-      { className: "track-line", color: LINE_COLOR, weight: 4, opacity: 0.9, interactive: false },
-    ).addTo(map);
+    const latLngs = points.map((p): LatLngTuple => [p.lat, p.lon]);
+    // A white halo under the line, so that it stands out of the map.
+    polyline(latLngs, {
+      className: "track-halo",
+      color: "#ffffff",
+      weight: 9,
+      opacity: 0.85,
+      interactive: false,
+    }).addTo(map);
+    const line = polyline(latLngs, {
+      className: "track-line",
+      color: LINE_COLOR,
+      weight: 5,
+      opacity: 1,
+      interactive: false,
+    }).addTo(map);
     const mark = (className: string, color: string, radius: number) => ({
       className,
       color: "#ffffff",
@@ -163,6 +177,18 @@ export default function TrackMap({
   // A <section> with a name is a region. `isolate` keeps the layers of Leaflet
   // (which go up to z-index 1000) under whatever the page puts over the content.
   return (
-    <section ref={element} aria-label={t.route.map} className={`track-map isolate ${MAP_BOX}`} />
+    <>
+      {/* The gradient of the line of the track: the dawn, from the start to the finish. */}
+      <svg aria-hidden="true" width="0" height="0" className="absolute">
+        <defs>
+          <linearGradient id="aurore-route" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#f47e4e" />
+            <stop offset="0.5" stopColor="#d6336f" />
+            <stop offset="1" stopColor="#5e4ae3" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <section ref={element} aria-label={t.route.map} className={`track-map isolate ${MAP_BOX}`} />
+    </>
   );
 }

@@ -35,7 +35,7 @@ export function ProfilePage() {
   if (runner === null) {
     return (
       <div className="flex flex-col gap-8">
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+        <h1 ref={heading} tabIndex={-1} className="page-title">
           {t.nav.profile}
         </h1>
         <Link to="/profil/reglages" className={LINK}>

@@ -24,7 +24,7 @@ export function DayList({
   }
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 md:hidden">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="block-title">
         {f.dateLong(day)}
       </h2>
       {views.length === 0 ? (

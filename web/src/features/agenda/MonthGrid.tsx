@@ -45,7 +45,7 @@ export function MonthGrid({
   // of the app shell's `<main>`) on a 320 px screen. From `md` it is back
   // between them.
   return (
-    <div className="-mx-4 md:mx-0">
+    <div className="-mx-4 bg-white px-1 py-2 shadow-card md:mx-0 md:overflow-hidden md:rounded-[1.25rem] md:p-2">
       <table
         aria-labelledby={labelledBy}
         aria-busy={busy}
@@ -58,7 +58,7 @@ export function MonthGrid({
               <th
                 key={day.dayOfWeek}
                 scope="col"
-                className="py-1 text-xs font-medium text-neutral-600"
+                className="pb-2 font-display text-[0.6875rem] font-bold tracking-[0.08em] text-neutral-600 uppercase"
               >
                 {f.weekday(day, "short")}
               </th>
@@ -107,13 +107,15 @@ function DayCell({
   const more = views.length - dots;
   // Today has a ring around its number, and the selected day is filled in:
   // neither is told by the colour alone.
-  const number = `flex size-7 items-center justify-center rounded-full border-2 text-sm ${
-    isToday ? "border-current font-bold" : "border-transparent"
-  }`;
+  const ring = isToday ? "font-bold" : "border-transparent";
+  const number = `flex size-7 items-center justify-center rounded-full border-2 text-sm tabular-nums ${ring}`;
+  // On the sunrise of the selected day, the ring of today is white.
+  const numberOnPhone = `${number} ${isToday ? (isSelected ? "border-white" : "border-iris-600 text-iris-700") : ""}`;
+  const numberOnDesktop = `${number} ${isToday ? "border-iris-600 bg-iris-600 text-white" : ""}`;
 
   return (
     <td
-      className={`border border-neutral-200 p-0 align-top ${inMonth ? "bg-white" : "bg-neutral-100"}`}
+      className={`p-0.5 align-top md:border md:border-neutral-100 md:p-0 ${inMonth ? "" : "md:bg-neutral-50"}`}
     >
       <button
         type="button"
@@ -123,18 +125,22 @@ function DayCell({
         onClick={() => {
           onSelect(day);
         }}
-        className={`flex h-14 w-full flex-col items-center justify-center gap-0.5 md:hidden ${
-          isSelected ? "bg-neutral-900 text-white" : inMonth ? "" : "text-neutral-600"
+        className={`press flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl md:hidden ${
+          isSelected
+            ? "bg-dawn-deep text-white shadow-glow"
+            : inMonth
+              ? "hover:bg-iris-50"
+              : "text-neutral-600 hover:bg-iris-50"
         }`}
       >
-        <span className={number}>{day.day}</span>
+        <span className={numberOnPhone}>{day.day}</span>
         {/* The name of the button says how many events there are. */}
         <span aria-hidden="true" className="flex h-3 items-center gap-0.5 text-xs leading-none">
           {Array.from({ length: dots }, (_, i) => (
             <span
               key={i}
               data-testid="dot"
-              className={`size-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blue-700"}`}
+              className={`size-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blush-500"}`}
             />
           ))}
           {more > 0 && <span>+{more}</span>}
@@ -146,7 +152,7 @@ function DayCell({
         <time
           dateTime={day.toString()}
           aria-current={isToday ? "date" : undefined}
-          className={number}
+          className={numberOnDesktop}
         >
           {day.day}
         </time>
@@ -158,7 +164,7 @@ function DayCell({
                   to="/evenements/$id"
                   params={{ id: view.event.id }}
                   title={view.event.name}
-                  className="block truncate rounded bg-blue-100 px-1 py-0.5 text-xs text-blue-900 hover:bg-blue-200 pointer-coarse:min-h-11 pointer-coarse:py-3"
+                  className="block truncate rounded-lg bg-iris-50 px-1.5 py-1 text-xs font-semibold text-iris-800 ring-1 ring-iris-100 hover:bg-iris-100 pointer-coarse:min-h-11 pointer-coarse:py-3"
                 >
                   {view.event.name}
                 </Link>

@@ -180,7 +180,7 @@ export function OffersSection({
 
   return (
     <section ref={root} aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} ref={heading} tabIndex={-1} className="text-lg font-semibold">
+      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title">
         {t.offers.title[kind]}
       </h2>
       {offers && all ? (
@@ -387,13 +387,13 @@ function OfferItem({
     <article
       data-offer={offer.id}
       aria-labelledby={titleId}
-      className="flex flex-col gap-2 rounded-lg border-2 border-neutral-200 p-3"
+      className="flex flex-col gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100"
     >
       <div className="flex items-center gap-3">
         <Avatar
           runner={owner}
           thumb="96x96"
-          className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
+          className="avatar-soft size-11 shrink-0 text-sm font-bold"
         />
         <h3
           id={titleId}
@@ -411,7 +411,7 @@ function OfferItem({
             href={ad}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center underline"
+            className="inline-flex min-h-11 items-center font-medium text-iris-700 underline underline-offset-4"
           >
             {t.offers.seeAd}
           </a>
@@ -434,7 +434,7 @@ function OfferItem({
                 <Avatar
                   runner={runner}
                   thumb="96x96"
-                  className="size-9 shrink-0 bg-neutral-200 text-xs font-semibold text-neutral-700"
+                  className="avatar-soft size-9 shrink-0 text-xs font-bold"
                 />
                 <p className="font-medium break-words">{runner.name}</p>
               </div>

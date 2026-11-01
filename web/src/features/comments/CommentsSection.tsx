@@ -70,7 +70,7 @@ export function CommentsSection({ eventId, me }: { eventId: string; me: Me | nul
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} ref={heading} tabIndex={-1} className="text-lg font-semibold">
+      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title">
         {comments ? t.comments.title(comments.length) : t.comments.heading}
       </h2>
       {comments ? (
@@ -193,12 +193,12 @@ function CommentItem({
   const canDelete = !!me && canDeleteComment(author, me);
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border-2 border-neutral-200 p-3">
+    <li className="flex flex-col gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100">
       <div className="flex items-center gap-3">
         <Avatar
           runner={author}
           thumb="96x96"
-          className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
+          className="avatar-soft size-11 shrink-0 text-sm font-bold"
         />
         <div id={authorId} className="min-w-0">
           <p className="font-medium break-words">{author.name}</p>

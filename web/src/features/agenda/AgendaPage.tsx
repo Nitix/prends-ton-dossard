@@ -1,6 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { SECONDARY } from "../../components/buttons";
+import { SunArc } from "../../components/Dawn";
 import { useI18n } from "../../i18n/I18nProvider";
 import { monthGrid } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
@@ -56,12 +58,16 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t.nav.calendar}</h1>
+      <h1 className="page-title">{t.nav.calendar}</h1>
       <Filters search={search} withPeriod={false} />
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <MonthLink target={month.subtract({ months: 1 })} label={t.agenda.previous} glyph="‹" />
-          <h2 id={headingId} aria-live="polite" className="text-lg font-semibold">
+          <h2
+            id={headingId}
+            aria-live="polite"
+            className="font-display text-xl font-extrabold tracking-tight first-letter:uppercase"
+          >
             {f.monthTitle(month)}
           </h2>
           <MonthLink target={month.add({ months: 1 })} label={t.agenda.next} glyph="›" />
@@ -86,7 +92,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
             type="button"
             onClick={() => void events.refetch()}
             disabled={events.isFetching}
-            className="min-h-11 self-start rounded-lg border border-neutral-300 bg-white px-4 font-medium disabled:opacity-60"
+            className={`${SECONDARY} self-start`}
           >
             {t.common.retry}
           </button>
@@ -94,8 +100,9 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
       ) : !loaded ? (
         <output>{t.common.loading}</output>
       ) : views.length === 0 ? (
-        <div className="flex flex-col gap-1">
-          <p className="font-medium">{t.list.empty}</p>
+        <div className="card flex flex-col items-center gap-1 px-6 pt-4 pb-6 text-center">
+          <SunArc tone="color" className="mb-2 w-44" />
+          <p className="card-title">{t.list.empty}</p>
           <p className="text-sm text-neutral-600">{t.list.emptyHint}</p>
         </div>
       ) : (
@@ -140,7 +147,7 @@ function MonthLink({
       to="."
       search={(previous) => ({ ...previous, mois: target.toString(), jour: undefined })}
       aria-label={label}
-      className="flex size-11 items-center justify-center rounded-lg border border-neutral-300 bg-white text-2xl leading-none"
+      className="press flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </Link>

@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useId, type ReactNode } from "react";
 
+import { INPUT } from "../../components/Field";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useSession } from "../auth/session";
 import { useRaceTypes, useRunners } from "./api";
@@ -54,7 +55,7 @@ export function Filters({
   };
 
   return (
-    <fieldset className="flex flex-wrap gap-3">
+    <fieldset className="card flex flex-wrap gap-3 p-3.5">
       <legend className="sr-only">{t.filters.title}</legend>
       <Select
         label={t.filters.person}
@@ -116,7 +117,7 @@ function Select({
   const id = useId();
   return (
     <div className="flex min-w-40 flex-1 flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="eyebrow">
         {label}
       </label>
       <select
@@ -125,7 +126,7 @@ function Select({
         onChange={(event) => {
           onChange(event.target.value);
         }}
-        className="min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base"
+        className={INPUT}
       >
         {children}
       </select>

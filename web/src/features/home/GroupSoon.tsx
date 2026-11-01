@@ -29,7 +29,7 @@ export function GroupSoon({ views }: { views: EventView[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="block-title">
         {t.home.groupTitle}
       </h2>
       {soon.length === 0 ? (

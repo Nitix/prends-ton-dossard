@@ -101,12 +101,10 @@ export function DateChip({
       <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
-        className={`relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-white shadow-glow ${
+        className={`relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_rgb(214_51_111/0.6)] ${
           big ? "w-[4.75rem] py-2.5" : "w-[3.75rem] py-2"
         }`}
       >
-        {/* A sun that rises behind the number. */}
-        <span className="absolute -bottom-5 left-1/2 size-10 -translate-x-1/2 rounded-full bg-peach-300/40 blur-md" />
         <span className="relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
           {twoMonths ? month(start) : f.weekday(start, "short").replace(".", "")}
         </span>

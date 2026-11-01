@@ -18,8 +18,7 @@ import {
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 import { isNotFound, participationError } from "./errors";
 
-const ITEM =
-  "flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left hover:bg-neutral-100";
+const ITEM = "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left hover:bg-iris-50";
 
 /** Which dialog the menu has opened, if any. */
 type Opened = "remove" | "choose" | "result";
@@ -138,7 +137,7 @@ export function ParticipationMenu({
         type="button"
         popoverTarget={menuId}
         aria-label={t.participation.actionsFor(runner.name)}
-        className="flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none hover:bg-neutral-100"
+        className="press flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-neutral-700 hover:bg-white hover:text-iris-700 hover:shadow-card"
       >
         <span aria-hidden="true">⋯</span>
       </button>
@@ -146,7 +145,7 @@ export function ParticipationMenu({
       <div
         id={menuId}
         popover="auto"
-        className="menu-popover rounded-lg border border-neutral-200 bg-white p-1 shadow-lg"
+        className="menu-popover rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-lift"
       >
         {/* With no format, only two statuses are possible: the participation is on the event alone. */}
         <ul aria-label={t.participation.status}>
@@ -162,10 +161,15 @@ export function ParticipationMenu({
                   onClick={() => {
                     if (!current) void change({ status });
                   }}
-                  className={`${ITEM} ${current ? "font-semibold" : ""}`}
+                  className={`${ITEM} ${current ? "bg-iris-50 font-semibold text-iris-800" : ""}`}
                 >
-                  {/* The current status is not told by the weight of the text alone. */}
-                  <span aria-hidden="true" className="w-4 text-center">
+                  {/* The current status is not told by the weight of the text alone: a check pops in a sun. */}
+                  <span
+                    aria-hidden="true"
+                    className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
+                      current ? "animate-pop bg-dawn-deep text-white" : ""
+                    }`}
+                  >
                     {current ? "✓" : ""}
                   </span>
                   {t.status[status]}

@@ -30,7 +30,7 @@ export function StatsPage({ search }: { search: StatsSearch }) {
       <div className="flex items-center justify-between gap-2">
         <YearLink year={year - 1} label={t.stats.previousYear} glyph="‹" />
         {/* Moving to another year with an arrow does not move the focus: the new title is read out. */}
-        <h1 ref={heading} tabIndex={-1} aria-live="polite" className="text-2xl font-semibold">
+        <h1 ref={heading} tabIndex={-1} aria-live="polite" className="page-title">
           {t.stats.yearTitle(year)}
         </h1>
         <YearLink year={year + 1} label={t.stats.nextYear} glyph="›" />
@@ -65,7 +65,7 @@ function Year({ results, year }: { results: ResultRow[]; year: number }) {
           <Link
             to="/coureurs/$id"
             params={{ id: runner.id }}
-            className="flex min-h-11 items-center underline-offset-2 hover:underline"
+            className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
           >
             {runner.name}
           </Link>
@@ -86,7 +86,7 @@ function YearLink({ year, label, glyph }: { year: number; label: string; glyph: 
       to="."
       search={{ annee: year }}
       aria-label={label}
-      className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-neutral-300 bg-white text-2xl leading-none"
+      className="press flex size-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </Link>

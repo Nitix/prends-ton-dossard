@@ -90,7 +90,7 @@ function LinkForm({
       <p>{kind === "invite" ? t.admin.inviteIntro : t.admin.resetIntro}</p>
       {kind === "invite" && (
         <fieldset className="flex flex-col">
-          <legend className="mb-1 text-sm font-medium">{t.admin.role}</legend>
+          <legend className="eyebrow mb-2">{t.admin.role}</legend>
           {ROLES.map((role) => (
             <label key={role} className="flex min-h-11 items-center gap-3">
               <input

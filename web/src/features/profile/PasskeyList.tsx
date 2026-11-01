@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useState } from "react";
 
+import { DANGER, PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { TextField } from "../../components/TextField";
 import { useToast } from "../../components/Toast";
@@ -11,10 +12,6 @@ import type { PasskeyRecord } from "../../lib/types";
 import { passkeysSupported, registerPasskey } from "../auth/passkeys";
 import { describeError, text } from "./forms";
 import { Section } from "./Section";
-
-const PRIMARY =
-  "min-h-11 rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60";
-const SECONDARY = "min-h-11 rounded-lg border border-neutral-300 bg-white px-4 font-medium";
 
 /** What a dialog is open for: a new passkey, or one of the list to rename or delete. */
 type Mode = "add" | "rename" | "remove";
@@ -73,7 +70,7 @@ export function PasskeyList({ userId }: { userId: string }) {
           {query.data.map((passkey) => (
             <li
               key={passkey.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white p-3"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100"
             >
               <div className="min-w-0">
                 <p className="font-medium break-words">{passkey.name}</p>
@@ -360,11 +357,7 @@ function RemoveForm({
         <button type="button" onClick={onClose} className={SECONDARY}>
           {t.common.cancel}
         </button>
-        <button
-          type="submit"
-          disabled={pending}
-          className="min-h-11 rounded-lg bg-red-700 px-4 font-medium text-white disabled:opacity-60"
-        >
+        <button type="submit" disabled={pending} className={DANGER}>
           {t.common.delete}
         </button>
       </div>

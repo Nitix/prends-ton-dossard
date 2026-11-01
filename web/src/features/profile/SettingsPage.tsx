@@ -4,7 +4,7 @@ import type { RecordAuthResponse } from "pocketbase";
 import { useActionState } from "react";
 
 import { AvatarPicker } from "../../components/AvatarPicker";
-import { SECONDARY } from "../../components/buttons";
+import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { TextField } from "../../components/TextField";
 import { useToast } from "../../components/Toast";
 import { translateError } from "../../i18n/errors";
@@ -18,8 +18,7 @@ import { failureOf, text, type Failure } from "./forms";
 import { PasskeyList } from "./PasskeyList";
 import { Section } from "./Section";
 
-const BUTTON =
-  "min-h-11 self-start rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60";
+const BUTTON = `${PRIMARY} self-start`;
 
 /**
  * The settings of the signed-in user, which the profile leads to: the photo and
@@ -37,18 +36,14 @@ export function SettingsPage() {
   if (!signedIn) return null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       <Link to="/profil" className={`${SECONDARY} inline-flex items-center self-start`}>
         {t.profile.backToProfile}
       </Link>
-      <h1 className="text-2xl font-semibold">{t.profile.settings}</h1>
+      <h1 className="page-title">{t.profile.settings}</h1>
       {/* An account that is not a member's (the super-admin of PocketBase) has none of these. */}
       {user !== null && <AccountSections user={user} runner={runner} />}
-      <button
-        type="button"
-        onClick={logout}
-        className="min-h-11 self-start rounded-lg border border-neutral-300 bg-white px-4 font-medium"
-      >
+      <button type="button" onClick={logout} className={`${SECONDARY} self-start`}>
         {t.profile.logout}
       </button>
     </div>

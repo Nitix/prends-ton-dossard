@@ -321,9 +321,9 @@ function EventFields({
       }}
       className="flex flex-col gap-6"
     >
-      <h1 className="text-2xl font-semibold">{initial ? t.form.editTitle : t.form.createTitle}</h1>
+      <h1 className="page-title">{initial ? t.form.editTitle : t.form.createTitle}</h1>
 
-      <div className="flex flex-col gap-4">
+      <div className="card flex flex-col gap-4 p-4 md:p-5">
         <Field label={t.form.name} error={eventError("name")}>
           {(control) => (
             <input
@@ -442,7 +442,7 @@ function EventFields({
       </div>
 
       <section aria-labelledby="formats-title" className="flex flex-col gap-4">
-        <h2 ref={formatsTitle} id="formats-title" tabIndex={-1} className="text-xl font-semibold">
+        <h2 ref={formatsTitle} id="formats-title" tabIndex={-1} className="block-title text-xl">
           {t.form.formatsTitle}
         </h2>
         {draft.rows.map((row, index) => (
@@ -465,7 +465,7 @@ function EventFields({
       </section>
 
       {joinOffered && (
-        <section className="flex flex-col gap-3">
+        <section className="card flex flex-col gap-3 p-4">
           <label className="flex min-h-11 items-center gap-3">
             <input
               type="checkbox"
@@ -475,7 +475,7 @@ function EventFields({
               }}
               className="size-6"
             />
-            <span className="font-medium">{t.form.join}</span>
+            <span className="font-semibold">{t.form.join}</span>
           </label>
           {draft.join && (
             <>

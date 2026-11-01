@@ -3,11 +3,23 @@ import { ClientResponseError } from "pocketbase";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Avatar } from "../../components/Avatar";
-import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
+import { DANGER_TEXT, ON_DAWN, PRIMARY, SECONDARY } from "../../components/buttons";
+import { CountdownRing, SunArc } from "../../components/Dawn";
+import {
+  CalendarIcon,
+  CalendarPlusIcon,
+  ClockIcon,
+  ExternalIcon,
+  PencilIcon,
+  PinIcon,
+  RunIcon,
+  TrashIcon,
+  UserPlusIcon,
+} from "../../components/icons";
 import { SECTION } from "../../components/section";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
-import { raceStarted } from "../../lib/dates";
+import { daysBetween, raceStarted } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventRecord, ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
@@ -181,8 +193,19 @@ function useFocusAfterDeparture(view: EventView) {
   return { root, setDeparture };
 }
 
-/** The link to the official page of the registration: it opens in another tab, without giving it access to this one. */
-function RegisterLink({ href, className }: { href: string; className?: string }) {
+/**
+ * The link to the official page of the registration: it opens in another tab,
+ * without giving it access to this one. On the sky of the hero, it is a white pill.
+ */
+function RegisterLink({
+  href,
+  tone = "primary",
+  className,
+}: {
+  href: string;
+  tone?: "primary" | "onDawn";
+  className?: string;
+}) {
   const { t } = useI18n();
 
   return (
@@ -190,9 +213,10 @@ function RegisterLink({ href, className }: { href: string; className?: string })
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`${PRIMARY} inline-flex items-center self-start ${className ?? ""}`}
+      className={`${tone === "onDawn" ? ON_DAWN : PRIMARY} inline-flex items-center gap-2 self-start ${className ?? ""}`}
     >
       {t.event.register}
+      <ExternalIcon className="size-4 shrink-0" />
     </a>
   );
 }
@@ -222,88 +246,149 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const options = me && joinOptions(view, me.runnerId);
   const canJoin = !!options && (options.formats.length > 0 || options.undecided);
   const notStarting = nonStarters(view);
+  const daysToGo = daysBetween(today, start);
+
+  const ACTION = `${SECONDARY.replace("px-4", "px-3.5")} inline-flex items-center justify-center gap-2 text-center text-[0.875rem] leading-tight`;
+  const secondary = [
+    me && formats.length > 0 && (
+      <button
+        key="add"
+        type="button"
+        aria-describedby={titleId}
+        onClick={() => {
+          setOpened("add");
+        }}
+        className={ACTION}
+      >
+        <UserPlusIcon className="size-[1.125rem] shrink-0 text-iris-600" />
+        {t.participation.addSomeone}
+      </button>
+    ),
+    <button
+      key="calendar"
+      type="button"
+      onClick={() => {
+        downloadEventIcs(view, t.event.calendarFileName, lang);
+      }}
+      className={ACTION}
+    >
+      <CalendarPlusIcon className="size-[1.125rem] shrink-0 text-iris-600" />
+      {t.event.addToCalendar}
+    </button>,
+    <Link key="edit" to="/evenements/$id/modifier" params={{ id: event.id }} className={ACTION}>
+      <PencilIcon className="size-[1.125rem] shrink-0 text-iris-600" />
+      {t.common.edit}
+    </Link>,
+    me && canDeleteEvent(event, me) && (
+      <button
+        key="delete"
+        type="button"
+        onClick={() => {
+          setOpened("delete");
+        }}
+        className={`${ACTION} ${DANGER_TEXT}`}
+      >
+        <TrashIcon className="size-[1.125rem] shrink-0" />
+        {t.common.delete}
+      </button>
+    ),
+  ].filter(Boolean);
+  // On a phone, two by two: a last one alone takes the whole row.
+  const lastAlone = secondary.length % 2 === 1;
+  const actions = [
+    canJoin && (
+      <button
+        key="join"
+        type="button"
+        onClick={() => {
+          setOpened("join");
+        }}
+        className={`${PRIMARY} col-span-2 inline-flex items-center justify-center gap-2 sm:px-6`}
+      >
+        <RunIcon className="size-5 shrink-0" />
+        {t.participation.join}
+      </button>
+    ),
+    ...secondary.map((element, i) =>
+      lastAlone && i === secondary.length - 1 ? (
+        <div key="last" className="col-span-2 grid sm:contents">
+          {element}
+        </div>
+      ) : (
+        element
+      ),
+    ),
+  ];
 
   return (
     <article ref={root} className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 id={titleId} data-focus={PAGE_TITLE} tabIndex={-1} className="text-2xl font-semibold">
-          {event.name}
-        </h1>
-        <p className="text-neutral-600">
-          {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
-        </p>
-        <p>{event.location}</p>
-        {deadline && (
-          <p>
-            {registrationLabel(deadline, f, t)}
-            {deadline.kind === "open" &&
-              deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-              `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
-          </p>
-        )}
-        {event.notes && <p className="mt-2 whitespace-pre-line">{event.notes}</p>}
-        {registration && <RegisterLink href={registration} className="mt-2" />}
+      {/* The hero: the sky of the dawn, the name in white, and the sun rising in its corner. */}
+      <header className="on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <span className="absolute -top-20 -left-16 size-56 animate-glow rounded-full bg-iris-400/35 blur-3xl" />
+          <span className="absolute right-[-2.5rem] bottom-0 w-[13rem] animate-rise md:right-4 md:w-[16rem]">
+            <SunArc className="block w-full" />
+          </span>
+        </span>
+        <div className="relative flex flex-col gap-3 p-5 pb-14 md:p-7 md:pb-16">
+          <div className="flex items-start justify-between gap-4">
+            <h1
+              id={titleId}
+              data-focus={PAGE_TITLE}
+              tabIndex={-1}
+              className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.375rem]"
+            >
+              {event.name}
+            </h1>
+            {daysToGo > 0 && <CountdownRing days={daysToGo} tone="light" className="mt-1" />}
+          </div>
+          <div className="flex flex-col gap-1.5 text-[0.9375rem] font-medium">
+            <p className="flex items-center gap-2">
+              <CalendarIcon className="size-[1.125rem] shrink-0 opacity-90" />
+              {severalDays
+                ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
+                : f.dateLong(start)}
+            </p>
+            <p className="flex items-center gap-2">
+              <PinIcon className="size-[1.125rem] shrink-0 opacity-90" />
+              {event.location}
+            </p>
+          </div>
+          {deadline && (
+            <p className="flex items-start gap-2 self-start rounded-2xl bg-[rgb(36_27_53/0.2)] px-3 py-2 text-sm font-semibold ring-1 ring-white/25">
+              <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
+              <span>
+                {registrationLabel(deadline, f, t)}
+                {deadline.kind === "open" &&
+                  deadline.daysLeft <= DAYS_LEFT_SHOWN &&
+                  `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
+              </span>
+            </p>
+          )}
+          {event.notes && (
+            <p className="self-start rounded-2xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink shadow-[0_8px_24px_-14px_rgb(36_27_53/0.6)]">
+              {event.notes}
+            </p>
+          )}
+          {registration && <RegisterLink href={registration} tone="onDawn" className="mt-1" />}
+        </div>
       </header>
 
       {reminded && (
-        <aside aria-label={t.event.reminderTitle} className={`flex flex-col gap-2 ${SECTION}`}>
-          <p>{t.event.reminder(f.date(deadline.deadline))}</p>
+        <aside
+          aria-label={t.event.reminderTitle}
+          className="flex flex-col gap-3 rounded-[1.25rem] bg-peach-50 p-4 ring-1 ring-peach-200"
+        >
+          <p className="flex items-start gap-2.5 text-neutral-900">
+            <ClockIcon className="mt-0.5 size-5 shrink-0 text-peach-700" />
+            {t.event.reminder(f.date(deadline.deadline))}
+          </p>
           {registration && <RegisterLink href={registration} />}
         </aside>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {canJoin && (
-          <button
-            type="button"
-            onClick={() => {
-              setOpened("join");
-            }}
-            className={PRIMARY}
-          >
-            {t.participation.join}
-          </button>
-        )}
-        {me && formats.length > 0 && (
-          <button
-            type="button"
-            aria-describedby={titleId}
-            onClick={() => {
-              setOpened("add");
-            }}
-            className={SECONDARY}
-          >
-            {t.participation.addSomeone}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            downloadEventIcs(view, t.event.calendarFileName, lang);
-          }}
-          className={SECONDARY}
-        >
-          {t.event.addToCalendar}
-        </button>
-        <Link
-          to="/evenements/$id/modifier"
-          params={{ id: event.id }}
-          className={`${SECONDARY} inline-flex items-center`}
-        >
-          {t.common.edit}
-        </Link>
-        {me && canDeleteEvent(event, me) && (
-          <button
-            type="button"
-            onClick={() => {
-              setOpened("delete");
-            }}
-            className={`${SECONDARY} ${DANGER_TEXT}`}
-          >
-            {t.common.delete}
-          </button>
-        )}
-      </div>
+      {/* The actions: the main one across, the others two by two on a phone, each a visible button. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions}</div>
 
       <div className="flex flex-col gap-3">
         {view.interested.length > 0 && (
@@ -422,8 +507,8 @@ function EventSection({
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-2 ${SECTION}`}>
-      <h2 id={headingId} data-focus={focus} tabIndex={-1} className="text-lg font-semibold">
+    <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
+      <h2 id={headingId} data-focus={focus} tabIndex={-1} className="block-title">
         {title}
       </h2>
       <ul aria-label={t.event.participants} className="flex flex-col gap-2">
@@ -476,22 +561,24 @@ function FormatSection({
   const today = useToday();
   const headingId = useId();
   const { format, raceType, date, participations } = formatView;
+  const [first, ...rest] = formatMeasures(format, raceType.label, f, t);
   // Those who do not start are in the list at the bottom of the page.
   const onTheStart = starters(participations);
   // Nobody has finished a race that has not started: the menus of the rows know it.
   const started = raceStarted(format, event, today);
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-2 ${SECTION}`}>
-      <h2
-        id={headingId}
-        data-focus={formatTitle(format.id)}
-        tabIndex={-1}
-        className="text-lg font-semibold"
-      >
-        {formatMeasures(format, raceType.label, f, t).join(SEPARATOR)}
+    <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
+      <h2 id={headingId} data-focus={formatTitle(format.id)} tabIndex={-1} className="block-title">
+        {/* The name in ink, the measures after it in grey: one text, read as one line. */}
+        <span className="min-w-0">
+          {first}
+          {rest.length > 0 && (
+            <span className="font-semibold text-neutral-600">{`${SEPARATOR}${rest.join(SEPARATOR)}`}</span>
+          )}
+        </span>
       </h2>
-      {showDate && <p className="text-sm text-neutral-600">{f.date(date)}</p>}
+      {showDate && <p className="eyebrow -mt-1">{f.date(date)}</p>}
       {onTheStart.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.event.nobody}</p>
       ) : (
@@ -539,7 +626,7 @@ function NonStartersSection({
     <details className={SECTION}>
       <summary
         data-focus={NON_STARTERS}
-        className="min-h-11 cursor-pointer py-2 text-lg font-semibold"
+        className="min-h-11 cursor-pointer py-2 text-lg font-bold tracking-tight marker:text-iris-500"
       >
         {t.event.nonStarters(list.length)}
       </summary>
@@ -606,15 +693,15 @@ function ParticipantRow({
   return (
     <li
       ref={row}
-      className={`flex items-center justify-between gap-2 rounded-lg border-2 py-1 pr-1 pl-3 ${
-        confirmed ? "border-neutral-200" : "border-dashed border-neutral-400"
+      className={`flex items-center justify-between gap-2 rounded-2xl border-2 py-1 pr-1 pl-2 ${
+        confirmed ? "border-transparent bg-neutral-50" : "border-dashed border-neutral-400 bg-white"
       }`}
     >
       <div className="flex min-w-0 items-center gap-3 py-1">
         <Avatar
           runner={runner}
           thumb="96x96"
-          className="size-11 shrink-0 bg-neutral-200 text-sm font-semibold text-neutral-700"
+          className="size-11 shrink-0 bg-gradient-to-br from-peach-100 via-blush-100 to-iris-100 text-sm font-bold text-iris-800 ring-2 ring-white"
         />
         <div className="min-w-0">
           {/* The name leads to the page of the runner, with their results. */}
@@ -622,7 +709,7 @@ function ParticipantRow({
             <Link
               to="/coureurs/$id"
               params={{ id: runner.id }}
-              className="flex min-h-11 items-center underline-offset-2 hover:underline"
+              className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
             >
               {runner.name}
             </Link>

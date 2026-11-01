@@ -76,7 +76,7 @@ function PasskeyRows({ runner, user }: UserPasskeysTarget) {
           {query.data.map((passkey) => (
             <li
               key={passkey.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white p-3"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100"
             >
               <div className="min-w-0">
                 <p className="font-medium break-words">{passkey.name}</p>

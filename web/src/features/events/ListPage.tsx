@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { SECONDARY } from "../../components/buttons";
+import { SunArc } from "../../components/Dawn";
 import { useI18n } from "../../i18n/I18nProvider";
 import { groupByMonth } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
@@ -25,7 +26,7 @@ export function ListPage({ search }: { search: ListSearch }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{t.nav.list}</h1>
+        <h1 className="page-title">{t.nav.list}</h1>
         {/* The past events are the ones that have results: the statistics are one tap away. */}
         {period === "passees" && (
           <Link to="/stats" className={`${SECONDARY} inline-flex items-center`}>
@@ -43,7 +44,7 @@ export function ListPage({ search }: { search: ListSearch }) {
             type="button"
             onClick={() => void events.refetch()}
             disabled={events.isFetching}
-            className="min-h-11 self-start rounded-lg border border-neutral-300 bg-white px-4 font-medium disabled:opacity-60"
+            className={`${SECONDARY} self-start`}
           >
             {t.common.retry}
           </button>
@@ -74,8 +75,9 @@ function Months({
 
   if (sorted.length === 0) {
     return (
-      <div className="flex flex-col gap-1">
-        <p className="font-medium">{t.list.empty}</p>
+      <div className="card flex flex-col items-center gap-1 px-6 pt-4 pb-6 text-center">
+        <SunArc tone="color" className="mb-2 w-44" />
+        <p className="card-title">{t.list.empty}</p>
         <p className="text-sm text-neutral-600">{t.list.emptyHint}</p>
       </div>
     );
@@ -95,10 +97,10 @@ function MonthSection({ month, views }: { month: Temporal.PlainYearMonth; views:
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="month-title">
         {f.monthTitle(month)}
       </h2>
-      <ul className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-3.5">
         {views.map((view) => (
           <li key={view.event.id}>
             <EventCard view={view} />

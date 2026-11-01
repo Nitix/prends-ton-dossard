@@ -26,7 +26,7 @@ export function UpcomingRaces({ runnerId }: { runnerId: string }) {
   const races = events.data && upcomingOf(events.data, runnerId, today);
 
   return (
-    <Section title={t.profile.upcoming} headingRef={heading}>
+    <Section title={t.profile.upcoming} headingRef={heading} boxed={false}>
       {/* A refresh that fails keeps what the page already shows. */}
       {races === undefined ? (
         events.isError ? (

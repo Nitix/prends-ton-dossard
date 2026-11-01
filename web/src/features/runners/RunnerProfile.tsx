@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useId, useRef, type ReactNode, type RefObject } from "react";
 
 import { Avatar } from "../../components/Avatar";
+import { SunArc } from "../../components/Dawn";
 import { LoadFailure } from "../../components/LoadFailure";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useRunners } from "../events/api";
@@ -33,15 +34,26 @@ export function RunnerProfile({ runnerId, extra }: { runnerId: string; extra?: R
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex items-center gap-4">
+      {/* A hero: the runner on the sky of the dawn, the sun rising behind them. */}
+      <header className="on-dawn relative flex items-center gap-4 overflow-hidden rounded-[1.75rem] bg-dawn-hero p-5 pb-9 text-white shadow-glow md:gap-6 md:p-7 md:pb-10">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <span className="absolute -top-16 -left-12 size-48 animate-glow rounded-full bg-iris-400/35 blur-3xl" />
+          <span className="absolute right-[-3rem] bottom-0 w-[12rem] animate-rise md:right-4 md:w-[15rem]">
+            <SunArc className="block w-full" />
+          </span>
+        </span>
         {runner && (
           <Avatar
             runner={runner}
             thumb="256x256"
-            className="size-24 shrink-0 bg-neutral-200 text-3xl font-semibold text-neutral-700"
+            className="avatar-soft relative size-24 shrink-0 text-3xl font-extrabold shadow-[0_0_0_4px_rgb(255_255_255/0.85),0_12px_30px_-10px_rgb(36_27_53/0.6)] md:size-28"
           />
         )}
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold break-words">
+        <h1
+          ref={heading}
+          tabIndex={-1}
+          className="relative min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.25rem]"
+        >
           {runner ? runner.name : t.runner.title}
         </h1>
       </header>
@@ -94,7 +106,7 @@ function Years({ rows }: { rows: ResultRow[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="block-title">
         {t.runner.years}
       </h2>
       <TotalsTable
@@ -117,7 +129,7 @@ function History({ rows }: { rows: ResultRow[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="block-title">
         {t.runner.history}
       </h2>
       {rows.length === 0 ? (
@@ -143,12 +155,12 @@ function HistoryRow({ row }: { row: ResultRow }) {
   const result = resultParts(participation, f, t);
 
   return (
-    <li className="flex flex-col rounded-lg border-2 border-neutral-200 bg-white p-3">
-      <h3 className="text-base font-semibold">
+    <li className="card flex flex-col p-4">
+      <h3 className="card-title">
         <Link
           to="/evenements/$id"
           params={{ id: event.id }}
-          className="flex min-h-11 items-center underline-offset-2 hover:underline"
+          className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
         >
           {event.name}
         </Link>
@@ -159,7 +171,11 @@ function HistoryRow({ row }: { row: ResultRow }) {
         {t.status[participation.status]}
       </p>
       <p className="text-sm text-neutral-600">{f.dateLong(date)}</p>
-      {result.length > 0 && <p className="text-sm">{result.join(SEPARATOR)}</p>}
+      {result.length > 0 && (
+        <p className="mt-1 self-start rounded-full bg-iris-50 px-2.5 py-1 text-sm font-semibold text-iris-800 ring-1 ring-iris-100">
+          {result.join(SEPARATOR)}
+        </p>
+      )}
     </li>
   );
 }

@@ -2,6 +2,8 @@ import { useRouter } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 
+import { PRIMARY, SECONDARY } from "../../components/buttons";
+import { INPUT } from "../../components/Field";
 import { errorCode, translateError } from "../../i18n/errors";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -126,11 +128,11 @@ export function LoginPage({ redirect }: { redirect?: string }) {
   }
 
   const message = passkeyError ?? errorMessage(t, state.error);
-  const field = "min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base font-normal";
+  const field = `${INPUT} font-normal`;
 
   return (
-    <form action={submit} className="flex flex-col gap-4 pt-8">
-      <h1 className="text-2xl font-semibold">{t.auth.signIn}</h1>
+    <form action={submit} className="flex flex-col gap-4">
+      <h1 className="page-title">{t.auth.signIn}</h1>
       <label className="flex flex-col gap-1 text-sm font-medium">
         {t.auth.email}
         <input
@@ -165,11 +167,7 @@ export function LoginPage({ redirect }: { redirect?: string }) {
           {message}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-11 rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60"
-      >
+      <button type="submit" disabled={pending} className={`${PRIMARY} mt-2`}>
         {pending ? t.auth.signingIn : t.auth.signIn}
       </button>
       {supported && (
@@ -177,7 +175,7 @@ export function LoginPage({ redirect }: { redirect?: string }) {
           type="button"
           disabled={passkeyPending}
           onClick={() => void signInWithButton()}
-          className="min-h-11 rounded-lg border border-neutral-900 bg-white px-4 font-medium text-neutral-900 disabled:opacity-60"
+          className={SECONDARY}
         >
           {passkeyPending ? t.auth.passkeyWaiting : t.auth.passkeyLogin}
         </button>

@@ -67,7 +67,7 @@ export function PendingConfirmations({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="text-lg font-semibold">
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title">
         {t.home.pendingTitle}
       </h2>
       <ul className="flex flex-col gap-3">
@@ -178,13 +178,13 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border-2 border-dashed border-neutral-400 bg-white p-3">
+    <li className="flex flex-col gap-3 rounded-[1.25rem] border-2 border-dashed border-blush-300 bg-white p-4 shadow-card">
       <div className="flex flex-col">
-        <h3 className="text-base font-semibold">
+        <h3 className="card-title">
           <Link
             to="/evenements/$id"
             params={{ id: event.id }}
-            className="flex min-h-11 items-center underline-offset-2 hover:underline"
+            className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
           >
             {event.name}
           </Link>

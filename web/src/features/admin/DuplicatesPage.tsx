@@ -58,12 +58,12 @@ export function DuplicatesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 ref={title} tabIndex={-1} className="text-2xl font-semibold">
+      <h1 ref={title} tabIndex={-1} className="page-title">
         {t.admin.duplicatesTitle}
       </h1>
       <p>{t.admin.duplicatesIntro}</p>
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium">{t.admin.mergeMode}</legend>
+        <legend className="eyebrow mb-2">{t.admin.mergeMode}</legend>
         {modes.map((mode) => (
           <RadioLine key={mode.kind} checked={kind === mode.kind}>
             <input
@@ -111,8 +111,8 @@ export function DuplicatesPage() {
 function RadioLine({ checked, children }: { checked: boolean; children: ReactNode }) {
   return (
     <label
-      className={`flex min-h-11 items-start gap-3 rounded-lg border px-3 py-2 ${
-        checked ? "border-neutral-900" : "border-neutral-300"
+      className={`flex min-h-11 items-start gap-3 rounded-2xl border-2 px-3 py-2.5 ${
+        checked ? "border-iris-500 bg-iris-50" : "border-neutral-200 bg-white"
       }`}
     >
       {children}
@@ -328,7 +328,7 @@ function MergePanel({
   return (
     <div className="flex flex-col gap-4">
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium">{t.admin.keep[kind]}</legend>
+        <legend className="eyebrow mb-2">{t.admin.keep[kind]}</legend>
         {[
           { choice: a, first: true },
           { choice: b, first: false },

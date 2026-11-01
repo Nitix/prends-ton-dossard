@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { CountdownRing } from "../../components/Dawn";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween } from "../../lib/dates";
 import type { ParticipationRecord } from "../../lib/types";
@@ -127,7 +128,7 @@ export function UpcomingSection({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="block-title">
         {title}
       </h2>
       {rows === undefined ? (
@@ -174,37 +175,41 @@ export function UpcomingRow({
   if (formatView) what = formatDisplayName(formatView.format, formatView.raceType.label, f, t);
   else if (participation.status !== "supporter") what = t.event.formatToChoose;
 
+  const daysLeft = Math.max(0, daysBetween(today, date));
+
   return (
     <li
-      className={`flex items-start justify-between gap-3 rounded-lg border-2 bg-white p-3 ${
-        confirmed ? "border-neutral-200" : "border-dashed border-neutral-400"
+      className={`flex items-center gap-3.5 p-3.5 pr-4 ${
+        confirmed ? "card" : "rounded-[1.25rem] border-2 border-dashed border-neutral-400 bg-white"
       }`}
     >
+      {/* The ring shows the days left; the words under the date say them. */}
+      {dateStyle === "countdown" && <CountdownRing days={daysLeft} />}
       <div className="flex min-w-0 flex-col">
-        <h3 className="text-base font-semibold">
+        <h3 className="card-title">
           <Link
             to="/evenements/$id"
             params={{ id: event.id }}
-            className="flex min-h-11 items-center underline-offset-2 hover:underline"
+            className="-my-1 flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
           >
             {event.name}
           </Link>
         </h3>
-        <p className="text-sm">
+        <p className="text-sm text-neutral-800">
           {what !== undefined && `${what}${SEPARATOR}`}
           {t.status[participation.status]}
         </p>
-        <p className="text-sm text-neutral-600">
-          {dateStyle === "long" ? f.dateLong(date) : f.date(date)}
-        </p>
+        <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+          <p className="text-neutral-600">
+            {dateStyle === "long" ? f.dateLong(date) : f.date(date)}
+          </p>
+          {/* The words are the countdown: nothing here is told by a colour. */}
+          {dateStyle === "countdown" && (
+            <p className="font-semibold text-iris-700">{f.inDays(daysLeft)}</p>
+          )}
+        </div>
         {!confirmed && <p className="text-sm text-neutral-600">{t.event.unconfirmed}</p>}
       </div>
-      {/* The words are the countdown: nothing here is told by a colour. */}
-      {dateStyle === "countdown" && (
-        <p className="shrink-0 pt-3 text-sm font-medium">
-          {f.inDays(Math.max(0, daysBetween(today, date)))}
-        </p>
-      )}
     </li>
   );
 }

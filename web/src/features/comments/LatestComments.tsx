@@ -22,29 +22,33 @@ export function LatestComments() {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-lg font-semibold">
+      <h2 id={headingId} className="block-title">
         {t.home.latestCommentsTitle}
       </h2>
       <ul className="flex flex-col gap-2">
         {data.map(({ comment, author, event }) => (
           <li
             key={comment.id}
-            className="flex flex-col rounded-lg border-2 border-neutral-200 bg-white p-3"
+            className="card relative flex flex-col gap-1 overflow-hidden p-4 pl-5"
           >
-            <p>
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-dawn"
+            />
+            <p className="text-sm text-neutral-700">
               {t.home.commentOn(
-                <strong className="font-medium">{author.name}</strong>,
+                <strong className="font-semibold text-ink">{author.name}</strong>,
                 <Link
                   to="/evenements/$id"
                   params={{ id: event.id }}
-                  className="inline-flex min-h-11 items-center font-semibold underline-offset-2 hover:underline"
+                  className="inline-flex min-h-11 items-center font-semibold text-iris-700 underline-offset-4 hover:underline"
                 >
                   {event.name}
                 </Link>,
               )}
             </p>
-            <p className="break-words">{excerpt(comment.body)}</p>
-            <p className="text-sm text-neutral-600">
+            <p className="break-words text-ink">{excerpt(comment.body)}</p>
+            <p className="text-xs font-medium text-neutral-600">
               <RelativeTime at={comment.created} />
             </p>
           </li>

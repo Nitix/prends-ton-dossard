@@ -157,8 +157,12 @@ export function FormatFieldset({
   const rowError = message("row");
 
   return (
-    <fieldset className="flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-3">
-      <legend ref={title} tabIndex={-1} className="px-1 text-lg font-semibold">
+    <fieldset className="card flex min-w-0 flex-col gap-4 p-4 pt-2">
+      <legend
+        ref={title}
+        tabIndex={-1}
+        className="rounded-full bg-dawn-deep px-3.5 py-1 font-display text-sm font-bold text-white shadow-glow"
+      >
         {t.form.formatTitle(number)}
       </legend>
       {rowError !== null && (

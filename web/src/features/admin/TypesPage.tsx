@@ -39,7 +39,7 @@ export function TypesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 ref={title} tabIndex={-1} className="text-2xl font-semibold">
+      <h1 ref={title} tabIndex={-1} className="page-title">
         {t.admin.typesTitle}
       </h1>
       <button
@@ -60,9 +60,9 @@ export function TypesPage() {
             {raceTypes.data.map((raceType) => (
               <li
                 key={raceType.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white p-3"
+                className="card flex flex-wrap items-center justify-between gap-3 p-4"
               >
-                <h2 className="min-w-0 text-lg font-semibold break-words">{raceType.label}</h2>
+                <h2 className="card-title min-w-0 break-words">{raceType.label}</h2>
                 <div className="flex flex-wrap gap-2">
                   <RowAction
                     label={t.admin.rename}

@@ -86,13 +86,18 @@ export function PasskeyBanner({
   return (
     <section
       aria-labelledby={headingId}
-      className="flex flex-col gap-2 rounded-lg border border-neutral-300 bg-neutral-50 p-3"
+      className="relative flex flex-col gap-2 overflow-hidden rounded-[1.25rem] bg-iris-50 p-4 ring-1 ring-iris-100"
     >
-      <h2 id={headingId} className="text-base font-semibold">
+      {/* A glow of sunrise in the corner. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-12 -right-10 size-36 rounded-full bg-blush-200/60 blur-2xl"
+      />
+      <h2 id={headingId} className="card-title relative">
         {t.home.passkeyTitle}
       </h2>
-      <p className="text-sm">{t.passkeys.intro}</p>
-      <div className="flex flex-wrap gap-2">
+      <p className="relative text-sm text-neutral-700">{t.passkeys.intro}</p>
+      <div className="relative mt-1 flex flex-wrap gap-2">
         <Link to="/profil/reglages" className={`${PRIMARY} inline-flex items-center`}>
           {t.home.passkeyLink}
         </Link>

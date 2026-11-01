@@ -293,7 +293,7 @@ function LinkField({
           value={url}
           aria-label={t.calendar.title}
           aria-describedby={helpId}
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 text-base"
+          className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-300 bg-neutral-50 px-3.5 text-base text-neutral-800"
         />
         <button type="button" onClick={() => void copy()} className={SECONDARY}>
           {t.calendar.copy}

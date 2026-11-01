@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 
+import { INPUT } from "../../components/Field";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Status } from "../../lib/types";
 import type { EventView, FormatView } from "../events/api";
@@ -44,7 +45,7 @@ export function SelectField({
         onChange={(event) => {
           onChange(event.target.value);
         }}
-        className="min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-base"
+        className={INPUT}
       >
         {children}
       </select>

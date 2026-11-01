@@ -62,19 +62,19 @@ export function MemberRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-3">
+    <li className="card flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
         <Avatar
           runner={runner}
           thumb="96x96"
-          className="size-12 shrink-0 bg-neutral-200 text-lg font-semibold text-neutral-700"
+          className="avatar-soft size-12 shrink-0 text-lg font-bold"
         />
         <div className="min-w-0">
           {/* It can take the focus (it is not in the tab order): it is where the focus goes when the button that had it is gone. */}
           <h2
             id={memberHeadingId(runner.id)}
             tabIndex={-1}
-            className="text-lg font-semibold break-words"
+            className="card-title text-lg break-words"
           >
             {runner.name}
           </h2>
