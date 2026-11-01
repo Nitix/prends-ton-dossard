@@ -339,16 +339,16 @@ test("EventCard — un événement sans intéressés sans épreuve n'a pas de li
     .not.toBeInTheDocument();
 });
 
-test("EventCard — en anglais, la ligne des intéressés dit « Format to pick »", async () => {
+test("EventCard — en anglais, la ligne des intéressés dit « Race to pick »", async () => {
   mocks.events.mockResolvedValue([withParticipations(eventRecord, [pNinaUndecided])]);
   const { screen } = await renderList("/liste", ["en-GB"]);
   await expect.element(screen.getByText("Trail des Crêtes")).toBeVisible();
 
-  await expect.element(screen.getByText("Format to pick", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Race to pick", { exact: true })).toBeVisible();
   await expect
     .element(
       screen
-        .getByRole("list", { name: "Interested, format to pick" })
+        .getByRole("list", { name: "Interested, race to pick" })
         .getByText("Nina", { exact: true }),
     )
     .toBeInTheDocument();

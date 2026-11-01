@@ -322,7 +322,7 @@ test("PendingConfirmations — une participation à une épreuve n'a pas de lign
   await expect.element(screen.getByText(fr.event.formatToChoose)).not.toBeInTheDocument();
 });
 
-test("PendingConfirmations — en anglais, une participation sans épreuve dit « Format to pick »", async () => {
+test("PendingConfirmations — en anglais, une participation sans épreuve dit « Race to pick »", async () => {
   mocks.pending.mockResolvedValue([pendingUndecided]);
 
   const { screen } = await renderHome({ languages: ["en-GB"] });
@@ -331,7 +331,7 @@ test("PendingConfirmations — en anglais, une participation sans épreuve dit �
   await expect.element(block).toBeVisible();
   const line = block.getByText(/Alice/);
   expect(plain(line.element().textContent)).toBe(en.home.addedYou("Alice", "Trail des Crêtes"));
-  await expect.element(block.getByText("Format to pick", { exact: true })).toBeVisible();
+  await expect.element(block.getByText("Race to pick", { exact: true })).toBeVisible();
 });
 
 test("PendingConfirmations — une réponse dont l'événement manque fait échouer le bloc", async () => {
