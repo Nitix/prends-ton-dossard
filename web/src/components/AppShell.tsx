@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Link
         to="/evenements/nouveau"
         aria-label={t.nav.createEvent}
-        className="press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-card/70 hover:brightness-110 md:right-6 md:bottom-6"
+        className="press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-card/70 hover:brightness-95 md:right-6 md:bottom-6"
       >
         <svg
           aria-hidden="true"

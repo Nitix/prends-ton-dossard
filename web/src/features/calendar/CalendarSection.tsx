@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } fr
 
 import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
+import { READ_ONLY_INPUT } from "../../components/Field";
 import { LoadFailure } from "../../components/LoadFailure";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -293,7 +294,7 @@ function LinkField({
           value={url}
           aria-label={t.calendar.title}
           aria-describedby={helpId}
-          className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-300 bg-neutral-50 px-3.5 text-base text-neutral-800"
+          className={`${READ_ONLY_INPUT} min-w-0 flex-1`}
         />
         <button type="button" onClick={() => void copy()} className={SECONDARY}>
           {t.calendar.copy}

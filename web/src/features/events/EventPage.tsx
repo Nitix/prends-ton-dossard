@@ -17,7 +17,7 @@ import {
   TrashIcon,
   UserPlusIcon,
 } from "../../components/icons";
-import { SECTION } from "../../components/section";
+import { SECTION, UNCONFIRMED_ROW } from "../../components/section";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween, raceStarted } from "../../lib/dates";
@@ -701,8 +701,8 @@ function ParticipantRow({
   return (
     <li
       ref={row}
-      className={`flex items-center justify-between gap-2 rounded-2xl border-2 py-1 pr-1 pl-2 ${
-        confirmed ? "border-transparent bg-neutral-50" : "border-dashed border-neutral-500 bg-card"
+      className={`flex items-center justify-between gap-2 py-1 pr-1 pl-2 ${
+        confirmed ? "rounded-2xl border-2 border-transparent bg-neutral-50" : UNCONFIRMED_ROW
       }`}
     >
       <div className="flex min-w-0 items-center gap-3 py-1">

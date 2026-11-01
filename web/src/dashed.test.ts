@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 import { contrast } from "./test/colour";
-import { themeColour } from "./test/theme";
+import { block, themeColour, type Theme } from "./test/theme";
 
 // A dashed border says « not confirmed » or « to confirm » next to the words,
 // so that the state is never told by colour alone: but a dash that is pale on
@@ -66,7 +66,10 @@ test("dashed — every dashed border has 3:1 against a card and against the shee
   const borders = dashedBorders();
   // Not an empty search: the rows of the page of an event and of a list, the
   // chips of the participants, the upcoming races and the confirmations to give.
-  expect(new Set(borders.map((border) => border.where)).size).toBeGreaterThanOrEqual(5);
+  expect(
+    borders.length,
+    "no class string with border-dashed was found in the sources: the search is broken",
+  ).toBeGreaterThan(0);
 
   for (const { where, classes, colour } of borders) {
     expect(
@@ -79,6 +82,56 @@ test("dashed — every dashed border has 3:1 against a card and against the shee
         contrast(hex, background),
         `${where}: border-${colour} (${hex}) on ${ground}`,
       ).toBeGreaterThanOrEqual(3);
+    }
+  }
+});
+
+/** The three channels of a `#rrggbb` colour, from 0 to 255. */
+const rgb = (hex: string) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+
+/**
+ * The pastel of the dawn that an avatar without a photo is painted with
+ * (`.avatar-soft` in styles.css), at its stops and at every sixteenth of the
+ * way between two (a gradient is mixed in sRGB).
+ */
+function pastels(theme: Theme): string[] {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const gradient = /background-image:\s*linear-gradient\(([^;]*)\);/.exec(
+    block(styles, ".avatar-soft") ?? "",
+  )?.[1];
+  const stops = [...(gradient ?? "").matchAll(/var\(--color-([a-z]+-\d+)\)/g)].map((match) =>
+    themeColour(match[1] ?? "", theme),
+  );
+  return stops.slice(1).flatMap((to, i) =>
+    Array.from({ length: 17 }, (_, step) => {
+      const from = rgb(stops[i] ?? "");
+      const end = rgb(to);
+      const mixed = from.map((value, c) =>
+        Math.round(value + ((end[c] ?? 0) - value) * (step / 16)),
+      );
+      return `#${mixed.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+    }),
+  );
+}
+
+test("dashed — la pastille d'un participant à confirmer garde 3:1, avec de la marge, sur le pastel d'un avatar, le jour et la nuit", () => {
+  // The dashed edge of a chip runs right around the avatar inside it: against
+  // the pastel of initials as well as against the card. 3:1 is what WCAG asks
+  // of a graphic; the chip keeps a margin over it (3.5), so that a pastel a
+  // shade lighter does not bring it down to the limit.
+  const chips = dashedBorders().filter(({ where }) => where.endsWith("ParticipantChips.tsx"));
+  expect(chips.length, "the dashed chip of ParticipantChips.tsx was not found").toBeGreaterThan(0);
+  for (const { classes, colour } of chips) {
+    for (const theme of ["light", "dark"] as const) {
+      const grounds = pastels(theme);
+      expect(grounds.length, "the pastel of .avatar-soft").toBeGreaterThan(2);
+      const hex = themeColour(colour ?? "", theme);
+      for (const ground of grounds) {
+        expect(
+          contrast(hex, ground),
+          `"${classes}": border-${colour} (${hex}) on the pastel ${ground} (${theme})`,
+        ).toBeGreaterThanOrEqual(3.5);
+      }
     }
   }
 });

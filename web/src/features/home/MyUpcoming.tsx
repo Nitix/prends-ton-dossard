@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { CountdownRing } from "../../components/Dawn";
+import { UNCONFIRMED } from "../../components/section";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween } from "../../lib/dates";
 import type { ParticipationRecord } from "../../lib/types";
@@ -180,7 +181,8 @@ export function UpcomingRow({
   return (
     <li
       className={`flex items-center gap-3.5 p-3.5 pr-4 ${
-        confirmed ? "card" : "rounded-[1.25rem] border-2 border-dashed border-neutral-500 bg-card"
+        // The radius of a card: an upcoming race not confirmed has the shape of the others.
+        confirmed ? "card" : `rounded-[1.25rem] ${UNCONFIRMED}`
       }`}
     >
       {/* The ring shows the days left; the words under the date say them. */}

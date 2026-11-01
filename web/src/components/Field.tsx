@@ -1,8 +1,17 @@
 import { useId, type ReactNode } from "react";
 
-/** The look of a text input, a select and a text area: at least 44 px tall, which is a tap target. */
+/**
+ * The look of a text input, a select and a text area: at least 44 px tall, which
+ * is a tap target. Its edge is what shows a field (3:1 at least on its ground, at
+ * rest, under the pointer, with the focus and refused, by day and at night:
+ * src/contrast.test.ts measures it).
+ */
 export const INPUT =
-  "min-h-11 rounded-xl border border-neutral-300 bg-field px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-300 focus:border-iris-500 focus:shadow-[0_0_0_4px_rgb(139_124_255/0.18)] aria-invalid:border-red-700";
+  "min-h-11 rounded-xl border border-neutral-500 bg-field px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-400 focus:border-iris-500 focus:shadow-[0_0_0_4px_rgb(139_124_255/0.18)] aria-invalid:border-red-700";
+
+/** The look of a field that shows a text to copy, read-only: its edge, on the soft ground of a panel. */
+export const READ_ONLY_INPUT =
+  "min-h-11 rounded-xl border border-neutral-500 bg-neutral-50 px-3.5 text-base text-neutral-800";
 
 /** What the control of a field gets, to be linked to its label, its hint and its error. */
 export type FieldControl = {

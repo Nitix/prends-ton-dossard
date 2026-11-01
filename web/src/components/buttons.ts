@@ -1,9 +1,13 @@
 // The classes of the buttons, at least 44 px tall (a tap target): round pills
 // that sink a little when pressed.
 
-/** The main action of a screen or a dialog: a pill of sunrise, white text (4.6:1 at least). */
+/**
+ * The main action of a screen or a dialog: a pill of sunrise, white text (4.6:1
+ * at least). Under the pointer it darkens a little, which keeps the text above
+ * 4.5:1 (a lighter sunrise would bring its pink to 3.9:1; src/contrast.test.ts).
+ */
 export const PRIMARY =
-  "press min-h-11 rounded-full bg-dawn-deep px-5 text-[0.9375rem] font-semibold text-white shadow-glow hover:brightness-110 disabled:opacity-60 disabled:shadow-none";
+  "press min-h-11 rounded-full bg-dawn-deep px-5 text-[0.9375rem] font-semibold text-white shadow-glow hover:brightness-95 disabled:opacity-60 disabled:shadow-none";
 
 /** An action next to the main one: cancel, and the actions of a bar. */
 export const SECONDARY =
