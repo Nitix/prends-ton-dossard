@@ -2,10 +2,12 @@ package testutil
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -162,4 +164,32 @@ func ImageForm(t testing.TB, field, filename string, data []byte) (io.Reader, st
 		t.Fatalf("ImageForm: %v", err)
 	}
 	return &body, form.FormDataContentType()
+}
+
+// GPX returns a GPX 1.1 document with one track of one segment of n points,
+// each with a position and an altitude: a walk to the north-east of Annecy
+// that climbs from 450 m to 750 m in its first half and goes down in the
+// second. PocketBase sniffs it as application/gpx+xml, which it does only when
+// the root element declares the GPX 1.1 namespace early in the file.
+func GPX(t testing.TB, n int) []byte {
+	t.Helper()
+	if n < 1 {
+		t.Fatalf("GPX: a track of %d points is empty", n)
+	}
+
+	var out strings.Builder
+	out.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	out.WriteString(`<gpx version="1.1" creator="courses tests" xmlns="http://www.topografix.com/GPX/1/1">` + "\n")
+	out.WriteString("  <trk>\n    <name>Trace de test</name>\n    <trkseg>\n")
+	for i := range n {
+		// 0 on the first point and 1 on the last.
+		progress := 0.0
+		if n > 1 {
+			progress = float64(i) / float64(n-1)
+		}
+		fmt.Fprintf(&out, "      <trkpt lat=\"%.6f\" lon=\"%.6f\"><ele>%.1f</ele></trkpt>\n",
+			45.9+0.05*progress, 6.12+0.07*progress, 450+300*math.Sin(math.Pi*progress))
+	}
+	out.WriteString("    </trkseg>\n  </trk>\n</gpx>\n")
+	return []byte(out.String())
 }

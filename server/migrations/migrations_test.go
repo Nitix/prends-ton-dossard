@@ -9,6 +9,7 @@ import (
 	validation "ganigeorgiev.com/pocketbase/ozzo-validation/v4"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/dbutils"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 
 	"courses/server/testutil"
 )
@@ -1367,4 +1368,103 @@ func TestMigrations_ResultsDownThenUp(t *testing.T) {
 		t.Errorf("after applying again, the result is %v, want it empty", p1.FieldsData())
 	}
 	saveResult()
+}
+
+// The migration 9f adds the track of a format, a GPX file, and the link to its
+// route. Its rollback takes both fields away, with what they hold, and keeps
+// the formats; applying it again gives the fields back, empty.
+func TestMigrations_FormatRouteDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9f_format_route.go")
+
+	field := func(name string) core.Field {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("formats")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Fields.GetByName(name)
+	}
+	// checkFields checks the type and the limits of the two fields.
+	checkFields := func(when string) {
+		t.Helper()
+		gpx, ok := field("gpx").(*core.FileField)
+		if !ok {
+			t.Fatalf("%s: formats.gpx must be a file field, got %T", when, field("gpx"))
+		}
+		// One file, 10 MiB at most, not protected: the site reads it with a
+		// plain request, which cannot ask for a file token.
+		if gpx.MaxSelect != 1 || gpx.MaxSize != 10<<20 || gpx.Protected || gpx.Required || len(gpx.Thumbs) != 0 {
+			t.Errorf("%s: formats.gpx = maxSelect %d, maxSize %d, protected %v, required %v, thumbs %q; want 1, 10 MiB, false, false, none",
+				when, gpx.MaxSelect, gpx.MaxSize, gpx.Protected, gpx.Required, gpx.Thumbs)
+		}
+		if want := []string{"application/gpx+xml", "application/xml", "text/xml"}; !slices.Equal(gpx.MimeTypes, want) {
+			t.Errorf("%s: formats.gpx mime types = %q, want %q", when, gpx.MimeTypes, want)
+		}
+
+		route, ok := field("route_url").(*core.URLField)
+		if !ok {
+			t.Fatalf("%s: formats.route_url must be a URL field, got %T", when, field("route_url"))
+		}
+		// Optional, and any site: Strava, Garmin, the page of the race.
+		if route.Required || len(route.OnlyDomains) != 0 || len(route.ExceptDomains) != 0 {
+			t.Errorf("%s: formats.route_url = required %v, only %q, except %q; want an optional URL on any domain",
+				when, route.Required, route.OnlyDomains, route.ExceptDomains)
+		}
+	}
+	// saveRoute gives F42 a track and a link.
+	saveRoute := func() {
+		t.Helper()
+		f42, err := app.FindRecordById("formats", fx.F42.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := filesystem.NewFileFromBytes(testutil.GPX(t, 20), "trace.gpx")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f42.Set("gpx", file)
+		f42.Set("route_url", "https://www.strava.com/routes/1")
+		if err := app.Save(f42); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	checkFields("as created")
+	saveRoute()
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with a track: %v", err)
+	}
+	for _, name := range []string{"gpx", "route_url"} {
+		if field(name) != nil {
+			t.Errorf("formats.%s must be gone after the rollback", name)
+		}
+	}
+	// The format stays as it was, track and link apart.
+	f42, err := app.FindRecordById("formats", fx.F42.Id)
+	if err != nil {
+		t.Fatalf("after the rollback, F42 is gone: %v", err)
+	}
+	if f42.GetString("event") != fx.Event.Id || f42.GetInt("distance_km") != 42 || f42.GetInt("elevation_gain_m") != 2400 {
+		t.Errorf("after the rollback, F42 changed beyond its track: %v", f42.FieldsData())
+	}
+	// Rolling back again, with nothing left to remove, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkFields("after applying again")
+	f42, err = app.FindRecordById("formats", fx.F42.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f42.GetString("gpx") != "" || f42.GetString("route_url") != "" {
+		t.Errorf("after applying again, F42 has gpx %q and route_url %q, want both empty", f42.GetString("gpx"), f42.GetString("route_url"))
+	}
+	saveRoute()
 }

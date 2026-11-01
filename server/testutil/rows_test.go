@@ -2,6 +2,7 @@ package testutil_test
 
 import (
 	"bytes"
+	"encoding/xml"
 	"image"
 	"image/png"
 	"io"
@@ -10,7 +11,9 @@ import (
 	"net/http"
 	"testing"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/core/validators"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 
 	"courses/server/testutil"
 )
@@ -123,6 +126,67 @@ func TestPNG(t *testing.T) {
 	}
 	if _, err := png.Decode(bytes.NewReader(data)); err != nil {
 		t.Errorf("the whole image does not decode: %v", err)
+	}
+}
+
+// GPX is a document that a GPX reader takes for a track: a segment of n points,
+// each with a position and an altitude, that goes somewhere and climbs and
+// descends. PocketBase must sniff it as application/gpx+xml, the first type of
+// the gpx field of the formats, and not as plain XML.
+func TestGPX(t *testing.T) {
+	data := testutil.GPX(t, 50)
+
+	var doc struct {
+		XMLName xml.Name `xml:"gpx"`
+		Version string   `xml:"version,attr"`
+		Points  []struct {
+			Lat float64  `xml:"lat,attr"`
+			Lon float64  `xml:"lon,attr"`
+			Ele *float64 `xml:"ele"`
+		} `xml:"trk>trkseg>trkpt"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parsing the document: %v", err)
+	}
+	if doc.Version != "1.1" || len(doc.Points) != 50 {
+		t.Fatalf("document = version %q, %d points; want 1.1, 50", doc.Version, len(doc.Points))
+	}
+	for i, point := range doc.Points {
+		if point.Ele == nil {
+			t.Fatalf("point %d has no altitude", i)
+		}
+		if point.Lat < -90 || point.Lat > 90 || point.Lon < -180 || point.Lon > 180 {
+			t.Errorf("point %d is at %v, %v: not a position", i, point.Lat, point.Lon)
+		}
+	}
+	if first, last := doc.Points[0], doc.Points[len(doc.Points)-1]; first.Lat == last.Lat && first.Lon == last.Lon {
+		t.Error("the first and the last point are at the same place")
+	}
+	climbs, descends := false, false
+	for i := 1; i < len(doc.Points); i++ {
+		switch delta := *doc.Points[i].Ele - *doc.Points[i-1].Ele; {
+		case delta > 0:
+			climbs = true
+		case delta < 0:
+			descends = true
+		}
+	}
+	if !climbs || !descends {
+		t.Errorf("the altitude climbs %v and descends %v, want both", climbs, descends)
+	}
+
+	// What PocketBase checks on an upload is the type that it sniffs.
+	file, err := filesystem.NewFileFromBytes(data, "trace.gpx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validators.UploadedFileMimeType([]string{"application/gpx+xml"})(file); err != nil {
+		t.Errorf("the document is not sniffed as application/gpx+xml: %v", err)
+	}
+
+	// One point is still a track; none is not what the helper is for.
+	if got := testutil.GPX(t, 1); !bytes.Contains(got, []byte("<trkpt")) {
+		t.Error("a document of one point has no point")
 	}
 }
 
