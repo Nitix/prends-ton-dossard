@@ -141,7 +141,7 @@ Les migrations de la base s'appliquent au démarrage. Le volume n'est pas touch�
 
 ## Sauvegardes
 
-- **Chaque nuit à 3 h**, PocketBase crée une sauvegarde et garde les 7 dernières. Ce réglage vient d'une migration ; il se voit dans le tableau de bord, sous Settings puis Backups. Une sauvegarde est une archive `.zip` du dossier de données : `data.db` et `auxiliary.db` (copiés de façon cohérente pendant que l'application tourne) et les éventuels fichiers déposés.
+- **Chaque nuit à 3 h (heure de Paris)**, PocketBase crée une sauvegarde et garde les 7 dernières. Ce réglage vient d'une migration ; il se voit dans le tableau de bord, sous Settings puis Backups, où l'expression `0 3 * * *` s'entend à l'heure de Paris (le programme règle le fuseau de ses tâches planifiées). Une sauvegarde est une archive `.zip` du dossier de données : `data.db` et `auxiliary.db` (copiés de façon cohérente pendant que l'application tourne) et les éventuels fichiers déposés.
 - **Le fichier SQLite n'est jamais copié à la main pendant que l'application tourne.** Pas de `cp` ni de `rsync` sur le volume : seules les sauvegardes de PocketBase font foi.
 - **Copie hors de la machine, sur un stockage compatible S3** (Cloudflare R2 ou Backblaze B2, offres gratuites). Créer un bucket **privé** et une clé d'accès limitée à ce bucket, puis, dans le tableau de bord, sous Settings puis Backups, activer « Store backups in S3 storage » et remplir :
 
