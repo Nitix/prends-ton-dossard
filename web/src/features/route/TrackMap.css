@@ -43,9 +43,6 @@
 .track-map .leaflet-tile-pane {
   filter: saturate(0.6) brightness(1.04) contrast(0.95);
 }
-.track-map .track-line {
-  stroke: url(#aurore-route);
-}
 .track-map.leaflet-container .leaflet-bar {
   overflow: hidden;
   border: 0;

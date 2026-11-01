@@ -2,6 +2,7 @@ import { Map as LeafletMap } from "leaflet";
 import { StrictMode, type ComponentProps } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { page } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -296,6 +297,80 @@ test("TrackMap — a track of one point, or of one place, is drawn", async () =>
     expect(screen.container.innerHTML).not.toContain("NaN");
     await screen.unmount();
   }
+});
+
+/** The colours of a picture in PNG (base64), as an array of RGBA, with its width. */
+async function pixelsOf(base64: string): Promise<{ data: Uint8ClampedArray; width: number }> {
+  const blob = await (await fetch(`data:image/png;base64,${base64}`)).blob();
+  const bitmap = await createImageBitmap(blob);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const context = canvas.getContext("2d");
+  if (context === null) throw new Error("no 2D canvas");
+  context.drawImage(bitmap, 0, 0);
+  return {
+    data: context.getImageData(0, 0, bitmap.width, bitmap.height).data,
+    width: bitmap.width,
+  };
+}
+
+test("TrackMap — une trace toute droite, plein est ou plein nord, est dessinée", async () => {
+  // Its box has no height (or no width): a gradient laid on that box cannot be
+  // drawn, and the line must still show, in the colour of the dawn.
+  for (const [what, points] of [
+    [
+      "due east",
+      toTrack([
+        { lat: 45, lon: 6 },
+        { lat: 45, lon: 6.03 },
+      ]),
+    ],
+    [
+      "due north",
+      toTrack([
+        { lat: 45, lon: 6 },
+        { lat: 45.03, lon: 6 },
+      ]),
+    ],
+  ] as const) {
+    const screen = await renderMap({ points });
+    const map = screen.getByRole("region", { name: fr.route.map });
+    const line = part(screen, "path.track-line").getBoundingClientRect();
+    const box = map.element().getBoundingClientRect();
+
+    const { data, width } = await pixelsOf(await page.screenshot({ element: map, save: false }));
+    const scale = width / box.width;
+    // Along the middle third of the line, away from the dots of the start and the finish.
+    const vivid = Array.from({ length: 21 }, (_, i) => {
+      const x = line.left + (line.width * (i + 10)) / 40;
+      const y = line.top + (line.height * (i + 10)) / 40;
+      const at =
+        (Math.round((y - box.top) * scale) * width + Math.round((x - box.left) * scale)) * 4;
+      const [r = 0, g = 0, b = 0] = data.slice(at, at + 3);
+      // The dawn is vivid; the map, the halo and the tiles are white or grey.
+      return Math.max(r, g, b) - Math.min(r, g, b) > 80;
+    }).filter(Boolean).length;
+    expect(vivid, `the line of a track ${what}, in colour`).toBeGreaterThanOrEqual(18);
+    await screen.unmount();
+  }
+});
+
+test("TrackMap — deux cartes sur la page ont chacune leur dégradé, sans id en double", async () => {
+  const screen = await render(
+    <I18nProvider languages={["fr"]}>
+      <TrackMap points={TRACK} tileUrl={BLANK_TILE} />
+      <TrackMap points={OTHER_TRACK} tileUrl={BLANK_TILE} />
+    </I18nProvider>,
+  );
+  await expect.element(screen.getByRole("region", { name: fr.route.map }).first()).toBeVisible();
+
+  const ids = [...screen.container.querySelectorAll("linearGradient")].map((g) => g.id);
+  expect(ids).toHaveLength(2);
+  expect(new Set(ids).size).toBe(2);
+  // Each line is painted with the gradient of its own map, and a plain colour where it cannot be.
+  const lines = [...screen.container.querySelectorAll("path.track-line")];
+  expect(lines.map((path) => getComputedStyle(path).stroke)).toEqual(
+    ids.map((id) => `url("#${id}") rgb(214, 51, 111)`),
+  );
 });
 
 test("TrackMap — a new track replaces the old one", async () => {

@@ -8,7 +8,7 @@ import {
   type PointTuple,
   type TooltipOptions,
 } from "leaflet";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TrackPoint } from "./gpx";
@@ -55,8 +55,8 @@ const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 // The colours of the track and of its two ends. The start and the finish also
 // differ by their size (the start is a dot in the ring of the finish, so both
 // show when the race ends where it starts) and are named in words.
-// The line is painted with the gradient of the dawn (see TrackMap.css): this
-// colour is what a browser without it shows.
+// The line is painted with the gradient of the dawn, and in this colour where
+// the gradient cannot be drawn (see below).
 const LINE_COLOR = "#d6336f";
 const START_COLOR = "#5e4ae3";
 const FINISH_COLOR = "#241b35";
@@ -97,6 +97,8 @@ export default function TrackMap({
 }) {
   const { t } = useI18n();
   const element = useRef<HTMLElement>(null);
+  // Each map has its gradient: two tracks on a page have two maps.
+  const gradient = useId();
   const { zoomIn, zoomOut, start, finish } = t.route;
 
   useEffect(() => {
@@ -136,9 +138,12 @@ export default function TrackMap({
       opacity: 0.85,
       interactive: false,
     }).addTo(map);
+    // The gradient of the dawn, laid on the box of the line, and the plain colour
+    // where it cannot be: a track due east or due north has a box of no height
+    // or no width, on which a gradient has nothing to be drawn.
     const line = polyline(latLngs, {
       className: "track-line",
-      color: LINE_COLOR,
+      color: `url(#${gradient}) ${LINE_COLOR}`,
       weight: 5,
       opacity: 1,
       interactive: false,
@@ -172,16 +177,17 @@ export default function TrackMap({
       Object.assign(map, { _animatingZoom: false });
       map.remove();
     };
-  }, [points, tileUrl, zoomIn, zoomOut, start, finish]);
+  }, [points, tileUrl, zoomIn, zoomOut, start, finish, gradient]);
 
   // A <section> with a name is a region. `isolate` keeps the layers of Leaflet
   // (which go up to z-index 1000) under whatever the page puts over the content.
   return (
     <>
-      {/* The gradient of the line of the track: the dawn, from the start to the finish. */}
+      {/* The gradient of the line of the track: the dawn, across the box of the track, from its
+          north-west corner (peach) to its south-east one (violet), whichever way the race runs. */}
       <svg aria-hidden="true" width="0" height="0" className="absolute">
         <defs>
-          <linearGradient id="aurore-route" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#f47e4e" />
             <stop offset="0.5" stopColor="#d6336f" />
             <stop offset="1" stopColor="#5e4ae3" />
