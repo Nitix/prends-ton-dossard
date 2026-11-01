@@ -1,5 +1,5 @@
-# Replace the domain with the one of APP_URL. Caddy gets and renews the HTTPS
-# certificate by itself.
+# Replace the domain with the one of APP_URL, and the port with HOST_PORT of
+# .env (8090 by default). Caddy gets and renews the HTTPS certificate by itself.
 #
 # The program trusts the X-Forwarded-For header that Caddy sets: it tells the
 # visitors apart for the rate limits. That is safe only because the port of the

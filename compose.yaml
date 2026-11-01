@@ -3,9 +3,10 @@ services:
     build: .
     restart: unless-stopped
     # Published on the loopback interface only: Caddy, on the same machine, is
-    # the one public entry point (see Caddyfile.example).
+    # the one public entry point (see Caddyfile.example). HOST_PORT, from .env,
+    # is the port on the machine; the container always listens on 8090.
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:${HOST_PORT:-8090}:8090"
     # APP_URL, the public URL of the site (see .env.example). Without it the
     # program falls back to the URL of the dev server, which breaks passkeys and
     # invitation links in production.

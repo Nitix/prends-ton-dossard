@@ -83,7 +83,7 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
    cp .env.example .env
    ```
 
-   Dans `.env`, remplacer la valeur de `APP_URL` par l'adresse publique du site : `https://` et le domaine, sans chemin (par exemple `https://courses.example.fr`).
+   Dans `.env`, remplacer la valeur de `APP_URL` par l'adresse publique du site : `https://` et le domaine, sans chemin (par exemple `https://courses.example.fr`). Si le port 8090 de la machine est déjà pris par un autre service, changer aussi `HOST_PORT` (le conteneur écoute toujours sur 8090 ; `HOST_PORT` est le port que la machine lui donne, sur `127.0.0.1`).
 
 2. **Construire et démarrer le conteneur.**
 
@@ -92,9 +92,9 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
    docker compose ps          # "healthy" au bout de quelques secondes
    ```
 
-   Le conteneur n'écoute que sur `127.0.0.1:8090` : il n'est pas joignable de l'extérieur tant que Caddy ne le publie pas. Les données vivent dans le volume Docker `pb_data` (`docker volume ls` donne son nom complet, préfixé par celui du dossier).
+   Le conteneur n'écoute que sur `127.0.0.1:8090` (ou `127.0.0.1:<HOST_PORT>`) : il n'est pas joignable de l'extérieur tant que Caddy ne le publie pas. Les données vivent dans le volume Docker `pb_data` (`docker volume ls` donne son nom complet, préfixé par celui du dossier).
 
-3. **Brancher Caddy.** Copier le bloc de `Caddyfile.example` dans `/etc/caddy/Caddyfile`, avec le domaine de `APP_URL`, puis recharger :
+3. **Brancher Caddy.** Copier le bloc de `Caddyfile.example` dans `/etc/caddy/Caddyfile`, avec le domaine de `APP_URL` et le port de `HOST_PORT` (8090 par défaut), puis recharger :
 
    ```
    courses.example.fr {
@@ -109,7 +109,7 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
 
    Caddy obtient et renouvelle seul le certificat HTTPS.
 
-   Le programme se fie à l'en-tête `X-Forwarded-For` (une migration le règle) pour reconnaître chaque visiteur : c'est ce qui donne à chacun sa propre limite de requêtes sur la connexion et les invitations, au lieu d'une limite partagée par tout le groupe. C'est sûr parce que le port 8090 n'est publié que sur `127.0.0.1` et que Caddy remplace cet en-tête. **Ne jamais publier le port 8090 sur une interface publique** : n'importe qui pourrait alors choisir l'adresse qu'il présente, et contourner les limites.
+   Le programme se fie à l'en-tête `X-Forwarded-For` (une migration le règle) pour reconnaître chaque visiteur : c'est ce qui donne à chacun sa propre limite de requêtes sur la connexion et les invitations, au lieu d'une limite partagée par tout le groupe. C'est sûr parce que le port du conteneur n'est publié que sur `127.0.0.1` et que Caddy remplace cet en-tête. **Ne jamais publier ce port sur une interface publique** (garder `127.0.0.1` dans `compose.yaml`) : n'importe qui pourrait alors choisir l'adresse qu'il présente, et contourner les limites.
 
 4. **Créer le super-admin PocketBase.** C'est le compte du tableau de bord (`https://courses.example.fr/_/`), qui sert à configurer les sauvegardes et à restaurer.
 
