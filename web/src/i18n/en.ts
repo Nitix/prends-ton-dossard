@@ -123,6 +123,10 @@ export const en = {
   },
   settings: {
     appearance: "Appearance",
+    skin: "Theme",
+    onlyLight: "This theme only has a light mode.",
+    onlyDark: "This theme only has a dark mode.",
+    fontSample: "Aa",
     themeAuto: "Auto (like your system)",
     themeLight: "Light",
     themeDark: "Dark",

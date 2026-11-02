@@ -145,6 +145,12 @@ export const fr = {
   // The appearance of the app on this device (see lib/theme.ts): the dark theme, chosen or following the phone.
   settings: {
     appearance: "Apparence",
+    // The skin of the app (see skins/): its name in the picker comes from the skin itself.
+    skin: "Thème",
+    onlyLight: "Ce thème n'a qu'un mode clair.",
+    onlyDark: "Ce thème n'a qu'un mode sombre.",
+    // A few letters in the font of a theme, on its card.
+    fontSample: "Aa",
     themeAuto: "Auto (comme le système)",
     themeLight: "Clair",
     themeDark: "Sombre",
