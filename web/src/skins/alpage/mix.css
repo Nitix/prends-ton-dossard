@@ -57,14 +57,14 @@
 }
 
 /* The deadline of a card: a trail-marker badge, the two bands of a blaze in front of it. */
-:root[data-skin="alpage"] .event-card p.rounded-full {
+:root[data-skin="alpage"] .event-card-deadline {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   border-radius: 0.625rem;
   padding-left: 0.5rem;
 }
-:root[data-skin="alpage"] .event-card p.rounded-full::before {
+:root[data-skin="alpage"] .event-card-deadline::before {
   content: "";
   flex: none;
   width: 0.875rem;
@@ -74,7 +74,7 @@
   transform: rotate(-4deg);
 }
 /* What is over (the registrations are closed): a plain grey band, no sunrise. */
-:root[data-skin="alpage"] .event-card p.rounded-full.bg-neutral-100::before {
+:root[data-skin="alpage"] .event-card-deadline[data-kind="closed"]::before {
   background-image: none;
   background-color: var(--color-neutral-500);
 }
