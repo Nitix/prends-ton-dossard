@@ -1,0 +1,91 @@
+/* « Carnet », depth mix: the signature pieces of a logbook drawn like a
+   technical sheet, over the palette: a warm paper, white sheets with a
+   hairline, a coral line for what is current, a navy card where the variant had
+   one. The colours are the palette's (no custom property here): coral is
+   `iris`, gold is `peach`, indigo is `blush`, and the navy is the sky. */
+
+/* What is under the pointer takes a tint of coral. The palette's `iris-50` (the
+   ground of a soft panel, of a choice) is the paper of the variant, near the
+   white of a sheet: under the pointer, a hover there would hardly show. */
+@media (hover: hover) {
+  :root[data-skin="carnet"] .hover\:bg-iris-50:hover {
+    background-color: var(--color-iris-100);
+  }
+}
+
+/* The tabs: a white bar with a hairline, no shadow. The current tab has the
+   coral line of the variant under its word (its paint, `--dawn-deep`, cut to a
+   line) and its word in bold, in ink. */
+:root[data-skin="carnet"] .tabbar ul {
+  border-color: var(--color-neutral-200);
+  background-color: var(--color-card);
+  box-shadow: none;
+}
+:root[data-skin="carnet"] .tab[aria-current="page"] {
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: calc(100% - 1.5rem) 0.1875rem;
+  box-shadow: none;
+  color: var(--color-ink);
+}
+
+/* The day of an event: a sheet of paper with a hairline, the coral line along its top. */
+:root[data-skin="carnet"] .date-chip {
+  border: 1px solid var(--color-neutral-300);
+  border-radius: 0.5rem;
+  background-image: none;
+  background-color: var(--color-neutral-50);
+  box-shadow: inset 0 3px 0 var(--color-iris-600);
+  color: var(--color-ink);
+}
+
+/* The top of the page of an event and of a runner: a navy sheet, no halo. */
+:root[data-skin="carnet"] .event-hero,
+:root[data-skin="carnet"] .runner-hero {
+  border-radius: var(--radius-2xl);
+  box-shadow: none;
+}
+
+/* The title of a page: a lighter bold, and a short coral line under it (the
+   strip of the three data colours), a tick and not the crest. */
+:root[data-skin="carnet"] .page-title {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+:root[data-skin="carnet"] .page-title::after {
+  width: 2.5rem;
+  height: 0.1875rem;
+  margin-top: 0.6rem;
+  border-radius: 0.125rem;
+  mask: none;
+  -webkit-mask: none;
+}
+:root[data-skin="carnet"] .section-title {
+  font-weight: 600;
+}
+
+/* The card that offers a key to sign in (the home page: `PasskeyBanner`, the
+   `section` on `iris-50` with its glow): the navy card of the variant, in fine
+   dots, its words in white. It has no class of its own: its utility classes are
+   the hook (a test reads them in the component). */
+:root[data-skin="carnet"] section.bg-iris-50.ring-iris-100 {
+  background-color: var(--dawn-sky-color);
+  background-image: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--color-card) 13%, transparent) 0 0.8px,
+    transparent 1.2px
+  );
+  background-size: 14px 14px;
+  box-shadow: none;
+  color: var(--color-card);
+}
+:root[data-skin="carnet"] section.bg-iris-50.ring-iris-100 > span[aria-hidden="true"] {
+  display: none;
+}
+:root[data-skin="carnet"] section.bg-iris-50.ring-iris-100 p {
+  color: color-mix(in srgb, var(--color-card) 82%, transparent);
+}
+:root[data-skin="carnet"] section.bg-iris-50.ring-iris-100 .btn-secondary {
+  color: var(--color-ink);
+}
