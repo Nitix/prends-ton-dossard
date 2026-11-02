@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { useThemeChoice, type ThemeChoice } from "../../lib/theme";
@@ -32,6 +32,10 @@ export function AppearanceSection() {
   const { t, lang } = useI18n();
   const [choice, choose] = useThemeChoice();
   const [skin, chooseSkin] = useSkin();
+  // The skin just chosen, while its look loads (skins/index.ts): its card says
+  // so at once; the page takes it once its look is there (or keeps its own, if
+  // the look cannot be loaded).
+  const [pending, setPending] = useState<string | null>(null);
   const skinTitle = useId();
   const labels: Record<ThemeChoice, string> = {
     auto: t.settings.themeAuto,
@@ -52,9 +56,12 @@ export function AppearanceSection() {
               skin={one}
               name={one.label[lang]}
               sample={t.settings.fontSample}
-              checked={one.id === skin.id}
+              checked={one.id === (pending ?? skin.id)}
               onChoose={() => {
-                void chooseSkin(one.id);
+                setPending(one.id);
+                void chooseSkin(one.id).finally(() => {
+                  setPending((now) => (now === one.id ? null : now));
+                });
               }}
             />
           ))}

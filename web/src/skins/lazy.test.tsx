@@ -21,7 +21,8 @@ import "../styles.css";
 // each; in a build, a <link>, which index.html writes for the skin kept on the
 // device: noFlash.test.ts). The page of a person who stays on Crête has none of
 // them. The tests of this file share one page, in their order: the first one
-// looks at it before any skin is chosen.
+// looks at it before any skin is chosen, the second one at a look that is
+// slow to load (a look is loaded once, then kept).
 
 /** The session of the tests: signed in until `logout`, which tells whoever listens. */
 const session = vi.hoisted(() => ({
@@ -62,6 +63,24 @@ vi.mock("../lib/pb", () => ({
     }),
   },
 }));
+
+/** The looks that a test holds back, by the id of their skin, until it opens them (a slow network). */
+const gates = vi.hoisted(() => new Map<string, Promise<void>>());
+
+vi.mock("./looks", async (importOriginal) => {
+  const { LOOKS: real } = await importOriginal<typeof import("./looks")>();
+  return {
+    LOOKS: Object.fromEntries(
+      Object.entries(real).map(([path, load]) => [
+        path,
+        async () => {
+          await gates.get(/^\.\/([^/]+)\/look\.ts$/.exec(path)?.[1] ?? path);
+          return load();
+        },
+      ]),
+    ),
+  };
+});
 
 beforeAll(async () => {
   await ensureTemporal();
@@ -126,6 +145,35 @@ test("lazy — avant tout choix, la page n'a rien d'un autre skin que Crête : n
     "Inter Variable",
     "Plus Jakarta Sans Variable",
   ]);
+});
+
+test("lazy — dans le sélecteur, le thème choisi est coché dès le clic, et la page le prend quand son look est chargé", async () => {
+  const skin = OTHERS.findLast((one) => !one.id.startsWith("_"));
+  if (skin === undefined) throw new Error("a skin besides Crête");
+  const { promise, resolve } = Promise.withResolvers<void>();
+  gates.set(skin.id, promise);
+  // The section brings the faces of the samples: after the first test, which looks at the page before.
+  const { AppearanceSection } = await import("../features/profile/AppearanceSection");
+  const screen = await render(
+    <I18nProvider languages={["fr"]}>
+      <AppearanceSection />
+    </I18nProvider>,
+  );
+  try {
+    const radio = screen.getByRole("radio", { name: skin.label.fr, exact: true });
+    await radio.click();
+    // The card says the choice at once, while the look of the skin loads (a slow network)…
+    await expect.element(radio).toBeChecked();
+    expect(document.documentElement.dataset.skin).toBeUndefined();
+    // … and the page is in the skin once it is there.
+    resolve();
+    await expect.poll(() => document.documentElement.dataset.skin).toBe(skin.id);
+    await expect.element(radio).toBeChecked();
+  } finally {
+    gates.delete(skin.id);
+    resolve();
+    await screen.unmount();
+  }
 });
 
 test("lazy — un skin choisi a sa palette dans la page, une fois, même choisi deux fois", async () => {
