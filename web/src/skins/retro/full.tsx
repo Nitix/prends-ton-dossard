@@ -119,12 +119,11 @@ function Poster({ view, heading }: EventHeroProps) {
 }
 
 /**
- * The days left draw nothing: the words beside the ring (the tag of `.days-left`)
- * say them. An empty element stands where the ring was, hidden (the shared test
- * of the pieces draws each variant and waits for something in its box).
+ * The days left draw no ring: the words beside it (the tag of `.days-left`) say
+ * them.
  */
 function NoRing() {
-  return <span aria-hidden="true" className="countdown-ring hidden" />;
+  return null;
 }
 
 export const variants: Variants = {

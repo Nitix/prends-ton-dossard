@@ -191,10 +191,8 @@ test.skipIf(!FULL)(
         <p className="days-left">dans 9 jours</p>
       </>,
       (drawn) => {
-        // Nothing to see or to read: an empty element, not displayed.
-        const ring = drawn.querySelector(".countdown-ring");
-        expect(plain(ring?.textContent)).toBe("");
-        expect(style(ring).display).toBe("none");
+        // Nothing to see or to read: no ring at all.
+        expect(drawn.querySelector(".countdown-ring")).toBeNull();
         const tag = drawn.querySelector(".days-left");
         expect(hex(style(tag).backgroundColor)).toBe(MUSTARD);
         expect(hex(style(tag).color)).toBe(INK);
