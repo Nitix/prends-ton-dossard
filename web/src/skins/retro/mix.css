@@ -1,0 +1,129 @@
+/* « Rétro », depth mix: the signature pieces of the running club of the
+   seventies, over the palette: an ink outline and a hard shadow under what you
+   press, a ticket for an event, a stamp for its day, and the three stripes
+   under a title. The colours are the palette's (no custom property here):
+   orange is `blush`, mustard is `peach`, teal is `iris`. */
+
+/* The tabs: a paper bar in an ink outline, a hard shadow under it; the current
+   tab, the orange pill, is outlined and shadowed in ink too. */
+:root[data-skin="retro"] .tabbar ul {
+  border: 2px solid var(--color-ink);
+  border-radius: 1.5rem;
+  background-color: var(--color-raised);
+  box-shadow: 0 3px 0 var(--color-ink);
+}
+:root[data-skin="retro"] .tab {
+  border-radius: 1.125rem;
+}
+:root[data-skin="retro"] .tab[aria-current="page"] {
+  box-shadow:
+    0 0 0 2px var(--color-ink),
+    0 3px 0 2px var(--color-ink);
+}
+@media (min-width: 48rem) {
+  :root[data-skin="retro"] .tabbar ul,
+  :root[data-skin="retro"] .tab {
+    border-radius: 999px;
+  }
+}
+
+/* The « + », an orange patch in an ink outline, with its hard shadow. */
+:root[data-skin="retro"] .fab {
+  box-shadow:
+    0 0 0 2px var(--color-ink),
+    0 4px 0 2px var(--color-ink);
+}
+
+/* The ticket of an event: an ink outline, a hard shadow, and it lifts under the pointer. */
+:root[data-skin="retro"] .event-card {
+  position: relative;
+  border: 2px solid var(--color-ink);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 3px 0 var(--color-ink);
+}
+@media (hover: hover) {
+  :root[data-skin="retro"] .event-card:hover {
+    box-shadow: 0 5px 0 var(--color-ink);
+  }
+}
+
+/* The perforation between the top of a ticket and its stub: a dashed line, and
+   a notch cut in each edge, in the colour of the page behind. */
+:root[data-skin="retro"] .perforation {
+  position: relative;
+  height: 0;
+  border-top: 2px dashed var(--color-neutral-300);
+}
+:root[data-skin="retro"] .perforation::before,
+:root[data-skin="retro"] .perforation::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background-color: var(--color-neutral-50);
+}
+:root[data-skin="retro"] .perforation::before {
+  left: -11px;
+  clip-path: inset(0 0 0 50%);
+}
+:root[data-skin="retro"] .perforation::after {
+  right: -11px;
+  clip-path: inset(0 50% 0 0);
+}
+
+/* The stamp of the day, on a ticket: mustard, in an ink outline, the ink on it. */
+:root[data-skin="retro"] .date-chip {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.6rem;
+  background-image: none;
+  background-color: var(--color-peach-400);
+  box-shadow: none;
+  color: var(--color-ink);
+}
+
+/* The poster of an event and of a runner: an ink outline and a hard shadow,
+   the stripes of its motif along its foot. */
+:root[data-skin="retro"] .event-hero,
+:root[data-skin="retro"] .runner-hero {
+  border: 2px solid var(--color-ink);
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 0 var(--color-ink);
+}
+:root[data-skin="retro"] .runner-hero .avatar-soft {
+  box-shadow:
+    0 0 0 3px var(--color-card),
+    0 0 0 5px var(--color-ink);
+}
+
+/* The title of a page, with the three stripes under it, as on a track suit. */
+:root[data-skin="retro"] .page-title {
+  font-size: 2rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+:root[data-skin="retro"] .page-title::after {
+  width: 4.5rem;
+  height: 11px;
+  margin-top: 0.5rem;
+  border-radius: 0 999px 999px 0;
+  mask: none;
+  -webkit-mask: none;
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-blush-500) 0 3px,
+    transparent 3px 4px,
+    var(--color-peach-400) 4px 7px,
+    transparent 7px 8px,
+    var(--color-iris-500) 8px 11px
+  );
+}
+
+/* The title of a block, after its three small stripes. */
+:root[data-skin="retro"] .section-title {
+  font-size: 1.3rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
