@@ -135,7 +135,7 @@ export function HeroArt({ place }: HeroArtProps) {
 /** Between two blocks of the home page: the course goes on. */
 export function Divider({ className = "" }: DividerProps) {
   return (
-    <div aria-hidden="true" className={`relative h-8 w-full ${className}`}>
+    <div aria-hidden="true" className={`course-divider relative h-8 w-full ${className}`}>
       <BlueLine className="inset-0" start="0rem" />
     </div>
   );
