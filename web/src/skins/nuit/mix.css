@@ -1,0 +1,121 @@
+/* « Nuit », depth mix: its signature pieces, over the palette. A city run at
+   night: reflective tape on what is lit (the card of an event, the bar of the
+   tabs, the title of a page), the light of a headlamp on the heroes, lime
+   where one acts. Only in a build at mix or full (src/skins/depth/). The
+   colours are the palette's (the lime is `iris-600`, the cyan `blush`). The
+   header and the heroes keep the tape that their motifs draw (Art.tsx). */
+
+/* The tabs: a glassy bar, and over it a strip of reflective tape, as on a
+   vest. The current tab keeps the lime pill of the main button. */
+:root[data-skin="nuit"] .tabbar ul {
+  position: relative;
+  background-color: color-mix(in srgb, var(--color-neutral-50) 90%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+}
+:root[data-skin="nuit"] .tabbar ul::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  inset-inline: 1.5rem;
+  height: 2px;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    -60deg,
+    var(--color-iris-600) 0 7px,
+    color-mix(in srgb, var(--color-iris-600) 35%, transparent) 7px 9px
+  );
+  box-shadow: 0 0 10px -2px var(--dawn-glow-warm);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  pointer-events: none;
+}
+
+/* The « + »: the lime lit from behind, in the ring of the card. It brightens
+   under the pointer, where the lime of the main buttons darkens. */
+:root[data-skin="nuit"] .fab {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--color-card) 70%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--color-iris-600) 40%, transparent),
+    0 10px 32px -8px var(--dawn-glow-warm);
+}
+:root[data-skin="nuit"] .fab:hover {
+  filter: brightness(1.08);
+}
+
+/* An event in a list: a patch of reflective tape on the edge of the card, its
+   day a tile that lights its edge in lime, and a dotted pace line between
+   the head of the card and the runners. */
+:root[data-skin="nuit"] .event-card {
+  position: relative;
+  overflow: hidden;
+}
+:root[data-skin="nuit"] .event-card:hover,
+:root[data-skin="nuit"] .event-card:focus-within {
+  border-color: var(--color-neutral-300);
+}
+:root[data-skin="nuit"] .event-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 1.25rem;
+  width: 2.5rem;
+  height: 0.25rem;
+  border-radius: 0 0 2px 2px;
+  background-image: repeating-linear-gradient(
+    -60deg,
+    var(--color-iris-600) 0 7px,
+    color-mix(in srgb, var(--color-iris-600) 35%, transparent) 7px 9px
+  );
+  box-shadow: 0 0 14px -2px var(--dawn-glow-warm);
+  opacity: 0.75;
+}
+:root[data-skin="nuit"] .event-card > div + div {
+  border-top: 3px dotted var(--color-neutral-500);
+  padding-top: 0.75rem;
+}
+:root[data-skin="nuit"] .date-chip {
+  background-image: none;
+  background-color: color-mix(in srgb, var(--color-iris-600) 8%, transparent);
+  color: var(--color-iris-600);
+  border: 1px solid color-mix(in srgb, var(--color-iris-600) 45%, transparent);
+  box-shadow: 0 0 18px -6px var(--dawn-chip-glow);
+}
+
+/* The heroes: a surface under the headlamp, in a hairline rather than a glow.
+   « S'inscrire » is the lime of the main buttons, not a white pill. */
+:root[data-skin="nuit"] .event-hero,
+:root[data-skin="nuit"] .runner-hero {
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+:root[data-skin="nuit"] .event-hero .btn-on-dawn {
+  background-color: var(--color-iris-600);
+  color: var(--dawn-deep-ink);
+  box-shadow:
+    0 8px 24px -10px var(--shade-on-dawn),
+    0 0 18px -6px var(--dawn-glow-warm);
+}
+:root[data-skin="nuit"] .event-hero .btn-on-dawn:hover {
+  filter: brightness(1.08);
+}
+:root[data-skin="nuit"] .runner-hero .avatar-soft {
+  box-shadow:
+    0 0 0 3px var(--color-card),
+    0 0 0 5px var(--color-iris-600),
+    0 12px 30px -10px var(--shade-photo);
+}
+
+/* The title of a page: a strip of reflective tape under it, in the place of the crest. */
+:root[data-skin="nuit"] .page-title::after {
+  mask: none;
+  height: 3px;
+  margin-top: 0.6rem;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    -60deg,
+    var(--color-iris-600) 0 7px,
+    color-mix(in srgb, var(--color-iris-600) 35%, transparent) 7px 9px
+  );
+  box-shadow: 0 0 10px -2px var(--dawn-glow-warm);
+}
