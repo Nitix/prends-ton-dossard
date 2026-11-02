@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
+import { page } from "vitest/browser";
 
 import { SKINS, chooseSkin } from "..";
 import { chooseAmbient } from "../../lib/ambient";
 import { emulateMedia, resetMedia } from "../../test/media";
-import { HeaderArt, HeroArt } from "./motifs";
+import { HeaderArt, HeroArt, PageArt } from "./motifs";
 
 import "../../styles.css";
 
@@ -197,4 +198,83 @@ test("Carnet — seul un skin au fond animé le dit : Carnet (et lui seul)", () 
   expect(SKINS.filter((skin) => skin.animatedBackground).map((skin) => skin.id)).toEqual([
     "carnet",
   ]);
+});
+
+// --- The sheet of dots behind the pages: the v4's living background ---
+
+/** A page as the app draws it: the art first in a sheet as tall as its content, which scrolls. */
+function Sheet({ height = 3000 }: { height?: number }) {
+  return (
+    <div data-sheet style={{ position: "relative", height }}>
+      <PageArt />
+    </div>
+  );
+}
+
+test("Carnet — la feuille de points de la page : des points fins, et des plaques qui s'effacent et reviennent, nombreuses et lentes", async () => {
+  const screen = await render(<Sheet />);
+  const dots = screen.container.querySelector(".carnet-page-dots");
+  if (!dots) throw new Error("no dots");
+  // Fine dots, one pixel every four, drawn in a colour of the palette (a mask over a colour).
+  const style = getComputedStyle(dots);
+  expect(style.maskImage).toMatch(/^url\(/);
+  expect(style.maskSize).toBe("4px 4px");
+
+  const patches = [...screen.container.querySelectorAll(".carnet-veil")];
+  expect(patches.length).toBeGreaterThanOrEqual(12);
+  const fading = moving(screen.container).filter(({ name }) => name === "carnet-veil");
+  expect(fading).toHaveLength(patches.length);
+  for (const { duration, iterations } of fading) {
+    expect(duration).toBeGreaterThanOrEqual(10_000);
+    expect(iterations).toBe(Infinity);
+  }
+  // Not in step: most have a period and a place in it of their own.
+  expect(new Set(fading.map(({ duration }) => duration)).size).toBeGreaterThanOrEqual(8);
+  expect(new Set(fading.map(({ delay }) => delay)).size).toBeGreaterThanOrEqual(8);
+  // The patches are the colour of the paper they fade the dots into.
+  const art = screen.container.querySelector(".carnet-art");
+  if (!art) throw new Error("no art");
+  const ground = getComputedStyle(art);
+  expect(ground.getPropertyValue("--carnet-ground").trim()).not.toBe("");
+});
+
+test("Carnet — la feuille de points reste sous les yeux quand la page défile, et ne dépasse pas la feuille", async () => {
+  await page.viewport(414, 700);
+  try {
+    const screen = await render(<Sheet height={3000} />);
+    const sheet = screen.container.querySelector<HTMLElement>("[data-sheet]");
+    const layer = screen.container.querySelector<HTMLElement>(".carnet-page-sheet");
+    if (!sheet || !layer) throw new Error("no sheet");
+    const top = sheet.getBoundingClientRect().top + window.scrollY;
+    // As tall as the screen: the dots and the patches are always where one looks.
+    expect(layer.getBoundingClientRect().height).toBeCloseTo(window.innerHeight, 0);
+    for (const at of [0, 900, 1800]) {
+      window.scrollTo(0, top + at);
+      expect(layer.getBoundingClientRect().top, `scrolled to ${at}`).toBeCloseTo(0, 0);
+    }
+    // At the foot of the sheet it stops with it: nothing is drawn past it.
+    window.scrollTo(0, top + 3000 - window.innerHeight);
+    expect(layer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      sheet.getBoundingClientRect().bottom + 0.5,
+    );
+    expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(top + 3000 + 1);
+  } finally {
+    window.scrollTo(0, 0);
+    await page.viewport(414, 896);
+  }
+});
+
+test("Carnet — la feuille de points : pour qui a demandé moins d'animations, ou éteinte, rien ne bouge, mais tout est dessiné", async () => {
+  await emulateMedia({ reducedMotion: "reduce" });
+  const reduced = await render(<Sheet />);
+  expect(moving(reduced.container)).toEqual([]);
+  expect(reduced.container.querySelectorAll(".carnet-veil").length).toBeGreaterThanOrEqual(12);
+  await resetMedia();
+  expect(names(reduced.container)).toContain("carnet-veil");
+
+  chooseAmbient(false);
+  await expect.poll(() => moving(reduced.container)).toEqual([]);
+  expect(reduced.container.querySelector(".carnet-page-dots")).not.toBeNull();
+  chooseAmbient(true);
+  await expect.poll(() => names(reduced.container)).toContain("carnet-veil");
 });

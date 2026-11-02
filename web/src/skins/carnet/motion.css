@@ -68,6 +68,45 @@
   background-image: radial-gradient(closest-side, var(--carnet-ground) 45%, transparent);
 }
 
+/* ── The sheet of the page ────────────────────────────────────────────── */
+
+/* The v4's living background, behind the content of a page, on its sheet:
+   `PageArt` is the first child of the `.sheet`, as tall as it, under the `main`
+   (a layer of -1 in the sheet's own stacking context), and never in the way of a
+   tap. The patches fade the dots into the colour of the paper. The foot of the
+   sheet fades the dots out, so that on a short page they do not stop at a line. */
+.carnet-art[data-ground="paper"] {
+  --carnet-ground: var(--color-neutral-50);
+}
+.carnet-page {
+  z-index: -1;
+  border-radius: inherit;
+  overflow: clip;
+  /* A pale mark of the palette's grey over the paper: the words on it keep 4.5:1 on a dot too
+     (skins/pageArt.test.tsx measures it). */
+  --carnet-dot: color-mix(in srgb, var(--color-neutral-400) 40%, transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 6rem), transparent);
+}
+
+/* As tall as the screen, and under the eyes while the page scrolls: the box of
+   `.carnet-page` is as tall as the sheet, and clips it (`overflow: clip` makes
+   no scroll container, so that this sticks to the screen). */
+.carnet-page-sheet {
+  position: sticky;
+  top: 0;
+  display: block;
+  height: 100dvh;
+}
+
+/* The dots: one pixel every four, a mask (its shape only) over a colour of the palette. */
+.carnet-page-dots {
+  position: absolute;
+  inset: 0;
+  background-color: var(--carnet-dot);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E");
+  mask-size: 4px 4px;
+}
+
 /* The orbits of the data: a drawing in a corner, past the edge of its box,
    over the dots and under what is written. */
 .carnet-orbits {

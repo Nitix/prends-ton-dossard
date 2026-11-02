@@ -165,6 +165,7 @@ const SLOTS: SlotName[] = [
   "Divider",
   "SectionMarker",
   "EmptyArt",
+  "PageArt",
 ];
 
 test("skins — le registre trouve chaque dossier qui a un index.ts, Crête en premier", () => {

@@ -36,6 +36,14 @@ export type SlotProps = {
   SectionMarker: NoProps;
   /** The art of a list with nothing in it, over its words (see components/EmptyState.tsx). */
   EmptyArt: NoProps;
+  /**
+   * The art behind the content of a page: the first child of its sheet (`.sheet`,
+   * in components/AppShell.tsx), as tall as the sheet, under the page's `main`.
+   * Crête draws nothing there. It must never be in the way of a tap
+   * (`pointer-events: none`) and, being behind the words, must keep them legible
+   * (4.5:1 over it).
+   */
+  PageArt: NoProps;
 };
 
 export type SlotName = keyof SlotProps;

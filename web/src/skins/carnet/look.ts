@@ -8,7 +8,7 @@ import "./motion.css";
 import "./palette.css";
 import "./utilities.css";
 import type { Slots } from "../types";
-import { BrandMark, Divider, EmptyArt, HeaderArt, HeroArt, SectionMarker } from "./motifs";
+import { BrandMark, Divider, EmptyArt, HeaderArt, HeroArt, PageArt, SectionMarker } from "./motifs";
 
 export const slots: Partial<Slots> = {
   HeaderArt,
@@ -17,4 +17,5 @@ export const slots: Partial<Slots> = {
   Divider,
   SectionMarker,
   EmptyArt,
+  PageArt,
 };

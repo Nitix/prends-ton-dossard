@@ -45,6 +45,44 @@ const VEILS = [
 const VEIL_LEAST = 0.08;
 
 /**
+ * A patch of the ground over the dots, where the sheet fades: at `left` and
+ * `top`, `width` by `height` big, hiding the dots as much as `opacity` at the
+ * most; it goes out and comes back (`period` seconds, `delay` into it already,
+ * negative) and drifts `drift` rem. See motion.css.
+ */
+function Veil(patch: {
+  left: string;
+  top: string;
+  width: string;
+  height: string;
+  opacity: number;
+  period: number;
+  delay: number;
+  drift: number;
+}) {
+  const { left, top, width, height, opacity, period, delay, drift } = patch;
+  return (
+    <span
+      className="carnet-veil"
+      style={
+        {
+          left,
+          top,
+          width,
+          height,
+          opacity,
+          "--veil-max": opacity,
+          "--veil-min": VEIL_LEAST,
+          "--veil-period": `${period}s`,
+          "--veil-delay": `${delay}s`,
+          "--veil-drift": `${drift}rem`,
+        } as CSSProperties
+      }
+    />
+  );
+}
+
+/**
  * The sheet of dots, in its box, fading out towards `fade` (see motion.css), with
  * the patches of the ground over it where it fades out and in (`veils`), never
  * all of it: they move in a drawing that has `data-moving` (`.carnet-art`).
@@ -54,24 +92,14 @@ function Dots({ fade, veils = false }: { fade?: "header" | "event" | "runner"; v
     <span aria-hidden="true" data-fade={fade} className="carnet-dots">
       <span className="carnet-dots-sheet" style={DOTS} />
       {veils &&
-        VEILS.map(({ left, top, size, opacity, period, delay, drift }) => (
-          <span
+        VEILS.map(({ left, top, size, ...pace }) => (
+          <Veil
             key={left}
-            className="carnet-veil"
-            style={
-              {
-                left,
-                top,
-                width: `${size}rem`,
-                height: `${size}rem`,
-                opacity,
-                "--veil-max": opacity,
-                "--veil-min": VEIL_LEAST,
-                "--veil-period": `${period}s`,
-                "--veil-delay": `${delay}s`,
-                "--veil-drift": `${drift}rem`,
-              } as CSSProperties
-            }
+            left={left}
+            top={top}
+            width={`${size}rem`}
+            height={`${size}rem`}
+            {...pace}
           />
         ))}
     </span>
@@ -317,4 +345,60 @@ export function SectionMarker() {
 /** France in dots, over the words of a list with nothing in it. */
 export function EmptyArt() {
   return <DotFrance className="carnet:mb-3 carnet:w-28" />;
+}
+
+/**
+ * The patches of the sheet of the page, over the dots: scattered over the
+ * screen (two low-discrepancy sequences, so that they are even without being in
+ * rows), each of its own size (6 to 11 rem, at most: they shrink on a small
+ * screen), and each at its own pace (11 to 24 s, none the same, and not in step).
+ * Never all of the dots at once: the v4's sheet faded out and in by patches.
+ */
+const PAGE_PATCHES = Array.from({ length: 14 }, (_, at) => {
+  const period = 11 + ((at * 5) % 14);
+  return {
+    left: ((at * 0.6180339887) % 1) * 100,
+    top: ((at * 0.7548776662) % 1) * 100,
+    size: 6 + ((at * 5) % 6),
+    period,
+    delay: -((at * 3.7) % period),
+    drift: at % 2 === 0 ? 1.5 : -1.5,
+  };
+});
+
+/**
+ * The v4's living background: behind the page, on its sheet, a fine grid of
+ * dots, one pixel every four, with patches where the dots fade out and come back
+ * in. It is as tall as the screen and stays under the eyes while the page
+ * scrolls (`position: sticky`, in a box as tall as the sheet that clips it); the
+ * foot of the sheet fades it out. The dots are a pale mark of the palette's grey,
+ * laid over the paper so that the words on it keep 4.5:1 on a dot too
+ * (skins/pageArt.test.tsx); the patches are the colour of the paper. It moves
+ * and obeys « Animer le fond » as the other drawings do (see motion.css).
+ */
+export function PageArt() {
+  const [moving] = useAmbient();
+  return (
+    <span
+      aria-hidden="true"
+      data-moving={moving ? "" : undefined}
+      data-ground="paper"
+      className="carnet-art carnet-page"
+    >
+      <span className="carnet-page-sheet">
+        <span className="carnet-page-dots" />
+        {PAGE_PATCHES.map(({ left, top, size, ...pace }) => (
+          <Veil
+            key={left}
+            left={`${left.toFixed(1)}%`}
+            top={`${top.toFixed(1)}%`}
+            width={`min(${size}rem, ${(size * 3.4).toFixed(1)}vmin)`}
+            height={`min(${size}rem, ${(size * 3.4).toFixed(1)}vmin)`}
+            opacity={0.95}
+            {...pace}
+          />
+        ))}
+      </span>
+    </span>
+  );
 }

@@ -21,3 +21,6 @@ export const SectionMarker = slotted("SectionMarker");
 
 /** The art of a list with nothing in it, over its words. */
 export const EmptyArt = slotted("EmptyArt");
+
+/** The art behind the content of a page, on its sheet (see AppShell): Crête draws nothing there. */
+export const PageArt = slotted("PageArt");

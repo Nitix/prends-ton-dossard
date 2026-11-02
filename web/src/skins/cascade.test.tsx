@@ -53,6 +53,7 @@ function Scene({ skin }: { skin: Skin }): ReactNode {
           {createElement(slot("HeroArt"), { place: "event" })}
         </div>
         <div className="relative h-48 overflow-hidden">{createElement(slot("EmptyArt"), {})}</div>
+        <div className="relative h-48 overflow-hidden">{createElement(slot("PageArt"), {})}</div>
         {createElement(slot("Divider"), {})}
         <h2>{createElement(slot("SectionMarker"), {})}Bloc</h2>
       </div>

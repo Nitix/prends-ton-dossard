@@ -467,18 +467,32 @@ The motifs are components in named places of the app (`types.ts`, `SlotProps`).
 The app draws them through `slotted(name)` (`components.tsx`), made once per slot
 in `components/Slots.tsx`; it draws `useSlot(name)`: the skin's own, or Crête's.
 
-| Slot            | Props                                  | Where                                                              |
-| --------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| `HeaderArt`     | `place: "header" \| "welcome"`, `sun?` | the sky of the header (AppShell), the sign-in pages (\_\_root)     |
-| `BrandMark`     | `size?: "md" \| "lg"`                  | the name of the app after its mark, on the sky                     |
-| `HeroArt`       | `place: "event" \| "runner"`           | behind the hero of an event, of a runner                           |
-| `Divider`       | `className?`                           | between two blocks of the home page                                |
-| `SectionMarker` | none                                   | the first child of every block title (`components/BlockTitle.tsx`) |
-| `EmptyArt`      | none                                   | over the words of an empty list (EmptyState)                       |
+| Slot            | Props                                  | Where                                                                                                                            |
+| --------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `HeaderArt`     | `place: "header" \| "welcome"`, `sun?` | the sky of the header (AppShell), the sign-in pages (\_\_root)                                                                   |
+| `BrandMark`     | `size?: "md" \| "lg"`                  | the name of the app after its mark, on the sky                                                                                   |
+| `HeroArt`       | `place: "event" \| "runner"`           | behind the hero of an event, of a runner                                                                                         |
+| `Divider`       | `className?`                           | between two blocks of the home page                                                                                              |
+| `SectionMarker` | none                                   | the first child of every block title (`components/BlockTitle.tsx`)                                                               |
+| `EmptyArt`      | none                                   | over the words of an empty list (EmptyState)                                                                                     |
+| `PageArt`       | none                                   | behind the content of every signed-in page: the first child of its sheet (`.sheet`, `components/AppShell.tsx`), under its `main` |
 
 A motif is decoration: `aria-hidden="true"`, `focusable="false"` on an SVG,
 nothing that the words around them do not say. Crête's long paths are in the page
 once (`MotifDefs`, in `crete/Alpenglow.tsx`); a skin draws its own.
+
+`PageArt` is drawn in the sheet of the page, which is the paper of the app: Crête
+draws nothing there (`crete/PageArt.tsx` is `null`, so its page is what it was, and
+so is that of a skin that does not draw one: `pageArt.test.tsx` checks that the
+sheet holds the `main` and nothing else). A skin that draws there makes a box as
+tall as the sheet (`position: absolute; inset: 0`), under the content
+(`z-index: -1`, inside the sheet's own stacking context, so it is over the paper
+and under every card and word), and never in the way of a tap
+(`pointer-events: none`). The words behind which it lies must keep their 4.5:1 on
+it: the palest text of the app on its paper is `neutral-600`, and a dot of the
+art must not take it under that (`pageArt.test.tsx` measures it, on the pages
+and on the token). « Carnet »'s is as tall as the screen at most, so that a long page does
+not pay for its length: `position: sticky` in the box of the sheet, clipped by it.
 
 `BrandMark` writes the name of the app (`t.common.appName`) as one text node, in
 one element: the smoke battery finds it on the sign-in pages by its text
@@ -515,7 +529,8 @@ The app has no animation that never ends: it keeps a phone at work
 (`../motion.test.ts`). What moves, moves once (a dialog that rises, a ring that
 draws itself), and not at all when less motion is asked for. One exception,
 for a skin whose background is alive (« Carnet »: the patches of its sheet of
-dots that fade out and in, its orbits that turn, a dot that pulses): the
+dots that fade out and in, on its header, its heroes and, behind every page, its
+sheet of the page; its orbits that turn, a dot that pulses): the
 decoration of its motifs, in the `motion.css` of its folder, on these
 conditions (`../motion.test.ts` checks the file, and `animatedBackground`):
 
@@ -691,3 +706,8 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
 - `../motion.test.ts`: no animation that never ends, but the `motion.css` of a
   skin on the conditions of « Motion »; `../lib/ambient.test.ts`: the
   background on or off, kept on the device.
+- `pageArt.test.tsx`: what is behind the content of a page: nothing in Crête
+  and in the skins that draw none (the sheet holds the `main`, nothing else, in
+  each of them at 375 and 1280 px), and in « Carnet » the sheet of dots, in the
+  sheet, under the content, out of the way of a tap, with the words on the paper
+  keeping 4.5:1 on a dot too, on the pages and on `neutral-600`.

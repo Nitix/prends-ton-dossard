@@ -4,15 +4,15 @@ import type { ReactNode } from "react";
 import { useSession } from "../features/auth/session";
 import { useI18n } from "../i18n/I18nProvider";
 import { OfflineBanner } from "./OfflineBanner";
-import { BrandMark, HeaderArt } from "./Slots";
+import { BrandMark, HeaderArt, PageArt } from "./Slots";
 import { TabBar } from "./TabBar";
 
 /**
  * The frame of every signed-in page: the offline banner, the sky of the header
  * with the name of the app, its map and its mountains, the tabs, the page
  * itself on a sheet that rises over the ridges, and the floating button that
- * creates an event. The art of the sky and the name of the app are the skin's
- * (`HeaderArt`, `BrandMark`). It owns the
+ * creates an event. The art of the sky, of the sheet and the name of the app are the skin's
+ * (`HeaderArt`, `PageArt`, `BrandMark`). It owns the
  * page's `<main>`, so the pages inside must not render another one.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -42,8 +42,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <TabBar isAdmin={isAdmin} />
       {/* The sheet of the page, over the sky. On a phone, room under the content for the tab bar
           and the floating button; on a tablet, for the button, which floats over the right of the
-          column (from `lg` the wider screen has it beside the column). */}
+          column (from `lg` the wider screen has it beside the column). The skin's `PageArt` is the
+          first thing in it, behind the page (Crête draws none). */}
       <div className="sheet relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:rounded-t-[2rem]">
+        <PageArt />
         <main className="mx-auto max-w-3xl px-4 pt-6 pb-44 md:px-5 md:pt-8 md:pb-28 lg:max-w-4xl lg:pb-12">
           {children}
         </main>

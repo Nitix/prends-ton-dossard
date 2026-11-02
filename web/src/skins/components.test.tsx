@@ -59,6 +59,7 @@ const MOTIFS: readonly (readonly [what: string, draw: (skin: Skin) => ReactNode]
   ["Divider", (skin) => createElement(slotOf(skin, "Divider"), {})],
   ["SectionMarker", (skin) => createElement(slotOf(skin, "SectionMarker"), {})],
   ["EmptyArt", (skin) => createElement(slotOf(skin, "EmptyArt"), {})],
+  ["PageArt", (skin) => createElement(slotOf(skin, "PageArt"), {})],
 ];
 
 test("slots — les motifs de chaque skin ne disent rien à un lecteur d'écran ; la marque dit le nom de l'appli, et rien d'autre", async () => {

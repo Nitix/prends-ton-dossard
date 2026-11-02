@@ -3,6 +3,7 @@ import { BrandMark } from "./Brand";
 import { EmptyArt } from "./EmptyArt";
 import { HeaderArt } from "./HeaderArt";
 import { HeroArt } from "./HeroArt";
+import { PageArt } from "./PageArt";
 import { RidgeDivider } from "./RidgeDivider";
 import { SectionMarker } from "./SectionMarker";
 
@@ -19,6 +20,7 @@ export const slots: Slots = {
   Divider: RidgeDivider,
   SectionMarker,
   EmptyArt,
+  PageArt,
 };
 
 export const skin: Skin = {
