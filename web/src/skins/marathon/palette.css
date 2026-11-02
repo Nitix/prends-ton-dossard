@@ -129,4 +129,16 @@
   --map-start: #2b59ff;
   --map-finish: #0b0b0c;
   --map-link: #1a3bc4;
+
+  /* The card of the sign-in pages, on the black of the sky: the white form of
+     the variant, in a black shade. A window (the variant's float), a message
+     and the pieces on the sky of a hero in the black ink. */
+  --welcome-card: #ffffff;
+  --shade-welcome: rgb(0 0 0 / 0.5);
+  --shade-dialog: rgb(11 11 12 / 0.45);
+  --shade-toast: rgb(11 11 12 / 0.7);
+  --shade-notes: rgb(11 11 12 / 0.6);
+  --shade-photo: rgb(11 11 12 / 0.6);
+  --shade-on-dawn: rgb(11 11 12 / 0.5);
+  --hero-veil: rgb(11 11 12 / 0.2);
 }

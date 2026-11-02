@@ -144,4 +144,17 @@
   --map-start: #1f7a7a;
   --map-finish: #3b2a20;
   --map-link: #155656;
+
+  /* The card of the sign-in pages, on the brown of the sky: the variant's
+     cream card in its brown outline, in a deep brown shade. A window, a
+     message and the pieces on the sky of a hero are shaded in the brown ink. */
+  --welcome-card: #fffbf3;
+  --welcome-rim: #3b2a20;
+  --shade-welcome: rgb(20 12 8 / 0.55);
+  --shade-dialog: rgb(59 42 32 / 0.45);
+  --shade-toast: rgb(59 42 32 / 0.7);
+  --shade-notes: rgb(59 42 32 / 0.6);
+  --shade-photo: rgb(59 42 32 / 0.6);
+  --shade-on-dawn: rgb(59 42 32 / 0.5);
+  --hero-veil: rgb(59 42 32 / 0.2);
 }
