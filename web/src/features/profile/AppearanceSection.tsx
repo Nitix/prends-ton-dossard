@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -45,6 +45,18 @@ export function AppearanceSection() {
   // the look cannot be loaded).
   const [pending, setPending] = useState<string | null>(null);
   const skinTitle = useId();
+  const skinGroup = useRef<HTMLDivElement>(null);
+  // « Clair ou sombre » gave way to a sentence with the focus in it: once the page
+  // is drawn, the focus goes to the skin chosen, not to the top of the page.
+  const focusLost = useRef(false);
+  useLayoutEffect(() => {
+    if (!focusLost.current) return;
+    focusLost.current = false;
+    skinGroup.current?.querySelector<HTMLInputElement>("input:checked")?.focus();
+  });
+  // The look of the skin chosen is still loading: its card is checked (`pending`)
+  // while the page is not in it yet.
+  const loading = pending !== null && pending !== skin.id;
 
   async function chooseSkin(id: string) {
     setPending(id);
@@ -68,7 +80,13 @@ export function AppearanceSection() {
         <h3 id={skinTitle} className="eyebrow">
           {t.settings.skin}
         </h3>
-        <div role="radiogroup" aria-labelledby={skinTitle} className="grid grid-cols-2 gap-2">
+        <div
+          ref={skinGroup}
+          role="radiogroup"
+          aria-labelledby={skinTitle}
+          aria-busy={loading}
+          className="grid grid-cols-2 gap-2"
+        >
           {SKINS.map((one) => (
             <SkinCard
               key={one.id}
@@ -83,12 +101,14 @@ export function AppearanceSection() {
           ))}
         </div>
       </div>
+      {/* What the card, checked at once, does not say: a polite message while the look loads, and nothing after. A failure is said by the message of the toast. */}
+      <output className="sr-only">{loading ? t.settings.skinLoading : ""}</output>
       {skin.modes.length === 1 ? (
         <p className="text-sm text-neutral-600">
           {skin.modes[0] === "dark" ? t.settings.onlyDark : t.settings.onlyLight}
         </p>
       ) : (
-        <ModeChoices choice={choice} choose={choose} labels={labels} />
+        <ModeChoices choice={choice} choose={choose} labels={labels} focusLost={focusLost} />
       )}
     </Section>
   );
@@ -161,14 +181,26 @@ function ModeChoices({
   choice,
   choose,
   labels,
+  focusLost,
 }: {
   choice: ThemeChoice;
   choose: (choice: ThemeChoice) => void;
   labels: Record<ThemeChoice, string>;
+  /** Set when this gives way (a skin with one mode only) while the focus is in it. */
+  focusLost: RefObject<boolean>;
 }) {
   const { t } = useI18n();
+  const fieldset = useRef<HTMLFieldSetElement>(null);
+  // This gives way to a sentence when the skin has one mode only: a focus that is
+  // in it then would fall to the top of the page. It says so, before it goes.
+  useLayoutEffect(() => {
+    const node = fieldset.current;
+    return () => {
+      if (node?.contains(document.activeElement)) focusLost.current = true;
+    };
+  }, [focusLost]);
   return (
-    <fieldset className="flex flex-col gap-2">
+    <fieldset ref={fieldset} className="flex flex-col gap-2">
       <legend className="eyebrow mb-2">{t.settings.mode}</legend>
       {CHOICES.map((value) => (
         <label

@@ -36,8 +36,9 @@ vi.mock("../../lib/pb", () => ({
   },
 }));
 
-/** The skins whose look cannot be loaded (offline, never loaded before). */
+/** The skins whose look cannot be loaded (offline, never loaded before), and those that a test holds back (a slow network). */
 const failing = vi.hoisted(() => new Set<string>());
+const gates = vi.hoisted(() => new Map<string, Promise<void>>());
 
 vi.mock("../../skins/looks", async (importOriginal) => {
   const { LOOKS: real } = await importOriginal<typeof import("../../skins/looks")>();
@@ -46,7 +47,9 @@ vi.mock("../../skins/looks", async (importOriginal) => {
       Object.entries(real).map(([path, load]) => [
         path,
         async () => {
-          if (failing.has(/^\.\/([^/]+)\/look\.ts$/.exec(path)?.[1] ?? path)) {
+          const id = /^\.\/([^/]+)\/look\.ts$/.exec(path)?.[1] ?? path;
+          await gates.get(id);
+          if (failing.has(id)) {
             throw new TypeError(`Failed to fetch dynamically imported module: ${path}`);
           }
           return load();
@@ -61,6 +64,7 @@ beforeEach(() => {
   account.update.mockReset();
   account.update.mockResolvedValue({});
   failing.clear();
+  gates.clear();
 });
 
 afterEach(async () => {
@@ -71,8 +75,12 @@ afterEach(async () => {
 
 /** The skins but Crête, in the order of the picker. */
 const OTHERS = SKINS.filter((skin) => skin.id !== "crete" && !skin.id.startsWith("_"));
-const [A, , C] = OTHERS;
-if (A === undefined || C === undefined) throw new Error("three skins besides Crête");
+const [A, B, C] = OTHERS;
+if (A === undefined || B === undefined || C === undefined) {
+  throw new Error("three skins besides Crête");
+}
+/** A skin that has one mode only: « Clair ou sombre » gives way to a sentence when it is the page's. */
+const SINGLE = SKINS.find((skin) => skin.modes.length === 1 && !skin.id.startsWith("_"));
 const CRETE = SKINS.find((skin) => skin.id === "crete")?.label.fr ?? "Crête";
 
 function renderAppearance(languages = ["fr"]) {
@@ -179,4 +187,67 @@ test("Thème — un look qui ne se charge pas n'écrase pas un thème déjà cho
   expect(document.documentElement.dataset.skin).toBe(A.id);
   expect(localStorage.getItem(SKIN_KEY)).toBe(A.id);
   expect(account.update.mock.calls).toEqual([["u1", { skin: A.id }]]);
+});
+
+// What assistive technology hears while a look loads: the card is checked at
+// once, which says nothing of the wait.
+test("Thème — pendant que le look se charge, un état poli le dit (« Chargement du thème… »), puis plus rien", async () => {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  gates.set(B.id, promise);
+  const screen = await renderAppearance();
+  const group = screen.getByRole("radiogroup", { name: fr.settings.skin });
+
+  await card(screen, B.label.fr).click();
+
+  // In a live region, politely: it is read out when it appears, without interrupting.
+  const status = screen.getByText(fr.settings.skinLoading);
+  await expect.element(status).toBeInTheDocument();
+  const region = status.element().closest("output");
+  expect(region, "a live region").not.toBeNull();
+  expect(group.element().getAttribute("aria-busy")).toBe("true");
+
+  resolve();
+  await expect.poll(() => document.documentElement.dataset.skin).toBe(B.id);
+  // Nothing more to say: the region stays, empty.
+  await expect.poll(() => region?.textContent).toBe("");
+  expect(group.element().getAttribute("aria-busy")).toBe("false");
+});
+
+test("Thème — l'état de chargement est dans la langue de la page, et un échec ne le laisse pas : c'est le message qui parle", async () => {
+  failing.add(C.id);
+  const { promise, resolve } = Promise.withResolvers<void>();
+  gates.set(C.id, promise);
+  const screen = await renderAppearance(["en"]);
+
+  await screen
+    .getByRole("radiogroup", { name: en.settings.skin })
+    .getByRole("radio", { name: C.label.en, exact: true })
+    .click();
+  await expect.element(screen.getByText(en.settings.skinLoading)).toBeInTheDocument();
+
+  resolve();
+  // The message says it failed (it is a live region too): no « loading » is left behind.
+  const failed = screen.getByText(en.settings.skinLoadFailed);
+  await expect.element(failed).toBeVisible();
+  expect(failed.element().closest("output"), "the message is in a live region").not.toBeNull();
+  await expect.poll(() => document.body.textContent.includes(en.settings.skinLoading)).toBe(false);
+});
+
+test("Thème — quand « Clair ou sombre » cède la place à une phrase, le focus reste sur les thèmes, pas au sommet de la page", async () => {
+  if (SINGLE === undefined) throw new Error("a skin with one mode only");
+  const screen = await renderAppearance();
+  const light = screen
+    .getByRole("group", { name: fr.settings.mode })
+    .getByRole("radio", { name: fr.settings.themeLight });
+  light.element().focus();
+  expect(document.activeElement).toBe(light.element());
+
+  // The skin comes from elsewhere (another tab, the account at sign-in) while the focus is in the modes.
+  await chooseSkin(SINGLE.id);
+
+  const sentence = SINGLE.modes[0] === "dark" ? fr.settings.onlyDark : fr.settings.onlyLight;
+  await expect.element(screen.getByText(sentence)).toBeVisible();
+  expect(document.activeElement, "the focus is on the skin chosen").toBe(
+    card(screen, SINGLE.label.fr).element(),
+  );
 });

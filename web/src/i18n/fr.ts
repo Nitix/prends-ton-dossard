@@ -154,6 +154,8 @@ export const fr = {
     // A few letters in the font of a theme, on its card.
     fontSample: "Aa",
     // The message when a theme chosen cannot be loaded (offline, and never chosen on this device): the page keeps the theme it had.
+    // Said politely (a live region) while the look of a theme chosen loads: its card is checked at once.
+    skinLoading: "Chargement du thème…",
     skinLoadFailed: "Ce thème n'a pas pu se charger : vérifie ta connexion.",
     themeAuto: "Auto (comme le système)",
     themeLight: "Clair",
