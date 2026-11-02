@@ -4,7 +4,9 @@ import { DateChip } from "../../components/Dawn";
 import { PinIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
-import type { EventView, FormatView } from "./api";
+import { skinnable } from "../../skins/components";
+import type { EventCardProps } from "../../skins/types";
+import type { FormatView } from "./api";
 import { formatMeasures } from "./formatName";
 import { ParticipantChips } from "./ParticipantChips";
 import { starters } from "./participants";
@@ -19,9 +21,9 @@ const SEPARATOR = " · ";
  * chosen yet, each of its formats with its measures and its participants, then
  * its supporters. Those who do not start are not on the card. Under the place,
  * the registration deadline, if the event has one, and "Inscriptions closes"
- * once it has passed.
+ * once it has passed. Crête draws it alike in every list (`list`).
  */
-export function EventCard({ view }: { view: EventView }) {
+export function EventCardBase({ view }: EventCardProps) {
   const { t, f } = useI18n();
   const { event, formats, start, end } = view;
   const severalDays = !start.equals(end);
@@ -96,6 +98,9 @@ export function EventCard({ view }: { view: EventView }) {
     </article>
   );
 }
+
+/** An event in a list, as the skin of the page draws it at the depth of the build (Crête's above, by default). */
+export const EventCard = skinnable("EventCard", EventCardBase);
 
 function FormatLine({ formatView, showDate }: { formatView: FormatView; showDate: boolean }) {
   const { t, f } = useI18n();

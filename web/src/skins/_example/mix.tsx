@@ -1,6 +1,6 @@
-import type { EmptyStateProps, Variants } from "../types";
+import type { EmptyStateProps, VariantPropsOf, Variants } from "../types";
 
-// « Exemple (dev) », depth mix: a component it replaces (see ../README.md,
+// « Exemple (dev) », depth mix: the components it replaces (see ../README.md,
 // « Markup variants »). Only in a build at mix or full, and never in a build of
 // the app at all, since the skin is one of development.
 
@@ -18,4 +18,23 @@ function ExampleEmptyState({ title, hint }: EmptyStateProps) {
   );
 }
 
-export const variants: Variants = { EmptyState: ExampleEmptyState };
+/**
+ * An event in a list: Crête's card (`Base`, every feature of it), framed by a
+ * thick line in the accent, dashed in the agenda. A variant that wraps the base.
+ */
+function ExampleEventCard({ Base, ...props }: VariantPropsOf<"EventCard">) {
+  return (
+    <div
+      data-variant="example"
+      data-list={props.list}
+      style={{
+        borderLeft: `6px ${props.list === "agenda" ? "dashed" : "solid"} var(--color-iris-600)`,
+        borderRadius: "1.5rem",
+      }}
+    >
+      <Base {...props} />
+    </div>
+  );
+}
+
+export const variants: Variants = { EmptyState: ExampleEmptyState, EventCard: ExampleEventCard };

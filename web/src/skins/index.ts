@@ -3,7 +3,7 @@ import { variants as depthVariants } from "virtual:skin-depth";
 
 import { forceMode } from "../lib/theme";
 import { skin as crete, slots as creteSlots } from "./crete";
-import type { Depth, Skin, SlotName, Slots, VariantName, VariantProps, Variants } from "./types";
+import type { Depth, Skin, SlotName, Slots, VariantName, VariantPropsOf, Variants } from "./types";
 
 /**
  * The skins of the app: the ways it can be dressed, one of them chosen on the
@@ -194,20 +194,19 @@ const VARIANTS = variantsBySkin(depthVariants);
 export function variantOf<N extends VariantName>(
   skinId: string,
   name: N,
-): ComponentType<VariantProps[N]> | undefined {
+): ComponentType<VariantPropsOf<N>> | undefined {
   return VARIANTS.get(skinId)?.[name];
 }
 
 /**
  * The component that the skin of the page puts in the place of `name` at the
- * depth of the build (its `mix.tsx` or `full.tsx`), or `fallback`. The app does
- * not call it in a render: it makes the component skinnable once, at the top
- * of its module, with `skinnable` (components.tsx).
+ * depth of the build (its `mix.tsx` or `full.tsx`), if any. The app does not
+ * call it in a render: it makes the component skinnable once, at the top of its
+ * module, with `skinnable` (components.tsx), which gives the variant its base.
  */
 export function useSkinVariant<N extends VariantName>(
   name: N,
-  fallback: ComponentType<VariantProps[N]>,
-): ComponentType<VariantProps[N]> {
+): ComponentType<VariantPropsOf<N>> | undefined {
   const [skin] = useSkin();
-  return variantOf(skin.id, name) ?? fallback;
+  return variantOf(skin.id, name);
 }

@@ -1,7 +1,7 @@
-import { createElement, type ComponentType } from "react";
+import { createElement, type Attributes, type ComponentType } from "react";
 
 import { useSkinVariant, useSlot } from ".";
-import type { SlotName, SlotProps, VariantName, VariantProps } from "./types";
+import type { SlotName, SlotProps, VariantName, VariantProps, VariantPropsOf } from "./types";
 
 // The two ways the app draws what a skin changes, each made once, at the top of
 // a module: the motif of a slot (`slotted`), and a component that a skin may
@@ -26,16 +26,19 @@ export function slotted<N extends SlotName>(name: N): ComponentType<SlotProps[N]
  * A component that a skin may replace, by its name in `VariantProps`
  * (types.ts): `export const EventCard = skinnable("EventCard", EventCardBase)`.
  * It draws the variant that the skin of the page exports under that name from
- * its `mix.tsx` or `full.tsx` when the build is deep enough to have it, and
- * `Base` otherwise.
+ * its `mix.tsx` or `full.tsx` when the build is deep enough to have it, given
+ * `Base` as a prop of the same name, to frame or wrap; and `Base` otherwise.
  */
 export function skinnable<N extends VariantName>(
   name: N,
   Base: ComponentType<VariantProps[N]>,
 ): ComponentType<VariantProps[N]> {
   function Skinnable(props: VariantProps[N]) {
-    const Component = useSkinVariant(name, Base);
-    return createElement(Component, props);
+    const Variant = useSkinVariant(name);
+    if (Variant === undefined) return createElement(Base, props);
+    // No key (`key: undefined` is none): it tells TypeScript that the props meet `Attributes`.
+    const given: Attributes & VariantPropsOf<N> = { key: undefined, ...props, Base };
+    return createElement(Variant, given);
   }
   Skinnable.displayName = `Skinnable(${name})`;
   return Skinnable;

@@ -32,7 +32,7 @@ export function DayList({
         <ul className="flex flex-col gap-3">
           {views.map((view) => (
             <li key={view.event.id}>
-              <EventCard view={view} />
+              <EventCard view={view} list="agenda" />
             </li>
           ))}
         </ul>

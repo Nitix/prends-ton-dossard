@@ -2,6 +2,8 @@ import { useId } from "react";
 
 import { useI18n } from "../i18n/I18nProvider";
 import { useToday } from "../lib/useToday";
+import { skinnable } from "../skins/components";
+import type { DateChipProps } from "../skins/types";
 
 /**
  * The pictures of the dawn: the day of an event as a chip of sunrise, and the
@@ -16,18 +18,7 @@ import { useToday } from "../lib/useToday";
  * its first and last day. The date is said by `label`, in words, for screen
  * readers: the chip is hidden from them.
  */
-export function DateChip({
-  start,
-  end,
-  label,
-  size = "md",
-}: {
-  start: Temporal.PlainDate;
-  end?: Temporal.PlainDate;
-  /** The date in words, read instead of the chip. */
-  label: string;
-  size?: "md" | "lg";
-}) {
+export function DateChipBase({ start, end, label, size = "md" }: DateChipProps) {
   const { f, formatLocale } = useI18n();
   const several = end !== undefined && !start.equals(end);
   const month = (d: Temporal.PlainDate) =>
@@ -68,6 +59,9 @@ export function DateChip({
     </>
   );
 }
+
+/** The day of an event, as the skin of the page draws it at the depth of the build (Crête's chip above, by default). */
+export const DateChip = skinnable("DateChip", DateChipBase);
 
 /** How many days the ring counts down: further than this, it is empty. */
 const HORIZON_DAYS = 30;

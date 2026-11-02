@@ -1,8 +1,12 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactNode, RefObject } from "react";
+
+import type { EventView } from "../features/events/api.ts";
+import type { RunnerRecord } from "../lib/types.ts";
 
 // What a skin is: a way to dress the app, chosen on the device (see index.ts
 // and README.md). These types are also read by plugin.ts, in Node: nothing
-// here may need a browser.
+// here may need a browser. The types of the app it names are imported as types
+// only, with their extension, as Vite's loader of the config asks.
 
 /** The two modes of a skin: by day and at night. */
 export type Mode = "light" | "dark";
@@ -88,6 +92,59 @@ export type Skin = {
 export type EmptyStateProps = { title: ReactNode; hint: ReactNode };
 
 /**
+ * The list an event card is in: the next events of the group on the home page,
+ * the events to come or the past ones of the list, the events of a day of the
+ * agenda. Crête draws them alike; a variant may tell them apart (« Dossard »:
+ * the band of its bib in coral for what is to come, in sun for the results, in
+ * sky in the agenda), never by colour alone.
+ */
+export type EventCardList = "home" | "upcoming" | "past" | "agenda";
+
+/** The props of features/events/EventCard.tsx: an event in a list. */
+export type EventCardProps = {
+  /** The event, its formats and who is on them, its days. */
+  view: EventView;
+  /** The list it is in. */
+  list: EventCardList;
+};
+
+/**
+ * The props of `DateChip` (components/Dawn.tsx): the day or days of an event as
+ * a picture, hidden from screen readers, which read `label`.
+ */
+export type DateChipProps = {
+  start: Temporal.PlainDate;
+  /** The last day, for an event of several days. */
+  end?: Temporal.PlainDate;
+  /** The date in words, read instead of the picture. */
+  label: string;
+  size?: "md" | "lg";
+};
+
+/** The props of features/events/EventHero.tsx: the top of the page of an event. */
+export type EventHeroProps = {
+  /** The event, its formats and who is on them, its days. */
+  view: EventView;
+  /**
+   * What the title of the page (the `h1` of the hero) carries, to spread on it:
+   * its id, which the actions of the page name (`aria-describedby`), and what
+   * lets the page give it the focus (`data-focus`, `tabIndex`).
+   */
+  heading: { id: string; "data-focus": string; tabIndex: -1 };
+};
+
+/** The props of features/runners/RunnerHero.tsx: the top of the page of a runner. */
+export type RunnerHeroProps = {
+  /** The runner, once known: until then, the title says « Coureur » and there is no photo. */
+  runner: RunnerRecord | undefined;
+  /**
+   * What the title of the page (the `h1` of the hero) carries, to spread on it:
+   * the ref by which a failure gives it the focus (`LoadFailure`), and `tabIndex`.
+   */
+  heading: { ref: RefObject<HTMLHeadingElement | null>; tabIndex: -1 };
+};
+
+/**
  * The components that a skin may replace at a depth beyond palette, by name,
  * with their props: a component made skinnable (`skinnable` in components.tsx)
  * adds its line here. A name that is not here does not typecheck, in a skin's
@@ -95,12 +152,27 @@ export type EmptyStateProps = { title: ReactNode; hint: ReactNode };
  */
 export type VariantProps = {
   EmptyState: EmptyStateProps;
+  EventCard: EventCardProps;
+  EventHero: EventHeroProps;
+  DateChip: DateChipProps;
+  RunnerHero: RunnerHeroProps;
 };
 
 export type VariantName = keyof VariantProps;
 
 /**
- * What a skin's `mix.tsx` or `full.tsx` exports as `variants`: the components
- * it replaces at that depth, each taking the props of the one it replaces.
+ * What a variant is given: the props of the piece it replaces, and that piece
+ * as Crête draws it, `Base` (with the skin's motifs in its slots), so that it
+ * can frame or wrap it rather than draw it again. `Base` takes the props alone:
+ * `({ Base, ...props }) => <div className="frame"><Base {...props} /></div>`.
  */
-export type Variants = { readonly [N in VariantName]?: ComponentType<VariantProps[N]> };
+export type VariantPropsOf<N extends VariantName> = VariantProps[N] & {
+  Base: ComponentType<VariantProps[N]>;
+};
+
+/**
+ * What a skin's `mix.tsx` or `full.tsx` exports as `variants`: the components
+ * it replaces at that depth, each taking the props of the one it replaces, and
+ * that one as `Base`.
+ */
+export type Variants = { readonly [N in VariantName]?: ComponentType<VariantPropsOf<N>> };

@@ -75,6 +75,13 @@ const brightened = (hex: string, factor: number) =>
  * A class of a class string, under any variants (`aria-[current=page]:bg-dawn-deep`),
  * with those variants. A string may be a template with strings in it (`${a ? "x" : ""}`):
  * a class ends at a space or a quote.
+ *
+ * What this reading of the sources cannot see, so what the guards built on it
+ * miss: a class with an opacity (`text-white/90` is not `text-white`); a text
+ * colour set on a child, in a class string of its own; a variant of the form
+ * `[&…]:` (`[&>span]:text-white`), which does not start like a class; and the
+ * branches of a template, read as one string (`bg-dawn-deep` in one branch and
+ * `text-dawn-deep-ink` in the other count as one pair).
  */
 function withVariants(classes: string, name: string): string[] {
   return [

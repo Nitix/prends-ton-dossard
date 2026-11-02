@@ -122,8 +122,13 @@ What a palette sets:
   | --------------------- | ---------- | --------------------------------------------------------------------------------------------------- |
   | `--display-style`     | `normal`   | `font-style` (`italic`: the face must have its italic, at 700 and 800; `fonts.test.ts` checks it)   |
   | `--display-transform` | `none`     | `text-transform` (`uppercase`)                                                                      |
-  | `--display-stretch`   | `normal`   | `font-stretch` (`110%`: the face must cover that width, a variable `wdth` axis; `fonts.test.ts`)    |
+  | `--display-stretch`   | `normal`   | `font-stretch` (`112.5%`: the face must cover that width, a variable `wdth` axis; `fonts.test.ts`)  |
   | `--display-tracking`  | `-0.025em` | the letter-spacing of the title of a page, a hero, a window; a block's and a card's are 0.01em more |
+
+  The rule of `styles.css` on every `h1, h2, h3, legend, summary` (the display
+  face, -0.01em) stays outside `--display-*`: a title in the display face that
+  should take the skin's style carries one of the classes above or
+  `display-title` (the month of the agenda does).
 
 - The map of a track (`features/route/TrackMap`, which stays light at night):
 
@@ -344,6 +349,17 @@ the Tailwind classes; the semantic classes carry no style of Crête but
 | `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-on-dawn` | the buttons (`components/buttons.ts`)                       |
 | `.card`, `.month-title`, `.eyebrow`, `.sheet`                   | already in `styles.css`                                     |
 
+The pieces made skinnable (below) also carry classes of `styles.css`, which draw
+Crête's look and which a sheet may restyle there too:
+
+| Class                       | Element                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `.on-dawn`                  | what sits on a sky: the header, the heroes (see « The sky »)                    |
+| `.card-lift`                | a card that lifts under the pointer: an event card                              |
+| `.glass`                    | a frosted card: the notes of an event on its hero, the card of the sign-in page |
+| `.avatar-soft`              | the photo of a runner on their hero (the pastel of their initials)              |
+| `display-title` (a utility) | the title of a hero, of an event card, of a window, the month of the agenda     |
+
 `mix.css` and `full.css` set no custom property (the colours stay in the palette,
 where the contrast tests read them), and every rule is the skin's. The forms they
 may use, and only these (`sheetProblems` in `../test/theme.ts`, tested on sheets of
@@ -418,12 +434,35 @@ A piece whose markup must change (the bib of « Dossard », the ticket of
 
 ```tsx
 // types.ts
-export type VariantProps = { EmptyState: EmptyStateProps; EventCard: EventCardProps };
+export type VariantProps = { EmptyState: EmptyStateProps; EventCard: EventCardProps; … };
 
 // features/events/EventCard.tsx
-function EventCardBase(props: EventCardProps) { … }
+export function EventCardBase(props: EventCardProps) { … }
 export const EventCard = skinnable("EventCard", EventCardBase);
 ```
+
+The app draws the skinnable one (`EventCard`); `…Base` is Crête's, exported for
+the tests. The pieces made skinnable:
+
+| Name         | Where                             | Props (`types.ts`)                             | What it is                                                                   |
+| ------------ | --------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| `EmptyState` | `components/EmptyState.tsx`       | `title`, `hint`                                | a list with nothing in it                                                    |
+| `EventCard`  | `features/events/EventCard.tsx`   | `view`, `list`                                 | an event in a list (`.event-card`): home, upcoming, past, agenda             |
+| `EventHero`  | `features/events/EventHero.tsx`   | `view`, `heading`                              | the top of the page of an event (`.event-hero`), its `h1`                    |
+| `DateChip`   | `components/Dawn.tsx`             | `start`, `end?`, `label`, `size?` (`md`, `lg`) | the day or days of an event (`.date-chip`), a picture; `label` says it       |
+| `RunnerHero` | `features/runners/RunnerHero.tsx` | `runner` (undefined while loading), `heading`  | the top of the page of a runner (`.runner-hero`), their photo and their `h1` |
+
+- `view` is the event as the app has it (`EventView`): the event, its formats with
+  who starts them, the interested and the supporters, its days.
+- `list` tells the lists apart, for a variant that marks them (Crête does not):
+  `home` (the group's next events), `upcoming` and `past` (the list), `agenda`.
+- `heading` is what the `h1` of a hero carries: spread it on the variant's `h1`
+  (`<h1 {...heading}>`). It holds its id (the actions name it), the attribute the
+  page gives the focus by, `tabIndex={-1}`, and the ref of a runner's title.
+- What a piece shows besides, it reads as Crête's does: the day (`useToday`), the
+  registration (`registrationState`, `registrationLabel`, `webAddress`), the link
+  to register (`RegisterLink`, `features/events/RegisterLink.tsx`), the formats
+  (`formatMeasures`), the runners (`ParticipantChips`).
 
 The skin exports the variant from `mix.tsx` or `full.tsx` (full wins over mix):
 
@@ -432,7 +471,35 @@ export const variants: Variants = { EventCard: BibCard };
 ```
 
 A name that is not in `VariantProps`, or a variant with other props, does not
-typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
+typecheck.
+
+**A variant gets the base as a prop.** `skinnable` draws the variant with the
+props of the piece and `Base`, the piece as Crête draws it (with the skin's own
+motifs in its slots), so that the variant can frame or wrap it rather than draw
+it again (`VariantPropsOf<N>` in `types.ts`). Take `Base` out of the props
+before passing them on; `Base` takes the props alone. A variant of `full.tsx`
+gets Crête's piece too, not the variant of `mix.tsx`. The pieces nest: Crête's
+card draws its day with `DateChip`, so a skin's day is in its card, base or not.
+
+```tsx
+// skins/<id>/mix.tsx: a frame around Crête's card
+function BibCard({ Base, ...props }: VariantPropsOf<"EventCard">) {
+  return (
+    <div className="bib">
+      <Base {...props} />
+    </div>
+  );
+}
+```
+
+A variant that draws its own markup instead keeps everything the base shows and
+does: every text (the statuses, the counts, the D+ figures, the dates), every
+link and every action, the `h1` with `heading`, the date in words (`label`) for
+a picture hidden from screen readers. Only the markup differs. It keeps the
+semantic class of the piece (`.event-card`, `.event-hero`, `.runner-hero` on its
+outer element, `.date-chip` on the picture of the day), which `mix.css` restyles
+and the smoke battery finds. `_example/mix.tsx` replaces `EmptyState`, and frames Crête's `EventCard`
+(a thick line, dashed in the agenda).
 
 ## Tests
 
@@ -443,7 +510,10 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
   each depth in a real build (a skin of development included), the `.env`
   directory, the table of the skins written in `index.html` and its script
   before the first paint.
-- `components.test.tsx`: `slotted` and `skinnable` in each skin, at the depth of the run.
+- `components.test.tsx`: `slotted` and `skinnable` in each skin, at the depth of
+  the run: each piece of `VariantProps` draws its base, or the skin's variant
+  given the base (which then differs from it); the example's card frames the
+  base it gets.
 - `tokens.test.tsx`: in each skin, Crête's motifs and the map of a track take
   every colour from a `--motif-*` or `--map-*` property: none written out, in an
   attribute, a style or the arbitrary value of a class (`shadow-[…]`,
@@ -458,9 +528,11 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
   `--shade-welcome`, `--welcome-card` and `--welcome-rim`), the settings, forced
   colours; 44 px targets, the marks of the titles, the current tab, the «+» and
   the main button in the skin's paint, ink and halo (the halo of `shadow-glow` in
-  the skin, transparent too), the shades of the hero's pieces and the style of
-  its title (at palette only, since mix and full may restyle them); the skins'
-  sheets in the page, and what the skin's own sheet sets (`ownDeclaration` of
+  the skin, transparent too), what the heroes say whoever draws them (the end
+  of the registrations, the notes, the link to register, the photo), the shades
+  of the hero's pieces and the style of its title (at palette only, since mix
+  and full may restyle them); the skins' sheets in the page, and what the
+  skin's own sheet sets (`ownDeclaration` of
   `../test/computed.ts`: Crête declares every property, so the page alone would
   not say whether the skin set one).
 - `../test/skinSheets.test.ts`: the forms a palette, a mix and a full sheet may

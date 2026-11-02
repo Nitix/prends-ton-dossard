@@ -4,24 +4,19 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { Avatar } from "../../components/Avatar";
 import { BlockTitle } from "../../components/BlockTitle";
-import { DANGER_TEXT, ON_DAWN, PRIMARY, SECONDARY } from "../../components/buttons";
-import { CountdownRing } from "../../components/Dawn";
+import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import {
-  CalendarIcon,
   CalendarPlusIcon,
   ClockIcon,
-  ExternalIcon,
   PencilIcon,
-  PinIcon,
   RunIcon,
   TrashIcon,
   UserPlusIcon,
 } from "../../components/icons";
 import { SECTION, UNCONFIRMED_ROW } from "../../components/section";
-import { HeroArt } from "../../components/Slots";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
-import { daysBetween, raceStarted } from "../../lib/dates";
+import { raceStarted } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventRecord, ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
@@ -45,14 +40,13 @@ import { resultParts } from "../results/resultText";
 import { RouteSection } from "../route/RouteSection";
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
+import { EventHero } from "./EventHero";
 import { formatDisplayName, formatMeasures } from "./formatName";
 import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
-import { registrationLabel, registrationState } from "./registration";
+import { RegisterLink } from "./RegisterLink";
+import { registrationState } from "./registration";
 
 const SEPARATOR = " · ";
-
-/** The days that are counted next to the deadline: a week or less. */
-const DAYS_LEFT_SHOWN = 7;
 
 // The titles that the focus can be given to, by their `data-focus`: the title of
 // the page, of the section of the interested, of a format, of the supporters, of
@@ -195,34 +189,6 @@ function useFocusAfterDeparture(view: EventView) {
   return { root, setDeparture };
 }
 
-/**
- * The link to the official page of the registration: it opens in another tab,
- * without giving it access to this one. On the sky of the hero, it is a white pill.
- */
-function RegisterLink({
-  href,
-  tone = "primary",
-  className,
-}: {
-  href: string;
-  tone?: "primary" | "onDawn";
-  className?: string;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`${tone === "onDawn" ? ON_DAWN : PRIMARY} inline-flex items-center gap-2 self-start ${className ?? ""}`}
-    >
-      {t.event.register}
-      <ExternalIcon className="size-4 shrink-0" />
-    </a>
-  );
-}
-
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const { t, f, lang } = useI18n();
   const today = useToday();
@@ -248,7 +214,6 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const options = me && joinOptions(view, me.runnerId);
   const canJoin = !!options && (options.formats.length > 0 || options.undecided);
   const notStarting = nonStarters(view);
-  const daysToGo = daysBetween(today, start);
 
   const ACTION = `${SECONDARY.replace("px-4", "px-3.5")} inline-flex items-center justify-center gap-2 text-center text-[0.875rem] leading-tight`;
   const secondary = [
@@ -324,52 +289,8 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
 
   return (
     <article ref={root} className="flex flex-col gap-6">
-      {/* The hero: the sky of the dawn drawn like a map (the skin's `HeroArt`), the name in white, and the sun rising behind the ridges at its foot. */}
-      <header className="event-hero on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
-        <HeroArt place="event" />
-        <div className="relative flex flex-col gap-3 p-5 pb-[5.25rem] md:p-7 md:pb-24">
-          <div className="flex items-start justify-between gap-4">
-            <h1
-              id={titleId}
-              data-focus={PAGE_TITLE}
-              tabIndex={-1}
-              className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold display-title break-words md:text-[2.375rem]"
-            >
-              {event.name}
-            </h1>
-            {daysToGo > 0 && <CountdownRing days={daysToGo} tone="light" className="mt-1" />}
-          </div>
-          <div className="flex flex-col gap-1.5 text-[0.9375rem] font-medium">
-            <p className="flex items-center gap-2">
-              <CalendarIcon className="size-[1.125rem] shrink-0 opacity-90" />
-              {severalDays
-                ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
-                : f.dateLong(start)}
-            </p>
-            <p className="flex items-center gap-2">
-              <PinIcon className="size-[1.125rem] shrink-0 opacity-90" />
-              {event.location}
-            </p>
-          </div>
-          {deadline && (
-            <p className="flex items-start gap-2 self-start rounded-2xl bg-(--hero-veil) px-3 py-2 text-sm font-semibold ring-1 ring-white/25">
-              <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
-              <span>
-                {registrationLabel(deadline, f, t)}
-                {deadline.kind === "open" &&
-                  deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-                  `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
-              </span>
-            </p>
-          )}
-          {event.notes && (
-            <p className="self-start rounded-2xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink shadow-[0_8px_24px_-14px_var(--shade-notes)]">
-              {event.notes}
-            </p>
-          )}
-          {registration && <RegisterLink href={registration} tone="onDawn" className="mt-1" />}
-        </div>
-      </header>
+      {/* The hero: the name of the event, its days, its place, its registration (see EventHero). */}
+      <EventHero view={view} heading={{ id: titleId, "data-focus": PAGE_TITLE, tabIndex: -1 }} />
 
       {reminded && (
         <aside

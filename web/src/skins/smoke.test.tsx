@@ -17,6 +17,7 @@ import {
 } from "../features/events/testFixture";
 import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
+import { initials } from "../lib/initials";
 import { ensureTemporal } from "../lib/temporal";
 import { chooseTheme } from "../lib/theme";
 import { TodayProvider } from "../lib/useToday";
@@ -379,22 +380,29 @@ for (const { skin, mode } of CASES) {
     await framed(screen);
     const hero = document.querySelector(".event-hero");
     expect(hero).not.toBeNull();
-    // On the sky of the hero: its title in the style of the skin's titles, the
-    // end of the registrations on its veil, the notes and the white pill to
-    // register in the shades of the skin.
+    // What the hero says, whoever draws it (Crête, or a skin's `EventHero` at
+    // mix and full): the end of the registrations, the notes, the link to register.
+    expect(hero?.textContent, "the end of the registrations").toContain(
+      fr.event.registrationUntil(""),
+    );
+    expect(hero?.textContent, "the notes").toContain(event.notes);
+    const register = [...(hero?.querySelectorAll("a") ?? [])].find((link) =>
+      link.textContent?.includes(fr.event.register),
+    );
+    expect(register?.getAttribute("href"), "the link to register").toBe(event.registration_url);
+    // On the sky of Crête's hero (palette): its title in the style of the skin's
+    // titles, the end of the registrations on its veil, the notes and the white
+    // pill to register in the shades of the skin.
     expectDisplayStyle(
       screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" }).element(),
       "the title of the hero",
     );
     const notes = screen.getByText(event.notes).element();
     expectShadeOfSkin(notes, "--shade-notes", "the notes on the hero");
-    const register = hero?.querySelector(".btn-on-dawn");
-    expect(register?.textContent, "the white pill to register").toContain(fr.event.register);
     expectShadeOfSkin(register ?? document.body, "--shade-on-dawn", "the white pill on the hero");
     const veil = [...(hero?.querySelectorAll("p") ?? [])].find((p) =>
       p.textContent?.includes(fr.event.registrationUntil("")),
     );
-    expect(veil, "the end of the registrations").toBeDefined();
     expectOfSkin(
       getComputedStyle(veil ?? document.body).backgroundColor,
       colourOf("--hero-veil"),
@@ -444,9 +452,17 @@ for (const { skin, mode } of CASES) {
     // The tabs and the « + »: the page of a runner with no results has nothing else to tap.
     await framed(screen, { least: 5 });
     expectDisplayStyle(title.element(), "the title of the hero");
-    // The photo (here its initials) cut out of the sky by a ring, over its shade.
-    const photo = document.querySelector(".runner-hero .avatar-soft");
-    expect(photo, "the photo of the runner").not.toBeNull();
+    // The photo of the runner in the hero, whoever draws it: here their initials.
+    const hero = document.querySelector(".runner-hero");
+    expect(hero?.contains(title.element()), "the title in the hero").toBe(true);
+    expect(
+      [...(hero?.querySelectorAll("span") ?? [])].some(
+        (span) => span.textContent === initials(aliceRunner.name),
+      ),
+      "the photo of the runner",
+    ).toBe(true);
+    // In Crête's hero (palette): cut out of the sky by a ring, over its shade.
+    const photo = hero?.querySelector(".avatar-soft");
     expectShadeOfSkin(photo ?? document.body, "--photo-ring", "the ring of the photo");
     expectShadeOfSkin(photo ?? document.body, "--shade-photo", "the shade of the photo");
   });

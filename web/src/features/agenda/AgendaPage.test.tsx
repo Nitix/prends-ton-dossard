@@ -183,6 +183,28 @@ test("AgendaPage — ?mois=2026-06 affiche « juin 2026 »", async () => {
   await expect.element(screen.getByRole("heading", { level: 2, name: "juin 2026" })).toBeVisible();
 });
 
+test("AgendaPage — le titre du mois prend le style des titres du thème (--display-*), comme chaque titre en police des titres", async () => {
+  // A theme whose titles are italic, in capitals, spaced out: the month follows it.
+  const root = document.documentElement;
+  const display = {
+    "--display-style": "italic",
+    "--display-transform": "uppercase",
+    "--display-tracking": "0.1em",
+  };
+  for (const [property, value] of Object.entries(display)) root.style.setProperty(property, value);
+  try {
+    const { screen } = await renderAgenda("/agenda?mois=2026-06");
+    const month = screen.getByRole("heading", { level: 2, name: "juin 2026" });
+    await expect.element(month).toBeVisible();
+    const style = getComputedStyle(month.element());
+    expect(style.fontStyle).toBe("italic");
+    expect(style.textTransform).toBe("uppercase");
+    expect(style.letterSpacing).toBe(`${parseFloat(style.fontSize) * 0.1}px`);
+  } finally {
+    for (const property of Object.keys(display)) root.style.removeProperty(property);
+  }
+});
+
 test("AgendaPage — sans mois, c'est le mois en cours", async () => {
   const { screen } = await renderAgenda("/agenda");
 

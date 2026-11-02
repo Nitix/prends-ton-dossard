@@ -68,7 +68,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
           <h2
             id={headingId}
             aria-live="polite"
-            className="font-display text-xl font-extrabold tracking-tight first-letter:uppercase"
+            className="font-display text-xl font-extrabold display-title first-letter:uppercase"
           >
             {f.monthTitle(month)}
           </h2>

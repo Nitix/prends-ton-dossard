@@ -1,12 +1,37 @@
-import { createElement } from "react";
-import { afterEach, expect, test } from "vitest";
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
+import {
+  createElement,
+  createRef,
+  type Attributes,
+  type ComponentType,
+  type ReactNode,
+} from "react";
+import { afterEach, beforeAll, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
 import { SKIN_DEPTH, SKINS, chooseSkin, slotOf, variantOf } from ".";
+import { DateChip, DateChipBase } from "../components/Dawn";
 import { EmptyState, EmptyStateBase } from "../components/EmptyState";
 import { SectionMarker } from "../components/Slots";
+import { toEventView } from "../features/events/api";
+import { EventCard, EventCardBase } from "../features/events/EventCard";
+import { EventHero, EventHeroBase } from "../features/events/EventHero";
+import { aliceRunner, eventRecord } from "../features/events/testFixture";
+import { RunnerHero, RunnerHeroBase } from "../features/runners/RunnerHero";
+import { I18nProvider } from "../i18n/I18nProvider";
+import { ensureTemporal } from "../lib/temporal";
+import { TodayProvider } from "../lib/useToday";
 import { withoutIds } from "../test/ids";
+import { variants as example } from "./_example/mix";
 import { slotted } from "./components";
+import type { EventCardProps, VariantName, VariantProps, VariantPropsOf } from "./types";
 
 import "../styles.css";
 
@@ -14,6 +39,10 @@ import "../styles.css";
 // the motif of a slot, and a component that a skin replaces at depth mix or
 // full. In each skin, at the depth of the run (`VITE_SKIN_DEPTH`): the suite
 // runs at each depth.
+
+beforeAll(async () => {
+  await ensureTemporal();
+});
 
 afterEach(() => {
   chooseSkin("crete");
@@ -26,6 +55,105 @@ async function html(element: Parameters<typeof render>[0]): Promise<string> {
   await screen.unmount();
   return drawn;
 }
+
+/**
+ * What a piece draws in the app: in its language, on a day, under a router (an
+ * event card links to its page), its ids set aside.
+ */
+async function inApp(element: ReactNode): Promise<string> {
+  const root = createRootRoute({
+    component: () => (
+      <I18nProvider languages={["fr"]}>
+        <TodayProvider value={Temporal.PlainDate.from("2026-06-01")}>
+          <div data-drawn="">
+            <Outlet />
+          </div>
+        </TodayProvider>
+      </I18nProvider>
+    ),
+  });
+  const index = createRoute({ getParentRoute: () => root, path: "/", component: () => element });
+  const router = createRouter({
+    routeTree: root.addChildren([index]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  await router.load();
+  const screen = await render(<RouterProvider router={router} />);
+  await expect.poll(() => screen.container.querySelector("[data-drawn] > *")).not.toBeNull();
+  const drawn = withoutIds(screen.container.querySelector("[data-drawn]")?.innerHTML ?? "");
+  await screen.unmount();
+  return drawn;
+}
+
+/** The event of the fixture, with all that its hero can show: notes, a link to register, a deadline 4 days ahead. */
+const view = () =>
+  toEventView({
+    ...eventRecord,
+    notes: "Départ à 7 h.",
+    registration_url: "https://example.org/inscription",
+    registration_deadline: "2026-06-05",
+  });
+
+/**
+ * A piece made skinnable, drawn with the same props three ways: through
+ * `skinnable`, as its base, and as the variant that a skin gives (with the base).
+ */
+type Piece = {
+  name: VariantName;
+  skinnable: () => ReactNode;
+  base: () => ReactNode;
+  /** The skin's variant, given the base, if the skin has one at the depth of the run. */
+  variant: (skinId: string) => ReactNode | undefined;
+};
+
+function piece<N extends VariantName>(
+  name: N,
+  Skinnable: ComponentType<VariantProps[N]>,
+  Base: ComponentType<VariantProps[N]>,
+  props: () => VariantProps[N],
+): Piece {
+  return {
+    name,
+    skinnable: () => createElement(Skinnable, props()),
+    base: () => createElement(Base, props()),
+    variant: (skinId) => {
+      const Variant = variantOf(skinId, name);
+      // As `skinnable` gives it (see components.tsx).
+      const given: Attributes & VariantPropsOf<N> = { key: undefined, ...props(), Base };
+      return Variant && createElement(Variant, given);
+    },
+  };
+}
+
+/** Every piece of `VariantProps`: the test below goes through each. */
+const NAMES: Record<VariantName, true> = {
+  EmptyState: true,
+  EventCard: true,
+  EventHero: true,
+  DateChip: true,
+  RunnerHero: true,
+};
+
+const pieces = (): Piece[] => [
+  piece("EmptyState", EmptyState, EmptyStateBase, () => ({
+    title: "Rien ici",
+    hint: "Ajoute un événement.",
+  })),
+  piece("EventCard", EventCard, EventCardBase, () => ({ view: view(), list: "upcoming" })),
+  piece("EventHero", EventHero, EventHeroBase, () => ({
+    view: view(),
+    heading: { id: "hero-title", "data-focus": "title", tabIndex: -1 },
+  })),
+  piece("DateChip", DateChip, DateChipBase, () => ({
+    start: view().start,
+    end: view().end,
+    label: "du 13 au 14 juin",
+  })),
+  piece("RunnerHero", RunnerHero, RunnerHeroBase, () => ({
+    runner: aliceRunner,
+    heading: { ref: createRef<HTMLHeadingElement>(), tabIndex: -1 },
+  })),
+];
 
 test("slotted — chaque skin dessine son motif dans l'emplacement, ou celui de Crête", async () => {
   for (const skin of SKINS) {
@@ -40,20 +168,62 @@ test("slotted — chaque skin dessine son motif dans l'emplacement, ou celui de 
   expect(await html(<Marker />)).toBe(await html(<SectionMarker />));
 });
 
-test("skinnable — une liste vide est la variante du skin à la profondeur du build, ou celle de Crête", async () => {
-  const props = { title: "Rien ici", hint: "Ajoute un événement." };
-  let replaced = 0;
-  for (const skin of SKINS) {
-    chooseSkin(skin.id);
-    const Variant = variantOf(skin.id, "EmptyState") ?? EmptyStateBase;
-    if (Variant !== EmptyStateBase) replaced++;
-    // Crête's, with the motifs of the skin (its `EmptyArt`), or the skin's variant.
-    const base = await html(<EmptyStateBase {...props} />);
-    const expected = await html(<Variant {...props} />);
-    const drawn = await html(<EmptyState {...props} />);
-    expect(drawn, `the empty state of ${skin.id} at ${SKIN_DEPTH}`).toBe(expected);
-    expect(drawn === base, `${skin.id} at ${SKIN_DEPTH}`).toBe(Variant === EmptyStateBase);
+test("skinnable — chaque pièce dessine sa base sans variante, et la variante du skin, qui reçoit la base, quand il en donne une", async () => {
+  expect(pieces().map(({ name }) => name)).toEqual(Object.keys(NAMES));
+  const replaced: string[] = [];
+  const asBase: string[] = [];
+  for (const { name, skinnable, base, variant } of pieces()) {
+    for (const skin of SKINS) {
+      chooseSkin(skin.id);
+      const own = variant(skin.id);
+      // Crête's, with the motifs of the skin, or the skin's variant given Crête's.
+      const expected = await inApp(own ?? base());
+      const drawn = await inApp(skinnable());
+      expect(drawn, `${name} in ${skin.id} at ${SKIN_DEPTH}`).toBe(expected);
+      if (own === undefined) continue;
+      replaced.push(`${skin.id}: ${name}`);
+      // A variant draws something of its own, around the base or instead of it.
+      if (drawn === (await inApp(base()))) asBase.push(`${skin.id}: ${name}`);
+    }
   }
-  // A palette build replaces nothing; a mix or full build does (the example skin replaces the empty state).
-  expect(replaced > 0, `variants drawn at ${SKIN_DEPTH}`).toBe(SKIN_DEPTH !== "palette");
+  expect(asBase, "variants that draw the base as it is").toEqual([]);
+  // A palette build replaces nothing; a mix or full build does (the example skin replaces the empty state and the card).
+  expect(replaced.length > 0, `variants drawn at ${SKIN_DEPTH}`).toBe(SKIN_DEPTH !== "palette");
+  expect(replaced.filter((line) => line.startsWith("_example:"))).toEqual(
+    SKIN_DEPTH === "palette" ? [] : ["_example: EmptyState", "_example: EventCard"],
+  );
+});
+
+test("skinnable — la carte d'« Exemple » encadre la base qu'elle reçoit, avec les props de la carte", async () => {
+  // Its module, whatever the depth of the run (a skin of development is in the tests).
+  const ExampleCard = example.EventCard;
+  expect(ExampleCard, "the example skin's event card").toBeDefined();
+  if (ExampleCard === undefined) return;
+  const shown = view();
+  const given: EventCardProps[] = [];
+  function Base(props: EventCardProps) {
+    given.push(props);
+    return <p data-base="">{props.view.event.name}</p>;
+  }
+  const screen = await render(<ExampleCard view={shown} list="past" Base={Base} />);
+  // The base has the props of the card, and nothing else.
+  expect(given).toStrictEqual([{ view: shown, list: "past" }]);
+  const frame = screen.container.querySelector<HTMLElement>('[data-variant="example"]');
+  expect(frame?.dataset.list).toBe("past");
+  expect(frame?.querySelector("[data-base]")?.textContent).toBe("Trail des Crêtes");
+});
+
+test("skinnable — sous « Exemple », une carte est la base de Crête dans le cadre de la variante à mix et full, la base seule à palette", async () => {
+  chooseSkin("_example");
+  const box = document.createElement("div");
+  box.innerHTML = await inApp(<EventCard view={view()} list="agenda" />);
+  const frame = box.querySelector<HTMLElement>('[data-variant="example"]');
+  // Crête's card, its link to the page of the event and its day: in the frame or alone.
+  const card = box.querySelector(".event-card");
+  expect(card?.querySelector('a[href="/evenements/event"]')?.textContent).toBe("Trail des Crêtes");
+  expect(card?.querySelector(".date-chip")).not.toBeNull();
+  const framed = SKIN_DEPTH !== "palette";
+  expect(frame !== null, `a frame at ${SKIN_DEPTH}`).toBe(framed);
+  expect(frame?.dataset.list).toBe(framed ? "agenda" : undefined);
+  expect(frame?.contains(card) ?? false, "Crête's card in the frame").toBe(framed);
 });
