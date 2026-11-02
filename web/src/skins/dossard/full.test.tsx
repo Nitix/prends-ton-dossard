@@ -334,6 +334,9 @@ test.skipIf(SKIN_DEPTH !== "full")(
         lines: drawn.querySelectorAll(".route-figures").length,
         tiles: drawn.querySelectorAll(".stat-tile").length,
         spoken: plain(drawn.querySelector(".route-figures")?.textContent),
+        dots: [...drawn.querySelectorAll(".route-figures span")]
+          .filter((dot) => plain(dot.textContent) === "·")
+          .map((dot) => getComputedStyle(dot).color),
         family: styleOf(drawn, ".route-figures").fontFamily,
         altitude: plain(drawn.querySelector(".route-altitude")?.textContent),
       }),
@@ -341,6 +344,16 @@ test.skipIf(SKIN_DEPTH !== "full")(
     expect(figures.tiles, "no tiles").toBe(0);
     expect(figures.lines, "one line").toBe(1);
     expect(figures.spoken).toBe("12,6 km · 724 m D+ · 728 m D−");
+    // The « · » between the figures are text, not decoration: 4.5:1 on the card and on the page.
+    expect(figures.dots.length, "a separator between two figures, twice").toBe(2);
+    for (const ink of figures.dots) {
+      expect(contrast(hex(ink), hex(figures.tokens.card)), "on the card").toBeGreaterThanOrEqual(
+        4.5,
+      );
+      expect(contrast(hex(ink), hex(figures.tokens.sand)), "on the page").toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
     expect(figures.family).toContain("Archivo");
     expect(figures.altitude).toBe("altitude 450 m à 1 157 m");
 

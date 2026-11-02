@@ -27,16 +27,19 @@
   border-radius: 0;
 }
 @media (min-width: 48rem) {
+  /* The bar of the variant: the garland (0.75 rem, the skin's art along the top of the
+     header) and under it a row of 4 rem for the brand and the tabs. */
   :root[data-skin="dossard"] .app-header-bar {
-    height: 4rem;
+    height: 4.75rem;
     align-items: center;
-    padding-top: 0;
+    padding-top: 0.75rem;
     padding-bottom: 0;
   }
   /* Crête's nav pulls itself up over the header (`md:-mt-[9rem]`) and leaves room under it
-     (`md:mb-[5.375rem]`), for a header of 10 rem. The header here is 4 rem and the capsule 3.5 rem
+     (`md:mb-[5.375rem]`), for a header of 10 rem. The header here is 4.75 rem and the capsule 3.5 rem
      (tabs of 2.75 rem in 0.375 rem of padding, components/TabBar.tsx), so the capsule is put 0.25 rem
-     from the top of the bar: pulled up by the 4 rem less that, and the 0.25 rem left under it. */
+     under the garland, at 1 rem from the top: pulled up by the 4.75 rem less that, and the 0.25 rem
+     left under it. */
   :root[data-skin="dossard"] .tabbar {
     top: 0.25rem;
     margin-top: -3.75rem;

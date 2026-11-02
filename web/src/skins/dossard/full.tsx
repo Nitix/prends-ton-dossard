@@ -24,7 +24,7 @@ function BibFigures({ figures, altitude }: TrackFiguresProps) {
       <p className="route-figures font-display text-lg font-extrabold tabular-nums">
         {figures.map((figure, i) => (
           <Fragment key={figure}>
-            {i > 0 && <span className="text-neutral-500">{SEPARATOR}</span>}
+            {i > 0 && <span className="text-neutral-600">{SEPARATOR}</span>}
             <Figure>{figure}</Figure>
           </Fragment>
         ))}

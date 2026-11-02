@@ -435,7 +435,7 @@ test.skipIf(SKIN_DEPTH === "palette")(
 );
 
 test.skipIf(SKIN_DEPTH === "palette")(
-  "dossard — dès md, l'en-tête reste court et les onglets sont une capsule blanche dont l'onglet courant est une pastille de soleil (l'encre dessus, 4,5:1)",
+  "dossard — dès md, l'en-tête reste court, la capsule blanche des onglets est sous la guirlande sans la recouvrir, et son onglet courant est une pastille de soleil (l'encre dessus, 4,5:1)",
   async () => {
     await page.viewport(1024, 800);
     const seen = await inDossard(
@@ -444,8 +444,14 @@ test.skipIf(SKIN_DEPTH === "palette")(
         const header = whole.querySelector(".app-header");
         const bar = whole.querySelector(".tabbar-list");
         const current = whole.querySelector('.tab[aria-current="page"]');
-        if (!header || !bar || !current) throw new Error("the frame was not drawn");
+        const garland = header?.querySelector("svg");
+        const brand = header?.querySelector(".brand-link");
+        if (!header || !bar || !current || !garland || !brand) {
+          throw new Error("the frame was not drawn");
+        }
         return {
+          garlandBottom: garland.getBoundingClientRect().bottom,
+          brandTop: brand.getBoundingClientRect().top,
           headerHeight: header.getBoundingClientRect().height,
           barTop: bar.getBoundingClientRect().top,
           barBottom: bar.getBoundingClientRect().bottom,
@@ -456,9 +462,14 @@ test.skipIf(SKIN_DEPTH === "palette")(
       },
       { framed: true },
     );
-    expect(seen.headerHeight, "the header is a bar, not a block of sky").toBeLessThanOrEqual(72);
-    expect(seen.barTop, "the capsule is in the header").toBeGreaterThanOrEqual(0);
-    expect(seen.barBottom).toBeLessThanOrEqual(seen.headerHeight);
+    // The bar of the variant: the garland (12 px) and under it the row of the brand and the tabs.
+    expect(seen.headerHeight, "the header is a bar, not a block of sky").toBeLessThanOrEqual(80);
+    expect(seen.garlandBottom, "the garland is the top of the header").toBeGreaterThan(0);
+    expect(seen.barTop, "the capsule is under the garland, not over it").toBeGreaterThanOrEqual(
+      seen.garlandBottom,
+    );
+    expect(seen.brandTop, "so is the name of the app").toBeGreaterThanOrEqual(seen.garlandBottom);
+    expect(seen.barBottom, "and it is in the bar").toBeLessThanOrEqual(seen.headerHeight);
     expect(seen.pill).toBe(seen.tokens.sun);
     expect(seen.words).toBeGreaterThanOrEqual(4.5);
   },
