@@ -1,0 +1,168 @@
+/* « Alpage », depth palette: a trail run at sunrise above the tree line. The
+   deep pine of the forest that brightens into emerald and fresh moss, the sun
+   that comes up orange behind the ridges, warm sand for the page, granite for
+   the text. The greens run in gradients across the sky of the header, the
+   heroes, the main buttons, the current tab, the date chips and the rings;
+   the orange of the sunrise is kept for what must be seen first. By day only:
+   the variant had no dark mode, so the page is drawn in this one whatever the
+   theme chosen (lib/theme.ts). Custom properties of Crête only, under the
+   skin's selector (see ../README.md); the fonts are in fonts.css.
+
+   The scales are « Sentier »'s, which « Alpage » takes as they are (it is
+   « Sentier » in « Aurore »'s layout): Crête's `iris` is the pine, `peach` and
+   `blush` the sunrise, but for the lightest `blush`, which is the moss of the
+   meadow (the pastel of an avatar, the glow at the top of a window). */
+:root[data-skin="alpage"] {
+  --color-neutral-50: #f7f3ea;
+  --color-neutral-100: #efebe2;
+  --color-neutral-200: #e2ddd1;
+  --color-neutral-300: #c9c2b2;
+  --color-neutral-400: #9a927f;
+  --color-neutral-500: #7a817b;
+  --color-neutral-600: #56635d;
+  --color-neutral-700: #3e4a45;
+  --color-neutral-800: #2e3934;
+  --color-neutral-900: #23302b;
+  --color-neutral-950: #161e1b;
+  --color-ink: #23302b;
+
+  /* Pine: the forest. The 600 and darker carry white text. */
+  --color-iris-50: #eef5f1;
+  --color-iris-100: #d6e8de;
+  --color-iris-200: #aed1bf;
+  --color-iris-300: #7fb39a;
+  --color-iris-400: #4f9276;
+  --color-iris-500: #2f785e;
+  --color-iris-600: #1f5f4a;
+  --color-iris-700: #194e3d;
+  --color-iris-800: #143f32;
+  --color-iris-900: #0f3027;
+
+  /* Sunrise: the accent. As a fill it takes granite text, as text it is the 700
+     or the 800, never the 400. */
+  --color-peach-50: #fef5ec;
+  --color-peach-100: #fde6cf;
+  --color-peach-200: #fbcc9d;
+  --color-peach-300: #f7ae68;
+  --color-peach-400: #f28c38;
+  --color-peach-500: #e2731d;
+  --color-peach-600: #c25c12;
+  --color-peach-700: #9c4710;
+  --color-peach-800: #7a3711;
+
+  --color-blush-50: #fef5ec;
+  --color-blush-100: #e5ecd6;
+  --color-blush-200: #fbcc9d;
+  --color-blush-300: #f7ae68;
+  --color-blush-400: #f28c38;
+  --color-blush-500: #e2731d;
+  --color-blush-600: #c25c12;
+  --color-blush-700: #9c4710;
+  --color-blush-800: #7a3711;
+
+  --color-red-700: #b3261e;
+
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #ffffff;
+  --color-toast: #23302b;
+  --color-scrim: rgb(35 48 43 / 0.5);
+  --color-relief: #0a211b;
+
+  /* The five zones of the slope, from gentle to steep: a glacier lake, the
+     emerald of the forest, gold grass, the orange of the sunrise, a berry. Each
+     is 3:1 on the card and on the line, and they stay apart with a colour vision
+     deficiency (src/features/route/slope.test.ts). */
+  --color-slope-1: #3197c9;
+  --color-slope-2: #1c8357;
+  --color-slope-3: #ac8b05;
+  --color-slope-4: #c04504;
+  --color-slope-5: #a94997;
+
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-card: 1.25rem;
+
+  /* Shadows tinted with the pine of the forest. */
+  --shade-card: rgb(23 79 62 / 0.3);
+  --shade-lift: rgb(23 79 62 / 0.42);
+  --shade-bar: rgb(15 48 39 / 0.32);
+  --shade-edge: rgb(35 48 43 / 0.05);
+  --shade-edge-lift: rgb(35 48 43 / 0.06);
+  --map-frame:
+    0 0 0 1px rgb(226 216 196), 0 18px 40px -16px rgb(23 79 62 / 0.5),
+    0 6px 24px -12px rgb(23 79 62 / 0.45);
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The map of a track: a line of the sunrise, a start in the green of the
+     forest, a finish in deep pine. */
+  --map-line-from: #f7ae68;
+  --map-line-via: #f28c38;
+  --map-line-to: #e2731d;
+  --map-line: #f28c38;
+  --map-start: #2f785e;
+  --map-finish: #0f3027;
+  --map-link: #194e3d;
+
+  /* The art of the skin (./slots.tsx, and « Sentier »'s ./motifs.tsx): the ridges
+     in pine, the far one for the header and a deeper one for the heroes, the sun
+     of the sunrise and the moss of the meadow. */
+  --motif-ridge-far-from: #194e3d;
+  --motif-ridge-far-to: #194e3d;
+  --motif-ridge-mid-from: #143f32;
+  --motif-ridge-mid-to: #143f32;
+  --motif-ridge-near-from: #0f3027;
+  --motif-ridge-near-to: #0f3027;
+  --motif-ridge-light: #a9c088;
+  --motif-sun-core: #fff3e2;
+  --motif-sun-mid: #fbcc9d;
+  --motif-sun-rim: #f28c38;
+  --motif-halo-from: #f7ae68;
+  --motif-halo-to: #f28c38;
+  --motif-dawn-1: #f7ae68;
+  --motif-dawn-2: #f28c38;
+  --motif-dawn-3: #e2731d;
+  --motif-peak-far: #4f9276;
+  --motif-peak-near-from: #1f5f4a;
+  --motif-peak-near-to: #1f5f4a;
+  --motif-hill-near-from: #2f785e;
+  --motif-hill-near-to: #2f785e;
+
+  /* The paints of the dawn, in the greens of the forest. The soft one is the
+     trail from the forest to the sunrise (rings, bars, dots); the deep one
+     carries white text on every stop. The sky is deep pine at the top left,
+     where the name is, brightening towards the horizon, where the sun comes up
+     (the lightest stop is the variant's, deepened until white reads on it:
+     #5f9c7c was 3.2:1, this is 4.5:1); the heroes are deep all over, with the
+     glow of the sunrise in the corner. */
+  --dawn-soft: linear-gradient(110deg, #2f785e 0%, #8fb866 55%, #f28c38 100%);
+  --dawn-deep: linear-gradient(110deg, #174f3e 0%, #1f6b4f 48%, #3f7a3a 100%);
+  --dawn-sky-color: #1f5f4a;
+  --dawn-sky:
+    radial-gradient(55% 90% at 82% 112%, rgb(253 230 207 / 0.42) 0%, transparent 70%),
+    linear-gradient(176deg, #0f3027 0%, #174f3e 40%, #2a7357 72%, #468264 100%);
+  --dawn-hero-color: #174f3e;
+  --dawn-hero:
+    radial-gradient(
+      60% 70% at 88% 104%,
+      rgb(242 140 56 / 0.62) 0%,
+      rgb(242 140 56 / 0.18) 45%,
+      transparent 72%
+    ),
+    linear-gradient(155deg, #0f3027 0%, #174f3e 38%, #1f6b4f 74%, #2f6d3f 100%);
+  --dawn-text: linear-gradient(100deg, #174f3e 0%, #1f6b4f 48%, #3f7a3a 100%);
+  --dawn-line: linear-gradient(90deg, #2f785e, #8fb866 55%, #f28c38);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #f7ae68, rgb(169 192 136 / 0.6) 40%, transparent);
+  --dawn-ring-from: #2f785e;
+  --dawn-ring-via: #8fb866;
+  --dawn-ring-to: #f28c38;
+  --dawn-chip-glow: rgb(23 79 62 / 0.7);
+  --dawn-glow-warm: rgb(23 79 62 / 0.6);
+  --dawn-glow-cool: rgb(15 48 39 / 0.35);
+  --focus-glow: rgb(79 146 118 / 0.2);
+  --sky-focus: #ffffff;
+}
