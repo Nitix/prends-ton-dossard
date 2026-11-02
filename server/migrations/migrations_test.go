@@ -855,6 +855,14 @@ func TestMigrations_DownThenUp(t *testing.T) {
 	if got, _ := app.CountRecords("race_types"); got != 6 {
 		t.Errorf("%d race types after applying again, want 6", got)
 	}
+	// The types are started from their name again (the migration 9i).
+	backyard, err := app.FindFirstRecordByData("race_types", "label", "Backyard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := backyard.GetStringSlice("measures"); !slices.Equal(got, []string{"time_limit"}) {
+		t.Errorf("Backyard has measures %q after applying again, want [time_limit]", got)
+	}
 	testutil.Seed(t, app) // the whole schema is usable again
 }
 
@@ -1696,5 +1704,127 @@ func TestMigrations_CalendarTokenDownThenUp(t *testing.T) {
 	}
 	if got := linkOf(fx.Alice).GetString("token"); got != "new-token" {
 		t.Errorf("after applying again, the token is %q, want new-token", got)
+	}
+}
+
+// The migration 9i adds `measures` to the race types: which of the four
+// measures of a format (distance, elevation, duration, time limit) the type
+// uses. It starts the types that exist from their name, compared without case
+// or accents, and leaves the others empty, which the site reads as all four. Its
+// rollback takes the field away and keeps the types; applying it again works the
+// defaults out again.
+func TestMigrations_RaceTypeMeasures(t *testing.T) {
+	app := testutil.NewApp(t)
+	migration := migrationFile(t, "9i_race_type_measures.go")
+
+	checkField := func(when string) {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("race_types")
+		if err != nil {
+			t.Fatal(err)
+		}
+		measures, ok := c.Fields.GetByName("measures").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: race_types.measures must be a select field, got %T", when, c.Fields.GetByName("measures"))
+		}
+		want := []string{"distance", "elevation", "duration", "time_limit"}
+		if !slices.Equal(measures.Values, want) || measures.MaxSelect != 4 || measures.Required {
+			t.Errorf("%s: race_types.measures = values %q, maxSelect %d, required %v; want %q, 4, false",
+				when, measures.Values, measures.MaxSelect, measures.Required, want)
+		}
+	}
+	// measuresOf is what the type of that label holds.
+	measuresOf := func(label string) []string {
+		t.Helper()
+		record, err := app.FindFirstRecordByData("race_types", "label", label)
+		if err != nil {
+			t.Fatalf("the race type %q: %v", label, err)
+		}
+		return record.GetStringSlice("measures")
+	}
+
+	// The three kinds of default: the distance, its elevation and its cut-off
+	// for a race on a course; the cut-off for a backyard; a duration for a timed
+	// race. Nothing for a name that tells nothing, and for a name that only
+	// looks like one (Canicross, Marathon, 10 km, 5 Hills).
+	course := []string{"distance", "elevation", "time_limit"}
+	duration := []string{"duration"}
+	seeded := map[string][]string{
+		"Route": course, "Trail": course, "Ultra-trail": course, "Cross": course,
+		"Backyard": {"time_limit"}, "Hyrox": {"distance"},
+	}
+	added := map[string][]string{
+		"COURSE NATURE":    course, // the case
+		"Ultra":            course,
+		"Trail des Crêtes": course, // contains « trail »
+		"6 heures":         duration,
+		"24h":              duration,
+		"12 H":             duration, // a number then « h », whatever the case
+		"6h30":             duration,
+		"Chronométré":      duration, // the accent
+		"Ultra en durée":   duration, // the accent, and not « Ultra » alone
+		"Contre-la-montre": duration,
+		"Trail 6 heures":   duration, // a timed trail is a duration
+		"Backyard Ultra":   {"time_limit"},
+		"Hyrox Double":     {"distance"},
+		"Canicross":        nil, // « cross » alone is the type, not any word that ends with it
+		"Marathon":         nil, // an « h », but no number before it
+		"10 km":            nil, // a number, but no « h » after it
+		"5 Hills":          nil, // « 5 h », but the « h » starts a word
+		"Marche nordique":  nil,
+		"Course à pied":    nil,
+	}
+
+	checkField("as created")
+	for label, want := range seeded {
+		if got := measuresOf(label); !slices.Equal(got, want) {
+			t.Errorf("as created: %q has measures %q, want %q", label, got, want)
+		}
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback: %v", err)
+	}
+	c, err := app.FindCollectionByNameOrId("race_types")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Fields.GetByName("measures") != nil {
+		t.Error("race_types.measures must be gone after the rollback")
+	}
+	// The types stay, with their label.
+	if got, _ := app.CountRecords("race_types"); got != 6 {
+		t.Errorf("%d race types after the rollback, want the 6 of the seed", got)
+	}
+	// Rolling back again, with nothing left to remove, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	// Types made before the migration: it starts them all.
+	for label := range added {
+		mustSave(t, app, "race_types", map[string]any{"label": label})
+	}
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	for label, want := range seeded {
+		if got := measuresOf(label); !slices.Equal(got, want) {
+			t.Errorf("after applying again: %q has measures %q, want %q", label, got, want)
+		}
+	}
+	for label, want := range added {
+		if got := measuresOf(label); !slices.Equal(got, want) {
+			t.Errorf("after applying again: %q has measures %q, want %q", label, got, want)
+		}
+	}
+
+	// The field takes a choice of the four, in any number, and nothing else.
+	if _, err := trySave(app, "race_types", map[string]any{"label": "Sprint", "measures": []string{"distance", "duration"}}); err != nil {
+		t.Errorf("two measures are refused: %v", err)
+	}
+	if _, err := trySave(app, "race_types", map[string]any{"label": "Vitesse", "measures": []string{"speed"}}); err == nil {
+		t.Error("a measure that is not one of the four was accepted")
 	}
 }

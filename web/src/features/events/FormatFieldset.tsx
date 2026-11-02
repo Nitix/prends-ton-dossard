@@ -1,13 +1,14 @@
-import { useId, useRef, useState, type ChangeEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
 import { DurationInput } from "../../components/DurationInput";
 import { Field, INPUT } from "../../components/Field";
 import { translateFieldError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
-import type { RaceTypeRecord } from "../../lib/types";
+import { MEASURES, shownMeasures } from "../../lib/measures";
+import type { Measure, RaceTypeRecord } from "../../lib/types";
 import { gpxStats, MAX_GPX_BYTES, parseGpx, type GpxStats } from "../route/gpx";
-import type { FormatRow } from "./formDraft";
+import { filledMeasures, type FormatRow } from "./formDraft";
 
 /** Puts the focus on an element when it appears: the first field of a row that has just been added. */
 function focusOnMount(element: HTMLElement | null) {
@@ -15,7 +16,10 @@ function focusOnMount(element: HTMLElement | null) {
 }
 
 /**
- * The fields of one format, in a group named after it ("Épreuve 1"). `errors`
+ * The fields of one format, in a group named after it ("Épreuve 1"). The measures
+ * of its race type come first, the others are in a closed section under them,
+ * « Options avancées » (see `shownMeasures`); a measure that has a value is
+ * never in that section. `errors`
  * has the code of the server, or of the form, for each field, by the name the
  * server gives it; `row` is a refusal that is about the format as a whole.
  */
@@ -49,6 +53,13 @@ export function FormatFieldset({
   const title = useRef<HTMLLegendElement>(null);
   const trackField = useRef<HTMLInputElement>(null);
   const statusId = useId();
+  // The measures that have a value, and so are shown whatever the type says. It is
+  // worked out when the row appears, when its type changes, when « Options avancées »
+  // is closed, and when a track gives a value: not at every key, since a field that
+  // is typed in has to stay where it is, or it would be taken away from under the
+  // finger and its focus lost. Emptying a field does not put it away either: it
+  // goes at the next change of type.
+  const [valued, setValued] = useState<ReadonlySet<Measure>>(() => filledMeasures(row));
   // What the file chosen holds, read in the browser.
   const [read, setRead] = useState<GpxStats | null>(null);
   // Why the file chosen last was left out: it could not be read, or the server would not take it.
@@ -110,6 +121,8 @@ export function FormatFieldset({
   /** « Reprendre ces valeurs »: the distance as it is read (to a tenth of a km), and the elevation gain when the file has altitudes. */
   function reuseTrack() {
     if (read === null) return;
+    // The values it gives are shown, even for a type that does not use them.
+    showAlways(read.min === undefined ? ["distance"] : ["distance", "elevation"]);
     onChange({
       distanceKm: String(Math.round(read.km * 10) / 10),
       ...(read.min === undefined ? {} : { elevation: String(Math.round(read.gain)) }),
@@ -145,6 +158,25 @@ export function FormatFieldset({
     title.current?.focus();
   }
 
+  /** Adds measures to those that are shown whatever the type says. */
+  function showAlways(measures: readonly Measure[]) {
+    setValued((current) => new Set([...current, ...measures]));
+  }
+
+  /**
+   * « Options avancées » was closed with values in it: they come out, to be with
+   * the measures, so that no value is left in a closed section. When that is all
+   * the section held it goes, and the summary that had the focus with it: the
+   * focus goes to the title of the format.
+   */
+  function sortAway() {
+    const filled = filledMeasures(row);
+    const coming = away.filter((measure) => filled.has(measure));
+    if (coming.length === 0) return;
+    showAlways(coming);
+    if (coming.length === away.length) title.current?.focus();
+  }
+
   const hasTrackToRemove = row.gpx.kind === "new" || (row.gpx.kind === "keep" && row.hasTrack);
 
   // One message for the three measures: a format needs one of them, not each.
@@ -155,6 +187,79 @@ export function FormatFieldset({
   const measuresDescribedBy =
     measureError === null ? measuresHintId : `${measuresHintId} ${measuresErrorId}`;
   const rowError = message("row");
+
+  // The measures of the type, the ones with a value, and the others.
+  const used = shownMeasures(raceTypes.find((raceType) => raceType.id === row.raceType));
+  const main = MEASURES.filter((measure) => used.includes(measure) || valued.has(measure));
+  const away = MEASURES.filter((measure) => !main.includes(measure));
+
+  /** The field of each measure, wherever it is put: with the others, or in « Options avancées ». */
+  const measureFields: Record<Measure, ReactNode> = {
+    distance: (
+      <Field key="distance" label={t.form.distance} error={null}>
+        {(control) => (
+          <input
+            {...control}
+            aria-describedby={measuresDescribedBy}
+            aria-invalid={measureError !== null}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={row.distanceKm}
+            onChange={(event) => {
+              onChange({ distanceKm: event.target.value });
+            }}
+            className={INPUT}
+          />
+        )}
+      </Field>
+    ),
+    elevation: (
+      <Field key="elevation" label={t.form.elevation} error={message("elevation_gain_m")}>
+        {(control) => (
+          <input
+            {...control}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            value={row.elevation}
+            onChange={(event) => {
+              onChange({ elevation: event.target.value });
+            }}
+            className={INPUT}
+          />
+        )}
+      </Field>
+    ),
+    duration: (
+      <DurationInput
+        key="duration"
+        name={`format-${row.key}-duration`}
+        label={t.form.duration}
+        value={row.duration}
+        onChange={(duration) => {
+          onChange({ duration });
+        }}
+        describedBy={measuresDescribedBy}
+        invalid={measureError !== null}
+      />
+    ),
+    time_limit: (
+      <DurationInput
+        key="time_limit"
+        name={`format-${row.key}-time-limit`}
+        label={t.form.timeLimit}
+        value={row.timeLimit}
+        onChange={(timeLimit) => {
+          onChange({ timeLimit });
+        }}
+        describedBy={measuresDescribedBy}
+        invalid={measureError !== null}
+      />
+    ),
+  };
 
   return (
     <fieldset className="card flex min-w-0 flex-col gap-4 p-4 pt-2">
@@ -194,6 +299,8 @@ export function FormatFieldset({
             required
             value={row.raceType}
             onChange={(event) => {
+              // What has a value stays with the measures, whatever the new type uses.
+              setValued(filledMeasures(row));
               onChange({ raceType: event.target.value });
             }}
             className={INPUT}
@@ -214,44 +321,7 @@ export function FormatFieldset({
         <p id={measuresHintId} className="text-sm text-neutral-600">
           {t.form.measuresHint}
         </p>
-        <Field label={t.form.distance} error={null}>
-          {(control) => (
-            <input
-              {...control}
-              aria-describedby={measuresDescribedBy}
-              aria-invalid={measureError !== null}
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="any"
-              value={row.distanceKm}
-              onChange={(event) => {
-                onChange({ distanceKm: event.target.value });
-              }}
-              className={INPUT}
-            />
-          )}
-        </Field>
-        <DurationInput
-          name={`format-${row.key}-duration`}
-          label={t.form.duration}
-          value={row.duration}
-          onChange={(duration) => {
-            onChange({ duration });
-          }}
-          describedBy={measuresDescribedBy}
-          invalid={measureError !== null}
-        />
-        <DurationInput
-          name={`format-${row.key}-time-limit`}
-          label={t.form.timeLimit}
-          value={row.timeLimit}
-          onChange={(timeLimit) => {
-            onChange({ timeLimit });
-          }}
-          describedBy={measuresDescribedBy}
-          invalid={measureError !== null}
-        />
+        {main.map((measure) => measureFields[measure])}
         {measureError !== null && (
           <p id={measuresErrorId} role="alert" className="text-sm font-medium text-red-700">
             {measureError}
@@ -259,22 +329,20 @@ export function FormatFieldset({
         )}
       </div>
 
-      <Field label={t.form.elevation} error={message("elevation_gain_m")}>
-        {(control) => (
-          <input
-            {...control}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1}
-            value={row.elevation}
-            onChange={(event) => {
-              onChange({ elevation: event.target.value });
-            }}
-            className={INPUT}
-          />
-        )}
-      </Field>
+      {away.length > 0 && (
+        <details
+          onToggle={(event) => {
+            if (!event.currentTarget.open) sortAway();
+          }}
+        >
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-neutral-800 marker:text-iris-600">
+            {t.form.moreOptions}
+          </summary>
+          <div className="flex flex-col gap-3 pt-1">
+            {away.map((measure) => measureFields[measure])}
+          </div>
+        </details>
+      )}
 
       <div className="flex flex-col gap-2">
         <Field label={t.format.gpx} error={trackError}>

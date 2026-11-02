@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { toEventView } from "./api";
 import {
+  filledMeasures,
   hasMeasure,
   initialDraft,
   joinRowOf,
@@ -24,6 +25,18 @@ const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   gpx: { kind: "keep" },
   date: "",
   ...extra,
+});
+
+describe("filledMeasures", () => {
+  test("filledMeasures — une mesure a une valeur quand son champ n'est pas vide ; zéro minute n'en est pas une", () => {
+    expect([...filledMeasures(row())]).toEqual([]);
+    expect([...filledMeasures(row({ distanceKm: "0" }))]).toEqual(["distance"]);
+    expect([...filledMeasures(row({ distanceKm: "  ", elevation: " " }))]).toEqual([]);
+    expect([
+      ...filledMeasures(row({ distanceKm: "42", elevation: "300", duration: 90, timeLimit: 600 })),
+    ]).toEqual(["distance", "elevation", "duration", "time_limit"]);
+    expect([...filledMeasures(row({ duration: 0, timeLimit: 0 }))]).toEqual([]);
+  });
 });
 
 describe("hasMeasure", () => {

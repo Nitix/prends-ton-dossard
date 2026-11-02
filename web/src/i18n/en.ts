@@ -340,7 +340,8 @@ export const en = {
       "Optional: otherwise it is made of the type and the distance, like “Trail 42 km”.",
     raceType: "Race type",
     chooseRaceType: "Choose a type",
-    measuresHint: "At least one of these three measures is required.",
+    measuresHint: "At least one measure is required: distance, duration or time limit.",
+    moreOptions: "More options",
     distance: "Distance (km)",
     duration: "Duration (timed race)",
     timeLimit: "Time limit",
@@ -514,6 +515,11 @@ export const en = {
     deleteTypeWarning: (label: string) =>
       `“${label}” will be deleted. A type that races still use cannot be.`,
     typeDeleted: "Type deleted.",
+    measures: "Measures",
+    measuresTitle: (label: string) => `Measures of “${label}”`,
+    measuresHint: "The fields the format form shows first for this type.",
+    measuresNone: "Keep at least one measure.",
+    measuresSaved: "Measures saved.",
     forItem: (action: string, name: string) => `${action} · ${name}`,
     duplicatesTitle: "Duplicates",
     duplicatesIntro:

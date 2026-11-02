@@ -448,7 +448,9 @@ export const fr = {
       "Facultatif : sinon il est fait du type et de la distance, « Trail 42 km » par exemple.",
     raceType: "Type de course",
     chooseRaceType: "Choisis un type",
-    measuresHint: "Au moins une de ces trois mesures est obligatoire.",
+    // Above the measures the type of the format uses. The others are in a closed section under them, so it does not count them.
+    measuresHint: "Au moins une mesure est obligatoire : distance, durée ou temps max.",
+    moreOptions: "Options avancées",
     distance: "Distance (km)",
     duration: "Durée (course au temps)",
     timeLimit: "Temps max",
@@ -656,6 +658,12 @@ export const fr = {
     deleteTypeWarning: (label: string) =>
       `« ${label} » sera supprimé. Un type que des épreuves utilisent encore ne peut pas l'être.`,
     typeDeleted: "Type supprimé.",
+    // The measures of a race type: which fields the format form shows first (see features/admin/MeasuresDialog).
+    measures: "Mesures",
+    measuresTitle: (label: string) => `Mesures de « ${label} »`,
+    measuresHint: "Les champs que le formulaire d'une épreuve montre d'abord pour ce type.",
+    measuresNone: "Garde au moins une mesure.",
+    measuresSaved: "Mesures enregistrées.",
     // The accessible name of an action of a row: its text, then what the row is.
     forItem: (action: string, name: string) => `${action} · ${name}`,
     // The duplicates page: merging two events, or two formats of one event.

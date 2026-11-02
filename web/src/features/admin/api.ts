@@ -11,6 +11,7 @@ import type {
   EventRecord,
   InvitationKind,
   InvitationRecord,
+  Measure,
   PasskeyRecord,
   Role,
 } from "../../lib/types";
@@ -189,6 +190,15 @@ export function useRaceTypeActions() {
         queryClient.invalidateQueries({ queryKey: ["events"] }),
         queryClient.invalidateQueries({ queryKey: ["event"] }),
       ]);
+    },
+
+    /**
+     * Saves the measures that the type uses (see `measuresOf`). The formats of
+     * the events read the types from the same list, which is asked for again.
+     */
+    setMeasures: async (id: string, measures: Measure[]): Promise<void> => {
+      await pb.collection("race_types").update(id, { measures });
+      await refreshTypes();
     },
 
     /** The server refuses while a format uses the type. Whatever the refusal, the list may be out of date: it is read again. */

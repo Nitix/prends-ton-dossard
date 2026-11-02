@@ -42,11 +42,16 @@ vi.mock("../../lib/pb", () => ({
 }));
 
 const base = { created: "", updated: "", collectionId: "", collectionName: "race_types" };
-const raceType = (id: string, label: string) => ({ ...base, id, label });
+const raceType = (id: string, label: string, measures: string[] = []) => ({
+  ...base,
+  id,
+  label,
+  measures,
+});
 
 function installServer() {
   mocks.db.raceTypes = [
-    raceType("rt-trail", "Trail"),
+    raceType("rt-trail", "Trail", ["distance", "elevation", "time_limit"]),
     raceType("rt-road", "Route"),
     raceType("rt-backyard", "Backyard"),
   ];
@@ -281,6 +286,136 @@ test("TypesPage — renommer en un nom déjà pris, majuscules comprises, est re
   await expect.element(heading(screen, "Route")).toBeVisible();
 });
 
+// --- The measures ---
+
+/** The four measures, by the label that the form of a format gives them. */
+const MEASURE_LABELS = [fr.form.distance, fr.form.elevation, fr.form.duration, fr.form.timeLimit];
+
+const measureBox = (dialog: ReturnType<Screen["getByRole"]>, label: string) =>
+  dialog.getByRole("checkbox", { name: label, exact: true });
+
+test("TypesPage — choisir les mesures d'un type", async () => {
+  const { screen } = await renderPage();
+
+  await action(screen, t.measures, "Backyard").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Backyard") });
+  await expect.element(dialog.getByText(t.measuresHint)).toBeVisible();
+  // A type that has chosen nothing uses all four.
+  for (const label of MEASURE_LABELS) {
+    await expect.element(measureBox(dialog, label)).toBeChecked();
+  }
+  await measureBox(dialog, fr.form.distance).click();
+  await measureBox(dialog, fr.form.elevation).click();
+  await measureBox(dialog, fr.form.duration).click();
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(screen.getByText(t.measuresSaved)).toBeVisible();
+  expect(mocks.update).toHaveBeenCalledExactlyOnceWith("rt-backyard", {
+    measures: ["time_limit"],
+  });
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  // The button that opened the window is still there: the focus goes back to it.
+  await expect.element(action(screen, t.measures, "Backyard")).toHaveFocus();
+  // The window starts from what is saved.
+  await action(screen, t.measures, "Backyard").click();
+  const again = screen.getByRole("dialog", { name: t.measuresTitle("Backyard") });
+  await expect.element(measureBox(again, fr.form.timeLimit)).toBeChecked();
+  await expect.element(measureBox(again, fr.form.distance)).not.toBeChecked();
+});
+
+test("TypesPage — la fenêtre des mesures part de ce que le type a choisi", async () => {
+  const { screen } = await renderPage();
+
+  await action(screen, t.measures, "Trail").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Trail") });
+
+  await expect.element(measureBox(dialog, fr.form.distance)).toBeChecked();
+  await expect.element(measureBox(dialog, fr.form.elevation)).toBeChecked();
+  await expect.element(measureBox(dialog, fr.form.timeLimit)).toBeChecked();
+  await expect.element(measureBox(dialog, fr.form.duration)).not.toBeChecked();
+});
+
+test("TypesPage — sans aucune mesure cochée, rien n'est envoyé et la fenêtre le dit", async () => {
+  const { screen } = await renderPage();
+
+  await action(screen, t.measures, "Trail").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Trail") });
+  await measureBox(dialog, fr.form.distance).click();
+  await measureBox(dialog, fr.form.elevation).click();
+  await measureBox(dialog, fr.form.timeLimit).click();
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog.getByRole("alert")).toHaveTextContent(t.measuresNone);
+  expect(mocks.update).not.toHaveBeenCalled();
+  // The focus stays in the window, on the button that was pressed.
+  await expect.element(dialog.getByRole("button", { name: fr.common.save })).toHaveFocus();
+});
+
+test("TypesPage — annuler les mesures ne change rien, et le focus revient au bouton", async () => {
+  const { screen } = await renderPage();
+
+  await action(screen, t.measures, "Route").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Route") });
+  await measureBox(dialog, fr.form.distance).click();
+  await dialog.getByRole("button", { name: fr.common.cancel }).click();
+
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  expect(mocks.update).not.toHaveBeenCalled();
+  await expect.element(action(screen, t.measures, "Route")).toHaveFocus();
+});
+
+test("TypesPage — un envoi qui dure ne part qu'une fois, et le bouton garde le focus", async () => {
+  const update = Promise.withResolvers<unknown>();
+  mocks.update.mockReturnValueOnce(update.promise);
+  const { screen } = await renderPage();
+
+  await action(screen, t.measures, "Route").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Route") });
+  await measureBox(dialog, fr.form.duration).click();
+  const submit = dialog.getByRole("button", { name: fr.common.save });
+  await submit.click();
+
+  // A disabled button would drop the focus: this one stays focusable, and ignores the tap.
+  await expect.element(submit).toHaveAttribute("aria-disabled", "true");
+  expect(submit.element().hasAttribute("disabled")).toBe(false);
+  submit.element().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  submit.element().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  expect(mocks.update).toHaveBeenCalledTimes(1);
+  await expect.element(submit).toHaveFocus();
+
+  update.resolve({});
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  expect(mocks.update).toHaveBeenCalledTimes(1);
+});
+
+test("TypesPage — un refus du serveur est dit dans la fenêtre, qui reste ouverte avec le choix", async () => {
+  mocks.update.mockRejectedValueOnce(refusal(500, {}));
+  const { screen } = await renderPage();
+
+  await action(screen, t.measures, "Route").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Route") });
+  await measureBox(dialog, fr.form.duration).click();
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+
+  await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  await expect.element(measureBox(dialog, fr.form.duration)).not.toBeChecked();
+  await expect.element(screen.getByText(t.measuresSaved)).not.toBeInTheDocument();
+  // It can be sent again.
+  await dialog.getByRole("button", { name: fr.common.save }).click();
+  await expect.element(screen.getByText(t.measuresSaved)).toBeVisible();
+});
+
+test("TypesPage — les mesures sont en anglais pour un navigateur anglais", async () => {
+  const { screen } = await renderPage(["en-GB"]);
+
+  await screen.getByRole("button", { name: en.admin.forItem(en.admin.measures, "Trail") }).click();
+  const dialog = screen.getByRole("dialog", { name: en.admin.measuresTitle("Trail") });
+  await expect.element(dialog.getByText(en.admin.measuresHint)).toBeVisible();
+  await expect
+    .element(dialog.getByRole("checkbox", { name: en.form.timeLimit, exact: true }))
+    .toBeChecked();
+});
+
 // --- Deleting ---
 
 test("TypesPage — supprimer demande confirmation, puis le type disparaît", async () => {
@@ -359,6 +494,7 @@ test("TypesPage — les zones tactiles font au moins 44 px, sur un téléphone",
 
   const targets = [
     screen.getByRole("button", { name: t.addType }),
+    action(screen, t.measures, "Trail"),
     action(screen, t.rename, "Trail"),
     action(screen, fr.common.delete, "Trail"),
   ];
@@ -366,6 +502,19 @@ test("TypesPage — les zones tactiles font au moins 44 px, sur un téléphone",
     const { width, height } = target.element().getBoundingClientRect();
     expect(height).toBeGreaterThanOrEqual(44);
     expect(width).toBeGreaterThanOrEqual(44);
+  }
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
+
+  // In the window of the measures, the label of a checkbox is the tap target.
+  await action(screen, t.measures, "Trail").click();
+  const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Trail") });
+  for (const label of MEASURE_LABELS) {
+    const row = measureBox(dialog, label).element().closest("label");
+    expect(row?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+  for (const name of [fr.common.save, fr.common.cancel, fr.common.close]) {
+    const button = dialog.getByRole("button", { name, exact: true }).element();
+    expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   }
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
 });

@@ -38,8 +38,21 @@ export type RunnerRecord = BaseRecord & {
   avatar?: string;
 };
 
+/**
+ * What a format measures: its distance, its elevation gain, the length of a
+ * timed race, the cut-off time. The names are those of the `measures` field of
+ * the race types.
+ */
+export type Measure = "distance" | "elevation" | "duration" | "time_limit";
+
 export type RaceTypeRecord = BaseRecord & {
   label: string;
+  /**
+   * The measures that the form of a format of this type shows first, the others
+   * going into its « Options avancées ». Empty (or missing, before the migration
+   * that adds it has run) means all four: use `measuresOf`.
+   */
+  measures?: Measure[];
 };
 
 export type EventRecord = BaseRecord & {

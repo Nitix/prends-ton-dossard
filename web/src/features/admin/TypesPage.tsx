@@ -8,10 +8,14 @@ import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useRaceTypes } from "../events/api";
 import { useRaceTypeActions } from "./api";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MeasuresDialog } from "./MeasuresDialog";
 import { RaceTypeDialog, type RaceTypeTarget } from "./RaceTypeDialog";
 
 /** The dialog that is open on the page, and what it is about. At most one is open. */
-type TypeDialog = RaceTypeTarget | { kind: "delete"; raceType: RaceTypeRecord };
+type TypeDialog =
+  | RaceTypeTarget
+  | { kind: "measures"; raceType: RaceTypeRecord }
+  | { kind: "delete"; raceType: RaceTypeRecord };
 
 /**
  * The race types page of the admin: the list the formats of the events choose
@@ -65,6 +69,13 @@ export function TypesPage() {
                 <h2 className="card-title min-w-0 break-words">{raceType.label}</h2>
                 <div className="flex flex-wrap gap-2">
                   <RowAction
+                    label={t.admin.measures}
+                    name={raceType.label}
+                    onClick={() => {
+                      setDialog({ kind: "measures", raceType });
+                    }}
+                  />
+                  <RowAction
                     label={t.admin.rename}
                     name={raceType.label}
                     onClick={() => {
@@ -104,6 +115,10 @@ export function TypesPage() {
 
       <RaceTypeDialog
         target={dialog?.kind === "create" || dialog?.kind === "rename" ? dialog : null}
+        onClose={close}
+      />
+      <MeasuresDialog
+        raceType={dialog?.kind === "measures" ? dialog.raceType : null}
         onClose={close}
       />
       <ConfirmDialog

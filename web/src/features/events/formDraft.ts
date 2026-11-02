@@ -1,6 +1,6 @@
 import { raceStarted } from "../../lib/dates";
 import { newId } from "../../lib/ids";
-import type { Status } from "../../lib/types";
+import type { Measure, Status } from "../../lib/types";
 import type { EventView } from "./api";
 import type { EventDraft, GpxChange } from "./saveEvent";
 
@@ -131,6 +131,20 @@ function numberOf(text: string): number | undefined {
 /** Whether a format has one of its three measures: a distance, a duration or a time limit. Zero is none. */
 export function hasMeasure(row: FormatRow): boolean {
   return (numberOf(row.distanceKm) ?? 0) > 0 || (row.duration ?? 0) > 0 || (row.timeLimit ?? 0) > 0;
+}
+
+/**
+ * The measures of a row that have a value, a text that is not empty or a duration
+ * that is not zero: what the form shows whatever the race type uses (a measure
+ * that is filled in is never put away).
+ */
+export function filledMeasures(row: FormatRow): ReadonlySet<Measure> {
+  const filled = new Set<Measure>();
+  if (row.distanceKm.trim() !== "") filled.add("distance");
+  if (row.elevation.trim() !== "") filled.add("elevation");
+  if ((row.duration ?? 0) > 0) filled.add("duration");
+  if ((row.timeLimit ?? 0) > 0) filled.add("time_limit");
+  return filled;
 }
 
 /**
