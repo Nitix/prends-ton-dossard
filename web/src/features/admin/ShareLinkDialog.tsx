@@ -97,8 +97,8 @@ function ShareForm({
   return (
     <div className="flex flex-col gap-4">
       <p>{t.admin.shareIntro[kind](runnerName)}</p>
-      <div className="flex flex-col gap-1">
-        <label htmlFor={inputId} className="text-sm font-medium">
+      <div className="field flex flex-col gap-1">
+        <label htmlFor={inputId} className="field-label text-sm font-medium">
           {t.admin.link}
         </label>
         <input

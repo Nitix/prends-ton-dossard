@@ -55,48 +55,54 @@ export type DrawOptions = {
  */
 export async function inApp<T>(
   element: ReactNode,
-  look: (drawn: HTMLElement, page: HTMLElement) => T,
+  look: (drawn: HTMLElement, page: HTMLElement) => T | Promise<T>,
   { skin, today = TODAY, framed = false }: DrawOptions = {},
 ): Promise<T> {
   if (skin !== undefined) chooseSkin(skin);
-  const root = createRootRoute({
-    component: () => (
-      <QueryClientProvider client={new QueryClient()}>
-        <I18nProvider languages={["fr"]}>
-          <TodayProvider value={Temporal.PlainDate.from(today)}>
-            {framed ? (
-              <AppShell>
-                <Outlet />
-              </AppShell>
-            ) : (
-              <Outlet />
-            )}
-          </TodayProvider>
-        </I18nProvider>
-      </QueryClientProvider>
-    ),
-  });
-  const index = createRoute({
-    getParentRoute: () => root,
-    path: "/",
-    component: () => <div data-drawn="">{element}</div>,
-  });
-  const router = createRouter({
-    routeTree: root.addChildren([index]),
-    history: createMemoryHistory({ initialEntries: ["/"] }),
-  });
-  await router.load();
-  const screen = await render(<RouterProvider router={router} />);
-  // The box is there once the page is: a piece may draw nothing in it.
-  await expect.poll(() => screen.container.querySelector("[data-drawn]")).not.toBeNull();
-  // A width or a wrap is measured in the fonts of the skin, not in those that stand in while they load.
-  await fontsReady();
-  const box = screen.container.querySelector<HTMLElement>("[data-drawn]");
+  let screen: Awaited<ReturnType<typeof render>> | undefined;
   try {
+    // One client for the whole look, with no retry: a query that the mock of
+    // PocketBase cannot answer fails at once.
+    const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const root = createRootRoute({
+      component: () => (
+        <QueryClientProvider client={queries}>
+          <I18nProvider languages={["fr"]}>
+            <TodayProvider value={Temporal.PlainDate.from(today)}>
+              {framed ? (
+                <AppShell>
+                  <Outlet />
+                </AppShell>
+              ) : (
+                <Outlet />
+              )}
+            </TodayProvider>
+          </I18nProvider>
+        </QueryClientProvider>
+      ),
+    });
+    const index = createRoute({
+      getParentRoute: () => root,
+      path: "/",
+      component: () => <div data-drawn="">{element}</div>,
+    });
+    const router = createRouter({
+      routeTree: root.addChildren([index]),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    await router.load();
+    const drawn = await render(<RouterProvider router={router} />);
+    screen = drawn;
+    // The box is there once the page is: a piece may draw nothing in it.
+    await expect.poll(() => drawn.container.querySelector("[data-drawn]")).not.toBeNull();
+    // A width or a wrap is measured in the fonts of the skin, not in those that stand in while they load.
+    await fontsReady();
+    const box = drawn.container.querySelector<HTMLElement>("[data-drawn]");
     if (box === null) throw new Error("the piece was not drawn");
-    return look(box, screen.container);
+    // Awaited here, so that an asynchronous look sees the piece before it goes.
+    return await look(box, drawn.container);
   } finally {
-    await screen.unmount();
+    await screen?.unmount();
     if (skin !== undefined) chooseSkin("crete");
   }
 }

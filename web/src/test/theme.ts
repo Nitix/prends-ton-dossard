@@ -525,7 +525,7 @@ export function sheetDashes(css: string): SheetDash[] {
         if (!/^(border|outline)/.test(property) || !/\bdashed\b/.test(value)) continue;
         // A colour of the theme read plainly, as a word of the value (not inside a mix).
         const colour = words(value)
-          .map((word) => /^var\(--color-([a-z]+(?:-\d+)?)\)$/.exec(word)?.[1])
+          .map((word) => /^var\(--color-([a-z]+(?:-[a-z0-9]+)*)\)$/.exec(word)?.[1])
           .find((name) => name !== undefined);
         for (const selector of splitTopLevel(head).map(tidy)) {
           found.push({ selector, property, value, colour });

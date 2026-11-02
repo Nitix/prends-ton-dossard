@@ -34,6 +34,15 @@ test("groundsBehind — le fond d'un élément, ses dégradés et ses voiles pos
         >
           Barre
         </span>
+        <span
+          data-gloss=""
+          style={{
+            backgroundColor: "rgb(255, 255, 255)",
+            backgroundImage: "linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0))",
+          }}
+        >
+          Vernis
+        </span>
         <span data-plain="">Rien</span>
       </div>
     </div>,
@@ -48,6 +57,8 @@ test("groundsBehind — le fond d'un élément, ses dégradés et ses voiles pos
   // A gradient cut to a bar is not behind the words: what is under it is, the half black veil on white.
   expect(groundsBehind(pick("[data-bar]"))).toEqual(["#808080"]);
   expect(groundsBehind(pick("[data-plain]"))).toEqual(["#808080"]);
+  // A translucent gloss over a fill of its own: the fill is under it, not what is under the element.
+  expect(groundsBehind(pick("[data-gloss]"))).toEqual(["#808080", "#ffffff"]);
   await screen.unmount();
 });
 

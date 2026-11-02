@@ -3,6 +3,7 @@ import { render } from "vitest-browser-react";
 
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
+import { plain, said } from "../../test/variant";
 import { toEventView } from "./api";
 import { FormatLine, FormatParts } from "./FormatLine";
 import { eventRecord } from "./testFixture";
@@ -21,17 +22,6 @@ const f42 = () => {
   if (found === undefined) throw new Error("no 42 km in the fixture");
   return found;
 };
-
-/** Text with its non-breaking spaces made plain, whitespace gathered. */
-const plain = (text: string | null) => (text ?? "").replace(/\s+/gu, " ").trim();
-
-/** The text a screen reader reads in an element: without what is hidden from it. */
-function spoken(element: Element): string {
-  const copy = element.cloneNode(true);
-  if (!(copy instanceof Element)) return "";
-  for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
-  return plain(copy.textContent);
-}
 
 async function drawn(line: Parameters<typeof render>[0]) {
   const screen = await render(<I18nProvider languages={["fr"]}>{line}</I18nProvider>);
@@ -88,7 +78,7 @@ test("FormatLine — marquée par un skin : un dessin avant, le nom et chaque me
   // The separators are in the text for a screen reader (and a copy), hidden from the eye.
   const separators = [...(parts?.querySelectorAll(".sr-only") ?? [])];
   expect(separators.map((one) => one.textContent)).toEqual([" · ", " · "]);
-  expect(spoken(line)).toBe("Trail 42 km · 2 400 m D+ · max 10h");
+  expect(said(line).flat).toBe("Trail 42 km · 2 400 m D+ · max 10h");
   await unmount();
 });
 
@@ -124,6 +114,6 @@ test("FormatParts — dessine les parties d'une épreuve hors d'une ligne, pour 
     "15 km",
     "700 m D+",
   ]);
-  expect(spoken(title ?? box)).toBe("Trail court · 15 km · 700 m D+");
+  expect(said(title ?? box).flat).toBe("Trail court · 15 km · 700 m D+");
   await unmount();
 });

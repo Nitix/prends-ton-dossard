@@ -116,7 +116,7 @@ function Select({
 }) {
   const id = useId();
   return (
-    <div className="flex min-w-40 flex-1 flex-col gap-1 filter">
+    <div className="filter-field flex min-w-40 flex-1 flex-col gap-1">
       <label htmlFor={id} className="filter-label eyebrow">
         {label}
       </label>

@@ -118,10 +118,11 @@ function fills(style: CSSStyleDeclaration): boolean {
 
 /**
  * The colours behind the words of an element, as `#rrggbb`: its own
- * background where it fills its box (each stop of a gradient), else the first
- * one under it, with the translucent ones laid over what is under them, down to
- * an opaque one (the page's `--color-neutral-50` if none is). A gradient cut to
- * a bar or a mark (`background-size` of a line) is not behind the words.
+ * background where it fills its box (each stop of a gradient, then its colour
+ * under them), else the first one under it, with the translucent ones laid over
+ * what is under them, down to an opaque one (the page's `--color-neutral-50` if
+ * none is). A gradient cut to a bar or a mark (`background-size` of a line) is
+ * not behind the words, nor is a pill drawn by `::before` or `::after`.
  */
 export function groundsBehind(element: Element): string[] {
   const layers: string[][] = [];
@@ -132,8 +133,8 @@ export function groundsBehind(element: Element): string[] {
     if (stops.length > 0) {
       layers.push(stops);
       if (stops.every((stop) => rgbaOf(stop)[3] === 1)) break;
-      continue;
     }
+    // Under its images, the element's own colour (a fill under a gloss).
     const colour = rgbaOf(style.backgroundColor);
     if (colour[3] === 0) continue;
     layers.push([style.backgroundColor]);

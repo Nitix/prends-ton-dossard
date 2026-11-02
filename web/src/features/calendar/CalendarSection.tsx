@@ -286,7 +286,7 @@ function LinkField({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="field flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         <input
           ref={inputRef}
@@ -300,7 +300,7 @@ function LinkField({
           {t.calendar.copy}
         </button>
       </div>
-      <p id={helpId} className="text-sm text-neutral-600">
+      <p id={helpId} className="field-hint text-sm text-neutral-600">
         {t.calendar.help}
       </p>
     </div>
