@@ -117,45 +117,51 @@
 
 /* ---- The card: each format on the tint of its terrain ---- */
 
-:root[data-skin="alpage"] [data-terrain="route"] .terrain-mark {
+/* The line of a format is a row, so that the point before its words has a box. */
+:root[data-skin="alpage"] .event-card-format .format-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+:root[data-skin="alpage"] .event-card-format[data-format-kind="route"] .terrain-mark {
   background-color: var(--color-slope-1);
 }
-:root[data-skin="alpage"] [data-terrain="trail"] .terrain-mark {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="trail"] .terrain-mark {
   background-color: var(--color-slope-2);
 }
-:root[data-skin="alpage"] [data-terrain="cross"] .terrain-mark {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="cross"] .terrain-mark {
   background-color: var(--color-slope-3);
 }
-:root[data-skin="alpage"] [data-terrain="ultra"] .terrain-mark {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="ultra"] .terrain-mark {
   background-color: var(--color-slope-4);
 }
-:root[data-skin="alpage"] [data-terrain="hyrox"] .terrain-mark {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="hyrox"] .terrain-mark {
   background-color: var(--color-slope-5);
 }
-:root[data-skin="alpage"] [data-terrain="backyard"] .terrain-mark {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="backyard"] .terrain-mark {
   background-color: var(--color-iris-400);
 }
-:root[data-skin="alpage"] [data-terrain="other"] .terrain-mark {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="other"] .terrain-mark {
   background-color: var(--color-neutral-500);
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="route"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="route"] {
   background-color: color-mix(in srgb, var(--color-slope-1) 14%, var(--color-card));
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="trail"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="trail"] {
   background-color: color-mix(in srgb, var(--color-slope-2) 14%, var(--color-card));
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="cross"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="cross"] {
   background-color: color-mix(in srgb, var(--color-slope-3) 14%, var(--color-card));
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="ultra"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="ultra"] {
   background-color: color-mix(in srgb, var(--color-slope-4) 14%, var(--color-card));
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="hyrox"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="hyrox"] {
   background-color: color-mix(in srgb, var(--color-slope-5) 14%, var(--color-card));
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="backyard"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="backyard"] {
   background-color: color-mix(in srgb, var(--color-iris-400) 14%, var(--color-card));
 }
-:root[data-skin="alpage"] .event-card-format[data-terrain="other"] {
+:root[data-skin="alpage"] .event-card-format[data-format-kind="other"] {
   background-color: color-mix(in srgb, var(--color-neutral-500) 14%, var(--color-card));
 }

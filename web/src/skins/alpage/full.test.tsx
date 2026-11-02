@@ -5,11 +5,12 @@ import { page } from "vitest/browser";
 import { SKIN_DEPTH } from "..";
 import { Dialog } from "../../components/Dialog";
 import { toEventView } from "../../features/events/api";
-import { EventCard } from "../../features/events/EventCard";
+import { EventCard, EventCardBase } from "../../features/events/EventCard";
 import { event2Record, eventRecord } from "../../features/events/testFixture";
 import { ensureTemporal } from "../../lib/temporal";
 import { colourOf, rgbaOf, textContrast } from "../../test/computed";
-import { inApp, plain, type DrawOptions } from "../../test/variant";
+import { withoutIds } from "../../test/ids";
+import { EVENT_SHAPES, inApp, plain, type DrawOptions } from "../../test/variant";
 
 import "../../styles.css";
 import "../../skins/styles";
@@ -50,6 +51,23 @@ function need(root: ParentNode, selector: string): HTMLElement {
   const found = root.querySelector<HTMLElement>(selector);
   if (found === null) throw new Error(`nothing matches ${selector}`);
   return found;
+}
+
+/**
+ * A card as its markup is, with what a variant may add to the formats taken out:
+ * the kind of each (`data-format-kind`) and the pieces its marks put in its line.
+ * What is left is Crête's own card, whoever drew it; `words` are the texts of the
+ * format lines, which are the same whoever marks them.
+ */
+function skeleton(card: Element | null): { html: string; words: string[] } {
+  const copy = card?.cloneNode(true);
+  if (!(copy instanceof Element)) throw new Error("no card");
+  const words = [...copy.querySelectorAll(".format-line")].map((line) => plain(line.textContent));
+  for (const line of copy.querySelectorAll(".format-line")) line.replaceChildren();
+  for (const format of copy.querySelectorAll("[data-format-kind]")) {
+    format.removeAttribute("data-format-kind");
+  }
+  return { html: withoutIds(copy.outerHTML), words };
 }
 
 /** What the browser computes of a `background-image` written out, in the theme of the page. */
@@ -271,7 +289,7 @@ test.skipIf(SKIN_DEPTH !== "full")(
 // ---- The card
 
 test.skipIf(SKIN_DEPTH !== "full")(
-  "« Alpage » full — sa carte pose les épreuves sur la teinte de leur terrain, un point devant, et garde le reste de celle de Crête",
+  "« Alpage » full — sa carte pose les épreuves sur la teinte de leur terrain, un point devant, et garde les classes de celle de Crête",
   async () => {
     const rich = toEventView({
       ...eventRecord,
@@ -296,20 +314,44 @@ test.skipIf(SKIN_DEPTH !== "full")(
         expect(cardTrail.querySelector(".event-card-body")).not.toBeNull();
         // A format is a panel on the tint of its terrain, with a point before its words.
         const trail = need(cardTrail, ".event-card-format");
-        expect(trail.dataset.terrain).toBe("trail");
+        expect(trail.dataset.formatKind).toBe("trail");
+        // A point of 8 px before the words: the line is flex, so that the mark has a box.
+        expect(need(trail, ".terrain-mark").getBoundingClientRect().width).toBe(8);
         expect(styleOf(need(trail, ".terrain-mark")).backgroundColor).toBe(
           colourOf("--color-slope-2"),
         );
         expect(styleOf(trail).backgroundColor).not.toBe(colourOf("--color-neutral-50"));
         expect(textContrast(need(trail, ".format-line"))).toBeGreaterThanOrEqual(4.5);
         const road = need(cardRoad, ".event-card-format");
-        expect(road.dataset.terrain).toBe("route");
+        expect(road.dataset.formatKind).toBe("route");
         expect(styleOf(need(road, ".terrain-mark")).backgroundColor).toBe(
           colourOf("--color-slope-1"),
         );
-        // The type is in the words, not only in the tint.
-        expect(plain(road.textContent)).toContain("10 km");
+        // The words of the format stay beside its mark, as Crête's card draws them (it does not
+        // write the type of a race either: the tint and the mark are the skin's addition).
+        expect(plain(need(road, ".format-line").textContent)).toContain("10 km");
       },
     );
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "« Alpage » full — sa carte n'est pas une copie : ôtés le genre et les marques des épreuves, c'est la carte de Crête, dans chaque forme d'événement",
+  async () => {
+    for (const { what, view, today } of EVENT_SHAPES()) {
+      const props = { view, list: "upcoming" } as const;
+      const base = await inApp(
+        <EventCardBase {...props} />,
+        (drawn) => skeleton(drawn.querySelector(".event-card")),
+        { skin: SKIN, today },
+      );
+      const own = await inApp(
+        <EventCard {...props} />,
+        (drawn) => skeleton(drawn.querySelector(".event-card")),
+        { skin: SKIN, today },
+      );
+      expect(own.html, `the card of Alpage, ${what}`).toBe(base.html);
+      expect(own.words, `its format lines, ${what}`).toEqual(base.words);
+    }
   },
 );
