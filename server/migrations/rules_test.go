@@ -3,6 +3,7 @@ package migrations_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
@@ -53,6 +54,16 @@ func setFields(t testing.TB, app core.App, collection, id string, values map[str
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// measuresOf reads the measures a race type is stored with.
+func measuresOf(t testing.TB, app core.App, id string) []string {
+	t.Helper()
+	record, err := app.FindRecordById("race_types", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.GetStringSlice("measures")
 }
 
 // The status codes below are the ones PocketBase answers when a rule refuses a
@@ -312,6 +323,35 @@ func TestRules(t *testing.T) {
 			URL:    records("race_types"),
 			Body:   body(`{"label":"Triathlon"}`),
 			Status: http.StatusOK,
+		},
+		// The measures a race type says it uses (migration 9i) are an update like
+		// any other: the demo hands a member session to anyone, so a member must
+		// not be able to change what the form shows for everybody.
+		{
+			Name:   "alice cannot change the measures of a race type",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    recordOf("race_types", func(fx testutil.Fixture) *core.Record { return fx.Backyard }),
+			Body:   body(`{"measures":["distance"]}`),
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := measuresOf(t, app, fx.Backyard.Id); !slices.Equal(got, []string{"time_limit"}) {
+					t.Errorf("the measures of the Backyard are %q, want [time_limit]", got)
+				}
+			},
+		},
+		{
+			Name:   "admin changes the measures of a race type",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("race_types", func(fx testutil.Fixture) *core.Record { return fx.Backyard }),
+			Body:   body(`{"measures":["distance"]}`),
+			Status: http.StatusOK,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := measuresOf(t, app, fx.Backyard.Id); !slices.Equal(got, []string{"distance"}) {
+					t.Errorf("the measures of the Backyard are %q, want [distance]", got)
+				}
+			},
 		},
 		{
 			Name:   "admin deletes an unused race type",
