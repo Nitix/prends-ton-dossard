@@ -160,6 +160,28 @@ git pull && docker compose up -d --build
 
 Les migrations de la base s'appliquent au démarrage. Le volume n'est pas touché. Avant une mise à jour qui ajoute une migration, créer une sauvegarde depuis le tableau de bord, par le tunnel SSH (Settings, puis Backups).
 
+## Démo
+
+Une instance à part du vrai site (son domaine, son dossier, son volume, son `.env`) peut laisser des curieux entrer sans compte : la page de connexion y montre un bouton « Entrer dans la démo », qui ouvre le compte d'Alice sans rien taper. Ce que les visiteurs y font reste : on ne remet jamais la démo à zéro (voir plus bas pour le faire quand même). **Le vrai site ne définit jamais `DEMO_LOGIN_EMAIL`** : n'importe qui entrerait dans ce compte.
+
+1. **Installer l'instance** comme le vrai site (« Mise en service »), dans son propre dossier, avec son propre `APP_URL` (par exemple `https://demo-prends-ton-dossard.ketra.fr`). Pas de `bootstrap-admin` : la base vient du `seed`.
+
+2. **La remplir des données de test.** Le programme de production refuse `seed` hors de `localhost` sans `--force`. Les comptes ont tous le même mot de passe, qui est public s'il n'est pas donné : en choisir un au hasard, que personne n'a besoin de connaître (le bouton ne le demande pas), garde fermés les comptes Admin et Bob. Il garde aussi le compte d'Alice hors de portée par son email et son mot de passe : les réglages demandent le mot de passe actuel pour changer l'un ou l'autre, et aucun visiteur ne le connaît, donc personne ne peut s'approprier le compte partagé.
+
+   ```sh
+   docker compose exec -e SEED_PASSWORD="$(openssl rand -base64 24)" courses /app/courses seed --force
+   ```
+
+3. **Activer le bouton.** Dans le `.env` de l'instance, ajouter `DEMO_LOGIN_EMAIL=alice@example.test`, puis `docker compose up -d`. La variable doit nommer **un membre** : un admin est refusé, comme un compte absent, désactivé ou sans coureur. La variable ouvre `GET` et `POST /api/app/demo` ; sans elle, ces routes n'existent pas (404). Avec un compte qui ne convient pas, elles répondent 404 aussi : le bouton est alors caché.
+
+**Remettre la démo à zéro** (on ne le fait pas, mais on le peut), dans le dossier de l'instance de démo et nulle part ailleurs : `-v` supprime le volume du dossier où l'on se trouve, sans sauvegarde, et ce serait celui du vrai site dans son dossier.
+
+```sh
+docker compose down -v
+docker compose up -d
+docker compose exec -e SEED_PASSWORD="$(openssl rand -base64 24)" courses /app/courses seed --force
+```
+
 ## Sauvegardes
 
 Le tableau de bord dont parle cette section s'ouvre par le tunnel SSH (voir « Tableau de bord PocketBase »).
@@ -291,20 +313,6 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] Sur un événement à plusieurs épreuves, cliquer sur « J'y vais » en laissant « Pas encore décidé » : le coureur apparaît dans « Intéressés, format à choisir ». Depuis le menu de sa participation, « Choisir l'épreuve » : choisir une épreuve et un statut, et vérifier qu'il passe dans la liste de cette épreuve.
 - [ ] Mettre quelqu'un en « Non partant » depuis le menu de sa participation : il quitte les listes et apparaît dans la section repliée « Non partants » (l'ouvrir pour le voir). Le remettre dans un autre statut le fait revenir dans les listes.
 - [ ] Désactiver le compte de test.
-
-## Démo
-
-Une instance à part du vrai site (son domaine, son volume, son `.env`) peut laisser des curieux entrer sans compte : la page de connexion y montre un bouton « Entrer dans la démo », qui ouvre le compte d'Alice sans rien taper. Ce que les visiteurs y font reste : rien ne la remet à zéro. **Le vrai site ne définit jamais `DEMO_LOGIN_EMAIL`** : n'importe qui entrerait dans ce compte.
-
-1. **Installer l'instance** comme le vrai site (« Mise en service »), avec son propre `APP_URL` (par exemple `https://demo-prends-ton-dossard.ketra.fr`). Pas de `bootstrap-admin` : la base vient du `seed`.
-
-2. **La remplir des données de test.** Le programme de production refuse `seed` hors de `localhost` sans `--force`. Les comptes ont tous le même mot de passe, public s'il n'est pas donné : en choisir un au hasard, que personne n'a besoin de connaître (le bouton ne le demande pas), garde fermés les comptes Admin et Bob.
-
-   ```sh
-   docker compose exec -e SEED_PASSWORD="$(openssl rand -base64 24)" courses /app/courses seed --force
-   ```
-
-3. **Activer le bouton.** Dans le `.env` de l'instance, ajouter `DEMO_LOGIN_EMAIL=alice@example.test` (un membre, pas `admin@example.test`), puis `docker compose up -d`. La variable ouvre `GET` et `POST /api/app/demo` ; sans elle, ces routes n'existent pas (404). Le compte doit exister, ne pas être désactivé et avoir un coureur, sinon le bouton s'affiche, mais son clic échoue (404).
 
 ## Feuille de route
 

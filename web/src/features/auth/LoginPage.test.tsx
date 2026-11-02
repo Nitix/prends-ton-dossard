@@ -489,18 +489,37 @@ test("LoginPage — pas de bouton de démo quand la demande échoue, et pas d'er
   await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
 });
 
-test("LoginPage — la page ne demande qu'une fois si le site est une démo", async () => {
+test("LoginPage — la page ne demande qu'une fois si le site est une démo, même quand elle revient", async () => {
   serveDemo({ enabled: { enabled: true } });
-  const screen = await renderLogin();
-  await expect.element(screen.getByRole("button", { name: fr.auth.demoEnter })).toBeVisible();
+  const first = await renderLogin();
+  await expect.element(first.getByRole("button", { name: fr.auth.demoEnter })).toBeVisible();
+  expect(demoRequests("GET")).toHaveLength(1);
 
-  // A login that fails is no reason to ask again.
-  authWithPassword.mockRejectedValue(refusal(400));
-  await signIn(screen, "wrong-password");
-  await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.auth.badCredentials);
+  // The page goes away and comes back (the back button), with the same cache.
+  await first.unmount();
+  const again = await renderLogin();
 
+  // The button is there at once, and nothing was asked again.
+  await expect.element(again.getByRole("button", { name: fr.auth.demoEnter })).toBeVisible();
+  expect(queryClient.isFetching()).toBe(0);
   expect(demoRequests("GET")).toHaveLength(1);
   expect(demoRequests("POST")).toHaveLength(0);
+});
+
+test("LoginPage — le « non » du vrai site est gardé aussi : une demande, même quand la page revient", async () => {
+  // The routes do not exist there: the default answer of these tests.
+  const first = await renderLogin();
+  await demoAnswered();
+  await first.unmount();
+
+  const again = await renderLogin();
+
+  await expect.element(again.getByRole("button", { name: fr.auth.signIn })).toBeVisible();
+  expect(queryClient.isFetching()).toBe(0);
+  expect(demoRequests("GET")).toHaveLength(1);
+  await expect
+    .element(again.getByRole("button", { name: fr.auth.demoEnter }))
+    .not.toBeInTheDocument();
 });
 
 test("LoginPage — « Entrer dans la démo » connecte et mène à l'accueil", async () => {

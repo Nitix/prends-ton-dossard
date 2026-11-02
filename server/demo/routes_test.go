@@ -117,8 +117,11 @@ func TestDemo_LogsIntoTheDemoAccount(t *testing.T) {
 	}
 }
 
-// Anything but an account that can sign in and has a runner to show gives the
-// same answer as no demo: a 404 with the code of not_found, and no token.
+// Anything but a member who can sign in and has a runner to show gives the same
+// answer as no demo, to the question of the login page as well as to the click:
+// a 404 with the code of not_found, and no token. The page then has no button
+// to offer. An admin is never the demo account: whatever the visitors do there
+// would be done with the powers of an admin.
 func TestDemo_MissingOrDisabledAccount(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -127,6 +130,7 @@ func TestDemo_MissingOrDisabledAccount(t *testing.T) {
 		before func(t testing.TB, app *tests.TestApp, fx testutil.Fixture)
 	}{
 		{name: "no account has that email", email: "nobody@example.test"},
+		{name: "the account is an admin", email: "admin@example.test"},
 		{
 			name:  "the account is disabled",
 			email: "alice@example.test",
@@ -155,18 +159,20 @@ func TestDemo_MissingOrDisabledAccount(t *testing.T) {
 			},
 		},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			app, fx := demoApp(t, tc.email)
-			if tc.before != nil {
-				tc.before(t, app, fx)
-			}
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			t.Run(tc.name+"/"+method, func(t *testing.T) {
+				app, fx := demoApp(t, tc.email)
+				if tc.before != nil {
+					tc.before(t, app, fx)
+				}
 
-			call(t, app, tests.ApiScenario{
-				Method:             http.MethodPost,
-				ExpectedStatus:     http.StatusNotFound,
-				ExpectedContent:    []string{`"code":"not_found"`},
-				NotExpectedContent: []string{`"token"`},
+				call(t, app, tests.ApiScenario{
+					Method:             method,
+					ExpectedStatus:     http.StatusNotFound,
+					ExpectedContent:    []string{`"code":"not_found"`},
+					NotExpectedContent: []string{`"token"`, `"enabled"`},
+				})
 			})
-		})
+		}
 	}
 }

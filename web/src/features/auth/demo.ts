@@ -5,15 +5,19 @@ import { pb } from "../../lib/pb";
 /**
  * Asks whether this site is a demo, which is when the login page offers to
  * enter it with no account (`DEMO_LOGIN_EMAIL` on the server). The real site
- * has no such route: PocketBase answers its 404, which is the answer "no".
- * Any other failure (no network, a server error) is not an answer: it is
- * thrown, and the page shows no button.
+ * has no such route: PocketBase answers its 404, which is the answer "no". The
+ * demo gives the same one when its account cannot be entered (missing,
+ * disabled, an admin...). Any other failure (no network, a server error) is not
+ * an answer: it is thrown, and the page shows no button.
+ *
+ * It takes no `signal`: the SDK replaces it when it cancels requests on its
+ * own, and reading TanStack's cancels the query when the page unmounts, which
+ * sends it twice under StrictMode.
  */
-export async function fetchDemoEnabled(signal?: AbortSignal): Promise<boolean> {
+export async function fetchDemoEnabled(): Promise<boolean> {
   try {
     const answer = await pb.send<{ enabled?: boolean } | null>("/api/app/demo", {
       method: "GET",
-      signal,
     });
     return answer?.enabled === true;
   } catch (err) {

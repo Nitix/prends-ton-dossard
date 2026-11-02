@@ -81,7 +81,7 @@ export function LoginPage({ redirect }: { redirect?: string }) {
   // change while the site runs, and the real site's "no" is kept as well.
   const demoQuery = useQuery({
     queryKey: ["demo"],
-    queryFn: ({ signal }) => fetchDemoEnabled(signal),
+    queryFn: fetchDemoEnabled,
     retry: false,
     staleTime: Infinity,
   });
