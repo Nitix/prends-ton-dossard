@@ -1,0 +1,159 @@
+/* « Sentier », depth palette: an early-morning trail run in the mountains. Deep
+   pine for what frames the app and for the main action, sunrise orange for the
+   highlights, warm sand for the page, granite for the text, soft moss for the
+   quiet fills. By day only: the variant had no dark mode, so the page is drawn
+   in this one whatever the theme chosen (lib/theme.ts), and Crête's light values
+   stand for every colour it does not set. Custom properties of Crête only, under
+   the skin's selector (see ../README.md); the fonts are in fonts.css.
+
+   Crête's three families of accent are the variant's: `iris` is its pine (the
+   action colour), `peach` its sunrise, `blush` its sunrise too (the dots of the
+   agenda, the dashed « to confirm », the pins: the variant had one warm colour
+   for all of them), but for its lightest step, which is the variant's moss
+   (`blush-100`: the pastel of an avatar, the glow at the top of a window): moss
+   is not a family of Crête's. */
+:root[data-skin="sentier"] {
+  /* Granite: the neutrals are warm greys with a hint of green; the sheet of the
+     page is the sand (`neutral-50`). */
+  --color-neutral-50: #f7f3ea;
+  --color-neutral-100: #efebe2;
+  --color-neutral-200: #e2ddd1;
+  --color-neutral-300: #c9c2b2;
+  --color-neutral-400: #9a927f;
+  --color-neutral-500: #7a817b;
+  --color-neutral-600: #56635d;
+  --color-neutral-700: #3e4a45;
+  --color-neutral-800: #2e3934;
+  --color-neutral-900: #23302b;
+  --color-neutral-950: #161e1b;
+  --color-ink: #23302b;
+
+  /* Pine: the header, the main button, the links, the focus. */
+  --color-iris-50: #eef5f1;
+  --color-iris-100: #d6e8de;
+  --color-iris-200: #aed1bf;
+  --color-iris-300: #7fb39a;
+  --color-iris-400: #4f9276;
+  --color-iris-500: #2f785e;
+  --color-iris-600: #1f5f4a;
+  --color-iris-700: #194e3d;
+  --color-iris-800: #143f32;
+  --color-iris-900: #0f3027;
+
+  /* Sunrise: highlights. As a fill it takes granite text, as text it is the 700
+     or the 800, never the 400. */
+  --color-peach-50: #fef5ec;
+  --color-peach-100: #fde6cf;
+  --color-peach-200: #fbcc9d;
+  --color-peach-300: #f7ae68;
+  --color-peach-400: #f28c38;
+  --color-peach-500: #e2731d;
+  --color-peach-600: #c25c12;
+  --color-peach-700: #9c4710;
+  --color-peach-800: #7a3711;
+
+  --color-blush-50: #fef5ec;
+  --color-blush-100: #e5ecd6;
+  --color-blush-200: #fbcc9d;
+  --color-blush-300: #f7ae68;
+  --color-blush-400: #f28c38;
+  --color-blush-500: #e2731d;
+  --color-blush-600: #c25c12;
+  --color-blush-700: #9c4710;
+  --color-blush-800: #7a3711;
+
+  /* A brick red for what deletes, warmer than Crête's. */
+  --color-red-700: #b3261e;
+
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  /* The white mat of the map, like a printed map. */
+  --color-rim: #ffffff;
+  --color-toast: #143f32;
+  --color-scrim: rgb(10 33 27 / 0.45);
+  --color-relief: #161e1b;
+
+  /* The five zones of the slope, from gentle to steep: a lake, the forest of the
+     trail, ochre ground, the sunrise, a berry. Each is 3:1 on the card and on the
+     line, and they stay apart with a colour vision deficiency (src/features/route/slope.test.ts). */
+  --color-slope-1: #4488ba;
+  --color-slope-2: #2f8957;
+  --color-slope-3: #aa912f;
+  --color-slope-4: #c2500f;
+  --color-slope-5: #a14887;
+
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-card: 1.25rem;
+
+  /* Shadows of granite, light: the variant had no tint in them, and no halo. */
+  --shade-card: rgb(35 48 43 / 0.2);
+  --shade-lift: rgb(35 48 43 / 0.3);
+  --shade-bar: rgb(35 48 43 / 0.25);
+  --shade-edge: rgb(35 48 43 / 0.05);
+  --shade-edge-lift: rgb(35 48 43 / 0.06);
+  --map-frame:
+    0 0 0 1px rgb(226 216 196), 0 1px 2px rgb(35 48 43 / 0.05),
+    0 6px 18px -10px rgb(35 48 43 / 0.18);
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The map of a track: a line of sunrise, a pine start and a granite finish. */
+  --map-line-from: #f28c38;
+  --map-line-via: #e2731d;
+  --map-line-to: #c25c12;
+  --map-line: #e2731d;
+  --map-start: #1f5f4a;
+  --map-finish: #23302b;
+  --map-link: #194e3d;
+
+  /* The art of the skin (./motifs.tsx): pine ridges and a sun of sunrise. The
+     far ridge, the near ridge (hero), and the one that is the colour of the page
+     (header). */
+  --motif-ridge-far-from: #2f785e;
+  --motif-ridge-far-to: #2f785e;
+  --motif-ridge-mid-from: #143f32;
+  --motif-ridge-mid-to: #143f32;
+  --motif-ridge-near-from: #f7f3ea;
+  --motif-ridge-near-to: #f7f3ea;
+  --motif-ridge-light: #fbcc9d;
+  --motif-sun-core: #fbcc9d;
+  --motif-sun-mid: #f7ae68;
+  --motif-sun-rim: #f28c38;
+  --motif-halo-from: #f7ae68;
+  --motif-halo-to: #f28c38;
+  --motif-dawn-1: #f7ae68;
+  --motif-dawn-2: #f28c38;
+  --motif-dawn-3: #e2731d;
+  --motif-peak-far: #4f9276;
+  --motif-peak-near-from: #1f5f4a;
+  --motif-peak-near-to: #1f5f4a;
+  --motif-hill-near-from: #4f9276;
+  --motif-hill-near-to: #1f5f4a;
+
+  /* The paints of the dawn, flat: the variant had no gradient (a flat colour is a
+     gradient of one stop). The main button, the header and the heroes are pine;
+     the heroes are a little deeper at the top, and lighter at the horizon. */
+  --dawn-soft: linear-gradient(110deg, #f28c38 0%, #f28c38 100%);
+  --dawn-deep: linear-gradient(110deg, #1f5f4a 0%, #1f5f4a 100%);
+  --dawn-sky-color: #1f5f4a;
+  --dawn-sky: linear-gradient(180deg, #1f5f4a 0%, #1f5f4a 100%);
+  --dawn-hero-color: #1f5f4a;
+  --dawn-hero: linear-gradient(180deg, #194e3d 0%, #1f5f4a 100%);
+  --dawn-text: linear-gradient(100deg, #1f5f4a 0%, #194e3d 100%);
+  --dawn-line: linear-gradient(90deg, #f28c38, #f28c38);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #a9c088, rgb(169 192 136 / 0.5) 45%, transparent);
+  --dawn-ring-from: #2f785e;
+  --dawn-ring-via: #2f785e;
+  --dawn-ring-to: #2f785e;
+  /* No halo, no glow: the variant's buttons and dates had none. */
+  --dawn-chip-glow: transparent;
+  --dawn-glow-warm: transparent;
+  --dawn-glow-cool: transparent;
+  --focus-glow: transparent;
+  /* The ring of the focus on the pine: a light sunrise. */
+  --sky-focus: #f7ae68;
+}
