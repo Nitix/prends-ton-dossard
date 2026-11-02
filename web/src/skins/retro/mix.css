@@ -6,7 +6,7 @@
 
 /* The tabs: a paper bar in an ink outline, a hard shadow under it; the current
    tab, the orange pill, is outlined and shadowed in ink too. */
-:root[data-skin="retro"] .tabbar ul {
+:root[data-skin="retro"] .tabbar-list {
   border: 2px solid var(--color-ink);
   border-radius: 1.5rem;
   background-color: var(--color-raised);
@@ -21,7 +21,7 @@
     0 3px 0 2px var(--color-ink);
 }
 @media (min-width: 48rem) {
-  :root[data-skin="retro"] .tabbar ul,
+  :root[data-skin="retro"] .tabbar-list,
   :root[data-skin="retro"] .tab {
     border-radius: 999px;
   }

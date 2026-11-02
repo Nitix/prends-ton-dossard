@@ -1,0 +1,645 @@
+/* « Rétro », depth full: every other piece of the club house, over the mix,
+   hooked on the semantic classes of the pieces (README.md): paper and brown
+   ink, an ink outline and a hard shadow under what you press, the three
+   stripes (orange `blush`, mustard `peach`, teal `iris`) along what is
+   current, a patch for each runner. The colours are the palette's (none is set
+   here). An unlayered rule wins over every utility of a piece, its `hover:`
+   ones included: where a rule sets a property, it sets its states too. */
+
+/* ---- The page and its frame -------------------------------------------------- */
+
+/* A very light halftone on the sheet of the page, as on old printed paper. */
+:root[data-skin="retro"] .sheet {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-ink) 5%, transparent) 0.8px,
+    transparent 1px
+  );
+  background-size: 7px 7px;
+}
+
+/* The band of the offline state: brown, with a line of mustard under it. */
+:root[data-skin="retro"] .offline-banner {
+  border-bottom: 2px solid var(--color-peach-400);
+  font-weight: 600;
+}
+
+/* On a phone the tabs are a flat bar from one edge of the screen to the other,
+   on its foot, on one ink rule; the current tab carries the three stripes above
+   it, in the paper of the bar (on a larger screen, the capsule of the mix at
+   the top of the page, outlined in paper and shadowed in mustard, since ink
+   would vanish on the brown header, and the stripes under the tab). */
+@media (max-width: 47.99rem) {
+  :root[data-skin="retro"] .tabbar {
+    bottom: 0;
+    padding-inline: 0;
+  }
+  :root[data-skin="retro"] .tabbar-list {
+    border-width: 2px 0 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+@media (min-width: 48rem) {
+  :root[data-skin="retro"] .tabbar-list {
+    border-color: var(--color-card);
+    box-shadow: 0 3px 0 var(--color-peach-400);
+  }
+}
+:root[data-skin="retro"] .tab {
+  position: relative;
+}
+:root[data-skin="retro"] .tab[aria-current="page"] {
+  background-image: none;
+  box-shadow: none;
+  color: var(--color-ink);
+  font-weight: 800;
+}
+:root[data-skin="retro"] .tab[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0.5rem auto;
+  height: 10px;
+  border-radius: 0 0 4px 4px;
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-blush-500) 0 3px,
+    var(--color-card) 3px 3.5px,
+    var(--color-peach-400) 3.5px 6.5px,
+    var(--color-card) 6.5px 7px,
+    var(--color-iris-500) 7px 10px
+  );
+}
+@media (min-width: 48rem) {
+  :root[data-skin="retro"] .tab[aria-current="page"]::before {
+    inset: auto 0.75rem 0;
+    border-radius: 4px 4px 0 0;
+  }
+}
+
+/* A message: a brown pill in an ink outline, on a hard shadow of mustard; no dot. */
+:root[data-skin="retro"] .toast {
+  gap: 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 4px 0 0 var(--color-peach-400),
+    0 14px 36px -12px var(--shade-toast);
+  font-weight: 500;
+}
+:root[data-skin="retro"] .toast-dot {
+  display: none;
+}
+
+/* ---- A window --------------------------------------------------------------- */
+
+/* An ink outline and a hard shadow; the three stripes along its top edge, as on
+   the collar of a track jacket (the band, which was a line of dawn); no glow. */
+:root[data-skin="retro"] .dialog {
+  border: 2px solid var(--color-ink);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 6px 0 0 var(--color-ink),
+    0 30px 80px -20px var(--shade-dialog);
+}
+:root[data-skin="retro"] .dialog-glow {
+  display: none;
+}
+:root[data-skin="retro"] .dialog-band {
+  inset: 0 0 auto;
+  height: 0.6875rem;
+  border-radius: 0;
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-blush-500) 0 3px,
+    transparent 3px 4px,
+    var(--color-peach-400) 4px 7px,
+    transparent 7px 8px,
+    var(--color-iris-500) 8px 11px
+  );
+}
+:root[data-skin="retro"] .dialog-head {
+  margin-top: 0.75rem;
+}
+:root[data-skin="retro"] .dialog-title {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+:root[data-skin="retro"] .dialog-close {
+  border: 2px solid transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+:root[data-skin="retro"] .dialog-close:hover {
+  border-color: var(--color-ink);
+  background-color: var(--color-peach-100);
+}
+
+/* ---- Fields and buttons ----------------------------------------------------- */
+
+/* Two lines, a brown edge; the focus and the refusal keep their own (last). */
+:root[data-skin="retro"] .field-input {
+  border-width: 2px;
+  border-color: var(--color-neutral-400);
+  box-shadow: none;
+}
+:root[data-skin="retro"] .field-input:hover {
+  border-color: var(--color-ink);
+}
+:root[data-skin="retro"] .field-input:focus {
+  border-color: var(--color-iris-600);
+  box-shadow: 0 0 0 3px var(--focus-glow);
+}
+:root[data-skin="retro"] .field-input[aria-invalid="true"] {
+  border-color: var(--color-red-700);
+}
+:root[data-skin="retro"] .field-label {
+  font-weight: 600;
+}
+
+/* The buttons look printed: an ink outline, a hard shadow under them, which they
+   press into. A secondary button turns mustard under the pointer. */
+:root[data-skin="retro"] .btn-primary,
+:root[data-skin="retro"] .btn-secondary,
+:root[data-skin="retro"] .btn-danger,
+:root[data-skin="retro"] .btn-on-dawn {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 0 0 var(--color-ink);
+}
+:root[data-skin="retro"] .btn-primary:active:not(:disabled),
+:root[data-skin="retro"] .btn-secondary:active:not(:disabled),
+:root[data-skin="retro"] .btn-danger:active:not(:disabled),
+:root[data-skin="retro"] .btn-on-dawn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 0 var(--color-ink);
+}
+:root[data-skin="retro"] .btn-primary:disabled,
+:root[data-skin="retro"] .btn-secondary:disabled,
+:root[data-skin="retro"] .btn-danger:disabled {
+  box-shadow: none;
+}
+:root[data-skin="retro"] .btn-secondary {
+  background-color: var(--color-card);
+}
+:root[data-skin="retro"] .btn-secondary:hover {
+  border-color: var(--color-ink);
+  background-color: var(--color-peach-100);
+}
+
+/* ---- The page of an event --------------------------------------------------- */
+
+/* The poster: a card of paper in an ink outline (the outline and the hard
+   shadow are the mix's), the rays of a sun behind its corner, the three
+   stripes along its foot. Its stamp of the day, tilted, has a hard shadow. */
+:root[data-skin="retro"] .event-hero::before,
+:root[data-skin="retro"] .runner-hero::before {
+  content: "";
+  position: absolute;
+  top: -5rem;
+  right: -5rem;
+  z-index: -1;
+  width: 20rem;
+  height: 20rem;
+  border-radius: 999px;
+  background-image: repeating-conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--color-peach-400) 32%, transparent) 0deg 7.5deg,
+    transparent 7.5deg 15deg
+  );
+  mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+}
+:root[data-skin="retro"] .event-hero::after,
+:root[data-skin="retro"] .runner-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 1.5rem;
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-blush-500) 0 6px,
+    transparent 6px 9px,
+    var(--color-peach-400) 9px 15px,
+    transparent 15px 18px,
+    var(--color-iris-500) 18px 24px
+  );
+}
+:root[data-skin="retro"] .event-hero .date-chip {
+  box-shadow: 0 3px 0 0 var(--color-ink);
+}
+:root[data-skin="retro"] .event-hero-deadline[data-kind="closed"] {
+  border-color: var(--color-neutral-400);
+}
+
+/* The top of a runner's page is a card of paper too, with its photo as a patch. */
+:root[data-skin="retro"] .runner-hero {
+  isolation: isolate;
+  background-image: none;
+  background-color: var(--color-card);
+  color: var(--color-ink);
+}
+:root[data-skin="retro"] .runner-hero .hero-art {
+  display: none;
+}
+:root[data-skin="retro"] .runner-hero .avatar {
+  box-shadow:
+    0 0 0 3px var(--color-card),
+    0 0 0 5px var(--color-ink);
+}
+
+/* The reminder to register: mustard, in an ink outline. */
+:root[data-skin="retro"] .register-reminder,
+:root[data-skin="retro"] .duplicate-hint {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.75rem;
+  background-color: var(--color-peach-100);
+  box-shadow: none;
+}
+
+/* The sections: sheets of paper in a fine edge, the page staying calm while the
+   tickets and the poster shout. */
+:root[data-skin="retro"] .event-section {
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 0.75rem;
+  box-shadow: none;
+}
+:root[data-skin="retro"] .participant-row[data-confirmed="true"] {
+  border: 2px solid var(--color-neutral-200);
+  border-radius: 0.5rem;
+  background-color: var(--color-card);
+}
+:root[data-skin="retro"] .participant-row {
+  border-radius: 0.5rem;
+}
+:root[data-skin="retro"] .participant-name {
+  font-weight: 600;
+}
+:root[data-skin="retro"] .non-starters-summary {
+  font-weight: 700;
+}
+
+/* The runners: each is an embroidered club patch, an ink edge and a stitched
+   ring of paper inside it, in one of three tones (orange, teal, mustard, by
+   the runner, a tone that means nothing: the name is written beside it). A
+   photo is cut out by a ring of paper. One that is not confirmed is a pale
+   patch, in the dashed ring of its chip. */
+:root[data-skin="retro"] .avatar[data-tint] {
+  border: 2px solid var(--color-ink);
+  background-image: none;
+  box-shadow: inset 0 0 0 2px var(--color-card);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+:root[data-skin="retro"] .avatar[data-tint="0"],
+:root[data-skin="retro"] .avatar[data-tint="3"],
+:root[data-skin="retro"] .avatar[data-tint="6"],
+:root[data-skin="retro"] .avatar[data-tint="9"] {
+  background-color: var(--color-blush-600);
+  color: var(--color-card);
+}
+:root[data-skin="retro"] .avatar[data-tint="1"],
+:root[data-skin="retro"] .avatar[data-tint="4"],
+:root[data-skin="retro"] .avatar[data-tint="7"],
+:root[data-skin="retro"] .avatar[data-tint="10"] {
+  background-color: var(--color-iris-500);
+  color: var(--color-card);
+}
+:root[data-skin="retro"] .avatar[data-tint="2"],
+:root[data-skin="retro"] .avatar[data-tint="5"],
+:root[data-skin="retro"] .avatar[data-tint="8"],
+:root[data-skin="retro"] .avatar[data-tint="11"] {
+  background-color: var(--color-peach-400);
+  color: var(--color-ink);
+}
+:root[data-skin="retro"] img.avatar {
+  border: 2px solid var(--color-ink);
+  box-shadow: 0 0 0 2px var(--color-card);
+}
+:root[data-skin="retro"] .chip[data-confirmed="true"] {
+  background-image: none;
+  background-color: transparent;
+}
+:root[data-skin="retro"] .chip[data-confirmed="false"] .avatar {
+  border: 0;
+  background-color: var(--color-card);
+  box-shadow: none;
+  color: var(--color-neutral-700);
+}
+
+/* The menu of a participation: an ink outline, a hard shadow, the current
+   status checked in a teal pill. */
+:root[data-skin="retro"] .menu-button {
+  border: 2px solid transparent;
+}
+:root[data-skin="retro"] .menu-button:hover {
+  border-color: var(--color-ink);
+  background-color: var(--color-peach-100);
+  box-shadow: none;
+}
+:root[data-skin="retro"] .menu-popover {
+  border: 2px solid var(--color-ink);
+  border-radius: 1rem;
+  box-shadow: 0 3px 0 0 var(--color-ink);
+}
+:root[data-skin="retro"] .menu-item {
+  border-radius: 0.5rem;
+}
+:root[data-skin="retro"] .menu-item:hover {
+  background-color: var(--color-peach-100);
+}
+:root[data-skin="retro"] .menu-item[aria-current="true"] .menu-check {
+  background-image: none;
+  background-color: var(--color-iris-500);
+  color: var(--color-card);
+}
+
+/* ---- The track -------------------------------------------------------------- */
+
+/* The course of a format: a small label in teal capitals over its figures
+   (the variant), the map in its ink frame (the palette's). */
+:root[data-skin="retro"] .route-section {
+  border-top: 2px solid var(--color-neutral-200);
+}
+:root[data-skin="retro"] .route-title {
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-iris-700);
+}
+:root[data-skin="retro"] .map-box {
+  border-radius: 1rem;
+}
+
+/* ---- Home: tickets and cards ------------------------------------------------ */
+
+/* The cards of the blocks: paper in an ink outline, on a printed shadow; what is
+   not confirmed is dashed already (its words say it). */
+:root[data-skin="retro"] .todo-row,
+:root[data-skin="retro"] .result-row,
+:root[data-skin="retro"] .upcoming-row[data-confirmed="true"] {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 0 0 var(--color-ink);
+}
+:root[data-skin="retro"] .pending-row,
+:root[data-skin="retro"] .upcoming-row {
+  border-radius: 0.75rem;
+}
+:root[data-skin="retro"] .latest-comment,
+:root[data-skin="retro"] .history-row {
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 0.75rem;
+  box-shadow: none;
+}
+:root[data-skin="retro"] .result-tag {
+  border-radius: 0.5rem;
+  background-color: var(--color-peach-100);
+  box-shadow: none;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The days left, in words, are a mustard tag in an ink outline (the ring beside
+   them draws nothing). */
+:root[data-skin="retro"] .days-left {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 0.25rem 0.625rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background-color: var(--color-peach-400);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The card that offers a key to sign in: teal, in an ink outline, with the
+   rays of a sun in its corner (what was its glow). */
+:root[data-skin="retro"] .passkey-card {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.75rem;
+  background-color: var(--color-iris-50);
+  box-shadow: 0 2px 0 0 var(--color-ink);
+}
+:root[data-skin="retro"] .passkey-card-glow {
+  background-color: transparent;
+  background-image: repeating-conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--color-iris-500) 14%, transparent) 0deg 7.5deg,
+    transparent 7.5deg 15deg
+  );
+  filter: none;
+  mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+}
+
+/* ---- Lists, filters, the agenda --------------------------------------------- */
+
+:root[data-skin="retro"] .filters {
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 0.75rem;
+  box-shadow: none;
+}
+:root[data-skin="retro"] .filter-label {
+  font-weight: 700;
+}
+
+/* The month of a list: three small stripes lead it, like a club badge. */
+:root[data-skin="retro"] .month-title {
+  gap: 0.6rem;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  text-transform: none;
+  color: var(--color-ink);
+}
+:root[data-skin="retro"] .month-title::first-letter {
+  text-transform: uppercase;
+}
+:root[data-skin="retro"] .month-title::before {
+  content: "";
+  flex: none;
+  width: 1.1rem;
+  height: 11px;
+  border-radius: 2px;
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-blush-500) 0 3px,
+    transparent 3px 4px,
+    var(--color-peach-400) 4px 7px,
+    transparent 7px 8px,
+    var(--color-iris-500) 8px 11px
+  );
+}
+:root[data-skin="retro"] .month-title::after {
+  display: none;
+}
+
+/* The agenda: a grid framed in ink, a mustard disc on today, teal for the day
+   chosen, its events teal too. */
+:root[data-skin="retro"] .month-nav-title {
+  text-align: center;
+  font-weight: 800;
+}
+:root[data-skin="retro"] .nav-arrow {
+  border: 2px solid var(--color-ink);
+  background-color: var(--color-card);
+  box-shadow: 0 2px 0 0 var(--color-ink);
+  color: var(--color-ink);
+  font-weight: 700;
+}
+:root[data-skin="retro"] .nav-arrow:hover {
+  background-color: var(--color-peach-100);
+}
+:root[data-skin="retro"] .month-grid {
+  border: solid var(--color-ink);
+  border-width: 2px 0;
+  border-radius: 0;
+  background-color: var(--color-card);
+  box-shadow: none;
+}
+@media (min-width: 48rem) {
+  :root[data-skin="retro"] .month-grid {
+    border-width: 2px;
+    border-radius: 1rem;
+    box-shadow: 0 2px 0 0 var(--color-ink);
+  }
+}
+:root[data-skin="retro"] .month-grid-weekday {
+  padding-block: 0.5rem;
+  background-color: var(--color-neutral-100);
+  font-size: 0.7rem;
+  color: var(--color-neutral-700);
+}
+:root[data-skin="retro"] .agenda-day[aria-current="date"] .agenda-day-number,
+:root[data-skin="retro"] time.agenda-day-number[aria-current="date"] {
+  border-color: var(--color-ink);
+  background-color: var(--color-peach-400);
+  color: var(--color-ink);
+  font-weight: 800;
+}
+:root[data-skin="retro"] .agenda-day[aria-pressed="true"] {
+  background-image: none;
+  background-color: var(--color-iris-500);
+  color: var(--color-card);
+  font-weight: 700;
+}
+:root[data-skin="retro"] .agenda-day[aria-pressed="true"] .agenda-dot {
+  background-color: var(--color-card);
+}
+:root[data-skin="retro"] .agenda-day[aria-pressed="false"] .agenda-dot {
+  background-color: var(--color-iris-500);
+}
+:root[data-skin="retro"] .agenda-event {
+  border-left: 3px solid var(--color-iris-500);
+  border-radius: 0.375rem;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+/* The lists, two columns from `md`, as the club's tickets have them. */
+@media (min-width: 48rem) {
+  :root[data-skin="retro"] .event-list,
+  :root[data-skin="retro"] .race-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+/* ---- The stats, the profile, the form, the admin ---------------------------- */
+
+/* The totals: on a phone a printed card for each line; from `sm` the board of a
+   club house, an ink head over cream lines. */
+:root[data-skin="retro"] .totals-row {
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 1rem;
+  box-shadow: none;
+}
+:root[data-skin="retro"] .totals-head {
+  border-bottom: 2px solid var(--color-neutral-200);
+}
+:root[data-skin="retro"] .stat-tile-title {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+@media (min-width: 40rem) {
+  :root[data-skin="retro"] .totals {
+    border: 2px solid var(--color-ink);
+    border-radius: 1rem;
+    box-shadow: 0 2px 0 0 var(--color-ink);
+  }
+  :root[data-skin="retro"] .totals-row {
+    border: 0;
+    border-top: 1px solid var(--color-neutral-200);
+    border-radius: 0;
+  }
+  :root[data-skin="retro"] .totals-header {
+    background-color: var(--color-ink);
+    color: var(--color-card);
+  }
+  :root[data-skin="retro"] .totals-header th {
+    color: var(--color-card);
+  }
+}
+
+:root[data-skin="retro"] .skin-choice,
+:root[data-skin="retro"] .mode-choice,
+:root[data-skin="retro"] .passkey-row {
+  border-radius: 0.75rem;
+}
+:root[data-skin="retro"] .form-card,
+:root[data-skin="retro"] .format-fieldset {
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 0.75rem;
+  box-shadow: none;
+}
+/* The « Épreuve 1 » of a format is a mustard tag in an ink outline. */
+:root[data-skin="retro"] .format-legend {
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background-image: none;
+  background-color: var(--color-peach-400);
+  box-shadow: none;
+  color: var(--color-ink);
+  font-weight: 800;
+}
+
+/* The tabs of the admin are pills in a fine edge, the page in view full of teal. */
+:root[data-skin="retro"] .admin-tab {
+  border: 2px solid var(--color-neutral-300);
+  background-color: var(--color-card);
+  box-shadow: none;
+  font-weight: 500;
+}
+:root[data-skin="retro"] .admin-tab:hover {
+  border-color: var(--color-ink);
+  background-color: var(--color-card);
+}
+:root[data-skin="retro"] .admin-tab[aria-current="page"] {
+  border-color: var(--color-ink);
+  background-image: none;
+  background-color: var(--color-iris-500);
+  color: var(--color-card);
+  font-weight: 700;
+}
+:root[data-skin="retro"] .member-row,
+:root[data-skin="retro"] .type-row,
+:root[data-skin="retro"] .event-picker {
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 0.75rem;
+  box-shadow: none;
+}
+:root[data-skin="retro"] .event-picker-option {
+  border-radius: 0.5rem;
+}
+:root[data-skin="retro"] .admin-choice {
+  border-radius: 0.75rem;
+}

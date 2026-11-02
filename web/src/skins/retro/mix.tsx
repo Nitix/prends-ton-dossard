@@ -2,8 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { DateChip } from "../../components/Dawn";
 import { PinIcon } from "../../components/icons";
-import type { FormatView } from "../../features/events/api";
-import { formatMeasures } from "../../features/events/formatName";
+import { FormatLine, type FormatMarks } from "../../features/events/FormatLine";
 import { ParticipantChips } from "../../features/events/ParticipantChips";
 import { starters } from "../../features/events/participants";
 import { registrationLabel, registrationState } from "../../features/events/registration";
@@ -20,38 +19,18 @@ import type { EventCardProps, Variants } from "../types";
 // same, mix.css gives it the mustard and the ink). What this imports is only
 // used while it renders (see ../README.md).
 
-const SEPARATOR = " · ";
-
 /**
- * A format of the stub: its name, then each measure as a small tag, like the
- * numbers printed on a ticket. The separators stay in the text, for a screen
- * reader and a copy, and only the tags show them.
+ * How a format of the stub is marked: its name, then each measure as a small
+ * tag, like the numbers printed on a ticket. `FormatLine` keeps the separators
+ * in the text, for a screen reader and a copy, and only the tags show them.
  */
-function MeasureTags({ formatView, showDate }: { formatView: FormatView; showDate: boolean }) {
-  const { t, f } = useI18n();
-  const { format, raceType, date } = formatView;
-  const [name, ...measures] = formatMeasures(format, raceType.label, f, t);
-
-  return (
-    <>
-      {/* On an event of several days, the day of each format is worth knowing. */}
-      {showDate && <p className="eyebrow text-[0.7rem]">{f.date(date)}</p>}
-      <p className="text-sm font-semibold">
-        <span>{name}</span>
-        {measures.map((measure, at) => (
-          // The parts of a line may repeat: the place is part of the key.
-          // oxlint-disable-next-line react/no-array-index-key
-          <span key={`${at}:${measure}`}>
-            <span className="sr-only">{SEPARATOR}</span>
-            <span className="ml-1.5 inline-block rounded-full border-[1.5px] border-neutral-300 bg-card px-2 py-px align-[0.1em] text-[0.78rem] leading-normal font-semibold whitespace-nowrap text-neutral-800">
-              {measure}
-            </span>
-          </span>
-        ))}
-      </p>
-    </>
-  );
-}
+const TAGS: FormatMarks = {
+  measure: (measure) => (
+    <span className="ml-1.5 inline-block rounded-full border-[1.5px] border-neutral-300 bg-card px-2 py-px align-[0.1em] text-[0.78rem] leading-normal font-semibold whitespace-nowrap text-neutral-800">
+      {measure}
+    </span>
+  ),
+};
 
 /**
  * An event in a list, as a race ticket: above the perforation, its day, its
@@ -119,7 +98,12 @@ function Ticket({ view }: EventCardProps) {
               <ul className="flex flex-col gap-2.5">
                 {formats.map((formatView) => (
                   <li key={formatView.format.id} className="flex flex-col gap-1.5">
-                    <MeasureTags formatView={formatView} showDate={severalDays} />
+                    <FormatLine
+                      formatView={formatView}
+                      showDate={severalDays}
+                      marks={TAGS}
+                      className="text-sm font-semibold"
+                    />
                     <ParticipantChips participations={starters(formatView.participations)} />
                   </li>
                 ))}

@@ -157,7 +157,7 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 /** The poster of an event or of a runner: rays of the sun in a corner of the hero, the stripes along its foot. */
 export function HeroArt({ place }: HeroArtProps) {
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+    <span aria-hidden="true" className="hero-art pointer-events-none absolute inset-0">
       <Sunburst
         className={
           place === "event"
