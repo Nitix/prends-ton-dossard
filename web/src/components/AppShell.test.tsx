@@ -16,6 +16,7 @@ import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
 
 import "../styles.css";
+import { fontsReady } from "../test/fontsReady";
 import { emulateMedia, resetMedia } from "../test/media";
 import { AppShell } from "./AppShell";
 import { DANGER, PRIMARY } from "./buttons";
@@ -220,7 +221,7 @@ test("AppShell — rien ne tourne sans fin dans le ciel, et la barre d'onglets n
     .filter((animation) => animation.effect?.getComputedTiming().endTime === Infinity)
     .map((animation) => {
       const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
-      return target?.getAttribute("class") ?? String(target);
+      return target?.getAttribute("class") ?? target?.nodeName ?? "a pseudo-element";
     });
   expect(endless).toEqual([]);
   // The bar is all but opaque: a blur of what passes under it would cost a
@@ -311,6 +312,8 @@ test("AppShell — le nom du site est dans l'en-tête à toutes les tailles, pas
   }
   // From md the tabs share the header with the name, at its right: they do not cover it.
   await page.viewport(768, 1024);
+  // Measured in the fonts of the site, not in those that stand in while they load.
+  await fontsReady();
   const tabs = nav.getByRole("list").element().getBoundingClientRect();
   expect(name.element().getBoundingClientRect().right).toBeLessThanOrEqual(tabs.left);
 });

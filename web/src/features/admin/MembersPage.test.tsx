@@ -18,6 +18,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { fontsReady } from "../../test/fontsReady";
 import { imageFile, pixelURL } from "../../test/images";
 import { MembersPage } from "./MembersPage";
 
@@ -1044,6 +1045,8 @@ test("MembersPage — un échec de la suppression d'une clé est dit dans la fen
 test("MembersPage — toutes les actions font au moins 44 px, y compris sur un petit écran", async () => {
   await page.viewport(320, 700);
   const { screen } = await renderPage();
+  // Measured in the fonts of the site, not in those that stand in while they load.
+  await fontsReady();
 
   const buttons = screen.getByRole("button").elements();
   expect(buttons.length).toBeGreaterThan(10);

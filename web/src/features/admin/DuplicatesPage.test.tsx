@@ -10,6 +10,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { fontsReady } from "../../test/fontsReady";
 import { eventLabel } from "../events/eventLabel";
 import { eventRecord, event2Record, f15, f42, trailType } from "../events/testFixture";
 import { DuplicatesPage } from "./DuplicatesPage";
@@ -653,6 +654,8 @@ test("DuplicatesPage — les zones tactiles font au moins 44 px, sur un téléph
   await pickTwoEvents(screen);
   await previewButton(screen).click();
   await expect.element(mergeButton(screen)).toBeEnabled();
+  // Measured in the fonts of the site, not in those that stand in while they load.
+  await fontsReady();
 
   const targets = [
     radio(screen, t.modeEvents),

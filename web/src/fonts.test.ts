@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { expect, test } from "vitest";
 
@@ -61,4 +61,38 @@ test("fonts — the faces are the files of both packages, latin and latin-ext on
     "@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-ext-wght-normal.woff2",
     "@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2",
   ]);
+});
+
+test("fonts — nothing imports the packages' own stylesheets, which would bring every script", () => {
+  // Their CSS (`@import "@fontsource-variable/inter"`, or an import in a
+  // module) declares a face for each script of the font: the build would emit
+  // them all into /assets/ and the program. Only the four faces above are
+  // declared, by hand. The `url()` of those faces name the packages too, and
+  // so do the comments: both are taken out before the search.
+  const rules = styles.replace(/\/\*[\s\S]*?\*\//g, "").replace(/url\([^)]*\)/g, "url()");
+  expect(rules).not.toContain("@fontsource");
+  // A module that names a package of the fonts, in an import of any form.
+  const main = readFileSync(new URL("./main.tsx", import.meta.url), "utf8");
+  expect(main).not.toMatch(/["']@fontsource/);
+});
+
+test("fonts — the page names no other host", () => {
+  // No stylesheet, script, icon or manifest of the page comes from another site.
+  expect(page).not.toMatch(/(?:href|src)="https?:/);
+});
+
+test("fonts — every face names a file that the package has", () => {
+  // Vite leaves a `url()` it cannot resolve as it is, with a warning only: a
+  // package that moves its files would leave the site in the system fonts.
+  const files = [
+    ...faceFiles(styles, "Inter Variable"),
+    ...faceFiles(styles, "Plus Jakarta Sans Variable"),
+  ];
+  expect(files).toHaveLength(4);
+  for (const file of files) {
+    expect(
+      existsSync(new URL(`../node_modules/${file}`, import.meta.url)),
+      `the file of ${file}`,
+    ).toBe(true);
+  }
 });

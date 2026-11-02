@@ -18,6 +18,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { fontsReady } from "../../test/fontsReady";
 import { pixelURL } from "../../test/images";
 import { EventPage } from "./EventPage";
 import {
@@ -1202,7 +1203,7 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       const { screen } = await renderPage();
       await loaded(screen);
       // Measured in the fonts of the site, not in those that stand in while they load.
-      await document.fonts.ready;
+      await fontsReady();
 
       const actions = [
         screen.getByRole("button", { name: fr.participation.join }),
@@ -1252,7 +1253,7 @@ test("EventPage — sur un téléphone, une action seule au bout prend toute la 
       const { screen } = await renderPage();
       await loaded(screen);
       // Measured in the fonts of the site, not in those that stand in while they load.
-      await document.fonts.ready;
+      await fontsReady();
       await expect.element(screen.getByRole("link", { name: fr.common.edit })).toBeVisible();
       await expect
         .element(screen.getByRole("button", { name: fr.common.delete }))

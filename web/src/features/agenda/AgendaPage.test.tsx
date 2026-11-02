@@ -17,6 +17,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { fontsReady } from "../../test/fontsReady";
 import {
   aliceRunner,
   bobRunner,
@@ -631,6 +632,8 @@ test("AgendaPage — à partir de md, les noms des courses sont dans les cases, 
     // The two days of the trail, and no more.
     const links = screen.getByRole("link", { name: "Trail des Crêtes" });
     await expect.element(links.first()).toBeVisible();
+    // Measured in the fonts of the site, not in those that stand in while they load.
+    await fontsReady();
     expect(links.elements()).toHaveLength(2);
     expect(links.first().element().getAttribute("href")).toBe("/evenements/event");
     await expect.element(screen.getByRole("link", { name: "10 km de Lyon" })).toBeVisible();
@@ -811,6 +814,8 @@ test("AgendaPage — zones tactiles d'au moins 44 px, sans défilement horizonta
     await inViewport(width, 844, async () => {
       const { screen } = await renderAgenda("/agenda?mois=2026-06&jour=2026-06-14");
       await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
+      // Measured in the fonts of the site, not in those that stand in while they load.
+      await fontsReady();
 
       const targets = [
         ...dayButtons(screen),

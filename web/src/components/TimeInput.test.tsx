@@ -4,6 +4,7 @@ import { render } from "vitest-browser-react";
 
 import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
+import { fontsReady } from "../test/fontsReady";
 import { TimeInput } from "./TimeInput";
 
 // The size of the fields is a matter of the styles, which are not loaded otherwise.
@@ -163,6 +164,8 @@ test("TimeInput — les unités sont écrites à côté des champs, et ses trois
   await expect
     .element(group)
     .toHaveTextContent(`${LABEL}${fr.results.hours}${fr.results.minutes}${fr.results.seconds}`);
+  // Measured in the fonts of the site, not in those that stand in while they load.
+  await fontsReady();
   // On a single line, and not wider than the room it has.
   const tops = new Set(
     [hours(screen), minutes(screen), seconds(screen)].map(
