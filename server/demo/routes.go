@@ -1,12 +1,14 @@
 // Package demo is the sign-in of the demo instance: a second site, with the
 // accounts of the seed, where a visitor enters with one click instead of an
 // invitation. The real site never has it.
+// The demo account is shared by every visitor, so it never keeps a skin.
 package demo
 
 import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/apis"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
@@ -38,11 +40,33 @@ func Register(app core.App, cfg config.Config) {
 		return
 	}
 
+	// The account is shared by every visitor, so it keeps no skin (see keepNoSkin).
+	app.OnRecordCreate("users").BindFunc(keepNoSkin(email))
+	app.OnRecordUpdate("users").BindFunc(keepNoSkin(email))
+
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		e.Router.GET(path, enabledRoute(email))
 		e.Router.POST(path, loginRoute(email))
 		return e.Next()
 	})
+}
+
+// keepNoSkin keeps the skin of the demo account empty. The site puts the skin
+// of an account on the device at sign-in, and every visitor of the demo is the
+// same account: a skin kept on it would be the one of whoever chose last, put
+// on the next visitor over their own. So an update that sets it is dropped,
+// with no error (the site saves the skin whenever it is chosen, and must not
+// see the demo as a failure), and the rest of the update applies. It is a
+// model hook, so that it holds for the writes that do not come from the API
+// too. Every other account of the instance keeps its skin.
+func keepNoSkin(demoEmail string) func(*core.RecordEvent) error {
+	return func(e *core.RecordEvent) error {
+		// The capitals do not matter, as for the sign-in (usableAccount).
+		if strings.EqualFold(e.Record.Email(), demoEmail) {
+			e.Record.Set("skin", "")
+		}
+		return e.Next()
+	}
 }
 
 // usableAccount returns the account of the demo: the one with that email, if it
@@ -100,6 +124,14 @@ func loginRoute(email string) func(*core.RequestEvent) error {
 		}
 		if user == nil {
 			return apperr.New(http.StatusNotFound, apperr.CodeNotFound)
+		}
+		// A skin that the account had before it was the demo's (a copy of
+		// another database) would be put on every visitor: it is emptied.
+		if user.GetString("skin") != "" {
+			user.Set("skin", "")
+			if err := e.App.Save(user); err != nil {
+				return e.InternalServerError("", err)
+			}
 		}
 		return apis.RecordAuthResponse(e, user, authMethod, nil)
 	}
