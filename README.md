@@ -84,7 +84,7 @@ Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas 
    cp .env.example .env
    ```
 
-   Dans `.env`, remplacer la valeur de `APP_URL` par l'adresse publique du site : `https://` et le domaine, sans chemin (par exemple `https://courses.example.fr`). Si le port 8090 de la machine est déjà pris par un autre service, changer aussi `HOST_PORT` (le conteneur écoute toujours sur 8090 ; `HOST_PORT` est le port que la machine lui donne, sur `127.0.0.1`).
+   Dans `.env`, remplacer la valeur de `APP_URL` par l'adresse publique du site : `https://` et le domaine, sans chemin (par exemple `https://courses.example.fr`). Si le port 8090 de la machine est déjà pris par un autre service, changer aussi `HOST_PORT` (le conteneur écoute toujours sur 8090 ; `HOST_PORT` est le port que la machine lui donne, sur `127.0.0.1`). `VITE_SKIN_DEPTH` choisit jusqu'où vont les thèmes : `palette` (par défaut) change couleurs, polices et motifs ; `mix` y ajoute les pièces dessinées de chaque thème ; `full` restyle tout le site ; il compte à la construction de l'image.
 
 2. **Construire et démarrer le conteneur.**
 

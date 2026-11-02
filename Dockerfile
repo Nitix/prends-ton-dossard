@@ -15,8 +15,11 @@ COPY web/package.json web/
 RUN pnpm install --frozen-lockfile
 
 # "pnpm --dir web build" writes server/webdist/dist, the directory that the Go
-# program embeds.
+# program embeds. VITE_SKIN_DEPTH is the depth of the skins of the build
+# (web/src/skins/README.md), which compose.yaml takes from .env: palette when it
+# is empty.
 COPY web web
+ARG VITE_SKIN_DEPTH=
 RUN pnpm --dir web build
 
 # --- Stage 2: build the Go program, with the front end embedded -------------
