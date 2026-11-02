@@ -1828,3 +1828,128 @@ func TestMigrations_RaceTypeMeasures(t *testing.T) {
 		t.Error("a measure that is not one of the four was accepted")
 	}
 }
+
+// The migration 9j adds `skin` to the accounts: the theme of the site that the
+// person chose, so that it follows them to every device. The server does not
+// know the themes, only the shape of an id: the site ignores one it does not
+// know. The rule that lets a person edit their own account then also lets them
+// set it, and it is refused to everybody else, an admin included. The rollback
+// takes the field away with the choices, puts the rule back, and keeps the
+// accounts; applying it again works.
+func TestMigrations_UserSkin(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9j_user_skin.go")
+
+	users := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("users")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	checkField := func(when string) {
+		t.Helper()
+		skin, ok := users().Fields.GetByName("skin").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: users.skin must be a text field, got %T", when, users().Fields.GetByName("skin"))
+		}
+		// Not hidden: a person's own record carries it to every device they sign
+		// in on. Not required: nobody has one until they choose.
+		if skin.Required || skin.Hidden || skin.Max != 32 || skin.Pattern != `^[a-z][a-z0-9-]*$` {
+			t.Errorf("%s: users.skin = required %v, hidden %v, max %d, pattern %q; want optional, visible, 32, ^[a-z][a-z0-9-]*$",
+				when, skin.Required, skin.Hidden, skin.Max, skin.Pattern)
+		}
+	}
+	// refusesOtherAccounts reports whether the rule that updates an account
+	// keeps an admin from setting the skin of another account.
+	refusesOtherAccounts := func() bool {
+		t.Helper()
+		rule := users().UpdateRule
+		return rule != nil && strings.Contains(*rule, "@request.body.skin:isset = false")
+	}
+	setSkin := func(skin any) error {
+		t.Helper()
+		alice, err := app.FindRecordById("users", fx.Alice.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		alice.Set("skin", skin)
+		return app.Save(alice)
+	}
+
+	checkField("as created")
+	if !refusesOtherAccounts() {
+		t.Error("as created: the rule that updates an account must refuse an admin the skin of another account")
+	}
+	// An account is created without one: the site reads that as « none chosen ».
+	if got := fx.Alice.GetString("skin"); got != "" {
+		t.Errorf("an account made without a skin has skin %q, want it empty", got)
+	}
+
+	// The shape of an id: lower case, a letter first, then letters, digits and
+	// hyphens, at most 32 characters. Empty clears the choice.
+	for _, skin := range []string{"nuit", "crete", "a", "alpage-2", strings.Repeat("a", 32), ""} {
+		if err := setSkin(skin); err != nil {
+			t.Errorf("the skin %q is refused: %v", skin, err)
+		}
+	}
+	for _, skin := range []string{
+		"Nuit", "nuit chaud", "1nuit", "-nuit", "nuit_chaud", "nuit!", "<b>", "crête", strings.Repeat("a", 33),
+	} {
+		if err := setSkin(skin); err == nil {
+			t.Errorf("the skin %q was accepted", skin)
+		}
+	}
+
+	if err := setSkin("nuit"); err != nil {
+		t.Fatal(err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with a skin set: %v", err)
+	}
+	if users().Fields.GetByName("skin") != nil {
+		t.Error("users.skin must be gone after the rollback")
+	}
+	// The accounts stay as they were, skin apart, and the rule is migration 4's again.
+	alice, err := app.FindRecordById("users", fx.Alice.Id)
+	if err != nil {
+		t.Fatalf("Alice is gone: %v", err)
+	}
+	if alice.GetString("email") != "alice@example.test" || alice.GetString("role") != "member" {
+		t.Errorf("after the rollback, Alice changed beyond her skin: %v", alice.FieldsData())
+	}
+	if rule := users().UpdateRule; rule == nil || !strings.Contains(*rule, "@request.body.role:isset = false") || refusesOtherAccounts() {
+		t.Errorf("after the rollback, the update rule is %v, want migration 4's", rule)
+	}
+	// Rolling back again, with nothing left to remove, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	if !refusesOtherAccounts() {
+		t.Error("after applying again: the update rule must refuse an admin the skin of another account")
+	}
+	// The choice went with the field: the accounts start over, with none.
+	if got := mustFind(t, app, "users", fx.Alice.Id).GetString("skin"); got != "" {
+		t.Errorf("after applying again, Alice has skin %q, want it empty", got)
+	}
+	if err := setSkin("sentier"); err != nil {
+		t.Errorf("a skin is refused after applying again: %v", err)
+	}
+}
+
+// mustFind reads a record that must be there.
+func mustFind(t testing.TB, app core.App, collection, id string) *core.Record {
+	t.Helper()
+	record, err := app.FindRecordById(collection, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
