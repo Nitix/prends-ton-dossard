@@ -1,0 +1,147 @@
+/* « Rétro », depth palette: the running club of the seventies, on the structure
+   of Crête. Cream paper, brown ink, and three stripes as on an old track suit:
+   burnt orange for the main action, teal for the links, the agenda and the
+   focus, mustard for what is put forward. It has no dark mode: the page is
+   drawn in this one whatever the theme chosen (lib/theme.ts), so Crête's light
+   values stand for every colour it does not set, and its sky (`.on-dawn`) has
+   these colours as they are.
+
+   The three colours take Crête's three ranges by what they do there: teal is
+   `iris` (the focus, the links, the agenda: everything Crête paints in its
+   accent), mustard is `peach` (the reminder to register) and orange is `blush`
+   (the pin of a place, a participation to confirm); the main button, the current
+   tab and the «+» are orange through `--dawn-deep`. The variant's header was
+   cream with a brown title: Crête's header carries white text on its sky, so
+   the sky is the brown of the ink, with the stripes along its foot. Nothing here
+   is a shadow or a font (a palette cannot set them): `--shade-*` are the colours
+   of the shadows, fonts.css has the faces. */
+
+:root[data-skin="retro"] {
+  /* The browns of the ink on cream: `neutral-50` is the cream of the page,
+     600 the secondary text, 400 the dashes of what is not confirmed. */
+  --color-neutral-50: #fff4e0;
+  --color-neutral-100: #fae8c8;
+  --color-neutral-200: #eed9b6;
+  --color-neutral-300: #dcc29c;
+  --color-neutral-400: #a08466;
+  --color-neutral-500: #86694f;
+  --color-neutral-600: #6e5442;
+  --color-neutral-700: #574234;
+  --color-neutral-800: #46342a;
+  --color-neutral-900: #3b2a20;
+  --color-neutral-950: #281c15;
+  --color-ink: #3b2a20;
+
+  /* Teal, the accent: 500 is the stripe and the focus, 600 the colour of a
+     link, 700 and 800 the words on its soft grounds. */
+  --color-iris-50: #e8f3f0;
+  --color-iris-100: #cce6e2;
+  --color-iris-200: #a3d1cb;
+  --color-iris-300: #78bab2;
+  --color-iris-400: #3f9a96;
+  --color-iris-500: #1f7a7a;
+  --color-iris-600: #1b6a6a;
+  --color-iris-700: #155656;
+  --color-iris-800: #0f4343;
+  --color-iris-900: #0a3030;
+
+  /* Mustard: what is highlighted. It always carries ink (7:1). */
+  --color-peach-50: #fef8ea;
+  --color-peach-100: #fcebc4;
+  --color-peach-200: #f9dc95;
+  --color-peach-300: #f7cd72;
+  --color-peach-400: #f2b134;
+  --color-peach-500: #e09a1a;
+  --color-peach-600: #b8800f;
+  --color-peach-700: #8a5a07;
+  --color-peach-800: #6b4405;
+
+  /* Burnt orange: the stripe (500, which never carries a text), the dashes of
+     a participation to confirm (600), its words (700). */
+  --color-blush-50: #fef3ec;
+  --color-blush-100: #fce3d3;
+  --color-blush-200: #f8c3a3;
+  --color-blush-300: #f29a6b;
+  --color-blush-400: #ec7a45;
+  --color-blush-500: #e8642c;
+  --color-blush-600: #c24a17;
+  --color-blush-700: #a33d12;
+  --color-blush-800: #7f2f0e;
+
+  --color-red-50: #fdeeea;
+  --color-red-200: #f4b8ae;
+  --color-red-700: #b91c1c;
+  --color-red-800: #8f1616;
+
+  /* No pure white in the club: paper. A message is a brown pill. */
+  --color-card: #fffbf3;
+  --color-raised: #fffbf3;
+  --color-field: #fffbf3;
+  --color-rim: #fffbf3;
+  --color-toast: #3b2a20;
+  --color-scrim: rgb(59 42 32 / 0.55);
+  --color-relief: #1f140d;
+
+  /* The five steps of the slope, from flat to steep, in the colours of the
+     club: teal, sage, bronze, orange, crimson. Each has 3:1 on a paper card
+     and with the dark line, and none melts into another
+     (src/features/route/slope.test.ts). */
+  --color-slope-1: #007a7d;
+  --color-slope-2: #789c5d;
+  --color-slope-3: #8c6100;
+  --color-slope-4: #f56100;
+  --color-slope-5: #ca3168;
+
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-card: 1rem;
+
+  /* The shadows are brown, like ink on paper. The variant has no halo: the
+     glows are none. */
+  --shade-card: rgb(59 42 32 / 0.3);
+  --shade-lift: rgb(59 42 32 / 0.4);
+  --shade-bar: rgb(59 42 32 / 0.35);
+  --shade-edge: rgb(59 42 32 / 0.16);
+  --shade-edge-lift: rgb(59 42 32 / 0.2);
+  --dawn-glow-warm: transparent;
+  --dawn-glow-cool: transparent;
+  --map-frame: 0 0 0 2px #3b2a20, 0 4px 0 0 #3b2a20;
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The paints. A flat colour is a gradient of one stop. The main button, the
+     current tab and the «+» are burnt orange (paper on it 4.7:1); the header
+     and the heroes are the brown of the ink, under the stripes. */
+  --dawn-soft: linear-gradient(110deg, #f29a6b 0%, #f7cd72 52%, #a3d1cb 100%);
+  --dawn-deep: linear-gradient(110deg, #c24a17 0%, #c24a17 100%);
+  --dawn-sky-color: #3b2a20;
+  --dawn-sky: linear-gradient(160deg, #3b2a20 0%, #3b2a20 100%);
+  --dawn-hero-color: #3b2a20;
+  --dawn-hero: linear-gradient(150deg, #3b2a20 0%, #3b2a20 100%);
+  --dawn-text: linear-gradient(100deg, #c24a17 0%, #a33d12 100%);
+  --dawn-line: linear-gradient(90deg, #e8642c, #f2b134 55%, #1f7a7a);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(
+    90deg,
+    #e8642c,
+    #f2b134 40%,
+    rgb(31 122 122 / 0.55) 75%,
+    transparent
+  );
+  --dawn-ring-from: #1f7a7a;
+  --dawn-ring-via: #f2b134;
+  --dawn-ring-to: #e8642c;
+  --dawn-chip-glow: rgb(59 42 32 / 0.35);
+  --focus-glow: rgb(31 122 122 / 0.22);
+  --sky-focus: #fffbf3;
+
+  /* The map of a track: an orange line, a teal start, a brown finish. */
+  --map-line-from: #e8642c;
+  --map-line-via: #c24a17;
+  --map-line-to: #a33d12;
+  --map-line: #c24a17;
+  --map-start: #1f7a7a;
+  --map-finish: #3b2a20;
+  --map-link: #155656;
+}
