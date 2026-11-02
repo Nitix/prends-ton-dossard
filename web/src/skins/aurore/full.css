@@ -1,0 +1,34 @@
+/* « Aurore », depth full: its header, which is what is left of the variant once
+   Crête has its layout. Crête's sky is 124 px tall on a phone and 160 px from md,
+   with room for the ridges of its art at the foot; « Aurore »'s, which has no
+   ridges (its sun is in a corner), is shorter: 3 rem under the name on a phone, a
+   bar of 7 rem at md with the name at its middle, level with the tabs, and the
+   sheet of the page rising over its foot. The tabs, the cards, the window, the
+   message and the fields are Crête's, which took them from « Aurore »: nothing
+   else is here. */
+
+/* On a phone: 1.25 rem over the name (or the notch), 3 rem under it. */
+@media (width < 48rem) {
+  :root[data-skin="aurore"] .app-header-bar {
+    padding-top: max(1.25rem, env(safe-area-inset-top));
+    padding-bottom: 3rem;
+  }
+}
+
+/* From md: the bar is 7 rem, the name in the middle of it; the capsule of the tabs is
+   pulled up into it (6 rem), and the sheet of the page follows it at once, over the sky. */
+@media (width >= 48rem) {
+  :root[data-skin="aurore"] .app-header-bar {
+    height: 7rem;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 1.5rem;
+  }
+  :root[data-skin="aurore"] .tabbar {
+    margin-top: -6rem;
+    margin-bottom: 0.875rem;
+  }
+  :root[data-skin="aurore"] .sheet {
+    margin-top: 0;
+  }
+}
