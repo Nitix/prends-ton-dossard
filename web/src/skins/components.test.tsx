@@ -194,6 +194,7 @@ test("skinnable — chaque pièce dessine sa base sans variante, et la variante 
   expect(pieces().map(({ name }) => name)).toEqual(Object.keys(NAMES));
   const replaced: string[] = [];
   const asBase: string[] = [];
+  const empty: string[] = [];
   for (const { name, skinnable, base, variant } of pieces()) {
     for (const skin of SKINS) {
       chooseSkin(skin.id);
@@ -203,14 +204,14 @@ test("skinnable — chaque pièce dessine sa base sans variante, et la variante 
       const drawn = await inApp(skinnable());
       expect(drawn, `${name} in ${skin.id} at ${SKIN_DEPTH}`).toBe(expected);
       // Only a ring may draw nothing: the words beside it say the days.
-      if (name !== "CountdownRing")
-        expect(drawn, `${name} in ${skin.id} draws nothing`).not.toBe("");
+      if (name !== "CountdownRing" && drawn === "") empty.push(`${skin.id}: ${name}`);
       if (own === undefined) continue;
       replaced.push(`${skin.id}: ${name}`);
       // A variant draws something of its own, around the base or instead of it.
       if (drawn === (await inApp(base()))) asBase.push(`${skin.id}: ${name}`);
     }
   }
+  expect(empty, "pieces that draw nothing").toEqual([]);
   expect(asBase, "variants that draw the base as it is").toEqual([]);
   // A palette build replaces nothing; a mix or full build does (the example skin replaces the empty state and the card).
   expect(replaced.length > 0, `variants drawn at ${SKIN_DEPTH}`).toBe(SKIN_DEPTH !== "palette");
