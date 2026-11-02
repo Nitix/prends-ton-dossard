@@ -520,6 +520,9 @@ test("fonts — the titles of a skin in italic or wider (--display-style, --disp
   ).toEqual(["normal", "none", "normal", "-0.025em"]);
   // A skin that asks its titles for a style or a width that no face has would
   // have them drawn by the browser: a slanted upright face, a width unchanged.
+  // Not an empty search: Piste's titles are italic, Dossard's wider.
+  expect(paletteValue("piste", "--display-style")).toBe("italic");
+  expect(paletteValue("dossard", "--display-stretch")).toMatch(/%$/);
   const problems = Object.keys(skinFonts).flatMap((id) => {
     const style = paletteValue(id, "--display-style") ?? "normal";
     const stretch = paletteValue(id, "--display-stretch") ?? "normal";

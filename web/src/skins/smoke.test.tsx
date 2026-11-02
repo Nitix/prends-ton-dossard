@@ -480,6 +480,10 @@ for (const { skin, mode } of CASES) {
     // frosted glass, and the rim of a window).
     const card = screen.getByRole("main").element();
     expectShadeOfSkin(card, "--shade-welcome", "the card");
+    // In the skin's own colours: Crête's violet halo would show under the card.
+    expect(ownDeclaration(skin.id, "--shade-welcome"), `${skin.id} sets --shade-welcome`).not.toBe(
+      "",
+    );
     for (const property of ["--welcome-card", "--welcome-rim"]) {
       expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
     }

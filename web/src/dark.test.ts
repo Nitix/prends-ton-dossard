@@ -119,6 +119,44 @@ test("dark — le texte des boutons en dégradé (--dawn-deep-ink) ne change pas
   }
 });
 
+test("dark — la carte des pages de connexion : son texte a 4,5:1 sur elle, dans chaque skin et chaque mode", () => {
+  // The card of the sign-in pages (routes/__root) is the frosted glass of a
+  // card (`glass`: 82 % of `--color-card`) over the sky, under the ground that
+  // `--welcome-card` lays on it: none in Crête (`transparent`), the opaque card
+  // of a skin whose sky is dark. Its text: the title and the words (ink, the
+  // labels), the errors, and on an opaque card the hints (neutral-600). Glass
+  // is measured over the colours of the sky (its art aside, as the notes of an
+  // event over a hero), where a hint is not held to 4.5: Crête's is 4.3:1 over
+  // the darkest violet of its sky by this measure (4.46 to 4.5 on the pixels of
+  // its card, which is lighter there), and Crête stays as it is (so does
+  // Aurore, on Crête's sky).
+  expect(themeValue("--welcome-card")).toBe("transparent");
+  for (const { skin, mode, label } of SKIN_CASES) {
+    const laid = themeValue("--welcome-card", mode, skin);
+    expect(laid, `${label}: --welcome-card`).toMatch(/^(transparent|#[0-9a-f]{6})$/i);
+    const card = themeColour("card", mode, skin);
+    const glass = laid === "transparent";
+    const grounds = glass
+      ? [
+          themeValue("--dawn-sky-color", mode, skin),
+          ...linearStops(themeValue("--dawn-sky", mode, skin)),
+        ].map((sky) => mixed(card, sky, 0.82))
+      : [laid];
+    const texts = glass
+      ? ["ink", "neutral-800", "red-700"]
+      : ["ink", "neutral-600", "neutral-800", "red-700"];
+    for (const ground of grounds) {
+      for (const text of texts) {
+        const colour = themeColour(text, mode, skin);
+        expect(
+          contrast(colour, ground),
+          `${label}: ${text} (${colour}) on the card of the sign-in pages (${ground})`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  }
+});
+
 /** The three channels of a `#rrggbb` colour, from 0 to 255. */
 const channels = (hex: string) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
 

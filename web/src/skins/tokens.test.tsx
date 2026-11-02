@@ -180,6 +180,10 @@ test("tokens — la fenêtre d'un dialogue a l'ombre --shade-dialog, dans chaque
     );
     const dialog = screen.getByRole("dialog", { name: "Une fenêtre" });
     await expect.element(dialog).toBeVisible();
+    // In the skin's own colours: Crête's violet would show under every window.
+    expect(ownDeclaration(skin.id, "--shade-dialog"), `${skin.id} sets --shade-dialog`).not.toBe(
+      "",
+    );
     expectShadowOf(
       getComputedStyle(dialog.element()).boxShadow,
       "--shade-dialog",
