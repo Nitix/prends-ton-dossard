@@ -50,8 +50,11 @@ function LaneArt({ className = "" }: { className?: string }) {
 
 /**
  * The art of the sky of the app: the bend in the right corner of the band of
- * the header, and on the pages to sign in, where the sky is the whole page, in
- * the corner at the top, with a finish-line checker under the name.
+ * the header. On the pages to sign in, where the sky is the whole page and the
+ * card covers its middle, the art is around the card: a small bend in the
+ * corner at the top, beside the name, a finish-line checker under the name,
+ * and under the card the bend of the track, wide, coming in from the bottom of
+ * the page.
  */
 export function HeaderArt({ place }: HeaderArtProps) {
   if (place === "header") {
@@ -62,8 +65,9 @@ export function HeaderArt({ place }: HeaderArtProps) {
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <LaneArt className="top-0 h-60 w-[22rem] opacity-90" />
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <LaneArt className="top-0 h-28 w-[13rem] opacity-70" />
+      <LaneArt className="bottom-0 h-[22rem] w-full max-w-[40rem] opacity-90" />
       <span
         className="absolute inset-x-0 top-[7.25rem] mx-auto h-2.5 w-24 rounded-[2px] opacity-80 md:top-36"
         style={{

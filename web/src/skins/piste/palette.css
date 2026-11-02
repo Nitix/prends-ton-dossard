@@ -71,14 +71,22 @@
   --color-scrim: rgb(27 31 42 / 0.5);
   --color-relief: #12151d;
 
-  /* The five zones of the slope, flat to steep: the blue of the infield, the
-     green of the grass, the ochre of the sand pit, the terracotta of the
-     track, the crimson of the finish. 3:1 on the card and with the ink line. */
+  /* The five zones of the slope, flat to steep: the cool blue of the variant,
+     the deep green of the infield, the sand of the long-jump pit, the track
+     red itself, and the violet of the evening for the steepest. 3:1 on the
+     card and with the ink line, and apart with a colour vision deficiency too
+     (src/features/route/slope.test.ts); none is one of Crête's. */
   --color-slope-1: #4a85c8;
-  --color-slope-2: #4ca378;
-  --color-slope-3: #ba8907;
-  --color-slope-4: #b74802;
-  --color-slope-5: #ce0a6d;
+  --color-slope-2: #257867;
+  --color-slope-3: #a7906e;
+  --color-slope-4: #d2452b;
+  --color-slope-5: #8348b7;
+
+  /* Its titles: Barlow Condensed in italic capitals, as the variant's, a hair
+     apart (the title of a page 0.005em, a block's and a card's 0.015em). */
+  --display-style: italic;
+  --display-transform: uppercase;
+  --display-tracking: 0.005em;
 
   --radius-lg: 0.625rem;
   --radius-xl: 0.875rem;
@@ -105,30 +113,6 @@
   --map-start: #2f6db5;
   --map-finish: #1b1f2a;
   --map-link: #962b19;
-
-  /* Crête's motifs, which « Piste » does not draw (the title marker): in the
-     red of the track and the ink. The header, the heroes and the mark are the
-     skin's own. */
-  --motif-ridge-far-from: #e8603f;
-  --motif-ridge-far-to: #b8361f;
-  --motif-ridge-mid-from: #962b19;
-  --motif-ridge-mid-to: #742316;
-  --motif-ridge-near-from: #2b2c33;
-  --motif-ridge-near-to: #1b1f2a;
-  --motif-ridge-light: #f3bba8;
-  --motif-sun-core: #fdf1ec;
-  --motif-sun-mid: #f3bba8;
-  --motif-sun-rim: #e8603f;
-  --motif-halo-from: #f3bba8;
-  --motif-halo-to: #e8603f;
-  --motif-dawn-1: #ea9277;
-  --motif-dawn-2: #d2452b;
-  --motif-dawn-3: #742316;
-  --motif-peak-far: #f3bba8;
-  --motif-peak-near-from: #b8361f;
-  --motif-peak-near-to: #1b1f2a;
-  --motif-hill-near-from: #d2452b;
-  --motif-hill-near-to: #742316;
 
   /* The paints of the dawn, flat as the variant's colours are. What carries
      white text is the ink (the variant's main button): the band of the header
@@ -160,4 +144,16 @@
   --dawn-glow-cool: rgb(27 31 42 / 0.3);
   --focus-glow: rgb(210 69 43 / 0.18);
   --sky-focus: #fbf6ef;
+
+  /* The card of the sign-in pages, on the ink of the band: the white card of
+     the variant, in a deep ink shade. A window (the variant's shade), a
+     message and the pieces on the band of a hero in the ink. */
+  --welcome-card: #ffffff;
+  --shade-welcome: rgb(10 12 18 / 0.6);
+  --shade-dialog: rgb(27 31 42 / 0.55);
+  --shade-toast: rgb(27 31 42 / 0.7);
+  --shade-notes: rgb(27 31 42 / 0.6);
+  --shade-photo: rgb(27 31 42 / 0.6);
+  --shade-on-dawn: rgb(27 31 42 / 0.5);
+  --hero-veil: rgb(27 31 42 / 0.2);
 }
