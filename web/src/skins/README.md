@@ -95,33 +95,46 @@ looks which share them share).
   is no longer in the app (a skin removed since), or whose look cannot be
   loaded, is Crête, with no error.
 - **Before the first paint**: the build writes into `index.html` the table of
-  the skins (`plugin.ts`): for each, its modes, its colour and the files of
-  its sheets (`sheets`, from the bundle: `lookSheets`). The script of the page
-  writes a `<link rel="stylesheet">` for each sheet of the skin kept
-  (`document.write`, while the page is read): a stylesheet of the parser blocks
-  the first paint and the scripts after it in every browser, so someone who
-  chose Nuit never sees Crête first, on every page, the pages to sign in
-  included. The look's own import finds those links in the page and adds none.
-  In the dev server, the table has no sheets: the look brings them, after a
-  short flash.
+  the skins (`plugin.ts`), in the order of their names: for each, its modes,
+  its colour and the files of its look, from the bundle (`lookFiles`): its
+  sheets (`sheets`) and its parts of JS (`scripts`), in the order in which
+  Vite preloads them when the look is imported. The script of the page writes
+  a `<link rel="stylesheet">` for each sheet of the skin kept (`document.write`,
+  while the page is read): a stylesheet of the parser blocks the first paint
+  and the scripts after it in every browser, so someone who chose Nuit never
+  sees Crête first, on every page, the pages to sign in included. It writes a
+  `<link rel="modulepreload">` for each part, so that the look loads with the
+  entry rather than after it. The look's own import finds those links in the
+  page and adds none. In the dev server, the table has no files: the look
+  brings its sheets, after a short flash.
 - **Offline**: the service worker (`public/sw.js`) keeps every file of
   `/assets/` the first time it is asked for (sheets, parts, faces) and the page:
   a skin chosen once is drawn offline the next time (`sw.test.ts`).
 
-The rules of a skin's sheets do not depend on their order with `styles.css`'s:
-the palette's are outside the layers, so they win over `@theme` (layer `theme`)
-and the dark blocks of Crête (layer `base`); `utilities.css` declares the order
-of the layers first, as `styles.css` does (the sheets of the skin kept come
-before it in the page).
+The sheets of a look come before `styles.css` in the page of a skin kept, and
+after it when the skin is chosen: what they draw must not depend on it.
+
+- The palette's rules are outside the layers, so they win over `@theme` (layer
+  `theme`) and the dark blocks of Crête (layer `base`) in either order.
+- The utilities of a look carry the prefix of its folder (`nuit:size-12`), so
+  none of them is a selector of `styles.css`: in the same layer, a rule of
+  each sheet would win or lose by the order alone (`.hidden` against
+  `.md\:flex`). The only selectors they share are Tailwind's own (`:root`, `*`),
+  with the look's prefixed properties, or the same values as the entry's.
+  `build.test.ts` checks it on the real build; `cascade.test.tsx` draws every
+  skin's motifs and the agenda at 1280 px with the look's sheets before and
+  after `styles.css`, and finds the same boxes.
+- `utilities.css` declares the order of the layers first, as `styles.css` does.
 
 ## Adding a skin, step by step
 
 1. Create `skins/<id>/index.ts` as above.
 2. Write `fonts.css` (see Fonts), and `palette.css`: custom properties only (see
    Colours), under the skin's selectors.
-3. Draw its motifs as components of the slots it changes; write `utilities.css`
-   as the other skins' (see Utilities) and add the folder to the list of
-   `styles.css`.
+3. Draw its motifs as components of the slots it changes, their classes of
+   Tailwind with the folder's prefix (`<id>:size-12`, `<id>:md:size-14`); write
+   `utilities.css` as the other skins' (see Utilities) and add the folder to
+   the list of `styles.css`.
 4. Write `look.ts`: the imports of its sheets, and `slots`.
 5. If its titles' font is new, add its latin face to `samples.css` (see Fonts).
 6. Run `pnpm --dir web test`. The tests go through the new skin in each of its
@@ -365,22 +378,34 @@ nothing else (a test says so): `@font-face` rules, and `--font-sans`,
 uses, but not the folders of the skins other than Crête's, nor `shared/`
 (`@source not "./skins/{alpage,…,shared}/**"`: a new skin adds its folder to
 that list, `plugin.test.ts` says so). Each of these folders has its own
-`utilities.css`, which its look imports:
+`utilities.css`, which its look imports, with the folder's prefix:
 
 ```css
 @layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "../../theme.css";
+@import "tailwindcss/theme.css" layer(theme) prefix(nuit);
+@import "../../theme.css" prefix(nuit);
+@import "../theme-vars.css" prefix(nuit);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 @source "./*.tsx";
 ```
 
-It makes the utilities of the folder's motifs with the app's theme
-(`theme.css`: the `@theme` and the `@utility` of the app, which `styles.css`
-imports in its place), so a class reads the same custom property as in
-`styles.css`; it declares the order of the layers first, for a page that reads
-it before `styles.css`. So the stylesheet of every page has only Crête's
-utilities.
+- The motifs of the folder write their classes with the prefix
+  (`nuit:absolute nuit:w-40 nuit:md:w-56`), and this sheet makes only those:
+  never a selector of `styles.css` (see Loading on demand). A class without
+  the prefix is made by nothing (`plugin.test.ts` refuses an utility without
+  it). A class that is not one of Tailwind keeps its name: `route-dots` of
+  `styles.css`, a hook.
+- It reads the app's theme (`theme.css`: the `@theme` and the `@utility` of
+  the app, which `styles.css` imports in its place). With a prefix, Tailwind
+  would read a prefixed copy of each property of the theme (`--nuit-color-iris-600`,
+  with Crête's value); `theme-vars.css` makes the colours, the radii and the
+  fonts read the page's own properties instead (`var(--color-iris-600)`), the
+  ones the skin's palette and fonts set. `src/skins/` is scanned by
+  `styles.css`, so the entry declares every one of them, for every page.
+- It declares the order of the layers first, for a page that reads it before
+  `styles.css`.
+
+So the stylesheet of every page has only Crête's utilities.
 
 ## Slots (motifs)
 
@@ -496,17 +521,26 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   single-mode skin, the bar's colour, the slots' fallback.
 - `plugin.test.ts`, `plugin.build.test.ts`, `noFlash.test.ts`: the skins of
   development out of a build, the table of the skins written in `index.html`
-  with the sheets of each look (a small app built for real), the script before
-  the first paint (the sheets of the skin kept linked by the parser, on every
-  page, signed in or not), no folder of a skin importing another's, the list of
-  folders that `styles.css` does not scan.
+  in the order of their names, with the files of each look in the order Vite
+  preloads them (a small app built for real), the script before the first
+  paint (the sheets of the skin kept linked by the parser and its parts
+  preloaded, on every page, signed in or not, reading nothing but the skin and
+  the theme kept), no folder of a skin importing another's, the list of folders
+  that `styles.css` does not scan, the prefix of their utilities and
+  `theme-vars.css`.
 - `build.test.ts`: the real app, built: the page of a person who stays on Crête
   links one stylesheet with nothing of another skin, and its entry and what it
   preloads have no motif of another skin; each other skin is a part of its
-  own, with its sheets in the table; the faces of the samples come with the
-  section « Apparence » only; nothing of the skin of development.
-- `lazy.test.tsx`: in a browser, a page before any choice has nothing of
-  another skin; a skin chosen has its palette in the page, once; signing out
+  own, with its sheets and its parts in the table; no rule of a look's sheet
+  is on a selector of the entry's, and every property a look reads is set on
+  the page; the faces of the samples come with the section « Apparence »
+  only; nothing of the skin of development.
+- `cascade.test.tsx`: in a browser at 1280 px, every skin's motifs and the
+  agenda are drawn the same with the look's sheets before `styles.css` (a skin
+  kept) and after it (a skin chosen).
+- `lazy.test.tsx`: in a browser, in any order, a page before any choice has
+  nothing of another skin; in the picker, a skin chosen is checked at once,
+  and the page takes it once its look is loaded; a skin chosen has its palette in the page, once; signing out
   keeps the skin, on the device and on the page, and the page to sign in is
   drawn in it; a page without a session opened with a skin kept has it.
 - `components.test.tsx`: `slotted` in each skin, and what every motif says to a
@@ -542,6 +576,6 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   (`--display-style`, `--display-stretch`), and those of the samples
   (`samples.css`).
 - `../features/profile/ThemePicker.test.tsx`: the picker, its samples in the
-  font of each skin (not asked for before the section shows), the edge of a
-  swatch (3:1 on its card, in every skin and mode).
+  font of each skin (neither declared nor asked for before the module of the
+  section), the edge of a swatch (3:1 on its card, in every skin and mode).
 - `../features/pwa/sw.test.ts`: a skin chosen once is drawn offline.
