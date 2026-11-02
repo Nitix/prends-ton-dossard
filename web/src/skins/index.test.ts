@@ -11,6 +11,7 @@ import {
   SKINS,
   applySkin,
   chooseSkin,
+  currentSkin,
   followSkinElsewhere,
   readSkin,
   registry,
@@ -18,7 +19,7 @@ import {
   variantsBySkin,
 } from ".";
 import { THEME_KEY, chooseTheme } from "../lib/theme";
-import { DEPTHS, type Skin, type SlotName } from "./types";
+import { DEPTHS, type EmptyStateProps, type Skin, type SlotName } from "./types";
 
 // The skins of the app: found by their folders, one of them chosen on the
 // device and put on <html> (`data-skin`), with the mode of a skin that has only
@@ -29,6 +30,8 @@ import { DEPTHS, type Skin, type SlotName } from "./types";
 type Root = { dataset: Record<string, string | undefined>; style: { colorScheme?: string } };
 
 let root: Root;
+/** The colour of the bar of the browser, as `<meta name="theme-color">` has it. */
+let bar: { content: string };
 let stored: Map<string, string>;
 let refuse: boolean;
 let storageListeners: ((event: Pick<StorageEvent, "key">) => void)[];
@@ -50,10 +53,14 @@ const storage = {
 
 beforeEach(() => {
   root = { dataset: {}, style: {} };
+  bar = { content: "#5e4ae3" };
   stored = new Map();
   refuse = false;
   storageListeners = [];
-  vi.stubGlobal("document", { documentElement: root });
+  vi.stubGlobal("document", {
+    documentElement: root,
+    querySelector: (selector: string) => (selector === 'meta[name="theme-color"]' ? bar : null),
+  });
   vi.stubGlobal("localStorage", storage);
   vi.stubGlobal("window", {
     addEventListener: (_type: string, listener: (event: Pick<StorageEvent, "key">) => void) => {
@@ -87,7 +94,7 @@ test("skins — le registre trouve chaque dossier qui a un index.ts, Crête en p
   expect(folders).toContain("_example");
   expect(ids().toSorted()).toEqual(folders.toSorted());
   expect(ids()[0]).toBe("crete");
-  expect(SKIN_DEPTH).toBe("palette");
+  // Whatever the depth of the run (VITE_SKIN_DEPTH): the suite runs at each.
   expect(DEPTHS).toContain(SKIN_DEPTH);
 });
 
@@ -101,12 +108,15 @@ test("skins — chacun a un nom, ses modes, deux couleurs et une police ; Crête
     for (const colour of skin.swatches)
       expect(colour, `skin ${skin.id}`).toMatch(/^#[0-9a-f]{6}$/i);
     expect(skin.fontSample.trim(), `skin ${skin.id}`).not.toBe("");
+    expect(skin.themeColor, `skin ${skin.id}`).toMatch(/^#[0-9a-f]{6}$/i);
   }
   const crete = SKINS[0];
   expect(Object.keys(crete?.slots ?? {}).toSorted()).toEqual(
     ["BrandMark", "Divider", "EmptyArt", "HeaderArt", "HeroArt", "SectionMarker"].toSorted(),
   );
   expect(crete?.modes).toEqual(["light", "dark"]);
+  // The violet of the sky, as index.html has it before any skin.
+  expect(crete?.themeColor).toBe("#5e4ae3");
 });
 
 const fake = (id: string, extra: Partial<Skin> = {}): { skin: Skin } => ({
@@ -116,6 +126,7 @@ const fake = (id: string, extra: Partial<Skin> = {}): { skin: Skin } => ({
     modes: ["light"],
     swatches: ["#000000", "#ffffff"],
     fontSample: "serif",
+    themeColor: "#000000",
     ...extra,
   },
 });
@@ -179,9 +190,11 @@ test("skins — le skin choisi est sur <html> et gardé sur l'appareil ; Crête,
   expect(stored.has(SKIN_KEY)).toBe(false);
 });
 
-test("applySkin — met un skin sur la page sans rien garder sur l'appareil", () => {
+test("applySkin — met un skin sur la page, et sa couleur sur la barre du navigateur, sans rien garder sur l'appareil", () => {
+  const example = SKINS.find((skin) => skin.id === "_example");
   applySkin("_example");
   expect(root.dataset.skin).toBe("_example");
+  expect(bar.content).toBe(example?.themeColor);
   expect(stored.has(SKIN_KEY)).toBe(false);
   // What main.tsx does at start: the skin kept, on the page.
   stored.set(SKIN_KEY, "_example");
@@ -190,6 +203,22 @@ test("applySkin — met un skin sur la page sans rien garder sur l'appareil", ()
   expect(root.dataset.skin).toBe("_example");
   applySkin("not-a-skin");
   expect(root.dataset.skin).toBeUndefined();
+  expect(bar.content).toBe("#5e4ae3");
+});
+
+test("useSkin — le skin de la page est gardé en mémoire : le stockage n'est pas relu à chaque dessin", () => {
+  const getItem = vi.spyOn(storage, "getItem");
+  chooseSkin("_example");
+  getItem.mockClear();
+  // What the hook reads, many times: the skin applied last, not the storage.
+  const [shown] = SKINS.filter((skin) => skin.id === "_example");
+  expect(currentSkin()).toBe(shown);
+  expect(currentSkin()).toBe(shown);
+  expect(getItem).not.toHaveBeenCalled();
+  // The storage changed by hand, without an event: the page keeps what it shows.
+  stored.set(SKIN_KEY, "crete");
+  expect(currentSkin()).toBe(shown);
+  getItem.mockRestore();
 });
 
 test("skins — un skin à un seul mode est dessiné dans ce mode, et le choix Clair / Sombre revient avec Crête", () => {
@@ -279,17 +308,19 @@ test("useSlot — un motif que le skin ne dessine pas est celui de Crête", () =
 });
 
 /** Three variants that draw nothing: only who they are counts. */
-const Mix: ComponentType = () => null;
-const Full: ComponentType = () => null;
-const Other: ComponentType = () => null;
+const Mix: ComponentType<EmptyStateProps> = () => null;
+const Full: ComponentType<EmptyStateProps> = () => null;
+const Other: ComponentType<EmptyStateProps> = () => null;
 
 test("useSkinVariant — les variantes d'un skin, celle de full l'emporte sur celle de mix", () => {
   const bySkin = variantsBySkin({
-    "../dossard/full.tsx": { EventCard: Full },
-    "../dossard/mix.tsx": { EventCard: Mix, EventHero: Mix },
-    "../retro/mix.tsx": { EventCard: Other },
+    "../dossard/full.tsx": { EmptyState: Full },
+    "../dossard/mix.tsx": { EmptyState: Mix },
+    "../retro/mix.tsx": { EmptyState: Other },
+    "../nuit/full.tsx": {},
   });
-  expect(bySkin.get("dossard")).toEqual({ EventCard: Full, EventHero: Mix });
-  expect(bySkin.get("retro")).toEqual({ EventCard: Other });
+  expect(bySkin.get("dossard")).toEqual({ EmptyState: Full });
+  expect(bySkin.get("retro")).toEqual({ EmptyState: Other });
+  expect(bySkin.get("nuit")).toEqual({});
   expect(bySkin.get("crete")).toBeUndefined();
 });

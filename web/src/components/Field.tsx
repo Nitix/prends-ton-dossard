@@ -7,7 +7,7 @@ import { useId, type ReactNode } from "react";
  * src/contrast.test.ts measures it).
  */
 export const INPUT =
-  "min-h-11 rounded-xl border border-neutral-500 bg-field px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-400 focus:border-iris-500 focus:shadow-[0_0_0_4px_rgb(139_124_255/0.18)] aria-invalid:border-red-700";
+  "min-h-11 rounded-xl border border-neutral-500 bg-field px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-400 focus:border-iris-500 focus:shadow-[0_0_0_4px_var(--focus-glow)] aria-invalid:border-red-700";
 
 /** The look of a field that shows a text to copy, read-only: its edge, on the soft ground of a panel. */
 export const READ_ONLY_INPUT =

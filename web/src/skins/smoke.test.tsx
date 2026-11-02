@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
+import { createElement } from "react";
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
@@ -21,14 +22,19 @@ import { chooseTheme } from "../lib/theme";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
 import { fontsReady } from "../test/fontsReady";
+import { emulateMedia, resetMedia } from "../test/media";
+import type { Mode, Skin } from "./types";
 
 import "../styles.css";
 
-// The main pages of the app, drawn in each skin, on a phone: the home page, the
-// page of an event with the map and the profile of its track, the form of a new
-// event, and the settings. A skin only dresses the app: every page is there,
-// with what it shows, nothing goes past the width of the screen, and the motifs
-// of the skin are in their places (Crête's where it draws none).
+// The main pages of the app, drawn in each skin and in each of its modes, on
+// the narrowest phone (320 px): the home page, the page of an event with the
+// map and the profile of its track and a dialog, the form of a new event, the
+// settings, and forced colours. A skin only dresses the app: every page is
+// there, with what it shows, nothing goes past the width of the screen, every
+// target keeps its 44 px, the motifs of the skin are in their places (Crête's
+// where it draws none), and the utilities of the dawn take its paints. Nothing
+// here names a skin: a new one is tested as it is added.
 
 /** An event of the fixture whose 42 km has a track. */
 const event = {
@@ -88,22 +94,32 @@ vi.mock("../features/route/TrackMap", async (importOriginal) => {
   return blankTileModule(importOriginal);
 });
 
+/** The narrowest phone the app is made for. */
+const WIDTH = 320;
+
 beforeAll(async () => {
   await ensureTemporal();
 });
 
 beforeEach(async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(CLIMB)));
-  await page.viewport(375, 812);
+  await page.viewport(WIDTH, 700);
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  await resetMedia();
   chooseSkin("crete");
   chooseTheme("auto");
   window.scrollTo(0, 0);
   await page.viewport(414, 896);
 });
+
+/** Puts a skin, in one of its modes, on the page. */
+function dress(skin: Skin, mode: Mode) {
+  chooseSkin(skin.id);
+  chooseTheme(mode);
+}
 
 async function openApp(path: string) {
   const router = createRouter({
@@ -128,26 +144,65 @@ async function openApp(path: string) {
 
 type Screen = Awaited<ReturnType<typeof openApp>>;
 
-/** What every page has, in every skin: the tabs, the button to create, nothing wider than the phone. */
+/** What the user can tap, in the page and its tabs, or in an open dialog. */
+function targets(scope: ParentNode = document): HTMLElement[] {
+  const found = scope.querySelectorAll<HTMLElement>(
+    "main button, main select, main summary, main input, nav a, a.fab, dialog[open] button, dialog[open] input, dialog[open] select",
+  );
+  return [...found]
+    .filter((element) => !(element instanceof HTMLInputElement && element.type === "hidden"))
+    .filter((element) => element.checkVisibility() && element.getBoundingClientRect().width > 1)
+    .map((element) =>
+      // A box or a dot is tapped by its label: the label is the target.
+      element instanceof HTMLInputElement && ["checkbox", "radio", "file"].includes(element.type)
+        ? (element.closest("label") ?? element)
+        : element,
+    );
+}
+
+/**
+ * What every page has, in every skin: the tabs, the button to create, nothing
+ * wider than the phone, and targets of 44 px at least.
+ */
 async function framed(screen: Screen) {
   await expect.element(screen.getByRole("navigation", { name: fr.nav.main })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.nav.createEvent })).toBeVisible();
   await fontsReady();
-  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
+  // Not an empty search: the tabs, the « + », and what the page has.
+  expect(targets().length).toBeGreaterThan(5);
+  const small = targets()
+    .filter((element) => element.getBoundingClientRect().height < 44)
+    .map((element) => element.outerHTML.slice(0, 160));
+  expect(small).toEqual([]);
 }
 
-/** The class that the mark before a block's title has in a skin: its own, or Crête's. */
-const markerOf = (id: string) => {
-  const skin = SKINS.find((one) => one.id === id);
-  const crete = SKINS[0];
-  return skin && crete && slotOf(skin, "SectionMarker") !== slotOf(crete, "SectionMarker")
-    ? ".example-marker"
-    : ".section-marker";
-};
+/** The mark of a skin before a block's title, drawn on its own: what each title must start with. */
+async function markerHtml(skin: Skin): Promise<string> {
+  const alone = await render(createElement(slotOf(skin, "SectionMarker")));
+  const html = alone.container.innerHTML;
+  await alone.unmount();
+  return html;
+}
 
-for (const skin of SKINS) {
-  test(`smoke — ${skin.id} : l'accueil, ses blocs et la marque de leurs titres`, async () => {
-    chooseSkin(skin.id);
+/** How a paint of the skin (`--dawn-deep`…) is drawn as a background, here and now. */
+function painted(property: string): string {
+  const probe = document.createElement("span");
+  probe.style.backgroundImage = `var(${property})`;
+  document.body.append(probe);
+  const image = getComputedStyle(probe).backgroundImage;
+  probe.remove();
+  return image;
+}
+
+const CASES = SKINS.flatMap((skin) => skin.modes.map((mode) => ({ skin, mode })));
+
+for (const { skin, mode } of CASES) {
+  const name = `${skin.id}, ${mode}`;
+
+  test(`smoke — ${name} : l'accueil, la marque des titres de ses blocs, l'onglet courant aux couleurs du skin`, async () => {
+    const marker = await markerHtml(skin);
+    dress(skin, mode);
     const screen = await openApp("/");
     await expect
       .element(screen.getByRole("heading", { level: 1, name: fr.nav.home }))
@@ -157,19 +212,32 @@ for (const skin of SKINS) {
       .toBeVisible();
     await framed(screen);
     expect(document.documentElement.dataset.skin).toBe(skin.id === "crete" ? undefined : skin.id);
+    expect(document.documentElement.dataset.theme).toBe(mode);
     // Each title of a block starts with the mark of the skin.
     const titles = [...document.querySelectorAll("h2.section-title")];
     expect(titles.length).toBeGreaterThan(0);
     for (const title of titles) {
-      expect(
-        title.firstElementChild?.matches(markerOf(skin.id)),
-        `title ${title.textContent}`,
-      ).toBe(true);
+      expect(title.firstElementChild?.outerHTML, `title ${title.textContent}`).toBe(marker);
     }
+    // The current tab, a variant of a utility (`aria-[current=page]:bg-dawn-deep`), takes the paint of the skin.
+    const current = screen
+      .getByRole("navigation", { name: fr.nav.main })
+      .getByRole("link", { name: fr.nav.home, exact: true })
+      .element();
+    const own = painted("--dawn-deep");
+    expect(own).toMatch(/gradient/);
+    expect(getComputedStyle(current).backgroundImage).toBe(own);
+    // A skin that paints its own dawn: the tab is not Crête's.
+    const root = document.documentElement;
+    const skinOf = root.dataset.skin;
+    delete root.dataset.skin;
+    const crete = painted("--dawn-deep");
+    if (skinOf !== undefined) root.dataset.skin = skinOf;
+    expect(getComputedStyle(current).backgroundImage === crete).toBe(own === crete);
   });
 
-  test(`smoke — ${skin.id} : la page d'un événement, avec la carte et le profil de sa trace`, async () => {
-    chooseSkin(skin.id);
+  test(`smoke — ${name} : la page d'un événement, sa carte, le profil de sa trace et une fenêtre`, async () => {
+    dress(skin, mode);
     const screen = await openApp(`/evenements/${event.id}`);
     await expect
       .element(screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" }))
@@ -182,10 +250,25 @@ for (const skin of SKINS) {
     await expect.element(trail42.getByText(/D\+/).first()).toBeVisible();
     await framed(screen);
     expect(document.querySelector(".event-hero")).not.toBeNull();
+
+    // A dialog: within the phone, its actions 44 px tall.
+    await screen
+      .getByRole("button", { name: fr.participation.addSomeone, exact: true })
+      .first()
+      .click();
+    const dialog = screen.getByRole("dialog", { name: fr.participation.addSomeoneTitle });
+    await expect.element(dialog).toBeVisible();
+    const box = dialog.element().getBoundingClientRect();
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(WIDTH);
+    const small = targets(dialog.element())
+      .filter((element) => element.getBoundingClientRect().height < 44)
+      .map((element) => element.outerHTML.slice(0, 160));
+    expect(small).toEqual([]);
   });
 
-  test(`smoke — ${skin.id} : le formulaire d'un nouvel événement`, async () => {
-    chooseSkin(skin.id);
+  test(`smoke — ${name} : le formulaire d'un nouvel événement`, async () => {
+    dress(skin, mode);
     const screen = await openApp("/evenements/nouveau");
     await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
     await expect
@@ -195,8 +278,8 @@ for (const skin of SKINS) {
     await framed(screen);
   });
 
-  test(`smoke — ${skin.id} : les réglages, avec le choix du thème`, async () => {
-    chooseSkin(skin.id);
+  test(`smoke — ${name} : les réglages, avec le choix du thème`, async () => {
+    dress(skin, mode);
     const screen = await openApp("/profil/reglages");
     await expect
       .element(screen.getByRole("heading", { level: 1, name: fr.profile.settings }))
@@ -205,6 +288,23 @@ for (const skin of SKINS) {
     await expect
       .element(skins.getByRole("radio", { name: skin.label.fr, exact: true }))
       .toBeChecked();
+    await framed(screen);
+  });
+
+  test(`smoke — ${name} : en couleurs forcées, l'onglet courant et le bouton + gardent un bord`, async () => {
+    dress(skin, mode);
+    await emulateMedia({ forcedColors: "active" });
+    const screen = await openApp("/");
+    await expect
+      .element(screen.getByRole("heading", { level: 1, name: fr.nav.home }))
+      .toBeVisible();
+    const current = screen
+      .getByRole("navigation", { name: fr.nav.main })
+      .getByRole("link", { name: fr.nav.home, exact: true })
+      .element();
+    expect(getComputedStyle(current).borderTopWidth).toBe("2px");
+    const plus = screen.getByRole("link", { name: fr.nav.createEvent }).element();
+    expect(getComputedStyle(plus).borderTopWidth).toBe("1px");
     await framed(screen);
   });
 }

@@ -147,6 +147,8 @@ export const fr = {
     appearance: "Apparence",
     // The skin of the app (see skins/): its name in the picker comes from the skin itself.
     skin: "Thème",
+    // Beside « Thème »: Auto, Clair, Sombre, for a theme that has both modes.
+    mode: "Clair ou sombre",
     onlyLight: "Ce thème n'a qu'un mode clair.",
     onlyDark: "Ce thème n'a qu'un mode sombre.",
     // A few letters in the font of a theme, on its card.

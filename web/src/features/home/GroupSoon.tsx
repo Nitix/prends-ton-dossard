@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-import { SectionMarker } from "../../components/Slots";
+import { BlockTitle } from "../../components/BlockTitle";
 import { useI18n } from "../../i18n/I18nProvider";
 import { sortEvents, type EventView } from "../events/api";
 import { EventCard } from "../events/EventCard";
@@ -30,10 +30,7 @@ export function GroupSoon({ views }: { views: EventView[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title section-title">
-        <SectionMarker />
-        {t.home.groupTitle}
-      </h2>
+      <BlockTitle id={headingId}>{t.home.groupTitle}</BlockTitle>
       {soon.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.home.groupEmpty}</p>
       ) : (

@@ -2,9 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
-import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { webAddress } from "../../lib/url";
@@ -57,10 +57,9 @@ export function RegistrationTodoBlock({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title section-title">
-        <SectionMarker />
+      <BlockTitle ref={heading} id={headingId} tabIndex={-1}>
         {t.home.todoTitle}
-      </h2>
+      </BlockTitle>
       <ul className="flex flex-col gap-3">
         {rows.map((row) => (
           <TodoItem key={row.participation.id} row={row} onDealtWith={setDealt} />

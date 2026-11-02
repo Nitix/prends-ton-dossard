@@ -158,7 +158,7 @@ function ModeChoices({
   const { t } = useI18n();
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="sr-only">{t.settings.appearance}</legend>
+      <legend className="eyebrow mb-2">{t.settings.mode}</legend>
       {CHOICES.map((value) => (
         <label
           key={value}

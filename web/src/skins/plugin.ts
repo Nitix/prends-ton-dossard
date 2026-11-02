@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadEnv, type Plugin } from "vite";
@@ -30,6 +30,16 @@ export function skinDepth(value: string | undefined): Depth {
   return depth;
 }
 
+/**
+ * Where Vite reads the `.env` files of a config, as Vite does: none with
+ * `envDir: false`, the root without an `envDir`, a relative one from the root.
+ */
+export function envDirOf(config: { root?: string; envDir?: string | false }): string | false {
+  if (config.envDir === false) return false;
+  const root = resolve(config.root ?? process.cwd());
+  return config.envDir === undefined ? root : resolve(root, config.envDir);
+}
+
 /** The file that bundles a depth: its `import.meta.glob` calls take the levels up to it. */
 export function depthFile(skinsDir: string, depth: Depth): string {
   return join(skinsDir, "depth", `${depth}.ts`);
@@ -37,6 +47,12 @@ export function depthFile(skinsDir: string, depth: Depth): string {
 
 /** The empty module that stands for each file of a skin of development in a build. */
 const NOTHING = "\0ptd-skins:nothing";
+
+/**
+ * What it exports: the names that the globs of the registry (`skin`) and of the
+ * depths (`variants`) import from it, with nothing in them.
+ */
+const NOTHING_CODE = "export const skin = undefined;\nexport const variants = {};\n";
 
 /** A path with the separators of a module id (`/`), without its query. */
 const slashed = (path: string) => path.split("?")[0]?.replaceAll("\\", "/") ?? "";
@@ -51,27 +67,35 @@ export function isDevSkinFile(id: string, skinsDir: string): boolean {
   return path.startsWith(dir) && /^_[^/]+\/./.test(path.slice(dir.length));
 }
 
-/** The skins that the page applies before it is drawn, by id, with their modes. */
-export type SkinTable = Record<string, readonly Mode[]>;
+/** What the page needs of a skin before it is drawn: its modes, and the colour of the browser's bar. */
+export type TableEntry = { modes: readonly Mode[]; themeColor: string };
+
+/** The skins that the page applies before it is drawn, by id. */
+export type SkinTable = Record<string, TableEntry>;
 
 /**
  * The table of the skins, from their folders: each one that has an `index.ts`,
- * with the modes it declares (`modes: ["light", "dark"]`), but Crête, which is
- * what the page is without a skin. A folder whose name starts with `_` is a
- * skin of development, left out of a build. index.test.ts checks that the table
- * says what the registry finds.
+ * with the modes and the theme colour it declares (`modes: ["light", "dark"]`,
+ * `themeColor: "#rrggbb"`), but Crête, which is what the page is without a
+ * skin. A folder whose name starts with `_` is a skin of development, left out
+ * of a build. plugin.test.ts checks that the table says what the registry finds.
  */
 export function skinTable(skinsDir: string, { dev }: { dev: boolean }): SkinTable {
-  const table: Record<string, Mode[]> = {};
+  const table: SkinTable = {};
   for (const entry of readdirSync(skinsDir, { withFileTypes: true })) {
     const index = join(skinsDir, entry.name, "index.ts");
     if (!entry.isDirectory() || !existsSync(index) || entry.name === DEFAULT_SKIN) continue;
     if (entry.name.startsWith("_") && !dev) continue;
-    const modes = declaredModes(readFileSync(index, "utf8"));
+    const source = readFileSync(index, "utf8");
+    const modes = declaredModes(source);
     if (modes.length === 0) {
       throw new Error(`${index} declares no modes (modes: ["light"], ["dark"] or both)`);
     }
-    table[entry.name] = modes;
+    const themeColor = declaredThemeColor(source);
+    if (themeColor === undefined) {
+      throw new Error(`${index} declares no theme colour (themeColor: "#rrggbb")`);
+    }
+    table[entry.name] = { modes, themeColor };
   }
   return table;
 }
@@ -82,6 +106,11 @@ const isMode = (value: string | undefined): value is Mode => value === "light" |
 export function declaredModes(source: string): Mode[] {
   const declared = /\bmodes:\s*\[([^\]]*)\]/.exec(source)?.[1] ?? "";
   return [...declared.matchAll(/["']([a-z]+)["']/g)].map((match) => match[1]).filter(isMode);
+}
+
+/** The theme colour that the source of a skin's `index.ts` declares (`themeColor: "#rrggbb"`). */
+export function declaredThemeColor(source: string): string | undefined {
+  return /\bthemeColor:\s*["'](#[0-9a-fA-F]{6})["']/.exec(source)?.[1];
 }
 
 /** Where index.html has the table of the skins, in its inline script. */
@@ -119,7 +148,8 @@ export function skins(): Plugin {
     // Before the resolver of Vite, which would find the files of a skin of development first.
     enforce: "pre",
     config(config, { mode }) {
-      const env = loadEnv(mode, config.envDir || process.cwd(), "VITE_");
+      const dir = envDirOf(config);
+      const env = dir === false ? {} : loadEnv(mode, dir, "VITE_");
       depth = skinDepth(process.env.VITE_SKIN_DEPTH ?? env.VITE_SKIN_DEPTH);
       return { define: { BUILD_SKIN_DEPTH: JSON.stringify(depth) } };
     },
@@ -139,7 +169,7 @@ export function skins(): Plugin {
       return resolved !== null && isDevSkinFile(resolved.id, skinsDir) ? NOTHING : resolved;
     },
     load(id) {
-      return id === NOTHING ? "export {};" : null;
+      return id === NOTHING ? NOTHING_CODE : null;
     },
     transformIndexHtml(html, { path }) {
       return pageWithSkins(html, path, () => skinTable(skinsDir, { dev }));

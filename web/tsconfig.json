@@ -13,7 +13,10 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    // The module of the depth of the build is one of src/skins/depth/ (see src/skins/plugin.ts):
+    // they all export the same, typed here as the deepest.
+    "paths": { "virtual:skin-depth": ["./src/skins/depth/full.ts"] }
   },
   "include": ["src", "vite.config.ts"]
 }

@@ -17,8 +17,10 @@ import {
   skinModes,
   skinSelectors,
   skinStylesheet,
+  linearStops,
+  skyColour,
   themeColour,
-  utilityBody,
+  themeValue,
   type SkinCase,
 } from "./test/theme";
 
@@ -82,23 +84,93 @@ test("dark — le ciel de l'entête et des bandeaux reste celui de l'aube", () =
   for (const kept of ["--color-white", "--color-iris-400", "--color-peach-300"]) {
     expect(chosen.has(kept), `${kept} is kept`).toBe(false);
   }
-  // The skies and the dawn of the buttons are written out, not made of
-  // colours that the dark theme changes.
-  for (const utility of ["bg-dawn-sky", "bg-dawn-hero", "bg-dawn-deep", "bg-dawn"]) {
-    expect(block(styles, `@utility ${utility}`), `the dawn of ${utility}`).not.toMatch(
-      /var\(--color/,
+  // The skies and the dawn of the buttons are paints of their own (`--dawn-*`),
+  // which every utility of the dawn reads; they are written out, not made of
+  // colours that the dark theme changes, and the night leaves them alone.
+  for (const utility of ["bg-dawn-sky", "bg-dawn-hero", "bg-dawn-deep", "bg-dawn", "text-dawn"]) {
+    expect(block(styles, `@utility ${utility}`), `the dawn of ${utility}`).toMatch(
+      /var\(--dawn-[a-z-]+\)/,
     );
+  }
+  const paints = [...light.keys()].filter((property) => property.startsWith("--dawn-"));
+  expect(paints.length).toBeGreaterThan(8);
+  for (const paint of paints) {
+    expect(light.get(paint), `${paint} is written out`).not.toMatch(/var\(--color/);
+    expect(chosen.has(paint), `${paint} is the same at night`).toBe(false);
   }
 });
 
 test("dark — le texte blanc des boutons en dégradé ne change pas : 4,5:1 sur chaque couleur de l'aube", () => {
   // The text is `text-white`, and the dark theme leaves white alone (see above).
   expect(darkBlocks().chosen.has("--color-white")).toBe(false);
-  for (const { skin, label } of SKIN_CASES) {
-    const stops = utilityBody("bg-dawn-deep", skin).match(/#[0-9a-f]{6}/gi) ?? [];
+  for (const { skin, mode, label } of SKIN_CASES) {
+    const stops = linearStops(themeValue("--dawn-deep", mode, skin));
     expect(stops.length, `stops of ${label}`).toBeGreaterThanOrEqual(skin === DEFAULT_SKIN ? 3 : 2);
     for (const stop of stops) {
       expect(contrast("#ffffff", stop), `${label}: white on ${stop}`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+/** The three channels of a `#rrggbb` colour, from 0 to 255. */
+const channels = (hex: string) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+
+/** A colour mixed with another, `amount` of the first (as `color-mix(in srgb, …)`). */
+function mixed(first: string, second: string, amount: number): string {
+  const [a, b] = [channels(first), channels(second)];
+  return `#${a
+    .map((value, i) =>
+      Math.round(value * amount + (b[i] ?? 0) * (1 - amount))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+test("dark — le ciel de chaque skin, dans chaque mode : le texte blanc, la pastille « S'inscrire » et les notes se lisent", () => {
+  for (const { skin, mode, label } of SKIN_CASES) {
+    // The white text of the header and of a hero, on every colour of their linear gradients.
+    for (const paint of ["--dawn-sky", "--dawn-hero"]) {
+      const colour = themeValue(`${paint}-color`, mode, skin);
+      for (const stop of [colour, ...linearStops(themeValue(paint, mode, skin))]) {
+        expect(
+          contrast("#ffffff", stop),
+          `${label}: white on ${paint} (${stop})`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    // « S'inscrire » on a hero (ON_DAWN): its text in iris-700 on a white pill.
+    const pill = skyColour("iris-700", mode, skin);
+    expect(
+      contrast(pill, "#ffffff"),
+      `${label}: iris-700 (${pill}) on the white pill`,
+    ).toBeGreaterThanOrEqual(4.5);
+    // The notes of an event: ink on a frosted card (`glass`, 82 % of a card) over the hero.
+    const ink = skyColour("ink", mode, skin);
+    const card = skyColour("card", mode, skin);
+    const behind = [
+      themeValue("--dawn-hero-color", mode, skin),
+      ...linearStops(themeValue("--dawn-hero", mode, skin)),
+    ];
+    for (const colour of behind) {
+      const ground = mixed(card, colour, 0.82);
+      expect(
+        contrast(ink, ground),
+        `${label}: ink (${ink}) on the notes over ${colour} (${ground})`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+test("dark — le ciel d'un skin à deux modes reste celui de son jour, la nuit", () => {
+  // As Crête's (above): what sits on the sky has the colours of the day, at night too.
+  for (const skin of [...new Set(SKIN_CASES.map((one) => one.skin))].filter(
+    (one) => skinModes(one).length > 1,
+  )) {
+    for (const name of ["ink", "card", "iris-700", "neutral-600", "neutral-800", "iris-600"]) {
+      expect(skyColour(name, "dark", skin), `${skin}: ${name} on the sky at night`).toBe(
+        skyColour(name, "light", skin),
+      );
     }
   }
 });
@@ -172,34 +244,60 @@ const OTHER_SKINS = [...new Set(SKIN_CASES.map(({ skin }) => skin))].filter(
   (skin) => skin !== DEFAULT_SKIN,
 );
 
-test("dark — un skin ne change que des propriétés que Crête déclare, sous son propre sélecteur", () => {
+/** The rules of a stylesheet of a skin, those in a media query included, with the properties each declares. */
+function skinRules(css: string): { selectors: string[]; properties: string[]; media: boolean }[] {
+  return rules(css)
+    .flatMap((rule) =>
+      rule.prelude.startsWith("@media")
+        ? rules(rule.body).map((inner) => ({ ...inner, media: true }))
+        : [{ ...rule, media: false }],
+    )
+    .map(({ prelude, body, media }) => ({
+      selectors: prelude.split(",").map((selector) => selector.replace(/\s+/g, " ").trim()),
+      properties: body
+        .split(";")
+        .map((declaration) => declaration.trim())
+        .filter((declaration) => declaration !== "")
+        .map((declaration) => declaration.slice(0, declaration.indexOf(":")).trim()),
+      media,
+    }));
+}
+
+test("dark — un skin ne fait que changer, sous son propre sélecteur, des propriétés que Crête déclare", () => {
   // Not an empty search: the example skin of development is one.
   expect(OTHER_SKINS.length).toBeGreaterThan(0);
   const known = lightTheme();
   for (const skin of OTHER_SKINS) {
-    const css = skinStylesheet(skin);
     const { root, darkChosen, darkFollowed, sky } = skinSelectors(skin);
-    const own = [
-      ...skinDeclarations(css, root).keys(),
-      ...skinDeclarations(css, darkChosen).keys(),
-      ...skinDeclarations(css, darkFollowed, "@media (prefers-color-scheme: dark)").keys(),
-      ...skinDeclarations(css, sky).keys(),
-    ];
-    expect(own.length, `${skin} sets no colour`).toBeGreaterThan(0);
-    for (const property of own) {
-      if (property === "color-scheme") continue;
-      expect(known.has(property), `${skin} sets ${property}, which Crête does not declare`).toBe(
-        true,
-      );
+    // palette.css: the custom properties of Crête (its colours, fonts, radii,
+    // shadows, paints of the dawn), on the skin's page, night and sky; nothing
+    // else, so that every utility, whatever its variant, follows the skin.
+    const palette = skinRules(skinStylesheet(skin, "palette"));
+    expect(palette.length, `${skin} has no palette.css`).toBeGreaterThan(0);
+    for (const { selectors, properties, media } of palette) {
+      for (const selector of selectors) {
+        const allowed = media ? [darkFollowed] : [root, darkChosen, sky];
+        expect(allowed, `${skin}, palette.css: ${selector}`).toContain(selector);
+      }
+      for (const property of properties) {
+        if (property === "color-scheme") continue;
+        expect(
+          known.has(property),
+          `${skin}, palette.css sets ${property}, which is not a custom property of Crête`,
+        ).toBe(true);
+      }
     }
-    // Every rule is the skin's, in a media query or not: a page in another skin never sees it.
-    const selectors = rules(css)
-      .flatMap((rule) => (rule.prelude.startsWith("@media") ? rules(rule.body) : [rule]))
-      .flatMap(({ prelude }) => prelude.split(","))
-      .map((selector) => selector.trim());
-    expect(selectors.length, `skin ${skin}`).toBeGreaterThan(0);
-    for (const selector of selectors) {
-      expect(selector.startsWith(root), `${skin}: ${selector}`).toBe(true);
+    // mix.css and full.css: rules of the skin only, which restyle with those
+    // properties and set none of their own (the tests of the colours read the palette).
+    for (const level of ["mix", "full"] as const) {
+      for (const { selectors, properties } of skinRules(skinStylesheet(skin, level))) {
+        for (const selector of selectors) {
+          expect(selector.startsWith(`${root} `), `${skin}, ${level}.css: ${selector}`).toBe(true);
+        }
+        for (const property of properties) {
+          expect(property.startsWith("--"), `${skin}, ${level}.css sets ${property}`).toBe(false);
+        }
+      }
     }
   }
 });

@@ -3,7 +3,7 @@ import { variants as depthVariants } from "virtual:skin-depth";
 
 import { forceMode } from "../lib/theme";
 import { skin as crete, slots as creteSlots } from "./crete";
-import type { Depth, Skin, SlotName, Slots, Variants } from "./types";
+import type { Depth, Skin, SlotName, Slots, VariantName, VariantProps, Variants } from "./types";
 
 /**
  * The skins of the app: the ways it can be dressed, one of them chosen on the
@@ -77,53 +77,54 @@ export function readSkin(): string {
   }
 }
 
+const listeners = new Set<() => void>();
+
+/**
+ * The skin of the page: the one applied last (by main.tsx at start, by a
+ * choice, from another tab). Until one is, the one kept on the device, read
+ * once. A choice that the storage refused stays here until the page is closed.
+ */
+let shown: Skin | undefined;
+
 /**
  * Puts a skin on the page: `data-skin` on <html>, none for Crête (or a skin
- * that is not in the app), and the mode of a skin that has one only.
+ * that is not in the app), the mode of a skin that has one only, and its
+ * colour for the bar of the browser. Whoever shows the skin is told.
  */
 export function applySkin(id: string): void {
   const skin = byId(id) ?? DEFAULT;
+  shown = skin;
   const root = document.documentElement;
   if (skin === DEFAULT) delete root.dataset.skin;
   else root.dataset.skin = skin.id;
   forceMode(skin.modes.length === 1 ? (skin.modes[0] ?? null) : null);
+  const bar = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (bar !== null) bar.content = skin.themeColor;
+  for (const listener of listeners) listener();
 }
 
 /** Keeps a skin on the device (Crête is kept as nothing); false when the storage refuses. */
-function keepSkin(skin: Skin): boolean {
+function keepSkin(skin: Skin): void {
   try {
     if (skin === DEFAULT) localStorage.removeItem(SKIN_KEY);
     else localStorage.setItem(SKIN_KEY, skin.id);
-    return true;
   } catch {
-    return false;
+    // Not kept, but the page has it (`shown`) until it is closed.
   }
-}
-
-const listeners = new Set<() => void>();
-
-/** The skin of this page, when the storage could not keep it: the page has it until it is closed. */
-let unkept: Skin | null = null;
-
-function tell(): void {
-  for (const listener of listeners) listener();
 }
 
 /** Chooses a skin: kept on the device, applied at once, told to whoever shows it. */
 export function chooseSkin(id: string): void {
   const skin = byId(id) ?? DEFAULT;
-  unkept = keepSkin(skin) ? null : skin;
+  keepSkin(skin);
   applySkin(skin.id);
-  tell();
 }
 
 /** A change of the storage made by another page of the site: the skin, if it was its key. */
 function changedElsewhere(event: Pick<StorageEvent, "key">): void {
   // `null`: the whole storage was emptied.
   if (event.key !== SKIN_KEY && event.key !== null) return;
-  unkept = null;
   applySkin(readSkin());
-  tell();
 }
 
 /**
@@ -145,11 +146,12 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-const current = (): Skin => unkept ?? byId(readSkin()) ?? DEFAULT;
+/** The skin of the page, as `useSkin` reads it: without reading the storage again on every render. */
+export const currentSkin = (): Skin => (shown ??= byId(readSkin()) ?? DEFAULT);
 
-/** The skin chosen on this device, and how to choose another (by its id). */
+/** The skin of the page, and how to choose another (by its id). */
 export function useSkin(): [Skin, (id: string) => void] {
-  const skin = useSyncExternalStore(subscribe, current, () => DEFAULT);
+  const skin = useSyncExternalStore(subscribe, currentSkin, () => DEFAULT);
   return [skin, chooseSkin];
 }
 
@@ -159,8 +161,8 @@ export function slotOf<N extends SlotName>(skin: Skin, name: N): Slots[N] {
 }
 
 /**
- * The motif of the skin of the page in a slot of the app, as a component:
- * `const Divider = useSlot("Divider")`, then `<Divider />`.
+ * The motif of the skin of the page in a slot of the app, as a component. The
+ * app draws it through `slotted` (components.tsx), as components/Slots.tsx does.
  */
 export function useSlot<N extends SlotName>(name: N): Slots[N] {
   const [skin] = useSkin();
@@ -188,19 +190,24 @@ export function variantsBySkin(modules: Readonly<Record<string, Variants>>): Map
 
 const VARIANTS = variantsBySkin(depthVariants);
 
+/** The component that a skin puts in the place of `name` at the depth of the build, if any. */
+export function variantOf<N extends VariantName>(
+  skinId: string,
+  name: N,
+): ComponentType<VariantProps[N]> | undefined {
+  return VARIANTS.get(skinId)?.[name];
+}
+
 /**
- * A component that a skin may replace at a depth beyond palette (the bib of
- * « Dossard », the ticket of « Rétro »…): `const Card = useSkinVariant("EventCard",
- * EventCard)`, then `<Card … />`. It is the variant that the skin of the page
- * exports under that name from its `mix.tsx` or `full.tsx`, when the build is
- * deep enough to have that file, and `fallback` otherwise. A variant takes the
- * props of the component it replaces.
+ * The component that the skin of the page puts in the place of `name` at the
+ * depth of the build (its `mix.tsx` or `full.tsx`), or `fallback`. The app does
+ * not call it in a render: it makes the component skinnable once, at the top
+ * of its module, with `skinnable` (components.tsx).
  */
-export function useSkinVariant<P extends object>(
-  name: string,
-  fallback: ComponentType<P>,
-): ComponentType<P> {
+export function useSkinVariant<N extends VariantName>(
+  name: N,
+  fallback: ComponentType<VariantProps[N]>,
+): ComponentType<VariantProps[N]> {
   const [skin] = useSkin();
-  const variant = VARIANTS.get(skin.id)?.[name];
-  return variant ?? fallback;
+  return variantOf(skin.id, name) ?? fallback;
 }

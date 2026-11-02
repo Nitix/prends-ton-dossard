@@ -4,7 +4,7 @@ import { runInNewContext } from "node:vm";
 
 import { expect, test } from "vitest";
 
-import { SKIN_KEY } from ".";
+import { SKIN_KEY, SKINS } from ".";
 import { THEME_KEY } from "../lib/theme";
 import { pageWithSkins, skinTable, skins, withSkins, type SkinTable } from "./plugin";
 
@@ -18,6 +18,12 @@ const page = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
 
 type Root = { dataset: Record<string, string | undefined>; style: { colorScheme?: string } };
 
+/** What the script leaves on the page: <html>, and the colour of the bar of the browser. */
+type Painted = Root & { bar: string };
+
+/** The colour of the bar that index.html has before any skin: the violet of Crête's sky. */
+const CRETE_BAR = "#5e4ae3";
+
 /** The inline scripts of the head of a page. */
 function inlineScripts(html: string): string[] {
   const head = html.slice(0, html.indexOf("</head>"));
@@ -25,41 +31,50 @@ function inlineScripts(html: string): string[] {
 }
 
 /** Runs the inline script of the page, built with `table`, against what the device keeps (or a storage that refuses). */
-function firstPaint(table: SkinTable, kept: Readonly<Record<string, string>> | Error): Root {
+function firstPaint(table: SkinTable, kept: Readonly<Record<string, string>> | Error): Painted {
   const [script = ""] = inlineScripts(withSkins(page, table));
   const root: Root = { dataset: {}, style: {} };
+  const bar = { content: CRETE_BAR };
   const localStorage = {
     getItem: (key: string) => {
       if (kept instanceof Error) throw kept;
       return kept[key] ?? null;
     },
   };
-  runInNewContext(script, { document: { documentElement: root }, localStorage });
-  return root;
+  const document = {
+    documentElement: root,
+    querySelector: (selector: string) => (selector === 'meta[name="theme-color"]' ? bar : null),
+  };
+  runInNewContext(script, { document, localStorage });
+  return { ...root, bar: bar.content };
 }
 
-/** The skins of a build, and two that the app does not have yet: one dark only, one with both modes. */
+/** The skins of a build, and three that the app does not have yet: dark only, both modes, light only. */
 const TABLE: SkinTable = {
   ...skinTable(dir, { dev: false }),
-  nuit: ["dark"],
-  alpage: ["light", "dark"],
-  carnet: ["light"],
+  nuit: { modes: ["dark"], themeColor: "#0e1116" },
+  alpage: { modes: ["light", "dark"], themeColor: "#2f6b3a" },
+  carnet: { modes: ["light"], themeColor: "#f4ecd8" },
 };
 
-test("noFlash — index.html applique le skin gardé avant le premier dessin, avec le thème", () => {
+test("noFlash — index.html applique le skin gardé avant le premier dessin, avec le thème et la couleur de la barre", () => {
   const [script = ""] = inlineScripts(withSkins(page, TABLE));
   expect(inlineScripts(page)).toHaveLength(1);
   expect(script).toContain(SKIN_KEY);
   expect(script).toContain(THEME_KEY);
+  // The page starts with Crête's colour for the bar.
+  expect(page).toContain(`<meta name="theme-color" content="${CRETE_BAR}" />`);
 
   expect(firstPaint(TABLE, { [SKIN_KEY]: "alpage" })).toEqual({
     dataset: { skin: "alpage" },
     style: {},
+    bar: "#2f6b3a",
   });
   // Both modes: the theme kept applies as it does with Crête.
   expect(firstPaint(TABLE, { [SKIN_KEY]: "alpage", [THEME_KEY]: "dark" })).toEqual({
     dataset: { skin: "alpage", theme: "dark" },
     style: { colorScheme: "dark" },
+    bar: "#2f6b3a",
   });
 });
 
@@ -69,10 +84,12 @@ test("noFlash — un skin à un seul mode est dessiné dans ce mode dès le prem
     expect(firstPaint(TABLE, { ...kept, [SKIN_KEY]: "nuit" }), `theme ${theme}`).toEqual({
       dataset: { skin: "nuit", theme: "dark" },
       style: { colorScheme: "dark" },
+      bar: "#0e1116",
     });
     expect(firstPaint(TABLE, { ...kept, [SKIN_KEY]: "carnet" }), `theme ${theme}`).toEqual({
       dataset: { skin: "carnet", theme: "light" },
       style: { colorScheme: "light" },
+      bar: "#f4ecd8",
     });
   }
 });
@@ -82,16 +99,20 @@ test("noFlash — Crête, un skin inconnu, un skin de développement dans un bui
     expect(firstPaint(TABLE, { [SKIN_KEY]: skin, [THEME_KEY]: "dark" }), `skin ${skin}`).toEqual({
       dataset: { theme: "dark" },
       style: { colorScheme: "dark" },
+      bar: CRETE_BAR,
     });
   }
   expect(firstPaint(TABLE, new DOMException("The storage is off", "SecurityError"))).toEqual({
     dataset: {},
     style: {},
+    bar: CRETE_BAR,
   });
   // In development, the example skin is a skin like the others.
+  const example = SKINS.find((skin) => skin.id === "_example");
   expect(firstPaint(skinTable(dir, { dev: true }), { [SKIN_KEY]: "_example" })).toEqual({
     dataset: { skin: "_example", theme: "light" },
     style: { colorScheme: "light" },
+    bar: example?.themeColor,
   });
 });
 

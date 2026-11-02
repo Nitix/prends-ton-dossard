@@ -124,6 +124,7 @@ export const en = {
   settings: {
     appearance: "Appearance",
     skin: "Theme",
+    mode: "Light or dark",
     onlyLight: "This theme only has a light mode.",
     onlyDark: "This theme only has a dark mode.",
     fontSample: "Aa",

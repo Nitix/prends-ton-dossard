@@ -13,5 +13,6 @@ export const skin: Skin = {
   modes: ["light"],
   slots: { SectionMarker: ExampleMarker, Divider: ExampleDivider },
   swatches: ["#0b7a5e", "#fde68a"],
-  fontSample: "ui-serif, Georgia, serif",
+  fontSample: '"Example Display", ui-serif, Georgia, serif',
+  themeColor: "#08634c",
 };

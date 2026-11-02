@@ -2,8 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
-import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
@@ -68,10 +68,9 @@ export function PendingConfirmations({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title section-title">
-        <SectionMarker />
+      <BlockTitle ref={heading} id={headingId} tabIndex={-1}>
         {t.home.pendingTitle}
-      </h2>
+      </BlockTitle>
       <ul className="flex flex-col gap-3">
         {rows.map((view) => (
           <PendingRow

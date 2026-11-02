@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-import { SectionMarker } from "../../components/Slots";
+import { BlockTitle } from "../../components/BlockTitle";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { EventView } from "../events/api";
 import { EventCard } from "../events/EventCard";
@@ -25,10 +25,7 @@ export function DayList({
   }
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 md:hidden">
-      <h2 id={headingId} className="block-title section-title">
-        <SectionMarker />
-        {f.dateLong(day)}
-      </h2>
+      <BlockTitle id={headingId}>{f.dateLong(day)}</BlockTitle>
       {views.length === 0 ? (
         <p>{t.agenda.dayEmpty}</p>
       ) : (

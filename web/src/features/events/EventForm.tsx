@@ -3,9 +3,9 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
 import { startTransition, useActionState, useId, useRef, useState } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Field, INPUT } from "../../components/Field";
-import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -514,15 +514,9 @@ function EventFields({
       </div>
 
       <section aria-labelledby="formats-title" className="flex flex-col gap-4">
-        <h2
-          ref={formatsTitle}
-          id="formats-title"
-          tabIndex={-1}
-          className="block-title section-title text-xl"
-        >
-          <SectionMarker />
+        <BlockTitle ref={formatsTitle} id="formats-title" tabIndex={-1} className="text-xl">
           {t.form.formatsTitle}
-        </h2>
+        </BlockTitle>
         {draft.rows.map((row, index) => (
           <FormatFieldset
             key={row.key}

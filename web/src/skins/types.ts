@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 // What a skin is: a way to dress the app, chosen on the device (see index.ts
 // and README.md). These types are also read by plugin.ts, in Node: nothing
@@ -32,24 +32,30 @@ export type HeroArtProps = { place: "event" | "runner" };
 /** A line between two blocks of a page. */
 export type DividerProps = { className?: string };
 
+/** A motif with no props. */
+export type NoProps = { children?: never };
+
+/** The props of the motif of each slot. */
+export type SlotProps = {
+  HeaderArt: HeaderArtProps;
+  BrandMark: BrandMarkProps;
+  HeroArt: HeroArtProps;
+  Divider: DividerProps;
+  /** The mark before the title of a block (`BlockTitle`, an `h2.section-title`): its first child. */
+  SectionMarker: NoProps;
+  /** The art of a list with nothing in it, over its words (see components/EmptyState.tsx). */
+  EmptyArt: NoProps;
+};
+
+export type SlotName = keyof SlotProps;
+
 /**
  * The motifs of a skin, each in a named place of the app. They are decoration:
  * hidden from screen readers (`aria-hidden`), they never say what the words
  * around them do not. Crête has them all; another skin gives those it draws
  * differently, and Crête's stand in for the others (see `useSlot`).
  */
-export type Slots = {
-  HeaderArt: ComponentType<HeaderArtProps>;
-  BrandMark: ComponentType<BrandMarkProps>;
-  HeroArt: ComponentType<HeroArtProps>;
-  Divider: ComponentType<DividerProps>;
-  /** The mark before the title of a block (an `h2.section-title`): its first child. */
-  SectionMarker: ComponentType;
-  /** The art of a list with nothing in it, over its words (see components/EmptyState.tsx). */
-  EmptyArt: ComponentType;
-};
-
-export type SlotName = keyof Slots;
+export type Slots = { [N in SlotName]: ComponentType<SlotProps[N]> };
 
 /** A skin: what its folder's `index.ts` exports as `skin`. */
 export type Skin = {
@@ -71,13 +77,30 @@ export type Skin = {
    * font is loaded (it never loads a font to show it), else in the app's.
    */
   fontSample: string;
+  /**
+   * The colour of the browser's bar around the page (`<meta name="theme-color">`,
+   * `#rrggbb`): the colour of the top of its header. index.html and `applySkin` set it.
+   */
+  themeColor: string;
 };
 
+/** The props of components/EmptyState.tsx. */
+export type EmptyStateProps = { title: ReactNode; hint: ReactNode };
+
 /**
- * The components that a skin replaces at a depth beyond palette, by name: what
- * its `mix.tsx` or `full.tsx` exports as `variants`. A variant takes the props
- * of the component it replaces (see `useSkinVariant` in index.ts), which the
- * app knows, not the registry: hence `any`.
+ * The components that a skin may replace at a depth beyond palette, by name,
+ * with their props: a component made skinnable (`skinnable` in components.tsx)
+ * adds its line here. A name that is not here does not typecheck, in a skin's
+ * `variants` as at the call.
  */
-// oxlint-disable-next-line typescript/no-explicit-any
-export type Variants = Readonly<Record<string, ComponentType<any>>>;
+export type VariantProps = {
+  EmptyState: EmptyStateProps;
+};
+
+export type VariantName = keyof VariantProps;
+
+/**
+ * What a skin's `mix.tsx` or `full.tsx` exports as `variants`: the components
+ * it replaces at that depth, each taking the props of the one it replaces.
+ */
+export type Variants = { readonly [N in VariantName]?: ComponentType<VariantProps[N]> };

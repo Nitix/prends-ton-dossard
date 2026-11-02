@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 
 import { INPUT, READ_ONLY_INPUT } from "./components/Field";
 import { contrast } from "./test/colour";
-import { SKIN_CASES, themeColour, utilityBody } from "./test/theme";
+import { SKIN_CASES, linearStops, themeColour, themeValue, type Theme } from "./test/theme";
 
 // Contrasts that the classes of the app decide, measured on the values of the
 // theme (styles.css) with the formula of WCAG 2, by day and at night, and on
@@ -48,16 +48,15 @@ const hexOf = (rgb: number[]) =>
     .join("")}`;
 
 /**
- * The colours of a linear gradient of a `@utility` of styles.css (or of the
- * rule of a skin that repaints it), at its stops and at every sixteenth of the
- * way between two of them (a gradient is mixed in sRGB, and a point between
- * two stops can be lighter than both).
+ * The colours of a paint of the dawn (`--dawn-deep`…, which the utilities of
+ * styles.css paint with and a skin sets), at its stops and at every sixteenth
+ * of the way between two of them (a gradient is mixed in sRGB, and a point
+ * between two stops can be lighter than both).
  */
-function gradientColours(utility: string, skin?: string): string[] {
-  const body = utilityBody(utility, skin);
-  const stops = [...body.matchAll(/(#[0-9a-fA-F]{6})\s+\d+%/g)].map((m) => m[1] ?? "");
+function gradientColours(property: string, mode: Theme, skin: string): string[] {
+  const stops = linearStops(themeValue(property, mode, skin));
   if (stops.length < 2) {
-    throw new Error(`${utility} has no gradient of #rrggbb stops (${skin ?? "crete"})`);
+    throw new Error(`${property} has no gradient of #rrggbb stops (${skin}, ${mode})`);
   }
   return stops.slice(1).flatMap((to, i) => {
     const from = channels(stops[i] ?? "");
@@ -78,7 +77,7 @@ describe("contrast", () => {
     const buttons = classStrings("bg-dawn-deep", "text-white");
     expect(buttons.length, "no class string paints white text on bg-dawn-deep").toBeGreaterThan(0);
     // The sunrise is painted in its own colours, whatever the theme: the same
-    // stops by day and at night, as the white of the text. A skin may repaint it.
+    // stops by day and at night, as the white of the text. A skin sets its own (`--dawn-deep`).
     for (const { where, classes } of buttons) {
       // The filters of its states (`hover:brightness-110`…), and the button at rest.
       const factors = [
@@ -87,8 +86,8 @@ describe("contrast", () => {
           (match) => Number(match[1]) / 100,
         ),
       ];
-      for (const { skin, label } of SKIN_CASES) {
-        const colours = gradientColours("bg-dawn-deep", skin);
+      for (const { skin, mode, label } of SKIN_CASES) {
+        const colours = gradientColours("--dawn-deep", mode, skin);
         for (const factor of factors) {
           const worst = Math.min(
             ...colours.map((colour) => contrast("#ffffff", brightened(colour, factor))),

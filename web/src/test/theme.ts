@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { SKINS } from "../skins";
+import type { Depth } from "../skins/types";
 
 // The colours of the theme, as styles.css declares them, so that a test reads
 // the value the app is painted with and not a copy of it. The light theme is
@@ -37,7 +38,10 @@ export function block(css: string, opener: string): string | undefined {
 
 /** The declarations at the top of a block (not those of the blocks inside it), by property. */
 export function declarations(body: string | undefined): Map<string, string> {
-  const flat = (body ?? "").replace(/\{[^{}]*\}/g, "{}").replace(/\{[^{}]*\}/g, "{}");
+  const flat = (body ?? "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\{[^{}]*\}/g, "{}")
+    .replace(/\{[^{}]*\}/g, "{}");
   return new Map(
     [...flat.matchAll(/(?:^|[;{}\s])(--[a-z0-9-]+|color-scheme)\s*:\s*([^;{}]+);/g)].map(
       (match) => [match[1] ?? "", (match[2] ?? "").replace(/\s+/g, " ").trim()],
@@ -92,10 +96,14 @@ export function skinSelectors(skin: string) {
   };
 }
 
-/** The palette of a skin (its `palette.css`), or nothing. */
-export function skinStylesheet(skin: string): string {
+/**
+ * A stylesheet of a skin, by its level: its `palette.css` (its colours, the
+ * only one that sets custom properties), `mix.css` or `full.css`; nothing when
+ * it has none.
+ */
+export function skinStylesheet(skin: string, level: Depth = "palette"): string {
   if (skin === DEFAULT_SKIN) return "";
-  const url = new URL(`../skins/${skin}/palette.css`, import.meta.url);
+  const url = new URL(`../skins/${skin}/${level}.css`, import.meta.url);
   return existsSync(url) ? readFileSync(url, "utf8") : "";
 }
 
@@ -166,32 +174,88 @@ function themeOf(theme: Theme, skin = DEFAULT_SKIN): Map<string, string> {
 }
 
 /**
- * The `#rrggbb` value of a theme colour (`neutral-50`, `ink`, `blush-600`…), in
- * the light theme or the dark one, of Crête or of another skin.
+ * What sits on the sky (`.on-dawn`: the header, the heroes) is painted with:
+ * for Crête, the colours of the day that its `.on-dawn` puts back; under
+ * another skin, the colours of the page, and over them what its own `.on-dawn`
+ * (`:root[data-skin="<id>"] .on-dawn`) puts back.
  */
-export function themeColour(name: string, theme: Theme = "light", skin = DEFAULT_SKIN): string {
-  const declared = themeOf(theme, skin);
-  let value = declared.get(`--color-${name}`);
+function skyOf(theme: Theme, skin = DEFAULT_SKIN): Map<string, string> {
+  const page = themeOf(theme, skin);
+  const sky =
+    skin === DEFAULT_SKIN
+      ? onDawnBlock()
+      : skinDeclarations(skinStylesheet(skin), skinSelectors(skin).sky);
+  return new Map([...page, ...sky]);
+}
+
+/** The value of a custom property in a set of declarations, its `var()` followed. */
+function valueIn(declared: Map<string, string>, property: string): string | undefined {
+  let value = declared.get(property);
   for (let hops = 0; value?.startsWith("var(") && hops < 5; hops++) {
     value = declared.get(value.replace(/^var\(|\)$/g, ""));
-  }
-  if (value === undefined || !/^#[0-9a-fA-F]{6}$/.test(value)) {
-    const where = skin === DEFAULT_SKIN ? "styles.css" : `the skin ${skin}`;
-    throw new Error(
-      `The colour "${name}" is not a #rrggbb colour of the ${theme} theme in ${where}`,
-    );
   }
   return value;
 }
 
+function hexIn(declared: Map<string, string>, name: string, what: string): string {
+  const value = valueIn(declared, `--color-${name}`);
+  if (value === undefined || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+    throw new Error(`The colour "${name}" is not a #rrggbb colour of ${what}`);
+  }
+  return value;
+}
+
+const where = (theme: Theme, skin: string) =>
+  `the ${theme} theme in ${skin === DEFAULT_SKIN ? "styles.css" : `the skin ${skin}`}`;
+
 /**
- * What a utility of the dawn (`bg-dawn-deep`…) paints with under a skin: the
- * body of the skin's rule for it (`:root[data-skin="<id>"] .bg-dawn-deep`), or
- * Crête's `@utility` in styles.css.
+ * The `#rrggbb` value of a theme colour (`neutral-50`, `ink`, `blush-600`…), in
+ * the light theme or the dark one, of Crête or of another skin.
  */
-export function utilityBody(utility: string, skin = DEFAULT_SKIN): string {
-  const own = bodiesOf(skinStylesheet(skin), `${skinSelectors(skin).root} .${utility}`);
-  return own.at(-1) ?? block(styles, `@utility ${utility}`) ?? "";
+export function themeColour(name: string, theme: Theme = "light", skin = DEFAULT_SKIN): string {
+  return hexIn(themeOf(theme, skin), name, where(theme, skin));
+}
+
+/** A theme colour as it is under the sky (`.on-dawn`), in a mode, in a skin. */
+export function skyColour(name: string, theme: Theme = "light", skin = DEFAULT_SKIN): string {
+  return hexIn(skyOf(theme, skin), name, `the sky of ${where(theme, skin)}`);
+}
+
+/**
+ * The value of any custom property of the theme (`--dawn-deep`, `--focus-glow`…),
+ * in a mode, in a skin: a paint of the dawn is one, which a skin sets.
+ */
+export function themeValue(property: string, theme: Theme = "light", skin = DEFAULT_SKIN): string {
+  const value = valueIn(themeOf(theme, skin), property);
+  if (value === undefined) throw new Error(`${property} is not set in ${where(theme, skin)}`);
+  return value;
+}
+
+/** The parts of a list of backgrounds (`--dawn-sky`…) that are a `linear-gradient(…)`, in order. */
+function linearParts(value: string): string[] {
+  const parts: string[] = [];
+  for (let at = value.indexOf("linear-gradient("); at !== -1;) {
+    let depth = 0;
+    let end = at + "linear-gradient(".length;
+    for (; end < value.length; end++) {
+      if (value[end] === "(") depth++;
+      if (value[end] === ")") {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    parts.push(value.slice(at, end + 1));
+    at = value.indexOf("linear-gradient(", end);
+  }
+  return parts;
+}
+
+/**
+ * The `#rrggbb` stops of the linear gradients of a paint of the dawn (its
+ * radial glows, where no text sits, are left out), in order.
+ */
+export function linearStops(value: string): string[] {
+  return linearParts(value).flatMap((part) => part.match(/#[0-9a-fA-F]{6}\b/g) ?? []);
 }
 
 /** A skin in one of its modes: what a test of the colours measures. */

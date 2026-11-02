@@ -1,13 +1,15 @@
 /* « Exemple (dev) », depth palette: a fake palette, green and yellow, in light
-   only, over Crête's structure. Every rule is under the skin's selector: a page
-   in another skin never sees it. See ../README.md. */
+   only, over Crête's structure. It only sets custom properties of Crête, under
+   the skin's selector: every utility that paints with them follows, whatever
+   its variant (a tab that is the current page, a hover), and a page in another
+   skin never sees them. See ../README.md. */
 
 /* The colours of the day. The skin has no dark mode: the page is drawn in this
    one whatever the theme chosen (lib/theme.ts), so Crête's light values stand
-   for every colour it does not set. src/dark.test.ts and the other contrast
-   tests measure these as they measure Crête's. */
+   for every colour it does not set. Its sky (`.on-dawn`) has these colours too.
+   src/dark.test.ts and the other contrast tests measure them as Crête's. */
 :root[data-skin="_example"] {
-  --font-display: ui-serif, Georgia, "Times New Roman", serif;
+  --font-display: "Example Display", ui-serif, Georgia, "Times New Roman", serif;
 
   --color-neutral-50: #f4f7f2;
   --color-neutral-100: #e8eee4;
@@ -35,33 +37,23 @@
 
   --color-toast: #1f281a;
   --radius-card: 0.75rem;
-}
+  --shadow-glow: 0 10px 28px -10px rgb(8 99 76 / 0.5), 0 4px 12px -6px rgb(21 94 117 / 0.4);
 
-/* The sunrise of Crête, in green: the pills that carry white text (each stop
-   at least 4.5:1 with white, src/contrast.test.ts), the soft one, the skies. */
-:root[data-skin="_example"] .bg-dawn-deep {
-  background-image: linear-gradient(110deg, #08634c 0%, #0b7a5e 52%, #155e75 100%);
-}
-:root[data-skin="_example"] .bg-dawn {
-  background-image: linear-gradient(110deg, #a6e8d2 0%, #fde68a 52%, #6fd3b5 100%);
-}
-:root[data-skin="_example"] .bg-dawn-sky,
-:root[data-skin="_example"] .bg-dawn-hero {
-  background-color: #08634c;
-  background-image: linear-gradient(160deg, #064e3c 0%, #08634c 45%, #155e75 100%);
-}
-:root[data-skin="_example"] .text-dawn {
-  background-image: linear-gradient(100deg, #08634c 0%, #155e75 100%);
-}
-
-/* The line under the title of a page, and the skin's mark before the title of a block. */
-:root[data-skin="_example"] .page-title::after {
-  background-image: linear-gradient(90deg, #fde68a, #1f9a76);
-}
-:root[data-skin="_example"] .example-marker {
-  flex: none;
-  width: 0.6rem;
-  height: 0.6rem;
-  rotate: 45deg;
-  background-color: #e3b505;
+  /* The dawn of Crête, in green: the pills that carry white text (each stop
+     at least 4.5:1 with white), the soft one, the skies, the lines. */
+  --dawn-soft: linear-gradient(110deg, #a6e8d2 0%, #fde68a 52%, #6fd3b5 100%);
+  --dawn-deep: linear-gradient(110deg, #08634c 0%, #0b7a5e 52%, #155e75 100%);
+  --dawn-sky-color: #08634c;
+  --dawn-sky: linear-gradient(160deg, #064e3c 0%, #08634c 45%, #155e75 100%);
+  --dawn-hero-color: #08634c;
+  --dawn-hero: linear-gradient(150deg, #064e3c 0%, #08634c 45%, #155e75 100%);
+  --dawn-text: linear-gradient(100deg, #08634c 0%, #155e75 100%);
+  --dawn-line: linear-gradient(90deg, #fde68a, #1f9a76);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #1f9a76, transparent);
+  --dawn-ring-from: #0b7a5e;
+  --dawn-ring-via: #1f9a76;
+  --dawn-ring-to: #fde68a;
+  --dawn-chip-glow: rgb(8 99 76 / 0.5);
+  --focus-glow: rgb(11 122 94 / 0.2);
 }

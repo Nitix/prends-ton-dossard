@@ -30,4 +30,6 @@ export const skin: Skin = {
   swatches: ["#5e4ae3", "#ff7eb3"],
   fontSample:
     '"Plus Jakarta Sans Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif',
+  // The top of its header: the violet of the sky.
+  themeColor: "#5e4ae3",
 };

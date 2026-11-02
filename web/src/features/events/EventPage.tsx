@@ -3,6 +3,7 @@ import { ClientResponseError } from "pocketbase";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Avatar } from "../../components/Avatar";
+import { BlockTitle } from "../../components/BlockTitle";
 import { DANGER_TEXT, ON_DAWN, PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
 import {
@@ -17,7 +18,7 @@ import {
   UserPlusIcon,
 } from "../../components/icons";
 import { SECTION, UNCONFIRMED_ROW } from "../../components/section";
-import { HeroArt, SectionMarker } from "../../components/Slots";
+import { HeroArt } from "../../components/Slots";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween, raceStarted } from "../../lib/dates";
@@ -504,10 +505,9 @@ function EventSection({
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} data-focus={focus} tabIndex={-1} className="block-title section-title">
-        <SectionMarker />
+      <BlockTitle id={headingId} data-focus={focus} tabIndex={-1}>
         {title}
-      </h2>
+      </BlockTitle>
       <ul aria-label={t.event.participants} className="flex flex-col gap-2">
         {list.map((participationView) => (
           <ParticipantRow
@@ -566,13 +566,7 @@ function FormatSection({
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2
-        id={headingId}
-        data-focus={formatTitle(format.id)}
-        tabIndex={-1}
-        className="block-title section-title"
-      >
-        <SectionMarker />
+      <BlockTitle id={headingId} data-focus={formatTitle(format.id)} tabIndex={-1}>
         {/* The name in ink, the measures after it in grey: one text, read as one line. */}
         <span className="min-w-0">
           {first}
@@ -580,7 +574,7 @@ function FormatSection({
             <span className="font-semibold text-neutral-600">{`${SEPARATOR}${rest.join(SEPARATOR)}`}</span>
           )}
         </span>
-      </h2>
+      </BlockTitle>
       {showDate && <p className="eyebrow -mt-1">{f.date(date)}</p>}
       {onTheStart.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.event.nobody}</p>

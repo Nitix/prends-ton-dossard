@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { useId, useRef, type ReactNode, type RefObject } from "react";
 
 import { Avatar } from "../../components/Avatar";
+import { BlockTitle } from "../../components/BlockTitle";
 import { LoadFailure } from "../../components/LoadFailure";
-import { HeroArt, SectionMarker } from "../../components/Slots";
+import { HeroArt } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useRunners } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
@@ -105,10 +106,7 @@ function Years({ rows }: { rows: ResultRow[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title section-title">
-        <SectionMarker />
-        {t.runner.years}
-      </h2>
+      <BlockTitle id={headingId}>{t.runner.years}</BlockTitle>
       <TotalsTable
         caption={t.runner.years}
         firstColumn={t.stats.year}
@@ -129,10 +127,7 @@ function History({ rows }: { rows: ResultRow[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title section-title">
-        <SectionMarker />
-        {t.runner.history}
-      </h2>
+      <BlockTitle id={headingId}>{t.runner.history}</BlockTitle>
       {rows.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.runner.noHistory}</p>
       ) : (

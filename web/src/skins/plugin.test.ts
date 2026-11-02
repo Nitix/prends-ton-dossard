@@ -1,10 +1,21 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
 
 import { SKINS } from ".";
-import { DEPTH_MODULE, depthFile, isDevSkinFile, skinDepth, skinTable, withSkins } from "./plugin";
+import {
+  DEPTH_MODULE,
+  declaredModes,
+  declaredThemeColor,
+  depthFile,
+  envDirOf,
+  isDevSkinFile,
+  skinDepth,
+  skinTable,
+  withSkins,
+} from "./plugin";
 import { DEPTHS } from "./types";
 
 // The part of the skins that runs at build time, in Node (vite.config.ts): the
@@ -60,13 +71,36 @@ test("plugin — la table des skins : chaque skin sauf Crête, avec ses modes, c
   expect(Object.keys(table)).not.toContain("crete");
   // What the registry finds, from the same folders (a test has the dev-only skins too).
   const registered = Object.fromEntries(
-    SKINS.filter((skin) => skin.id !== "crete").map((skin) => [skin.id, [...skin.modes]]),
+    SKINS.filter((skin) => skin.id !== "crete").map((skin) => [
+      skin.id,
+      { modes: [...skin.modes], themeColor: skin.themeColor },
+    ]),
   );
   expect(table).toEqual(registered);
   // A build leaves the dev-only skins out: production never applies one.
   expect(Object.keys(skinTable(dir, { dev: false })).filter((id) => id.startsWith("_"))).toEqual(
     [],
   );
+});
+
+test("plugin — les modes et la couleur d'un skin se lisent dans son index.ts", () => {
+  const source =
+    'export const skin = { id: "x", modes: ["light", "dark"], themeColor: "#12ab9C" };';
+  expect(declaredModes(source)).toEqual(["light", "dark"]);
+  expect(declaredThemeColor(source)).toBe("#12ab9C");
+  expect(declaredModes('modes: ["dusk"]')).toEqual([]);
+  expect(declaredThemeColor('themeColor: "violet"')).toBeUndefined();
+});
+
+test("plugin — les fichiers .env sont lus là où Vite les lit, et pas avec envDir: false", () => {
+  const cwd = process.cwd();
+  expect(envDirOf({})).toBe(resolve(cwd));
+  expect(envDirOf({ root: "web" })).toBe(resolve(cwd, "web"));
+  expect(envDirOf({ root: "web", envDir: "env" })).toBe(resolve(cwd, "web", "env"));
+  expect(envDirOf({ root: "web", envDir: resolve(cwd, "elsewhere") })).toBe(
+    resolve(cwd, "elsewhere"),
+  );
+  expect(envDirOf({ root: "web", envDir: false })).toBe(false);
 });
 
 test("plugin — un build vide les fichiers d'un skin de développement, et seulement les siens", () => {
@@ -92,8 +126,12 @@ test("plugin — un build vide les fichiers d'un skin de développement, et seul
 
 test("plugin — la table est écrite dans le script de index.html, à sa place, et nulle part ailleurs", () => {
   const html = "<script>\n  const skins = /* skins */ {};\n</script>";
-  expect(withSkins(html, { nuit: ["dark"], alpage: ["light", "dark"] })).toBe(
-    '<script>\n  const skins = {"nuit":["dark"],"alpage":["light","dark"]};\n</script>',
+  const table = {
+    nuit: { modes: ["dark" as const], themeColor: "#0e1116" },
+    alpage: { modes: ["light" as const, "dark" as const], themeColor: "#2f6b3a" },
+  };
+  expect(withSkins(html, table)).toBe(
+    `<script>\n  const skins = ${JSON.stringify(table)};\n</script>`,
   );
   // A page without the place of the table is a mistake of the build, not a page without skins.
   expect(() => withSkins("<script></script>", {})).toThrow(/skins/);

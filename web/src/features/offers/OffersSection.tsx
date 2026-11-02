@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Avatar } from "../../components/Avatar";
+import { BlockTitle } from "../../components/BlockTitle";
 import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { SECTION } from "../../components/section";
-import { SectionMarker } from "../../components/Slots";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { parseDate } from "../../lib/dates";
@@ -181,10 +181,9 @@ export function OffersSection({
 
   return (
     <section ref={root} aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title section-title">
-        <SectionMarker />
+      <BlockTitle id={headingId} ref={heading} tabIndex={-1}>
         {t.offers.title[kind]}
-      </h2>
+      </BlockTitle>
       {offers && all ? (
         <>
           {offers.length === 0 ? (
