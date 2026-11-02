@@ -78,13 +78,16 @@
   --color-scrim: rgb(6 8 11 / 0.72);
   --color-relief: #ffffff;
 
-  /* The five zones of the slope, flat to steep, 3:1 on the card and with the
-     white line: a cold blue, green, mustard, orange, hot pink. */
-  --color-slope-1: #2a8fc4;
-  --color-slope-2: #1a8660;
-  --color-slope-3: #b88c00;
-  --color-slope-4: #c13c00;
-  --color-slope-5: #eb3394;
+  /* The five zones of the slope, flat to steep, from the cold of the night to
+     the heat of the effort: the cyan of the information, an emerald, the lime
+     in a deep step, an orange, a raspberry. 3:1 on the card and with the white
+     line, and apart with a colour vision deficiency too
+     (src/features/route/slope.test.ts). */
+  --color-slope-1: #439ad9;
+  --color-slope-2: #1da77b;
+  --color-slope-3: #657306;
+  --color-slope-4: #d87927;
+  --color-slope-5: #b94465;
 
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
@@ -97,7 +100,8 @@
   --shade-bar: rgb(0 0 0 / 0.8);
   --shade-edge: rgb(0 0 0 / 0.5);
   --shade-edge-lift: rgb(0 0 0 / 0.5);
-  /* The map keeps its light tiles; it gets the cyan halo of the variant. */
+  /* The map keeps its light tiles, at full brightness as the variant had them
+     (no veil); it gets the cyan halo of the variant. */
   --map-frame: 0 0 0 1px rgb(51 209 255 / 0.1), 0 18px 48px -20px rgb(51 209 255 / 0.35);
   --map-veil: none;
   /* The light of a headlamp at the top of the page: a lime cone, a cyan halo. */
@@ -116,37 +120,22 @@
   --map-finish: #0e1116;
   --map-link: #0b6f8c;
 
-  /* Crête's motifs that « Nuit » does not draw (the empty lists): lime and
-     cyan hills, a sun as a headlamp. The ridges and the peaks are here for
-     completeness: the header, the heroes and the mark are drawn by the skin. */
-  --motif-ridge-far-from: #3a4d12;
-  --motif-ridge-far-to: #1f2a10;
-  --motif-ridge-mid-from: #1f2a10;
-  --motif-ridge-mid-to: #161d12;
-  --motif-ridge-near-from: #121820;
-  --motif-ridge-near-to: #0e1116;
-  --motif-ridge-light: #c6f432;
-  --motif-sun-core: #f4ffc2;
-  --motif-sun-mid: #c6f432;
-  --motif-sun-rim: #33d1ff;
-  --motif-halo-from: #c6f432;
-  --motif-halo-to: #33d1ff;
+  /* Crête's motif that « Nuit » does not draw, the picture of an empty list
+     (Crête's EmptyArt): a sun as a headlamp, lime and cyan, over lime hills. */
   --motif-dawn-1: #d9ff63;
   --motif-dawn-2: #7fe38b;
   --motif-dawn-3: #33d1ff;
-  --motif-peak-far: #435414;
-  --motif-peak-near-from: #6f8c18;
-  --motif-peak-near-to: #1c2511;
   --motif-hill-near-from: #3a4d12;
   --motif-hill-near-to: #1c2511;
 
   /* The paints of the dawn, as the night leaves them: no sunrise here, the
-     reflective tape and the headlamp. What carries white text is the deepest
-     step of the lime (4.5:1 with white at every stop, as Crête's pills), going
-     to the cyan: the variant's main buttons are lime with dark text, which
-     waits for the deeper levels (the text of a button is a class of the app). */
+     reflective tape and the headlamp. What one acts on (the main buttons, the
+     current tab, the «+», the day of an event) is the variant's flat lime, its
+     text in the asphalt of the page (`--dawn-deep-ink`: 14.8:1, and 13:1 under
+     the pointer). */
   --dawn-soft: linear-gradient(110deg, #c6f432 0%, #d9ff63 50%, #33d1ff 100%);
-  --dawn-deep: linear-gradient(110deg, #5f7d00 0%, #3d7a2e 55%, #0b6f8c 100%);
+  --dawn-deep: linear-gradient(110deg, #c6f432 0%, #c6f432 100%);
+  --dawn-deep-ink: #0e1116;
   /* The sky of the header: the night, a headlamp lighting it from the top (a
      lime cone, a cyan halo). */
   --dawn-sky-color: #0a0d12;
@@ -178,6 +167,16 @@
   --dawn-glow-cool: rgb(51 209 255 / 0.3);
   --focus-glow: rgb(198 244 50 / 0.2);
   --sky-focus: #c6f432;
+
+  /* The shades of the night are black: a window (the variant's pop), the card
+     of the sign-in pages, a message, the pieces on the sky of a hero. */
+  --shade-dialog: rgb(0 0 0 / 0.85);
+  --shade-welcome: rgb(0 0 0 / 0.8);
+  --shade-toast: rgb(0 0 0 / 0.8);
+  --shade-notes: rgb(0 0 0 / 0.7);
+  --shade-photo: rgb(0 0 0 / 0.7);
+  --shade-on-dawn: rgb(0 0 0 / 0.6);
+  --hero-veil: rgb(0 0 0 / 0.25);
 }
 
 /* The sky is dark like the page, so it keeps these colours; except the white
