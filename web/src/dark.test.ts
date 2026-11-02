@@ -337,7 +337,7 @@ function skinRules(css: string): { selectors: string[]; properties: string[]; me
     }));
 }
 
-test("dark — un skin ne fait que changer, sous son propre sélecteur, ce que README.md permet : sa palette, ses pièces", () => {
+test("dark — un skin ne fait que changer, sous son propre sélecteur, ce que README.md permet : sa palette", () => {
   // Not an empty search: the example skin of development is one.
   expect(OTHER_SKINS.length).toBeGreaterThan(0);
   const known = new Set(lightTheme().keys());
@@ -349,12 +349,9 @@ test("dark — un skin ne fait que changer, sous son propre sélecteur, ce que R
   }
   // palette.css: custom properties of Crête on the skin's page, night and sky
   // (no shadow, which Tailwind writes into its utilities, no font, which
-  // fonts.css has); mix.css and full.css: pieces under the skin, no custom
-  // property (src/test/skinSheets.test.ts says which forms, on sheets of its own).
+  // fonts.css has): src/test/skinSheets.test.ts says which forms, on sheets of its own.
   const problems = OTHER_SKINS.flatMap((skin) =>
-    (["palette", "mix", "full"] as const).flatMap((level) =>
-      sheetProblems(skinStylesheet(skin, level), skin, level, known),
-    ),
+    sheetProblems(skinStylesheet(skin, "palette"), skin, known),
   );
   expect(problems).toEqual([]);
 });
@@ -374,7 +371,7 @@ const FACE_PROPERTIES = [
 /** The custom properties of fonts a skin may set (Tailwind's `font-sans`, `font-mono`, `font-serif`, and the titles). */
 const FONT_PROPERTIES = ["--font-sans", "--font-display", "--font-mono", "--font-serif"];
 
-test("dark — les polices d'un skin (fonts.css, présent à toute profondeur) : des @font-face, et ses --font-* sous son seul sélecteur", () => {
+test("dark — les polices d'un skin (fonts.css) : des @font-face, et ses --font-* sous son seul sélecteur", () => {
   // Every folder that has one, a skin or the start of one: Task 2 of v6 adds
   // the fonts before the skins.
   const folders = skinsWithFonts();

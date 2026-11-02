@@ -506,8 +506,8 @@ function FormatSection({
       className={`format-section flex flex-col gap-3 ${SECTION}`}
     >
       <BlockTitle id={headingId} data-focus={formatTitle(format.id)} tabIndex={-1}>
-        {/* Its words as the skin draws them: Crête's name in ink, the measures in grey, one line. */}
-        <FormatTitle formatView={formatView} parts={parts} />
+        {/* Its words: the name in ink, the measures in grey, one line. */}
+        <FormatTitle parts={parts} />
       </BlockTitle>
       {showDate && <p className="format-date eyebrow -mt-1">{f.date(date)}</p>}
       {onTheStart.length === 0 ? (

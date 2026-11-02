@@ -41,7 +41,7 @@ export function GroupSoon({ views }: { views: EventView[] }) {
         <ul className="event-list flex flex-col gap-3">
           {soon.map((view) => (
             <li key={view.event.id}>
-              <EventCard view={view} list="home" />
+              <EventCard view={view} />
             </li>
           ))}
         </ul>

@@ -6,7 +6,6 @@ import { EmptyState } from "../../components/EmptyState";
 import { useI18n } from "../../i18n/I18nProvider";
 import { groupByMonth } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
-import type { EventCardList } from "../../skins/types";
 import { applyFilters, sortEvents, useEvents, type EventView } from "./api";
 import { EventCard } from "./EventCard";
 import { Filters, useFilterCriteria, type FilterCriteria } from "./Filters";
@@ -82,27 +81,13 @@ function Months({
   return (
     <div className="flex flex-col gap-6">
       {groupByMonth(sorted, (view) => view.start).map(({ month, items }) => (
-        <MonthSection
-          key={month.toString()}
-          month={month}
-          views={items}
-          list={period === "a-venir" ? "upcoming" : "past"}
-        />
+        <MonthSection key={month.toString()} month={month} views={items} />
       ))}
     </div>
   );
 }
 
-function MonthSection({
-  month,
-  views,
-  list,
-}: {
-  month: Temporal.PlainYearMonth;
-  views: EventView[];
-  /** The events to come, or the past ones: their cards may tell them apart (see `EventCardList`). */
-  list: EventCardList;
-}) {
+function MonthSection({ month, views }: { month: Temporal.PlainYearMonth; views: EventView[] }) {
   const { f } = useI18n();
   const headingId = useId();
 
@@ -114,7 +99,7 @@ function MonthSection({
       <ul className="event-list flex flex-col gap-3.5">
         {views.map((view) => (
           <li key={view.event.id}>
-            <EventCard view={view} list={list} />
+            <EventCard view={view} />
           </li>
         ))}
       </ul>

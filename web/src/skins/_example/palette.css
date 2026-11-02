@@ -1,4 +1,4 @@
-/* « Exemple (dev) », depth palette: a fake palette, green and yellow, in light
+/* « Exemple (dev) »: a fake palette, green and yellow, in light
    only, over Crête's structure and fonts (it has no fonts.css: a skin of
    development declares no face). It only sets custom properties of Crête, under
    the skin's selector: every utility that paints with them follows, whatever

@@ -1,10 +1,6 @@
 services:
   courses:
-    build:
-      context: .
-      # The depth of the skins of the front end, from .env (see .env.example).
-      args:
-        VITE_SKIN_DEPTH: ${VITE_SKIN_DEPTH:-}
+    build: .
     restart: unless-stopped
     # Published on the loopback interface only: Caddy, on the same machine, is
     # the one public entry point (see Caddyfile.example). HOST_PORT, from .env,

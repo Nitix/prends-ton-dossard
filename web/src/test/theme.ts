@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 import { SKINS } from "../skins";
-import type { Depth } from "../skins/types";
 
 // The colours of the theme, as styles.css declares them, so that a test reads
 // the value the app is painted with and not a copy of it. The light theme is
@@ -97,14 +96,13 @@ export function skinSelectors(skin: string) {
 }
 
 /**
- * A stylesheet of a skin, by its level: its `palette.css` (its colours, the
- * only one that sets custom properties of the theme), `mix.css` or `full.css`,
- * or its `fonts.css` (its faces and `--font-*`, whatever the depth); nothing
- * when it has none.
+ * A stylesheet of a skin: its `palette.css` (its colours, the only one that
+ * sets custom properties of the theme), or its `fonts.css` (its faces and
+ * `--font-*`); nothing when it has none.
  */
-export function skinStylesheet(skin: string, level: Depth | "fonts" = "palette"): string {
+export function skinStylesheet(skin: string, sheet: "palette" | "fonts" = "palette"): string {
   if (skin === DEFAULT_SKIN) return "";
-  const url = new URL(`../skins/${skin}/${level}.css`, import.meta.url);
+  const url = new URL(`../skins/${skin}/${sheet}.css`, import.meta.url);
   return existsSync(url) ? readFileSync(url, "utf8") : "";
 }
 
@@ -313,43 +311,12 @@ export function skyValue(property: string, theme: Theme = "light", skin = DEFAUL
 
 // --- The rules of the stylesheets of a skin (README.md) ---
 
-/** A stylesheet of a skin, by its level. */
-export type SheetLevel = "palette" | "mix" | "full";
-
 /**
  * What a palette may not set, though Crête declares it: the shadows (Tailwind
  * writes them into its utilities, so only the variables in them reach a page:
  * `--shade-*`, `--dawn-glow-*`), and the fonts (`fonts.css` has them).
  */
 export const NOT_IN_PALETTE = /^--(shadow|inset-shadow|drop-shadow|text-shadow|font)-/;
-
-/** The at-rules that a sheet of mix or full may wrap its rules in. */
-const WRAPPERS = /^@(media|supports|container)\b/;
-
-/**
- * The names of the elements of a page, and of the drawings in it: a selector of
- * a mix or full sheet may not name one (README, « Semantic classes »), with
- * what precedes or follows it in the selector.
- */
-const ELEMENTS =
-  /(^|[\s>+~(,])(?:a|abbr|article|aside|b|blockquote|body|button|canvas|caption|circle|code|dd|details|dialog|div|dl|dt|em|fieldset|figure|footer|form|g|h[1-6]|header|hr|html|i|img|input|label|legend|li|line|main|mark|nav|ol|option|output|p|path|picture|polyline|pre|progress|rect|section|select|small|span|strong|summary|svg|table|tbody|td|text|textarea|tfoot|th|thead|time|tr|ul|use)(?![\w-])/;
-
-/**
- * Whether a selector names the type of an element: what is left once its
- * strings, attributes, pseudo-elements, pseudo-classes and classes are set
- * aside (what `:is()`, `:not()` or `:has()` hold stays, and is read too).
- */
-function namesAnElement(selector: string): boolean {
-  const bare = selector
-    .replace(/"[^"]*"|'[^']*'/g, "")
-    .replace(/\[[^\]]*\]/g, "")
-    .replace(/::[a-z-]+/g, "")
-    .replace(/:[a-z-]+/g, " ")
-    .replace(/\.[\w-]+/g, ".");
-  return ELEMENTS.test(bare.trim());
-}
-
-const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** The names of the properties that a block declares, in order. */
 function propertiesOf(body: string): string[] {
@@ -361,37 +328,20 @@ function propertiesOf(body: string): string[] {
 }
 
 /**
- * What is wrong with a stylesheet of a skin, by the rules of README.md (an
+ * What is wrong with the `palette.css` of a skin, by the rules of README.md (an
  * empty list when nothing is). `known` is what Crête declares: the custom
- * properties a palette may set.
- *
- * - palette.css: rules on the skin's page (`:root[data-skin="<id>"]`), its
- *   night chosen (`…[data-theme="dark"]`) and its sky (`… .on-dawn`), and its
- *   night followed (`…:not([data-theme="light"])`) in
- *   `@media (prefers-color-scheme: dark)`; custom properties of Crête only,
- *   and `color-scheme`; no shadow, no font.
- * - mix.css and full.css: every selector is `:root[data-skin="<id>"]`, then
- *   `[data-theme="dark"]`, `[data-theme="light"]` or `:not([data-theme="light"])`
- *   if the rule is for a mode, then a combinator and the piece; a list is
- *   split at its own commas (not those of `:is(a, b)`); rules may be wrapped in
- *   `@media`, `@supports` or `@container`, as deep as needed; `@keyframes`
- *   whose name starts with `<id>-`; no custom property, no other at-rule; no
- *   selector that names the type of an element (`th`, `img.avatar`, `> span`).
+ * properties a palette may set. Rules on the skin's page
+ * (`:root[data-skin="<id>"]`), its night chosen (`…[data-theme="dark"]`) and its
+ * sky (`… .on-dawn`), and its night followed (`…:not([data-theme="light"])`) in
+ * `@media (prefers-color-scheme: dark)`; custom properties of Crête only, and
+ * `color-scheme`; no shadow, no font.
  */
-export function sheetProblems(
-  css: string,
-  skin: string,
-  level: SheetLevel,
-  known: ReadonlySet<string>,
-): string[] {
+export function sheetProblems(css: string, skin: string, known: ReadonlySet<string>): string[] {
   const { root, darkChosen, darkFollowed, sky } = skinSelectors(skin);
   const problems: string[] = [];
   const say = (problem: string) => {
-    problems.push(`${skin}, ${level}.css: ${problem}`);
+    problems.push(`${skin}, palette.css: ${problem}`);
   };
-  const piece = new RegExp(
-    `^${escaped(root)}(\\[data-theme="(dark|light)"\\]|:not\\(\\[data-theme="light"\\]\\))?(\\s+|\\s*[>+~]\\s*)\\S`,
-  );
   const visit = (text: string, wrappers: string[]) => {
     const stripped = text.replace(/\/\*[\s\S]*?\*\//g, "");
     const tail = stripped.slice(stripped.lastIndexOf("}") + 1).trim();
@@ -403,20 +353,8 @@ export function sheetProblems(
         say(`a statement ${statement}`);
       }
       if (head.startsWith("@")) {
-        if (level === "palette") {
-          if (head === "@media (prefers-color-scheme: dark)" && wrappers.length === 0) {
-            visit(body, [head]);
-          } else say(`the at-rule ${head}`);
-        } else if (WRAPPERS.test(head)) visit(body, [...wrappers, head]);
-        else if (head.startsWith("@keyframes ")) {
-          const name = head.slice("@keyframes ".length).trim();
-          if (!name.startsWith(`${skin}-`))
-            say(`the keyframes ${name} (its name starts with "${skin}-")`);
-          for (const frame of rules(body)) {
-            for (const property of propertiesOf(frame.body).filter((one) => one.startsWith("--"))) {
-              say(`a keyframe sets ${property}`);
-            }
-          }
+        if (head === "@media (prefers-color-scheme: dark)" && wrappers.length === 0) {
+          visit(body, [head]);
         } else say(`the at-rule ${head}`);
         continue;
       }
@@ -424,29 +362,17 @@ export function sheetProblems(
         say(`a rule nested in ${head}`);
         continue;
       }
-      const selectors = splitTopLevel(head).map(tidy);
-      const properties = propertiesOf(body);
-      if (level === "palette") {
-        const allowed = wrappers.length > 0 ? [darkFollowed] : [root, darkChosen, sky];
-        for (const selector of selectors.filter((one) => !allowed.includes(one))) {
-          say(`the selector ${selector}`);
-        }
-        for (const property of properties) {
-          if (property === "color-scheme") continue;
-          if (!property.startsWith("--")) say(`${property}, which is not a custom property`);
-          else if (NOT_IN_PALETTE.test(property)) say(`${property}, which a palette cannot change`);
-          else if (!known.has(property)) say(`${property}, which Crête does not declare`);
-        }
-      } else {
-        for (const selector of selectors.filter((one) => !piece.test(one))) {
-          say(`the selector ${selector}`);
-        }
-        for (const selector of selectors.filter((one) => piece.test(one) && namesAnElement(one))) {
-          say(`the selector ${selector} names an element`);
-        }
-        for (const property of properties.filter((one) => one.startsWith("--"))) {
-          say(`a custom property ${property}`);
-        }
+      const allowed = wrappers.length > 0 ? [darkFollowed] : [root, darkChosen, sky];
+      for (const selector of splitTopLevel(head)
+        .map(tidy)
+        .filter((one) => !allowed.includes(one))) {
+        say(`the selector ${selector}`);
+      }
+      for (const property of propertiesOf(body)) {
+        if (property === "color-scheme") continue;
+        if (!property.startsWith("--")) say(`${property}, which is not a custom property`);
+        else if (NOT_IN_PALETTE.test(property)) say(`${property}, which a palette cannot change`);
+        else if (!known.has(property)) say(`${property}, which Crête does not declare`);
       }
     }
   };
@@ -466,100 +392,3 @@ export function skinCases(skins: readonly { id: string; modes: readonly Theme[] 
 
 /** Every skin of the app in every mode it has, as the tests of the colours go through them. */
 export const SKIN_CASES: readonly SkinCase[] = skinCases(SKINS);
-
-/**
- * Every declaration of a block of a sheet, in order, as `[property, value]`:
- * split at its semicolons outside quotes and parentheses (a `url("data:…;…")`
- * stays whole), whitespace gathered.
- */
-function allDeclarations(body: string): [string, string][] {
-  const parts: string[] = [];
-  let depth = 0;
-  let quote: string | null = null;
-  let start = 0;
-  for (let at = 0; at < body.length; at++) {
-    const char = body[at];
-    if (quote !== null) {
-      if (char === quote) quote = null;
-    } else if (char === '"' || char === "'") quote = char;
-    else if (char === "(") depth++;
-    else if (char === ")") depth--;
-    else if (char === ";" && depth === 0) {
-      parts.push(body.slice(start, at));
-      start = at + 1;
-    }
-  }
-  parts.push(body.slice(start));
-  return parts
-    .map((part) => part.trim())
-    .filter((part) => part.includes(":"))
-    .map((part) => {
-      const colon = part.indexOf(":");
-      return [
-        part.slice(0, colon).trim(),
-        part
-          .slice(colon + 1)
-          .replace(/\s+/g, " ")
-          .trim(),
-      ];
-    });
-}
-
-/** The words of a value, split at its spaces outside parentheses: `2px dashed color-mix(in srgb, …)` is three. */
-function words(value: string): string[] {
-  const found: string[] = [];
-  let depth = 0;
-  let word = "";
-  for (const char of value) {
-    if (char === "(") depth++;
-    if (char === ")") depth--;
-    if (/\s/.test(char) && depth === 0) {
-      if (word !== "") found.push(word);
-      word = "";
-    } else word += char;
-  }
-  if (word !== "") found.push(word);
-  return found;
-}
-
-/** A dashed border or outline of a sheet: its selector (one of a list), its declaration, and the colour of the theme it is in. */
-export type SheetDash = {
-  selector: string;
-  property: string;
-  value: string;
-  /** The name of the colour of the theme it reads (`var(--color-<name>)`), if it reads one plainly. */
-  colour: string | undefined;
-};
-
-/**
- * Every dashed border or outline that a sheet of a skin draws (`border`,
- * `border-*`, `outline`, `outline-style`…: a declaration whose value is
- * `dashed`), in its at-rules too (`@media`, `@supports`, `@container`; never a
- * keyframe), once for each selector of its list. The colour is the one of the
- * theme it reads plainly, in the same declaration; a mix (`color-mix(…)`), a
- * written colour or a colour set by another declaration has none.
- */
-export function sheetDashes(css: string): SheetDash[] {
-  const found: SheetDash[] = [];
-  const visit = (text: string) => {
-    for (const { prelude, body } of rules(text)) {
-      const head = tidy(prelude);
-      if (head.startsWith("@")) {
-        if (WRAPPERS.test(head)) visit(body);
-        continue;
-      }
-      for (const [property, value] of allDeclarations(body)) {
-        if (!/^(border|outline)/.test(property) || !/\bdashed\b/.test(value)) continue;
-        // A colour of the theme read plainly, as a word of the value (not inside a mix).
-        const colour = words(value)
-          .map((word) => /^var\(--color-([a-z]+(?:-[a-z0-9]+)*)\)$/.exec(word)?.[1])
-          .find((name) => name !== undefined);
-        for (const selector of splitTopLevel(head).map(tidy)) {
-          found.push({ selector, property, value, colour });
-        }
-      }
-    }
-  };
-  visit(css.replace(/\/\*[\s\S]*?\*\//g, ""));
-  return found;
-}

@@ -30,9 +30,8 @@ export default defineConfig({
     // by @vitejs/plugin-react itself, without Babel. It is experimental.
     react({ compiler: true }),
     tailwindcss(),
-    // The skins (src/skins/README.md): the depth of the build (`VITE_SKIN_DEPTH`),
-    // the stylesheets and the variants it bundles, and the table of the skins in
-    // the script of index.html.
+    // The skins (src/skins/README.md): the skins of development left out of a
+    // build, and the table of the skins in the script of index.html.
     skins(),
   ],
   server: {

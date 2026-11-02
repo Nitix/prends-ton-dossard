@@ -1,9 +1,8 @@
-import { useSyncExternalStore, type ComponentType } from "react";
-import { variants as depthVariants } from "virtual:skin-depth";
+import { useSyncExternalStore } from "react";
 
 import { forceMode } from "../lib/theme";
 import { skin as crete, slots as creteSlots } from "./crete";
-import type { Depth, Skin, SlotName, Slots, VariantName, VariantPropsOf, Variants } from "./types";
+import type { Skin, SlotName, Slots } from "./types";
 
 /**
  * The skins of the app: the ways it can be dressed, one of them chosen on the
@@ -18,9 +17,6 @@ import type { Depth, Skin, SlotName, Slots, VariantName, VariantPropsOf, Variant
 
 /** Where the device keeps the skin chosen. index.html reads the same key. */
 export const SKIN_KEY = "ptd-skin";
-
-/** How deep the skins go in this build (`VITE_SKIN_DEPTH`, see plugin.ts): a constant of the build. */
-export const SKIN_DEPTH: Depth = BUILD_SKIN_DEPTH;
 
 type SkinModule = { skin?: Skin };
 
@@ -167,46 +163,4 @@ export function slotOf<N extends SlotName>(skin: Skin, name: N): Slots[N] {
 export function useSlot<N extends SlotName>(name: N): Slots[N] {
   const [skin] = useSkin();
   return slotOf(skin, name);
-}
-
-/** The order of the files of variants: mix, then full. */
-const level = (path: string) => (path.endsWith("/full.tsx") ? 1 : 0);
-
-/**
- * The components that each skin replaces at the depth of the build, from the
- * modules of its `mix.tsx` and `full.tsx` (by the path of their file): the
- * variants of full win over those of mix.
- */
-export function variantsBySkin(modules: Readonly<Record<string, Variants>>): Map<string, Variants> {
-  const bySkin = new Map<string, Variants>();
-  for (const [path, variants] of Object.entries(modules).toSorted(
-    ([a], [b]) => level(a) - level(b),
-  )) {
-    const id = /([^/]+)\/(?:mix|full)\.tsx$/.exec(path)?.[1];
-    if (id !== undefined) bySkin.set(id, { ...bySkin.get(id), ...variants });
-  }
-  return bySkin;
-}
-
-const VARIANTS = variantsBySkin(depthVariants);
-
-/** The component that a skin puts in the place of `name` at the depth of the build, if any. */
-export function variantOf<N extends VariantName>(
-  skinId: string,
-  name: N,
-): ComponentType<VariantPropsOf<N>> | undefined {
-  return VARIANTS.get(skinId)?.[name];
-}
-
-/**
- * The component that the skin of the page puts in the place of `name` at the
- * depth of the build (its `mix.tsx` or `full.tsx`), if any. The app does not
- * call it in a render: it makes the component skinnable once, at the top of its
- * module, with `skinnable` (components.tsx), which gives the variant its base.
- */
-export function useSkinVariant<N extends VariantName>(
-  name: N,
-): ComponentType<VariantPropsOf<N>> | undefined {
-  const [skin] = useSkin();
-  return variantOf(skin.id, name);
 }

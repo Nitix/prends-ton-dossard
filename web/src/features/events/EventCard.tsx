@@ -4,8 +4,7 @@ import { DateChip } from "../../components/Dawn";
 import { PinIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
-import { skinnable } from "../../skins/components";
-import type { EventCardProps } from "../../skins/types";
+import type { EventView } from "./api";
 import { FormatLine } from "./FormatLine";
 import { ParticipantChips } from "./ParticipantChips";
 import { starters } from "./participants";
@@ -18,10 +17,9 @@ import { registrationLabel, registrationState } from "./registration";
  * chosen yet, each of its formats with its measures and its participants, then
  * its supporters. Those who do not start are not on the card. Under the place,
  * the registration deadline, if the event has one, and "Inscriptions closes"
- * once it has passed. Crête draws it alike in every list (`list`); a variant
- * may mark its formats (`decorFormat`) rather than draw it again.
+ * once it has passed.
  */
-export function EventCardBase({ view, decorFormat }: EventCardProps) {
+export function EventCard({ view }: { view: EventView }) {
   const { t, f } = useI18n();
   const { event, formats, start, end } = view;
   const severalDays = !start.equals(end);
@@ -75,19 +73,15 @@ export function EventCardBase({ view, decorFormat }: EventCardProps) {
         )}
         {formats.length > 0 && (
           <ul className="event-card-formats flex flex-col gap-2">
-            {formats.map((formatView) => {
-              const decor = decorFormat?.(formatView);
-              return (
-                <li
-                  key={formatView.format.id}
-                  data-format-kind={decor?.kind}
-                  className="event-card-format flex flex-col gap-1.5 rounded-2xl bg-neutral-50 px-3 py-2.5"
-                >
-                  <FormatLine formatView={formatView} showDate={severalDays} marks={decor?.marks} />
-                  <ParticipantChips participations={starters(formatView.participations)} />
-                </li>
-              );
-            })}
+            {formats.map((formatView) => (
+              <li
+                key={formatView.format.id}
+                className="event-card-format flex flex-col gap-1.5 rounded-2xl bg-neutral-50 px-3 py-2.5"
+              >
+                <FormatLine formatView={formatView} showDate={severalDays} />
+                <ParticipantChips participations={starters(formatView.participations)} />
+              </li>
+            ))}
           </ul>
         )}
         {/* After the formats: they come to cheer, they start nothing. The words say it, not the place. */}
@@ -101,6 +95,3 @@ export function EventCardBase({ view, decorFormat }: EventCardProps) {
     </article>
   );
 }
-
-/** An event in a list, as the skin of the page draws it at the depth of the build (Crête's above, by default). */
-export const EventCard = skinnable("EventCard", EventCardBase);

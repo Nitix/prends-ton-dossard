@@ -2,11 +2,9 @@ import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { ComponentType } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import {
-  SKIN_DEPTH,
   SKIN_KEY,
   SKINS,
   applySkin,
@@ -16,10 +14,9 @@ import {
   readSkin,
   registry,
   slotOf,
-  variantsBySkin,
 } from ".";
 import { THEME_KEY, chooseTheme } from "../lib/theme";
-import { DEPTHS, type EmptyStateProps, type Skin, type SlotName } from "./types";
+import type { Skin, SlotName } from "./types";
 
 // The skins of the app: found by their folders, one of them chosen on the
 // device and put on <html> (`data-skin`), with the mode of a skin that has only
@@ -94,8 +91,6 @@ test("skins — le registre trouve chaque dossier qui a un index.ts, Crête en p
   expect(folders).toContain("_example");
   expect(ids().toSorted()).toEqual(folders.toSorted());
   expect(ids()[0]).toBe("crete");
-  // Whatever the depth of the run (VITE_SKIN_DEPTH): the suite runs at each.
-  expect(DEPTHS).toContain(SKIN_DEPTH);
 });
 
 test("skins — chacun a un nom, ses modes, deux couleurs et une police ; Crête a tous les motifs", () => {
@@ -305,22 +300,4 @@ test("useSlot — un motif que le skin ne dessine pas est celui de Crête", () =
   const example = SKINS.find((skin) => skin.id === "_example");
   expect(Object.keys(example?.slots ?? {}).length).toBeGreaterThan(0);
   expect(Object.keys(example?.slots ?? {}).length).toBeLessThan(slots.length);
-});
-
-/** Three variants that draw nothing: only who they are counts. */
-const Mix: ComponentType<EmptyStateProps> = () => null;
-const Full: ComponentType<EmptyStateProps> = () => null;
-const Other: ComponentType<EmptyStateProps> = () => null;
-
-test("useSkinVariant — les variantes d'un skin, celle de full l'emporte sur celle de mix", () => {
-  const bySkin = variantsBySkin({
-    "../dossard/full.tsx": { EmptyState: Full },
-    "../dossard/mix.tsx": { EmptyState: Mix },
-    "../retro/mix.tsx": { EmptyState: Other },
-    "../nuit/full.tsx": {},
-  });
-  expect(bySkin.get("dossard")).toEqual({ EmptyState: Full });
-  expect(bySkin.get("retro")).toEqual({ EmptyState: Other });
-  expect(bySkin.get("nuit")).toEqual({});
-  expect(bySkin.get("crete")).toBeUndefined();
 });

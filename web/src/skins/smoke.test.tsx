@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
 
-import { SKIN_DEPTH, SKINS, chooseSkin, slotOf } from ".";
+import { SKINS, chooseSkin, slotOf } from ".";
 import { ToastProvider } from "../components/Toast";
 import {
   aliceRunner,
@@ -232,15 +232,12 @@ function glowOfSkin(): string[] {
  * The halo of a piece of the dawn is the skin's: the one `shadow-glow` draws from
  * the skin's `--dawn-glow-*`, coloured or transparent (a skin without a halo),
  * never Crête's left behind: the skin's own sheet sets both (Crête declares
- * them, so the page alone would not say it). At mix and full a skin may restyle
- * the piece itself (`box-shadow: none` on the current tab, README.md): there,
- * only the properties are checked.
+ * them, so the page alone would not say it).
  */
 function expectGlowOfSkin(skin: Skin, element: Element, what: string) {
   for (const glow of GLOWS) {
     expect(ownDeclaration(skin.id, glow), `${skin.id} sets ${glow}`).not.toBe("");
   }
-  if (SKIN_DEPTH !== "palette") return;
   const halo = glowOfSkin();
   expect(halo, "the two layers of shadow-glow").toHaveLength(2);
   const layers = shadowLayers(getComputedStyle(element).boxShadow);
@@ -249,32 +246,24 @@ function expectGlowOfSkin(skin: Skin, element: Element, what: string) {
 
 /**
  * A piece is shaded in a colour of the theme (`--shade-notes`…), one of
- * Crête's (a name the test had wrong would read as `transparent`). At mix and
- * full a skin may restyle the piece: there, only the property is checked.
+ * Crête's (a name the test had wrong would read as `transparent`).
  */
 function expectShadeOfSkin(element: Element, property: string, what: string) {
   expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
-  if (SKIN_DEPTH !== "palette") return;
   const layers = shadowLayers(getComputedStyle(element).boxShadow).join(", ");
   expect(layers, `the shade of ${what}`).toContain(colourOf(property));
 }
 
-/**
- * A piece is drawn in a value of the skin (computed as `expected`). At mix and
- * full a skin may restyle the piece: there, nothing is checked.
- */
+/** A piece is drawn in a value of the skin (computed as `expected`). */
 function expectOfSkin(actual: string, expected: string, what: string) {
-  if (SKIN_DEPTH !== "palette") return;
   expect(actual, `${what}, in the skin`).toBe(expected);
 }
 
 /**
  * A piece is painted with the deep dawn of the skin (`--dawn-deep`, a
- * gradient): the current tab. At mix and full a skin may draw it its own way (a
- * bar, a line, a pill of its own): there, nothing is checked here.
+ * gradient): the current tab.
  */
 function expectPaintOfSkin(element: Element, what: string) {
-  if (SKIN_DEPTH !== "palette") return;
   const own = painted("--dawn-deep");
   expect(own, "the deep dawn of the skin").toMatch(/gradient/);
   expect(getComputedStyle(element).backgroundImage, `the paint of ${what}`).toBe(own);
@@ -283,10 +272,9 @@ function expectPaintOfSkin(element: Element, what: string) {
 /**
  * A title is drawn in the style of the display face that the skin gives
  * (`--display-*`: italic, capitals, a width, a spacing), as `page-title` is
- * (tokens.test.tsx). At mix and full a skin may restyle it.
+ * (tokens.test.tsx).
  */
 function expectDisplayStyle(title: Element, what: string) {
-  if (SKIN_DEPTH !== "palette") return;
   const probe = document.createElement("span");
   probe.style.cssText =
     "font-style: var(--display-style); text-transform: var(--display-transform); font-stretch: var(--display-stretch); letter-spacing: var(--display-tracking)";
@@ -348,11 +336,9 @@ for (const { skin, mode } of CASES) {
       ).toBe(marker);
     }
     // The current tab, variants of utilities (`aria-[current=page]:bg-dawn-deep`,
-    // `aria-[current=page]:shadow-glow`), takes the paint and the halo of the skin
-    // at palette. At mix and full a skin may draw it its own way (a bar, a line,
-    // a pill of its own colour): at every depth, it is told apart from the other
-    // tabs by more than the colour of its words, and its words read on what is
-    // behind them (4.5:1).
+    // `aria-[current=page]:shadow-glow`), takes the paint and the halo of the skin;
+    // it is told apart from the other tabs by more than the colour of its words,
+    // and its words read on what is behind them (4.5:1).
     const tabs = screen.getByRole("navigation", { name: fr.nav.main });
     const current = tabs.getByRole("link", { name: fr.nav.home, exact: true }).element();
     const other = tabs.getByRole("link", { name: fr.nav.list, exact: true }).element();
@@ -395,8 +381,7 @@ for (const { skin, mode } of CASES) {
     await framed(screen);
     const hero = document.querySelector(".event-hero");
     expect(hero).not.toBeNull();
-    // What the hero says, whoever draws it (Crête, or a skin's `EventHero` at
-    // mix and full): the end of the registrations, the notes, the link to register.
+    // What the hero says: the end of the registrations, the notes, the link to register.
     expect(hero?.textContent, "the end of the registrations").toContain(
       fr.event.registrationUntil(""),
     );
@@ -405,7 +390,7 @@ for (const { skin, mode } of CASES) {
       link.textContent?.includes(fr.event.register),
     );
     expect(register?.getAttribute("href"), "the link to register").toBe(event.registration_url);
-    // On the sky of Crête's hero (palette): its title in the style of the skin's
+    // On the sky of the hero: its title in the style of the skin's
     // titles, the end of the registrations on its veil, the notes and the white
     // pill to register in the shades of the skin.
     expectDisplayStyle(
@@ -476,7 +461,7 @@ for (const { skin, mode } of CASES) {
       ),
       "the photo of the runner",
     ).toBe(true);
-    // In Crête's hero (palette): cut out of the sky by a ring, over its shade.
+    // In the hero: cut out of the sky by a ring, over its shade.
     const photo = hero?.querySelector(".avatar-soft");
     expectShadeOfSkin(photo ?? document.body, "--photo-ring", "the ring of the photo");
     expectShadeOfSkin(photo ?? document.body, "--shade-photo", "the shade of the photo");

@@ -1,8 +1,9 @@
+import type { RefObject } from "react";
+
 import { Avatar } from "../../components/Avatar";
 import { HeroArt } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
-import { skinnable } from "../../skins/components";
-import type { RunnerHeroProps } from "../../skins/types";
+import type { RunnerRecord } from "../../lib/types";
 
 /**
  * The top of the page of a runner, its hero: their photo (or their initials)
@@ -10,7 +11,18 @@ import type { RunnerHeroProps } from "../../skins/types";
  * runner is known. The runner on the sky of the dawn drawn like a map (the
  * skin's `HeroArt`), in front of the ridges, the sun rising behind them.
  */
-export function RunnerHeroBase({ runner, heading }: RunnerHeroProps) {
+export function RunnerHero({
+  runner,
+  heading,
+}: {
+  /** The runner, once known: until then, the title says « Coureur » and there is no photo. */
+  runner: RunnerRecord | undefined;
+  /**
+   * What the title of the page (the `h1` of the hero) carries, to spread on it:
+   * the ref by which a failure gives it the focus (`LoadFailure`), and `tabIndex`.
+   */
+  heading: { ref: RefObject<HTMLHeadingElement | null>; tabIndex: -1 };
+}) {
   const { t } = useI18n();
 
   return (
@@ -36,6 +48,3 @@ export function RunnerHeroBase({ runner, heading }: RunnerHeroProps) {
     </header>
   );
 }
-
-/** The top of the page of a runner, as the skin of the page draws it at the depth of the build (Crête's above, by default). */
-export const RunnerHero = skinnable("RunnerHero", RunnerHeroBase);

@@ -1,6 +1,4 @@
 import { Figure } from "../../components/Figure";
-import { skinnable } from "../../skins/components";
-import type { TrackFiguresProps } from "../../skins/types";
 
 const SEPARATOR = " · ";
 
@@ -9,10 +7,19 @@ const SEPARATOR = " · ";
  * and its loss as tiles (`.stat-tile`), then its lowest and highest points.
  * The separators stay in the text, for a screen reader, and so does the space
  * before "D+" (at the start of its line in the tile, the space does not show).
- * A skin's variant may set them as one line of split times, or on a picture of
- * where the track starts (`start`), keeping every figure and the altitude.
  */
-export function TrackFiguresBase({ figures, altitude }: TrackFiguresProps) {
+export function TrackFigures({
+  figures,
+  altitude,
+}: {
+  /**
+   * Its figures in words, in order: its length, then its gain and its loss
+   * when it has altitudes (« 12,6 km », « 724 m D+ », « 728 m D− »).
+   */
+  figures: readonly string[];
+  /** Its lowest and highest points in words (« altitude 450 m à 1 157 m »), or null without altitudes. */
+  altitude: string | null;
+}) {
   return (
     <>
       <p className="route-figures flex gap-2">
@@ -38,6 +45,3 @@ export function TrackFiguresBase({ figures, altitude }: TrackFiguresProps) {
     </>
   );
 }
-
-/** The figures of a track, as the skin of the page draws them at the depth of the build (Crête's tiles above, by default). */
-export const TrackFigures = skinnable("TrackFigures", TrackFiguresBase);

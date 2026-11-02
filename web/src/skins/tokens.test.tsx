@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
-import { SKIN_DEPTH, SKINS, chooseSkin } from ".";
+import { SKINS, chooseSkin } from ".";
 import { ON_DAWN } from "../components/buttons";
-import { CountdownRingBase } from "../components/Dawn";
+import { CountdownRing } from "../components/Dawn";
 import { Dialog } from "../components/Dialog";
 import { ToastProvider, useToast } from "../components/Toast";
 import { toTrack } from "../features/route/gpx";
@@ -30,10 +30,8 @@ import "../skins/styles";
 // them (an attribute, a style, a class): in every skin, each colour they show
 // is the one the skin gives the property. So are the shade of a window
 // (`--shade-dialog`), of a message and of the pieces on the sky of a hero, and
-// the style of the titles (`--display-*`). These pieces are measured at every
-// depth: a rule of mix or full on them reads the property (README.md); but the
-// white pill on a hero (« S'inscrire », `--shade-on-dawn`), at palette only,
-// since a skin may draw that pill its own way at mix and full.
+// the style of the titles (`--display-*`), and the white pill on a hero
+// (« S'inscrire », `--shade-on-dawn`).
 // Nothing here names a skin.
 
 afterEach(() => {
@@ -220,16 +218,11 @@ function fillOf(value: string): string {
   return fill;
 }
 
-/**
- * The white pill on a hero (« S'inscrire ») is shaded with `--shade-on-dawn`,
- * at palette. At mix and full a skin may draw its pill its own way (README.md):
- * only the property is checked there.
- */
+/** The white pill on a hero (« S'inscrire ») is shaded with `--shade-on-dawn`. */
 function expectPillShade(pill: Element, skin: string) {
   expect(ownDeclaration("crete", "--shade-on-dawn"), "--shade-on-dawn is one of Crête's").not.toBe(
     "",
   );
-  if (SKIN_DEPTH !== "palette") return;
   expectShadowOf(
     getComputedStyle(pill).boxShadow,
     "--shade-on-dawn",
@@ -249,7 +242,7 @@ test("tokens — les ombres et les voiles des pièces sur le ciel et des message
           <a href="#inscription" className={ON_DAWN}>
             S'inscrire
           </a>
-          <CountdownRingBase days={9} tone="light" />
+          <CountdownRing days={9} tone="light" />
         </div>
       </I18nProvider>,
     );

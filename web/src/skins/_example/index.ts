@@ -1,9 +1,9 @@
 import type { Skin } from "../types";
 import { ExampleDivider, ExampleMarker } from "./motifs";
 
-// A skin of development, to see the mechanism at work without a real variant:
-// a palette that is plainly fake (green and yellow), in light only, two motifs
-// of its own (Crête's stand in for the others), and a line of CSS at each depth.
+// A skin of development, to see the mechanism at work without a real skin: a
+// palette that is plainly fake (green and yellow), in light only, and two
+// motifs of its own (Crête's stand in for the others).
 // Its folder starts with `_`: the app has it in development and in the tests,
 // never in a build (see ../README.md).
 

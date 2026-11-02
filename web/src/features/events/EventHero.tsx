@@ -5,8 +5,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
-import { skinnable } from "../../skins/components";
-import type { EventHeroProps } from "../../skins/types";
+import type { EventView } from "./api";
 import { RegisterLink } from "./RegisterLink";
 import { deadlineText, registrationState } from "./registration";
 
@@ -18,7 +17,19 @@ import { deadlineText, registrationState } from "./registration";
  * (the skin's `HeroArt`), the name in white, and the sun rising behind the
  * ridges at its foot.
  */
-export function EventHeroBase({ view, heading }: EventHeroProps) {
+export function EventHero({
+  view,
+  heading,
+}: {
+  /** The event, its formats and who is on them, its days. */
+  view: EventView;
+  /**
+   * What the title of the page (the `h1` of the hero) carries, to spread on it:
+   * its id, which the actions of the page name (`aria-describedby`), and what
+   * lets the page give it the focus (`data-focus`, `tabIndex`).
+   */
+  heading: { id: string; "data-focus": string; tabIndex: -1 };
+}) {
   const { t, f } = useI18n();
   const today = useToday();
   const { event, start, end } = view;
@@ -71,6 +82,3 @@ export function EventHeroBase({ view, heading }: EventHeroProps) {
     </header>
   );
 }
-
-/** The top of the page of an event, as the skin of the page draws it at the depth of the build (Crête's above, by default). */
-export const EventHero = skinnable("EventHero", EventHeroBase);

@@ -2,8 +2,6 @@ import { useId } from "react";
 
 import { useI18n } from "../i18n/I18nProvider";
 import { useToday } from "../lib/useToday";
-import { skinnable } from "../skins/components";
-import type { CountdownRingProps, DateChipProps } from "../skins/types";
 
 /**
  * The pictures of the dawn: the day of an event as a chip of sunrise, and the
@@ -18,7 +16,19 @@ import type { CountdownRingProps, DateChipProps } from "../skins/types";
  * its first and last day. The date is said by `label`, in words, for screen
  * readers: the chip is hidden from them.
  */
-export function DateChipBase({ start, end, label, size = "md" }: DateChipProps) {
+export function DateChip({
+  start,
+  end,
+  label,
+  size = "md",
+}: {
+  start: Temporal.PlainDate;
+  /** The last day, for an event of several days. */
+  end?: Temporal.PlainDate;
+  /** The date in words, read instead of the chip. */
+  label: string;
+  size?: "md" | "lg";
+}) {
   const { f, formatLocale } = useI18n();
   const several = end !== undefined && !start.equals(end);
   const month = (d: Temporal.PlainDate) =>
@@ -60,9 +70,6 @@ export function DateChipBase({ start, end, label, size = "md" }: DateChipProps) 
   );
 }
 
-/** The day of an event, as the skin of the page draws it at the depth of the build (Crête's chip above, by default). */
-export const DateChip = skinnable("DateChip", DateChipBase);
-
 /** How many days the ring counts down: further than this, it is empty. */
 const HORIZON_DAYS = 30;
 const RING_RADIUS = 22;
@@ -74,7 +81,17 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
  * words beside it. `tone` is "color" on white, "light" (white) on the sky of a
  * hero.
  */
-export function CountdownRingBase({ days, tone = "color", className = "" }: CountdownRingProps) {
+export function CountdownRing({
+  days,
+  tone = "color",
+  className = "",
+}: {
+  /** The days left: 0 on the day. */
+  days: number;
+  tone?: "color" | "light";
+  /** Its place in what holds it (a margin). */
+  className?: string;
+}) {
   const light = tone === "light";
   const { formatLocale } = useI18n();
   const id = useId();
@@ -148,6 +165,3 @@ export function CountdownRingBase({ days, tone = "color", className = "" }: Coun
     </span>
   );
 }
-
-/** The days left, as the skin of the page draws them at the depth of the build (Crête's ring above, by default). */
-export const CountdownRing = skinnable("CountdownRing", CountdownRingBase);

@@ -5,7 +5,7 @@ import type { EventRecord } from "../../lib/types";
 
 /**
  * The days left before the deadline that a hero counts beside it: a week or
- * less (Crête's hero, and a skin's variant of it, say them alike).
+ * less.
  */
 export const DAYS_LEFT_SHOWN = 7;
 
@@ -55,8 +55,7 @@ const SEPARATOR = " · ";
 /**
  * The deadline as a hero says it: `registrationLabel`, and in its last week
  * (`DAYS_LEFT_SHOWN` days or less) the days left after it: "Inscriptions
- * jusqu'au mer. 10 juin · plus que 3 jours". Crête's hero and a skin's
- * variant of a piece say it alike.
+ * jusqu'au mer. 10 juin · plus que 3 jours".
  */
 export function deadlineText(state: RegistrationState, f: Formatters, t: Messages): string {
   const label = registrationLabel(state, f, t);

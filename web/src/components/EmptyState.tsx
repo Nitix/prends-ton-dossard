@@ -1,5 +1,5 @@
-import { skinnable } from "../skins/components";
-import type { EmptyStateProps } from "../skins/types";
+import type { ReactNode } from "react";
+
 import { EmptyArt } from "./Slots";
 
 /**
@@ -8,7 +8,7 @@ import { EmptyArt } from "./Slots";
  * map and a small dawn on the summits). The words say it all; the drawing is
  * decoration.
  */
-export function EmptyStateBase({ title, hint }: EmptyStateProps) {
+export function EmptyState({ title, hint }: { title: ReactNode; hint: ReactNode }) {
   return (
     <div className="empty-state card relative isolate flex flex-col items-center gap-1 overflow-hidden px-6 pt-5 pb-6 text-center">
       <EmptyArt />
@@ -17,6 +17,3 @@ export function EmptyStateBase({ title, hint }: EmptyStateProps) {
     </div>
   );
 }
-
-/** The empty state, as the skin of the page draws it at the depth of the build (Crête's above, by default). */
-export const EmptyState = skinnable("EmptyState", EmptyStateBase);

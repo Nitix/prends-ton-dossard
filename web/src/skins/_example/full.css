@@ -1,8 +1,0 @@
-/* « Exemple (dev) », depth full: the other pieces, over the mix. Only in a
-   build at full (src/skins/depth/). */
-:root[data-skin="_example"] .stat-tile {
-  border-radius: 0.25rem;
-}
-:root[data-skin="_example"] .btn-primary {
-  border-radius: 0.5rem;
-}

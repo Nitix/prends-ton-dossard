@@ -90,15 +90,9 @@ function Track({ points }: { points: TrackPoint[] }) {
   const altitude =
     min === undefined || max === undefined ? null : t.route.altitude(f.meters(min), f.meters(max));
 
-  const first = points[0];
-
   return (
     <>
-      <TrackFigures
-        figures={summary.split(SEPARATOR)}
-        altitude={altitude}
-        start={first && { lat: first.lat, lon: first.lon }}
-      />
+      <TrackFigures figures={summary.split(SEPARATOR)} altitude={altitude} />
       <MapBoundary>
         <Suspense fallback={<MapLoading />}>
           <TrackMap
