@@ -201,8 +201,9 @@ for (const skin of SKINS) {
       );
 
       const items = cards().map((card) => {
+        // The layout, not the pixels: a card that lifts under the pointer (`card-lift`) is shifted.
         const box = card.getBoundingClientRect();
-        return { card, top: Math.round(box.top), height: box.height };
+        return { card, top: card.offsetTop, height: box.height };
       });
       // The rows: the cards that start at the same height.
       const rows = Map.groupBy(items, (item) => item.top);
