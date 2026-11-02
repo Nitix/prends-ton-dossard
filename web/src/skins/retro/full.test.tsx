@@ -3,7 +3,7 @@ import { afterEach, beforeAll, expect, test } from "vitest";
 
 import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
 import { Avatar } from "../../components/Avatar";
-import { PRIMARY, SECONDARY } from "../../components/buttons";
+import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
 import { Dialog } from "../../components/Dialog";
 import { TextField } from "../../components/TextField";
@@ -24,7 +24,7 @@ import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { contrast } from "../../test/colour";
-import { groundsBehind, textContrast } from "../../test/computed";
+import { colourOf, groundsBehind, textContrast } from "../../test/computed";
 import { hex, inApp, plain } from "../../test/variant";
 
 import fullCss from "./full.css?raw";
@@ -399,3 +399,20 @@ test("retro — les feuilles ne nomment aucun type d'élément : seulement les c
   }
   expect(named, "selectors that name an element type").toEqual([]);
 });
+
+test.skipIf(!FULL)(
+  "retro — une action qui supprime reste rouge, lisible à 4,5:1 sur la feuille",
+  async () => {
+    await inApp(
+      <button type="button" className={`${SECONDARY} ${DANGER_TEXT}`}>
+        Supprimer
+      </button>,
+      (drawn) => {
+        const color = style(drawn.querySelector("button")).color;
+        expect(hex(color)).toBe(hex(colourOf("--color-red-700")));
+        expect(contrast(hex(color), hex(colourOf("--color-card")))).toBeGreaterThanOrEqual(4.5);
+      },
+      { skin: ID },
+    );
+  },
+);
