@@ -434,8 +434,12 @@ export const fr = {
     location: "Lieu",
     locationHint: "Une ville ou un lieu.",
     startDate: "Date de début",
-    endDate: "Date de fin",
-    endDateHint: "Seulement si l'événement dure plusieurs jours.",
+    // Under the start date: the days of the event, which the dates of its formats make (there is no end date to fill in). The days come written ("sam. 29 nov.").
+    periodOneDay: (day: string) => `Un jour : ${day}`,
+    periodRange: (from: string, to: string) =>
+      `Du ${from} au ${to}, d'après les dates des épreuves`,
+    // After the line above, when saving would change the end the event has now: nothing is lost without being said.
+    periodWas: (from: string, to: string) => `(avant : du ${from} au ${to})`,
     registrationUrl: "Lien pour s'inscrire",
     registrationUrlHint: "Facultatif : l'adresse de la page d'inscription.",
     registrationDeadline: "Date limite d'inscription",

@@ -211,7 +211,11 @@ const renderEdit = (id = "event") =>
 const name = (screen: Screen) => screen.getByLabelText(fr.form.name);
 const location = (screen: Screen) => screen.getByLabelText(fr.form.location);
 const startDate = (screen: Screen) => screen.getByLabelText(fr.form.startDate);
-const endDate = (screen: Screen) => screen.getByLabelText(fr.form.endDate);
+/** The line under the start date that says the days of the event: an <output>, which is read out when it changes. */
+const period = (screen: Screen) => screen.getByText(/^(Un jour|Du|One day|From)\b/);
+
+/** What the line under the start date says now, to poll: it changes as the form is filled in. */
+const periodNow = (screen: Screen) => () => period(screen).element().textContent;
 const registrationDeadline = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationDeadline);
 const notes = (screen: Screen) => screen.getByLabelText(fr.form.notes);
@@ -240,7 +244,6 @@ async function fillEvent(screen: Screen) {
   await name(screen).fill("Trail du Lac");
   await location(screen).fill("Annecy");
   await startDate(screen).fill("2026-06-13");
-  await endDate(screen).fill("2026-06-14");
   const row = format(screen, 1);
   await raceType(row).selectOptions(trailType.id);
   await distance(row).fill("42");
@@ -401,7 +404,6 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
   await name(screen).fill("  Trail du Lac ");
   await location(screen).fill("Annecy");
   await startDate(screen).fill("2026-06-13");
-  await endDate(screen).fill("2026-06-14");
   await screen
     .getByLabelText(fr.form.registrationUrl)
     .fill("https://trail.example.test/inscription");
@@ -633,7 +635,6 @@ test("EventForm — « Terminé » choisi, puis un début plus tard : le statut 
   await screen.getByLabelText(fr.participation.status).selectOptions("finished");
 
   await startDate(screen).fill("2026-06-20");
-  await endDate(screen).fill("2026-06-21");
 
   await expect.element(screen.getByLabelText(fr.participation.status)).toHaveValue("interested");
 
@@ -650,13 +651,12 @@ test("EventForm — « Terminé » choisi, puis un début plus tard : le statut 
 
 // --- A save that is refused ---
 
-test("EventForm — une erreur end_before_start s'affiche sous la date de fin, liée au champ, et les valeurs saisies restent", async () => {
+test("EventForm — un refus sur end_date, qui n'a plus de champ, est dit au-dessus du bouton, et les valeurs saisies restent", async () => {
   mocks.send.mockRejectedValue(refused(0, 400, { end_date: field("end_before_start") }));
   const { screen } = await renderForm();
   await name(screen).fill("Trail du Lac");
   await location(screen).fill("Annecy");
   await startDate(screen).fill("2026-06-14");
-  await endDate(screen).fill("2026-06-13");
   await screen.getByLabelText(fr.form.registrationUrl).fill("https://trail.example.test");
   await notes(screen).fill("Parking à l'arrivée.");
   const first = format(screen, 1);
@@ -675,19 +675,14 @@ test("EventForm — une erreur end_before_start s'affiche sous la date de fin, l
 
   await save(screen).click();
 
-  const message = screen.getByText(fr.errors.end_before_start);
+  // No field of the form is the end date: the refusal is not swallowed, it is said as a whole.
+  const message = screen.getByRole("alert").filter({ hasText: fr.errors.end_before_start });
   await expect.element(message).toBeVisible();
-  // Linked to the end date, not to the start date.
-  expect(endDate(screen).element().getAttribute("aria-describedby")).toContain(
-    message.element().id,
-  );
-  expect(endDate(screen).element().getAttribute("aria-invalid")).toBe("true");
   expect(startDate(screen).element().getAttribute("aria-invalid")).toBe("false");
   // Everything typed is still there.
   await expect.element(name(screen)).toHaveValue("Trail du Lac");
   await expect.element(location(screen)).toHaveValue("Annecy");
   await expect.element(startDate(screen)).toHaveValue("2026-06-14");
-  await expect.element(endDate(screen)).toHaveValue("2026-06-13");
   await expect
     .element(screen.getByLabelText(fr.form.registrationUrl))
     .toHaveValue("https://trail.example.test");
@@ -827,21 +822,231 @@ test("EventForm — une règle qui refuse (404) est dite avec son message, une p
 });
 
 test("EventForm — après un refus, on peut corriger et enregistrer", async () => {
-  mocks.send.mockRejectedValueOnce(refused(0, 400, { end_date: field("end_before_start") }));
+  mocks.send.mockRejectedValueOnce(
+    refused(0, 400, { registration_deadline: field("registration_deadline_after_start") }),
+  );
   const { screen, router } = await renderForm();
   await fillEvent(screen);
-  await endDate(screen).fill("2026-06-12");
+  await registrationDeadline(screen).fill("2026-06-20");
   await save(screen).click();
-  await expect.element(screen.getByText(fr.errors.end_before_start)).toBeVisible();
+  await expect.element(screen.getByText(fr.errors.registration_deadline_after_start)).toBeVisible();
 
-  await endDate(screen).fill("2026-06-14");
+  await registrationDeadline(screen).fill("2026-06-10");
   await save(screen).click();
 
   await vi.waitFor(() => {
     expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
   });
   expect(mocks.send).toHaveBeenCalledTimes(2);
-  await expect.element(screen.getByText(fr.errors.end_before_start)).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText(fr.errors.registration_deadline_after_start))
+    .not.toBeInTheDocument();
+});
+
+// --- The end date comes from the formats ---
+
+test("EventForm — plus de champ « date de fin »", async () => {
+  const { screen } = await renderForm();
+
+  await expect.element(screen.getByLabelText(/date de fin/i)).not.toBeInTheDocument();
+  expect(screen.container.querySelector('[name="end_date"]')).toBeNull();
+  expect(screen.container.textContent).not.toContain("plusieurs jours");
+});
+
+test("EventForm — plus de champ « date de fin » à la modification, ni en anglais", async () => {
+  const { screen } = await renderForm({
+    at: "/evenements/event/modifier",
+    heading: "Edit the event",
+    languages: ["en-GB"],
+  });
+
+  await expect.element(screen.getByLabelText(/end date/i)).not.toBeInTheDocument();
+  expect(screen.container.querySelector('[name="end_date"]')).toBeNull();
+  // The start date is still there.
+  await expect.element(screen.getByLabelText("Start date")).toHaveValue("2026-06-13");
+});
+
+test("EventForm — la période affichée suit les dates des épreuves", async () => {
+  const { screen } = await renderForm();
+  // No start day yet: nothing to say.
+  await expect.element(period(screen)).not.toBeInTheDocument();
+
+  await startDate(screen).fill("2026-06-13");
+  // Alone, the event is one day. The line is an <output>: a change is read out.
+  await expect.poll(periodNow(screen)).toBe("Un jour : sam. 13 juin");
+  expect(period(screen).element().tagName).toBe("OUTPUT");
+
+  await formatDate(format(screen, 1)).fill("2026-06-15");
+  await expect
+    .poll(periodNow(screen))
+    .toBe("Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves");
+
+  // A format with no day is the first day: it moves nothing. The latest of the days is the end.
+  await addFormat(screen).click();
+  await expect
+    .poll(periodNow(screen))
+    .toBe("Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves");
+  await formatDate(format(screen, 2)).fill("2026-06-16");
+  await expect
+    .poll(periodNow(screen))
+    .toBe("Du sam. 13 juin au mar. 16 juin, d'après les dates des épreuves");
+  await formatDate(format(screen, 2)).fill("2026-06-14");
+  await expect
+    .poll(periodNow(screen))
+    .toBe("Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves");
+
+  // No format after the first day: one day again.
+  await formatDate(format(screen, 1)).fill("");
+  await formatDate(format(screen, 2)).fill("2026-06-13");
+  await expect.poll(periodNow(screen)).toBe("Un jour : sam. 13 juin");
+
+  // A later start moves the first day, and the days of the formats are compared with the new one.
+  await formatDate(format(screen, 1)).fill("2026-06-15");
+  await startDate(screen).fill("2026-06-20");
+  await expect.poll(periodNow(screen)).toBe("Un jour : sam. 20 juin");
+});
+
+test("EventForm — la période est dite en anglais, avec la langue des dates", async () => {
+  const { screen } = await renderForm({ languages: ["en-GB"], heading: "Create an event" });
+  await screen.getByLabelText("Start date").fill("2026-06-13");
+
+  await expect.poll(periodNow(screen)).toMatch(/^One day: Sat,? 13 Jun$/);
+
+  await screen.getByLabelText("Race date").fill("2026-06-15");
+  await expect
+    .poll(periodNow(screen))
+    .toMatch(/^From Sat,? 13 Jun to Mon,? 15 Jun, from the formats' dates$/);
+});
+
+test("EventForm — la période d'un événement dont les épreuves ne changent rien n'a pas d'« avant »", async () => {
+  const { screen } = await renderEdit();
+
+  // F42 is on the 14th, the event ends on the 14th.
+  await expect
+    .poll(periodNow(screen))
+    .toMatch(/^Du sam\. 13 juin au dim\. 14 juin, d'après les dates des épreuves$/);
+});
+
+test("EventForm — la période affichée suit les dates des épreuves : un événement de plusieurs jours dont les épreuves n'ont pas de date devient d'un jour, et le formulaire le dit avant l'enregistrement", async () => {
+  // Review focus 3: the event lasts two days, no format has a day of its own.
+  mocks.getOne.mockResolvedValue({
+    ...eventRecord,
+    expand: { ...eventRecord.expand, formats_via_event: [{ ...f42, date: "" }, f15] },
+  });
+  const { screen, router } = await renderEdit();
+
+  await expect
+    .poll(periodNow(screen))
+    .toBe("Un jour : sam. 13 juin (avant : du sam. 13 juin au dim. 14 juin)");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  // What the line said is what was saved.
+  expect(mocks.calls.find(({ collection }) => collection === "events")?.body).toMatchObject({
+    start_date: "2026-06-13",
+    end_date: "",
+  });
+});
+
+test("EventForm — la période dit aussi « avant » quand une épreuve change la fin, et plus rien quand la fin redevient celle qu'elle était", async () => {
+  const { screen } = await renderEdit();
+
+  await formatDate(format(screen, 2)).fill("2026-06-15");
+  await expect
+    .poll(periodNow(screen))
+    .toBe(
+      "Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves (avant : du sam. 13 juin au dim. 14 juin)",
+    );
+
+  // Back to the stored end: nothing changes any more.
+  await formatDate(format(screen, 2)).fill("2026-06-14");
+  await expect
+    .poll(periodNow(screen))
+    .toMatch(/^Du sam\. 13 juin au dim\. 14 juin, d'après les dates des épreuves$/);
+});
+
+test("EventForm — la période dit « was » en anglais, avec la langue des dates", async () => {
+  mocks.getOne.mockResolvedValue({
+    ...eventRecord,
+    expand: { ...eventRecord.expand, formats_via_event: [{ ...f42, date: "" }, f15] },
+  });
+  const { screen } = await renderForm({
+    at: "/evenements/event/modifier",
+    heading: "Edit the event",
+    languages: ["en-GB"],
+  });
+
+  await expect
+    .poll(periodNow(screen))
+    .toMatch(/^One day: Sat,? 13 Jun \(was: from Sat,? 13 Jun to Sun,? 14 Jun\)$/);
+});
+
+test("EventForm — un événement d'un jour à qui une épreuve donne une fin n'a pas d'« avant »", async () => {
+  mocks.getOne.mockResolvedValue(event2Record);
+  const { screen } = await renderEdit("event2");
+
+  await expect.poll(periodNow(screen)).toBe("Un jour : lun. 22 juin");
+  await formatDate(format(screen, 1)).fill("2026-06-23");
+
+  await expect
+    .poll(periodNow(screen))
+    .toMatch(/^Du lun\. 22 juin au mar\. 23 juin, d'après les dates des épreuves$/);
+});
+
+test("EventForm — le lot envoie la date de fin calculée : la plus tardive des épreuves", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await formatDate(format(screen, 1)).fill("2026-06-14");
+  await addFormat(screen).click();
+  await distance(format(screen, 2)).fill("10");
+  await formatDate(format(screen, 2)).fill("2026-06-16");
+  await addFormat(screen).click();
+  await distance(format(screen, 3)).fill("5");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "events")?.body).toMatchObject({
+    start_date: "2026-06-13",
+    end_date: "2026-06-16",
+  });
+  // The server checks each format against it: they all are in 13-16 June.
+  const days = mocks.calls.filter(({ collection }) => collection === "formats");
+  expect(days.map(({ body }) => body?.date)).toEqual(["2026-06-14", "2026-06-16", ""]);
+});
+
+test("EventForm — le lot envoie une date de fin vide quand aucune épreuve n'est après le début", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await formatDate(format(screen, 1)).fill("2026-06-13");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  const body = mocks.calls.find(({ collection }) => collection === "events")?.body;
+  // Always sent, an empty text included: that is how a date of the event is cleared.
+  expect(body).toHaveProperty("end_date", "");
+});
+
+test("EventForm — la modification envoie la date de fin calculée, avec l'épreuve déplacée après le lot si le jour est nouveau", async () => {
+  const { screen, router } = await renderEdit();
+  // F15 (no day) goes to the 16th, after the stored end (the 14th): the event gains days.
+  await formatDate(format(screen, 1)).fill("2026-06-16");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.send).toHaveBeenCalledOnce();
+  // F15 and F42 first, F15 without the day the event does not have yet, then the event, then F15's day.
+  expect(mocks.calls.map(({ id }) => id)).toEqual(["f15", "f42", "event", "f15"]);
+  expect(mocks.calls[0]?.body).toMatchObject({ date: "" });
+  expect(mocks.calls[2]?.body).toMatchObject({ start_date: "2026-06-13", end_date: "2026-06-16" });
+  expect(mocks.calls[3]?.body).toEqual({ date: "2026-06-16" });
 });
 
 // --- Duplicates ---
@@ -937,7 +1142,6 @@ test("EventForm — à la modification : les valeurs de l'événement, ses épre
   await expect.element(name(screen)).toHaveValue("Trail des Crêtes");
   await expect.element(location(screen)).toHaveValue("Annecy");
   await expect.element(startDate(screen)).toHaveValue("2026-06-13");
-  await expect.element(endDate(screen)).toHaveValue("2026-06-14");
   // F15 is on the first day, F42 on the second.
   await expect.element(distance(format(screen, 1))).toHaveValue(15);
   await expect.element(elevation(format(screen, 1))).toHaveValue(700);
@@ -1022,7 +1226,7 @@ test("EventForm — l'épreuve qu'on retire est supprimée dans le même lot, et
 
 test("EventForm — les dates effacées, ou les mesures, sont envoyées vides pour être effacées", async () => {
   const { screen } = await renderEdit();
-  await endDate(screen).fill("");
+  // F42 is the only format that has a day after the first: with no day, the event ends on its first day.
   await formatDate(format(screen, 2)).fill("");
 
   await save(screen).click();
@@ -1124,7 +1328,8 @@ test("EventForm — réduire les dates : l'erreur du serveur s'affiche sous la d
   // The formats that stay (F15, F42) go first: the event is the third request.
   mocks.send.mockRejectedValue(refused(2, 400, { start_date: field("format_date_out_of_range") }));
   const { screen } = await renderEdit();
-  await endDate(screen).fill("2026-06-13");
+  // F42 is on the 14th: the event, now from the 15th, no longer has its day.
+  await startDate(screen).fill("2026-06-15");
 
   await save(screen).click();
 
@@ -1138,7 +1343,6 @@ test("EventForm — reporter l'événement et déplacer l'épreuve du jour 2 : u
   const { screen, router } = await renderEdit();
   // 13-14 June becomes 20-21 June, and F42 (the 14th) goes to the 21st.
   await startDate(screen).fill("2026-06-20");
-  await endDate(screen).fill("2026-06-21");
   await formatDate(format(screen, 2)).fill("2026-06-21");
 
   await save(screen).click();
@@ -1171,7 +1375,6 @@ test("EventForm — la date d'une épreuve refusée à la fin du lot s'affiche s
   mocks.send.mockRejectedValue(refused(3, 400, { date: field("format_date_out_of_range") }));
   const { screen } = await renderEdit();
   await startDate(screen).fill("2026-06-20");
-  await endDate(screen).fill("2026-06-21");
   await formatDate(format(screen, 2)).fill("2026-06-30");
 
   await save(screen).click();
@@ -1288,7 +1491,6 @@ test("EventForm — les champs et les boutons font au moins 44 px de haut", asyn
     name(screen),
     location(screen),
     startDate(screen),
-    endDate(screen),
     registrationDeadline(screen),
     notes(screen),
     save(screen),

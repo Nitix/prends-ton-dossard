@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { toEventView } from "./api";
 import {
+  eventEndDate,
   filledMeasures,
   hasMeasure,
   initialDraft,
@@ -57,6 +58,48 @@ describe("hasMeasure", () => {
   });
 });
 
+describe("eventEndDate", () => {
+  test("eventEndDate — sans épreuve datée, l'événement tient sur un jour", () => {
+    expect(eventEndDate("2026-06-13", [])).toBe("");
+    expect(eventEndDate("2026-06-13", [""])).toBe("");
+    expect(eventEndDate("2026-06-13", ["", ""])).toBe("");
+  });
+
+  test("eventEndDate — une épreuve plus tard que le début donne la fin", () => {
+    expect(eventEndDate("2026-06-13", ["2026-06-14"])).toBe("2026-06-14");
+    // Across a year, days sort as days.
+    expect(eventEndDate("2026-12-30", ["2027-01-02"])).toBe("2027-01-02");
+  });
+
+  test("eventEndDate — plusieurs épreuves : la plus tardive, quel que soit l'ordre", () => {
+    expect(eventEndDate("2026-06-13", ["2026-06-14", "2026-06-16", "2026-06-15"])).toBe(
+      "2026-06-16",
+    );
+    expect(eventEndDate("2026-06-13", ["2026-06-16", "2026-06-14"])).toBe("2026-06-16");
+  });
+
+  test("eventEndDate — une épreuve sans date compte pour le premier jour : elle ne change pas la fin", () => {
+    expect(eventEndDate("2026-06-13", ["", "2026-06-15"])).toBe("2026-06-15");
+    expect(eventEndDate("2026-06-13", ["2026-06-15", ""])).toBe("2026-06-15");
+    expect(eventEndDate("2026-06-13", [""])).toBe("");
+  });
+
+  test("eventEndDate — une épreuve le premier jour, ou avant, ne fait pas de fin", () => {
+    expect(eventEndDate("2026-06-13", ["2026-06-13"])).toBe("");
+    expect(eventEndDate("2026-06-13", ["2026-06-13", "2026-06-13"])).toBe("");
+    // Before the start: the server refuses that format, the end is not for it to move.
+    expect(eventEndDate("2026-06-13", ["2026-06-12"])).toBe("");
+    expect(eventEndDate("2026-06-13", ["2026-06-12", "2026-06-14"])).toBe("2026-06-14");
+  });
+
+  test("eventEndDate — un texte qui n'est pas un jour est laissé de côté, et sans début il n'y a pas de fin", () => {
+    expect(eventEndDate("2026-06-13", ["2026-06-1", "2026-02-31", "demain"])).toBe("");
+    expect(eventEndDate("2026-06-13", ["2026-06-1", "2026-06-15"])).toBe("2026-06-15");
+    expect(eventEndDate("", ["2026-06-15"])).toBe("");
+    expect(eventEndDate("2026-06-1", ["2026-06-15"])).toBe("");
+  });
+});
+
 describe("initialDraft", () => {
   test("a new event: nothing filled in, one format to fill in, and I take part", () => {
     const draft = initialDraft(undefined);
@@ -74,7 +117,6 @@ describe("initialDraft", () => {
       name: "Trail des Crêtes",
       location: "Annecy",
       startDate: "2026-06-13",
-      endDate: "2026-06-14",
       registrationUrl: "",
       registrationDeadline: "",
       notes: "",
@@ -94,6 +136,8 @@ describe("initialDraft", () => {
       date: "",
     });
     expect(draft.rows[1]).toMatchObject({ timeLimit: 600, date: "2026-06-14" });
+    // The end date is not a field: it comes from the dates of the formats.
+    expect(draft).not.toHaveProperty("endDate");
   });
 
   test("the link of the course and whether the format has a track are in the fields; the track itself is kept as it is", () => {
@@ -160,7 +204,7 @@ describe("toEventDraft", () => {
       name: "Trail du Lac",
       location: "Annecy",
       start_date: "2026-06-13",
-      end_date: undefined,
+      end_date: "",
       registration_url: undefined,
       registration_deadline: undefined,
       notes: undefined,
@@ -258,6 +302,19 @@ describe("toEventDraft", () => {
 
   test("does not join when it is not asked", () => {
     expect(toEventDraft(initialDraft(undefined), undefined, false).join).toBeUndefined();
+  });
+
+  test("la date de fin est la plus tardive des épreuves, et vide quand aucune n'est après le début", () => {
+    const base = { ...initialDraft(undefined), startDate: "2026-06-13" };
+    const later = {
+      ...base,
+      rows: [row({ key: "a", date: "2026-06-14" }), row({ key: "b", date: "2026-06-16" })],
+    };
+    expect(toEventDraft(later, undefined, false).end_date).toBe("2026-06-16");
+
+    const undated = { ...base, rows: [row({ key: "a" }), row({ key: "b", date: "2026-06-13" })] };
+    // Sent as an empty text, which is how an event that lasted longer becomes a one-day event.
+    expect(toEventDraft(undated, undefined, false).end_date).toBe("");
   });
 
   test("an event being edited keeps its id, and so do its formats", () => {

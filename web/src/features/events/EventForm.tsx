@@ -8,7 +8,8 @@ import { Field, INPUT } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
-import type { RaceTypeRecord } from "../../lib/types";
+import { parseDate } from "../../lib/dates";
+import type { EventRecord, RaceTypeRecord } from "../../lib/types";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { allowedStatus } from "../participations/api";
@@ -20,8 +21,10 @@ import { FormatFieldset } from "./FormatFieldset";
 import { formatDisplayName } from "./formatName";
 import {
   emptyRow,
+  eventEndDate,
   hasMeasure,
   initialDraft,
+  isDay,
   joinRowOf,
   joinStarted,
   toEventDraft,
@@ -45,11 +48,11 @@ type Errors = {
 
 const NO_ERRORS: Errors = { event: {}, rows: {}, form: null };
 
+// `end_date` is not one: the form has no field for it, so a refusal about it is said as a whole.
 const EVENT_FIELDS: readonly string[] = [
   "name",
   "location",
   "start_date",
-  "end_date",
   "registration_url",
   "registration_deadline",
   "notes",
@@ -155,6 +158,40 @@ export function EditEventPage({ id }: { id: string }) {
   return <output>{t.common.loading}</output>;
 }
 
+/**
+ * The days of the event, under its start date: one day, or from the first to the
+ * last day of its formats (`end`, see `eventEndDate`). An event that is being
+ * edited and whose end would change says what it was (`stored` is the event as
+ * it was loaded): saving a long event whose formats have no day of their own
+ * makes it a one-day event, and that is not to be a surprise.
+ *
+ * It is an `<output>`, a polite live region, so that a change is read out. It is
+ * always in the page, empty (and out of the flow) while there is no start day:
+ * a region that comes with its text is often not read out.
+ */
+function Period({
+  start,
+  end,
+  stored,
+}: {
+  start: string;
+  end: string;
+  stored: Pick<EventRecord, "start_date" | "end_date"> | undefined;
+}) {
+  const { t, f } = useI18n();
+  let text = "";
+  if (isDay(start)) {
+    const first = f.date(parseDate(start));
+    text =
+      end === "" ? t.form.periodOneDay(first) : t.form.periodRange(first, f.date(parseDate(end)));
+    const was = stored?.end_date ?? "";
+    if (stored && was !== "" && was !== end) {
+      text += ` ${t.form.periodWas(f.date(parseDate(stored.start_date)), f.date(parseDate(was)))}`;
+    }
+  }
+  return <output className="text-sm text-neutral-700 empty:sr-only">{text}</output>;
+}
+
 function EventFields({
   existing,
   raceTypes,
@@ -187,6 +224,12 @@ function EventFields({
   // back to « Intéressé » when the race to join has not started.
   const started = joinStarted(draft, today);
   const joinStatus = allowedStatus(draft.joinStatus, started);
+
+  // The event ends on the last day of its formats: there is no field for it.
+  const endDate = eventEndDate(
+    draft.startDate,
+    draft.rows.map((row) => row.date),
+  );
 
   function change(patch: Partial<typeof draft>) {
     setDraft((current) => ({ ...current, ...patch }));
@@ -359,35 +402,24 @@ function EventFields({
             />
           )}
         </Field>
-        <Field label={t.form.startDate} error={eventError("start_date")}>
-          {(control) => (
-            <input
-              {...control}
-              name="start_date"
-              type="date"
-              required
-              value={draft.startDate}
-              onChange={(event) => {
-                change({ startDate: event.target.value });
-              }}
-              className={INPUT}
-            />
-          )}
-        </Field>
-        <Field label={t.form.endDate} hint={t.form.endDateHint} error={eventError("end_date")}>
-          {(control) => (
-            <input
-              {...control}
-              name="end_date"
-              type="date"
-              value={draft.endDate}
-              onChange={(event) => {
-                change({ endDate: event.target.value });
-              }}
-              className={INPUT}
-            />
-          )}
-        </Field>
+        <div className="flex flex-col gap-1">
+          <Field label={t.form.startDate} error={eventError("start_date")}>
+            {(control) => (
+              <input
+                {...control}
+                name="start_date"
+                type="date"
+                required
+                value={draft.startDate}
+                onChange={(event) => {
+                  change({ startDate: event.target.value });
+                }}
+                className={INPUT}
+              />
+            )}
+          </Field>
+          <Period start={draft.startDate} end={endDate} stored={initial?.event} />
+        </div>
         <DuplicateHint
           name={draft.name}
           startDate={draft.startDate}

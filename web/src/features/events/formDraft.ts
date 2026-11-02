@@ -37,7 +37,6 @@ export type FormDraft = {
   name: string;
   location: string;
   startDate: string;
-  endDate: string;
   registrationUrl: string;
   /** A `YYYY-MM-DD` day, or empty. */
   registrationDeadline: string;
@@ -79,7 +78,6 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
       name: "",
       location: "",
       startDate: "",
-      endDate: "",
       registrationUrl: "",
       registrationDeadline: "",
       notes: "",
@@ -112,7 +110,6 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     name: event.name,
     location: event.location,
     startDate: event.start_date,
-    endDate: event.end_date ?? "",
     registrationUrl: event.registration_url ?? "",
     registrationDeadline: event.registration_deadline ?? "",
     notes: event.notes ?? "",
@@ -121,6 +118,36 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     joinRow: rows[0]?.key ?? "",
     joinStatus: "interested",
   };
+}
+
+/** Whether a text is a real `YYYY-MM-DD` day: what a date field holds once it is complete, or nothing. */
+export function isDay(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  try {
+    Temporal.PlainDate.from(text);
+    return true;
+  } catch (error) {
+    // Not a real day ("2026-02-31"): Temporal refuses it with a RangeError.
+    if (error instanceof RangeError) return false;
+    throw error;
+  }
+}
+
+/**
+ * The last day of an event that starts on `start`, from the days of its formats:
+ * the latest of them when it is after the start, and none (an empty text) when
+ * no format is, which makes the event a one-day event. A format that has no
+ * day takes place on the first day, so it never moves the end; neither does a
+ * text that is not a day. Without a start day there is no period to speak of.
+ * Both are `YYYY-MM-DD` texts, which sort as the days do.
+ */
+export function eventEndDate(start: string, formatDates: readonly string[]): string {
+  if (!isDay(start)) return "";
+  let end = start;
+  for (const day of formatDates) {
+    if (day > end && isDay(day)) end = day;
+  }
+  return end === start ? "" : end;
 }
 
 /** The number in a field, or undefined when it is empty. */
@@ -191,7 +218,10 @@ export function toEventDraft(
     name: draft.name.trim(),
     location: draft.location.trim(),
     start_date: draft.startDate,
-    end_date: draft.endDate || undefined,
+    end_date: eventEndDate(
+      draft.startDate,
+      draft.rows.map((row) => row.date),
+    ),
     registration_url: draft.registrationUrl.trim() || undefined,
     registration_deadline: draft.registrationDeadline || undefined,
     notes: draft.notes.trim() || undefined,
