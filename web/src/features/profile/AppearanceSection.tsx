@@ -82,7 +82,7 @@ export function SkinCard({
 }) {
   const fontLoaded = useFontLoaded(skin.fontSample);
   return (
-    <label className="group relative flex min-h-[4.75rem] cursor-pointer flex-col justify-between gap-2 rounded-2xl border-2 border-neutral-200 bg-card p-3 hover:border-iris-200 hover:bg-iris-50 has-checked:border-iris-600 has-checked:bg-iris-50 has-checked:text-iris-800">
+    <label className="skin-choice group relative flex min-h-[4.75rem] cursor-pointer flex-col justify-between gap-2 rounded-2xl border-2 border-neutral-200 bg-card p-3 hover:border-iris-200 hover:bg-iris-50 has-checked:border-iris-600 has-checked:bg-iris-50 has-checked:text-iris-800">
       <input
         type="radio"
         name="skin"
@@ -162,7 +162,7 @@ function ModeChoices({
       {CHOICES.map((value) => (
         <label
           key={value}
-          className="group relative flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 border-neutral-200 bg-card px-3.5 py-2 hover:border-iris-200 hover:bg-iris-50 has-checked:border-iris-600 has-checked:bg-iris-50 has-checked:font-semibold has-checked:text-iris-800"
+          className="mode-choice group relative flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border-2 border-neutral-200 bg-card px-3.5 py-2 hover:border-iris-200 hover:bg-iris-50 has-checked:border-iris-600 has-checked:bg-iris-50 has-checked:font-semibold has-checked:text-iris-800"
         >
           <input
             type="radio"
