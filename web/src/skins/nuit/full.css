@@ -94,13 +94,16 @@
 
 /* The runners of a card: a dark ring round the photo, then a ring of the light
    of the tape when confirmed (the dashes of the others are Crête's), and a lift
-   under the pointer. */
+   under the pointer, which moves only when motion is allowed (as the lift of a
+   card is cancelled under reduced motion, styles.css). */
 :root[data-skin="nuit"] .chip {
   padding: 2px;
   transition: transform 150ms ease;
 }
-:root[data-skin="nuit"] .chip:hover {
-  transform: translateY(-2px);
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-skin="nuit"] .chip:hover {
+    transform: translateY(-2px);
+  }
 }
 :root[data-skin="nuit"] .chip[data-confirmed="true"] {
   border: 2px solid var(--color-neutral-700);

@@ -5,13 +5,14 @@ import { HeroArt } from "../../components/Slots";
 import { RegisterLink } from "../../features/events/RegisterLink";
 import { deadlineText, registrationState } from "../../features/events/registration";
 import { useI18n } from "../../i18n/I18nProvider";
+import { daysBetween } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import type { EventHeroProps, TrackFiguresProps, Variants } from "../types";
 
 // « Nuit », depth full: the pieces whose markup the variant of v4 (design/v4-nuit)
 // draws its own way: the top of the page of an event (the date in lime over the
-// title, the rest in a column, no ring), the figures of a track as one line of
+// title, the rest in a column, the days left in words in place of the ring), the figures of a track as one line of
 // the display face (a pace, not tiles), and no ring of the days left (the
 // words beside it say them, in a lime or cyan pill: full.css). Each keeps every
 // text, every link and the title the page gives its hero. What it reads, it
@@ -35,6 +36,7 @@ function HeadlampHero({ view, heading }: EventHeroProps) {
   const severalDays = !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
+  const daysAhead = daysBetween(today, start);
 
   return (
     <header className="event-hero on-dawn relative flex flex-col gap-1.5 overflow-hidden bg-dawn-hero p-5 text-ink md:p-7">
@@ -49,6 +51,10 @@ function HeadlampHero({ view, heading }: EventHeroProps) {
         {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
       </p>
       <p className="event-hero-facts relative text-neutral-700">{event.location}</p>
+      {/* Crête's hero shows the days left in a ring; this one has none, so it writes them, in the pill of the days left. */}
+      {daysAhead > 0 && (
+        <p className="event-hero-days days-left relative mt-1 self-start">{f.inDays(daysAhead)}</p>
+      )}
       {deadline && (
         <p
           data-kind={deadline.kind}

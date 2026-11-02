@@ -2,7 +2,7 @@ import { createElement, useEffect, useRef, type ReactNode } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import { page } from "vitest/browser";
 
-import { SKIN_DEPTH, variantOf } from "..";
+import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
 import { Dialog } from "../../components/Dialog";
 import { INPUT } from "../../components/Field";
 import { OfflineBanner } from "../../components/OfflineBanner";
@@ -15,6 +15,7 @@ import { aliceRunner } from "../../features/events/testFixture";
 import { UpcomingSection } from "../../features/home/MyUpcoming";
 import { TrackFigures } from "../../features/route/TrackFigures";
 import { fr } from "../../i18n/fr";
+import { daysBetween } from "../../lib/dates";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { contrast } from "../../test/colour";
@@ -449,7 +450,10 @@ test.skipIf(SKIN_DEPTH !== "full")(
           const title = drawn.querySelector("h1");
           const date = drawn.querySelector(".event-hero-date");
           const deadline = drawn.querySelector(".event-hero-deadline");
+          const days = drawn.querySelector(".event-hero .days-left");
           return {
+            days: plain(days?.textContent),
+            daysPill: days === null ? "" : getComputedStyle(days).color,
             outer: drawn.firstElementChild === hero,
             title: [title?.id, title?.dataset.focus, title?.tabIndex],
             headings: drawn.querySelectorAll("h1").length,
@@ -481,6 +485,48 @@ test.skipIf(SKIN_DEPTH !== "full")(
       const state = registrationState(view.event, Temporal.PlainDate.from(today ?? "2026-06-01"));
       const sentence = state === null ? "" : deadlineText(state, f, fr);
       expect(seen.deadline, `the deadline, ${what}`).toBe(sentence);
+      // The days left before the event, in words (Crête shows them in a ring, which this hero has not),
+      // in the lime pill of the days left, and nothing once the event is under way.
+      const start = Temporal.PlainDate.from(today ?? "2026-06-01");
+      const ahead = daysBetween(start, view.start);
+      expect(seen.days, `the days left, ${what}`).toBe(ahead > 0 ? plain(f.inDays(ahead)) : "");
+      expect(seen.daysPill, `in the pill, ${what}`).toBe(ahead > 0 ? seen.tokens.lime : "");
     }
+  },
+);
+
+/** The rules of the skin's sheets that move a piece under the pointer, and where they sit (inside `prefers-reduced-motion: no-preference` or not). */
+function lifts(): { selector: string; calm: boolean }[] {
+  const found: { selector: string; calm: boolean }[] = [];
+  const visit = (rules: CSSRuleList, calm: boolean) => {
+    for (const rule of rules) {
+      if (rule instanceof CSSStyleRule) {
+        if (
+          rule.selectorText.includes('data-skin="nuit"') &&
+          rule.selectorText.includes(":hover") &&
+          rule.style.getPropertyValue("transform") !== ""
+        ) {
+          found.push({ selector: rule.selectorText, calm });
+        }
+      } else if (rule instanceof CSSMediaRule) {
+        visit(
+          rule.cssRules,
+          calm || /prefers-reduced-motion:\s*no-preference/.test(rule.conditionText),
+        );
+      } else if (rule instanceof CSSGroupingRule) visit(rule.cssRules, calm);
+    }
+  };
+  for (const sheet of document.styleSheets) visit(sheet.cssRules, false);
+  return found;
+}
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "nuit — la pastille d'un coureur ne se soulève sous le pointeur qu'avec le mouvement permis, comme les cartes de Crête",
+  () => {
+    chooseSkin("nuit");
+    const moving = lifts();
+    expect(moving.length, "the lift of the chips").toBeGreaterThan(0);
+    expect(moving.filter(({ calm }) => !calm).map(({ selector }) => selector)).toEqual([]);
+    chooseSkin("crete");
   },
 );
