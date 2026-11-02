@@ -45,7 +45,7 @@ export function Dialog({
         if (event.target === event.currentTarget && open) onClose();
       }}
       // Tailwind's reset zeroes the margin that centres a dialog.
-      className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-[1.75rem] border border-rim bg-raised p-0 text-ink shadow-[0_30px_80px_-20px_rgb(42_32_112/0.55)] backdrop:bg-scrim backdrop:backdrop-blur-[3px]"
+      className="m-auto max-h-[90dvh] w-[min(32rem,calc(100%-2rem))] overflow-y-auto rounded-[1.75rem] border border-rim bg-raised p-0 text-ink shadow-[0_30px_80px_-20px_var(--shade-dialog)] backdrop:bg-scrim backdrop:backdrop-blur-[3px]"
     >
       {open && (
         <div className="relative p-5">

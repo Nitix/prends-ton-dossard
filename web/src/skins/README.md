@@ -85,16 +85,21 @@ What a palette sets:
   `--color-scrim`, `--color-relief`, `--color-slope-1…5`.
 - The rest of the theme: `--radius-*`; the colours of the shadows
   (`--shade-card`, `--shade-lift`, `--shade-bar`, and `--shade-edge`,
-  `--shade-edge-lift`, the thin line under a card, a card that lifts, the tab bar);
+  `--shade-edge-lift`, the thin line under a card, a card that lifts, the tab bar;
+  `--shade-dialog`, a window, `components/Dialog`; `--shade-welcome`, the card of
+  the sign-in pages, `routes/__root`);
   `--map-frame`, `--map-veil`, `--sheet-glow`.
 - The map of a track (`features/route/TrackMap`, which stays light at night):
 
-  | Property                         | What paints with it                                                   |
-  | -------------------------------- | --------------------------------------------------------------------- |
-  | `--map-line-from`, `-via`, `-to` | the gradient of the line of the track                                 |
-  | `--map-line`                     | the line where a gradient cannot be drawn (a track due east or north) |
-  | `--map-start`, `--map-finish`    | the dots of the start and of the finish (3:1 on white)                |
-  | `--map-link`                     | the links of the attribution (4.5:1 on white)                         |
+  | Property                         | What paints with it                                                                              |
+  | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+  | `--map-line-from`, `-via`, `-to` | the gradient of the line of the track                                                            |
+  | `--map-line`                     | the line where a gradient cannot be drawn (a track due east or north)                            |
+  | `--map-start`, `--map-finish`    | the dots of the start and of the finish (3:1 on white)                                           |
+  | `--map-link`                     | the links of the attribution (4.5:1 on white)                                                    |
+  | `--map-ink`                      | the words of the start and of the finish, the zoom buttons (4.5:1 on white and on `--map-hover`) |
+  | `--map-hover`                    | a zoom button under the pointer                                                                  |
+  | `--map-shade`                    | the shade of those words and of the zoom                                                         |
 
 - Crête's motifs, which stand in for the slots a skin does not draw: a palette
   skin that sets these has them in its colours without drawing anything.
@@ -107,6 +112,8 @@ What a palette sets:
   | `--motif-dawn-1`, `-2`, `-3`                                                                       | the sun of the mark of the app (`BrandMark`) and of an empty list (`EmptyArt`)                                    |
   | `--motif-peak-far`, `--motif-peak-near-from`, `-to`                                                | the two summits of the mark                                                                                       |
   | `--motif-hill-near-from`, `-to`                                                                    | the near hills of an empty list                                                                                   |
+  | `--motif-mark-shade`, `--motif-name-shade`                                                         | the shade under the tile of the mark, behind the name of the app (`BrandMark`)                                    |
+  | `--motif-sun-glow`                                                                                 | the glow of the sun of the divider (`Divider`)                                                                    |
 
 - The paints of the dawn, which Crête writes out and the night leaves alone:
 
@@ -125,6 +132,11 @@ What a palette sets:
   | `--dawn-glow-warm`, `-cool`        | the halo of what `--dawn-deep` paints (`shadow-glow`: main buttons, current tab, «+»)                                  |
   | `--focus-glow`                     | the halo of a field with the focus                                                                                     |
   | `--sky-focus`                      | the ring of the focus on the sky                                                                                       |
+
+A skin without a halo sets both glows to `transparent` (`--dawn-glow-warm:
+transparent; --dawn-glow-cool: transparent;`): `shadow-glow` is then drawn in
+nothing, and the smoke test, which compares each piece's halo with that of
+`shadow-glow` in the skin, accepts it.
 
 ```css
 :root[data-skin="<id>"] {
@@ -378,11 +390,15 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
   before the first paint.
 - `components.test.tsx`: `slotted` and `skinnable` in each skin, at the depth of the run.
 - `tokens.test.tsx`: in each skin, Crête's motifs and the map of a track take
-  every colour from a `--motif-*` or `--map-*` property (none written out).
+  every colour from a `--motif-*` or `--map-*` property: none written out, in an
+  attribute, a style or the arbitrary value of a class (`shadow-[…]`,
+  `drop-shadow-[…]`; a mask's is only an alpha); a window, `--shade-dialog`.
 - `smoke.test.tsx`: every skin × mode, at 320 px: home, an event with its map,
-  profile and a dialog, the form, the settings, forced colours; 44 px targets,
-  the marks of the titles, the current tab, the «+» and the main button in the
-  skin's paint and halo; the skins' sheets in the page.
+  profile and a dialog, the form, a public page (its card in `--shade-welcome`),
+  the settings, forced colours; 44 px targets, the marks of the titles, the
+  current tab, the «+» and the main button in the skin's paint and halo (the halo
+  of `shadow-glow` in the skin, transparent too; at palette only, since mix and
+  full may restyle them); the skins' sheets in the page.
 - `../test/skinSheets.test.ts`: the forms a palette, a mix and a full sheet may
   and may not use (`sheetProblems`), and the stops a gradient may have.
 - `../dark.test.ts`, `../contrast.test.ts`, `../dashed.test.ts`,

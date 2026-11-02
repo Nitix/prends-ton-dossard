@@ -258,6 +258,10 @@
     /* The thin line under the shadows of a card, of a card that lifts, of the tab bar. */
     --shade-edge: rgb(36 27 53 / 0.04);
     --shade-edge-lift: rgb(36 27 53 / 0.05);
+    /* The shade of a window (components/Dialog) and of the card of the sign-in
+       pages (routes/__root), the same by day and at night. */
+    --shade-dialog: rgb(42 32 112 / 0.55);
+    --shade-welcome: rgb(42 32 112 / 0.6);
     --map-frame:
       0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
       0 6px 24px -12px rgb(94 74 227 / 0.45);
@@ -274,6 +278,12 @@
     --map-start: #5e4ae3;
     --map-finish: #241b35;
     --map-link: #4b37c4;
+    /* The words of the start and of the finish, and the zoom buttons, on
+       Leaflet's white: their ink, the ground of a zoom button under the
+       pointer, their shade. */
+    --map-ink: #241b35;
+    --map-hover: #f5f3ff;
+    --map-shade: rgb(36 27 53 / 0.45);
 
     /* Crête's motifs (skins/crete/), which stand in for those a skin does not
        draw: a skin sets these to have them in its colours. The ridges, from the
@@ -301,6 +311,11 @@
     --motif-peak-near-to: #2a2070;
     --motif-hill-near-from: #7462f7;
     --motif-hill-near-to: #3a2b99;
+    /* The shade under the tile of the mark and behind the name of the app, on
+       the sky; the glow of the sun of the divider (RidgeDivider). */
+    --motif-mark-shade: rgb(36 27 53 / 0.45);
+    --motif-name-shade: rgb(42 32 112 / 0.35);
+    --motif-sun-glow: rgb(255 154 106 / 0.6);
 
     /* The paints of the dawn, the same by day and at night (they never use a
        colour that the night changes). The sky of the header and of the heroes:

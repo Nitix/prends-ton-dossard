@@ -15,14 +15,14 @@ export function BrandMark({ size = "md" }: { size?: "md" | "lg" }) {
     <span className="flex items-center gap-3">
       <span
         aria-hidden="true"
-        className={`flex shrink-0 overflow-hidden rounded-xl bg-white shadow-[0_6px_18px_-6px_rgb(36_27_53/0.45)] ${
+        className={`flex shrink-0 overflow-hidden rounded-xl bg-white shadow-[0_6px_18px_-6px_var(--motif-mark-shade)] ${
           big ? "size-11" : "size-9"
         }`}
       >
         <PeakGlyph className="size-full" />
       </span>
       <span
-        className={`font-display leading-none font-extrabold tracking-tight text-white drop-shadow-[0_1px_8px_rgb(42_32_112/0.35)] ${
+        className={`font-display leading-none font-extrabold tracking-tight text-white drop-shadow-[0_1px_8px_var(--motif-name-shade)] ${
           big ? "text-[1.75rem]" : "text-[1.3125rem]"
         }`}
       >

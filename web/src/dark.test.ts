@@ -165,10 +165,18 @@ test("dark — le ciel de chaque skin, dans chaque mode : le texte blanc, la pas
   }
 });
 
-test("dark — la carte d'une trace, claire dans tous les modes : les liens de l'attribution à 4,5:1 sur blanc, le départ et l'arrivée à 3:1", () => {
+test("dark — la carte d'une trace, claire dans tous les modes : les liens de l'attribution et les mots du départ, de l'arrivée et du zoom à 4,5:1, le départ et l'arrivée à 3:1", () => {
   for (const { skin, mode, label } of SKIN_CASES) {
     const link = themeValue("--map-link", mode, skin);
     expect(contrast(link, "#ffffff"), `${label}: --map-link (${link})`).toBeGreaterThanOrEqual(4.5);
+    // The labels and the zoom buttons are on Leaflet's white; a zoom button on --map-hover when hovered.
+    const ink = themeValue("--map-ink", mode, skin);
+    const hover = themeValue("--map-hover", mode, skin);
+    expect(contrast(ink, "#ffffff"), `${label}: --map-ink (${ink})`).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrast(ink, hover),
+      `${label}: --map-ink (${ink}) on --map-hover (${hover})`,
+    ).toBeGreaterThanOrEqual(4.5);
     for (const end of ["--map-start", "--map-finish"]) {
       const colour = themeValue(end, mode, skin);
       expect(contrast(colour, "#ffffff"), `${label}: ${end} (${colour})`).toBeGreaterThanOrEqual(3);

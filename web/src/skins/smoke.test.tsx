@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
 
-import { SKINS, chooseSkin, slotOf } from ".";
+import { SKIN_DEPTH, SKINS, chooseSkin, slotOf } from ".";
 import { ToastProvider } from "../components/Toast";
 import {
   aliceRunner,
@@ -200,7 +200,7 @@ function painted(property: string): string {
   return image;
 }
 
-/** A colour of the skin (`--dawn-glow-warm`…) as the browser computes it, here and now. */
+/** A colour of the skin (`--shade-welcome`…) as the browser computes it, here and now. */
 function colourOf(property: string): string {
   const probe = document.createElement("span");
   probe.style.color = `var(${property}, transparent)`;
@@ -210,18 +210,64 @@ function colourOf(property: string): string {
   return colour;
 }
 
-/** The two colours of the halo of the dawn (`shadow-glow`: the main buttons, the current tab, the «+»). */
+/**
+ * The two colours of the halo of the dawn (`shadow-glow`: the main buttons, the
+ * current tab, the «+»). A skin without a halo sets both to `transparent`.
+ */
 const GLOWS = ["--dawn-glow-warm", "--dawn-glow-cool"];
 
-/** The halo of a piece of the dawn is in the colours of the skin of the page. */
+/** The empty layer that Tailwind puts in a `box-shadow` for a ring or an inset shadow it does not draw. */
+const EMPTY_LAYER = "rgba(0, 0, 0, 0) 0px 0px 0px 0px";
+
+/** The layers of a computed `box-shadow`, without Tailwind's empty ones. */
+function shadowLayers(shadow: string): string[] {
+  if (shadow === "none") return [];
+  return shadow
+    .split(/,(?![^(]*\))/)
+    .map((layer) => layer.trim())
+    .filter((layer) => layer !== EMPTY_LAYER);
+}
+
+/** The halo that `shadow-glow` draws in the skin of the page, here and now. */
+function glowOfSkin(): string[] {
+  const probe = document.createElement("span");
+  probe.className = "shadow-glow";
+  document.body.append(probe);
+  const layers = shadowLayers(getComputedStyle(probe).boxShadow);
+  probe.remove();
+  return layers;
+}
+
+/**
+ * The halo of a piece of the dawn is the skin's: the one `shadow-glow` draws from
+ * the skin's `--dawn-glow-*`, coloured or transparent (a skin without a halo),
+ * never Crête's left behind. At mix and full a skin may restyle the piece itself
+ * (`box-shadow: none` on the current tab, README.md): there, only the properties
+ * are checked.
+ */
 function expectGlowOfSkin(element: Element, what: string) {
-  const shadow = getComputedStyle(element).boxShadow;
-  expect(shadow, `the halo of ${what}`).not.toBe("none");
+  const root = getComputedStyle(document.documentElement);
   for (const glow of GLOWS) {
-    const colour = colourOf(glow);
-    expect(colour, `${glow} is set`).not.toBe("rgba(0, 0, 0, 0)");
-    expect(shadow, `${what}: its halo in ${glow}`).toContain(colour);
+    expect(root.getPropertyValue(glow).trim(), `${glow} is defined`).not.toBe("");
   }
+  if (SKIN_DEPTH !== "palette") return;
+  const halo = glowOfSkin();
+  expect(halo, "the two layers of shadow-glow").toHaveLength(2);
+  const layers = shadowLayers(getComputedStyle(element).boxShadow);
+  expect(layers.slice(-halo.length), `the halo of ${what}`).toEqual(halo);
+}
+
+/**
+ * A piece is shaded in a colour of the skin (`--shade-welcome`…), which is
+ * declared. At mix and full a skin may restyle the piece: there, only the
+ * property is checked.
+ */
+function expectShadeOfSkin(element: Element, property: string, what: string) {
+  const root = getComputedStyle(document.documentElement);
+  expect(root.getPropertyValue(property).trim(), `${property} is declared`).not.toBe("");
+  if (SKIN_DEPTH !== "palette") return;
+  const layers = shadowLayers(getComputedStyle(element).boxShadow).join(", ");
+  expect(layers, `the shade of ${what}`).toContain(colourOf(property));
 }
 
 const CASES = SKINS.flatMap((skin) => skin.modes.map((mode) => ({ skin, mode })));
@@ -308,12 +354,15 @@ for (const { skin, mode } of CASES) {
       .click();
     const dialog = screen.getByRole("dialog", { name: fr.participation.addSomeoneTitle });
     await expect.element(dialog).toBeVisible();
-    // Measured once it has risen and its fonts are in: not in the middle of its entrance.
+    // Measured once it has risen and its fonts are in: not in the middle of its
+    // entrance. Only an animation that ends is waited for (an endless one, a
+    // spinner, never would), and one cancelled on the way is as good as done.
     await Promise.all(
       dialog
         .element()
         .getAnimations({ subtree: true })
-        .map((animation) => animation.finished),
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
     );
     await fontsReady();
     const box = dialog.element().getBoundingClientRect();
@@ -341,6 +390,19 @@ for (const { skin, mode } of CASES) {
     const primary = document.querySelector("main .btn-primary");
     expect(primary, "the main button of the form").not.toBeNull();
     if (primary !== null) expectGlowOfSkin(primary, "the main button");
+  });
+
+  test(`smoke — ${name} : une page publique, sa carte sur le ciel`, async () => {
+    dress(skin, mode);
+    // An invitation without its token: the page says so, on the sky of the sign-in pages.
+    const screen = await openApp("/invitation");
+    await expect.element(screen.getByText(fr.errors.invitation_invalid)).toBeVisible();
+    await expect.element(screen.getByText(fr.common.appName)).toBeVisible();
+    // Within the phone (it has no tabs: `framed` is for the signed-in pages).
+    await fontsReady();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
+    // The card of the page floats over the ridges, in the shade of the skin.
+    expectShadeOfSkin(screen.getByRole("main").element(), "--shade-welcome", "the card");
   });
 
   test(`smoke — ${name} : les réglages, avec le choix du thème`, async () => {

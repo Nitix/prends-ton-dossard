@@ -36,6 +36,8 @@
 
   --color-toast: #1f281a;
   --radius-card: 0.75rem;
+  --shade-dialog: rgb(6 78 60 / 0.5);
+  --shade-welcome: rgb(6 78 60 / 0.55);
   --dawn-glow-warm: rgb(8 99 76 / 0.5);
   --dawn-glow-cool: rgb(21 94 117 / 0.4);
 
@@ -57,7 +59,11 @@
   --dawn-chip-glow: rgb(8 99 76 / 0.5);
   --focus-glow: rgb(11 122 94 / 0.2);
 
-  /* The map of a track: a green line, its ends, its links. */
+  /* The map of a track: a green line, its ends, its links, the ink and the
+     shade of its words and of its zoom. */
+  --map-ink: #1f281a;
+  --map-hover: #ecfbf6;
+  --map-shade: rgb(31 40 26 / 0.4);
   --map-line-from: #e3b505;
   --map-line-via: #0b7a5e;
   --map-line-to: #155e75;
@@ -88,4 +94,7 @@
   --motif-peak-near-to: #053b2e;
   --motif-hill-near-from: #1f9a76;
   --motif-hill-near-to: #064e3c;
+  --motif-mark-shade: rgb(31 40 26 / 0.4);
+  --motif-name-shade: rgb(6 78 60 / 0.4);
+  --motif-sun-glow: rgb(227 181 5 / 0.6);
 }
