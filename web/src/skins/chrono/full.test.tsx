@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeAll, expect, test } from "vitest";
 
 import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
-import { PRIMARY, SECONDARY } from "../../components/buttons";
+import { BlockTitle } from "../../components/BlockTitle";
+import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
 import { Dialog } from "../../components/Dialog";
 import { TextField } from "../../components/TextField";
@@ -24,6 +25,7 @@ import { TotalsTable } from "../../features/stats/TotalsTable";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { contrast } from "../../test/colour";
 import { colourOf } from "../../test/computed";
 import { hex, inApp, plain, said } from "../../test/variant";
 
@@ -330,3 +332,68 @@ test("chrono — les feuilles ne nomment aucun type d'élément : seulement les 
   }
   expect(named, "selectors that name an element type").toEqual([]);
 });
+
+test.skipIf(!FULL)(
+  "chrono — une action qui supprime reste rouge, lisible à 4,5:1 sur la carte : le bouton secondaire ne la repeint pas en encre",
+  async () => {
+    await inApp(
+      <button type="button" className={`${SECONDARY} ${DANGER_TEXT}`}>
+        Supprimer
+      </button>,
+      (drawn) => {
+        const color = style(drawn.querySelector("button")).color;
+        expect(hex(color), "red, not the ink of the other buttons").toBe(
+          hex(colourOf("--color-red-700")),
+        );
+        expect(contrast(hex(color), hex(colourOf("--color-card")))).toBeGreaterThanOrEqual(4.5);
+      },
+      { skin: ID },
+    );
+  },
+);
+
+test.skipIf(!FULL)(
+  "chrono — le titre d'un format est une ligne en gras, pas des capitales mono : sur le plus petit téléphone, chaque mesure reste d'un bloc, et un « · » les sépare",
+  async () => {
+    const formats = toEventView(eventRecord).formats;
+    await inApp(
+      <div style={{ width: 256 }}>
+        {formats.map((formatView) => (
+          <BlockTitle key={formatView.format.id}>
+            <FormatTitle
+              formatView={formatView}
+              parts={formatMeasures(formatView.format, formatView.raceType.label, f, fr)}
+            />
+          </BlockTitle>
+        ))}
+      </div>,
+      (drawn) => {
+        const titles = [...drawn.querySelectorAll(".format-title")];
+        expect(titles.length, "a title for each format").toBe(formats.length);
+        // A line may break between two measures (never inside one): the heading does not overflow.
+        for (const heading of drawn.querySelectorAll("h2")) {
+          expect(heading.scrollWidth, "the title fits its heading").toBeLessThanOrEqual(
+            heading.clientWidth,
+          );
+        }
+        for (const title of titles) {
+          const own = style(title);
+          expect(own.textTransform, "not capitals").toBe("none");
+          expect(own.fontFamily, "not the mono face").not.toContain("JetBrains Mono");
+          expect(Number(own.fontWeight)).toBeGreaterThanOrEqual(700);
+          const measures = [...title.querySelectorAll(".format-measures")];
+          expect(measures.length, "the measures after the name").toBeGreaterThan(0);
+          for (const measure of measures) {
+            expect(style(measure).whiteSpace, "never broken inside").toBe("nowrap");
+            expect(
+              measure.getClientRects().length,
+              `${plain(measure.textContent)} in one piece`,
+            ).toBe(1);
+            expect(style(measure, "::before").content, "a dot before it").toContain("·");
+          }
+        }
+      },
+      { skin: ID },
+    );
+  },
+);

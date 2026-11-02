@@ -1,4 +1,4 @@
-import { FormatParts } from "../../features/events/FormatLine";
+import { FormatParts, type FormatMarks } from "../../features/events/FormatLine";
 import type { CountdownRingProps, FormatTitleProps, TrackFiguresProps, Variants } from "../types";
 import { raceTypeZone, WatchRing, ZoneBar } from "./watch";
 
@@ -11,6 +11,20 @@ import { raceTypeZone, WatchRing, ZoneBar } from "./watch";
 // ../README.md).
 
 const SEPARATOR = " · ";
+
+/**
+ * Each measure in one piece, after a space (the place where a line may break: the
+ * hidden separator of the words is no space to the eye): the sheet never breaks
+ * inside one, and draws the dot before it.
+ */
+const MEASURES: FormatMarks = {
+  measure: (measure) => (
+    <>
+      {" "}
+      <span className="format-measures">{measure}</span>
+    </>
+  ),
+};
 
 /**
  * The words of the title of a format on the page of an event, after the bar of
@@ -27,6 +41,7 @@ function ZonedTitle({ formatView, parts }: FormatTitleProps) {
           before: (
             <ZoneBar zone={raceTypeZone(formatView.raceType.label)} className="h-5 w-[5px]" />
           ),
+          ...MEASURES,
         }}
       />
     </span>
