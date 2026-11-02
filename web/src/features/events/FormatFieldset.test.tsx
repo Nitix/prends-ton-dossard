@@ -59,7 +59,9 @@ type Located = { element(): Element };
 
 /** The section « Options avancées » of the row, or null when it has none. */
 const advancedOf = (row: Row): HTMLDetailsElement | null => row.element().querySelector("details");
-const moreOptions = (row: Row) => row.getByText(fr.form.moreOptions, { exact: true });
+/** The summary of that section: « Options avancées », then what it holds (« : distance et D+ »). */
+const moreOptions = (row: Row) => row.getByText(/^(Options avancées :|More options:)/);
+const summaryText = (row: Row) => moreOptions(row).element().textContent;
 /** Whether a field of the row is put away in « Options avancées ». */
 const inAdvanced = (located: Located) => located.element().closest("details") !== null;
 /** Whether `first` comes before `second` in the page. */
@@ -414,6 +416,26 @@ test("FormatFieldset — le résumé de « Options avancées » se lit le jour, 
   }
 });
 
+test("FormatFieldset — le résumé le plus long, en anglais, tient sur un téléphone", async () => {
+  await page.viewport(375, 812);
+  try {
+    withMeasuredTypes();
+    const { screen } = await renderForm({ languages: ["en-GB"], heading: "Create an event" });
+    const row = screen.getByRole("group", { name: "Race 1", exact: true });
+    await row.getByLabelText("Race type").selectOptions(backyardType.id);
+    await fontsReady();
+
+    const opener = moreOptions(row).element();
+    // Three measures in it: it may take two lines, and never more than the screen.
+    expect(opener.textContent).toMatch(/^More options: distance, elevation gain,? and duration$/);
+    expect(opener.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(opener.getBoundingClientRect().right).toBeLessThanOrEqual(375);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
+  } finally {
+    await page.viewport(414, 896);
+  }
+});
+
 test("FormatFieldset — en anglais, « More options » et le rappel de la mesure sont en anglais", async () => {
   withMeasuredTypes();
   const { screen } = await renderForm({ languages: ["en-GB"], heading: "Create an event" });
@@ -421,8 +443,67 @@ test("FormatFieldset — en anglais, « More options » et le rappel de la mesur
 
   await row.getByLabelText("Race type").selectOptions(backyardType.id);
 
-  await expect.element(row.getByText("More options", { exact: true })).toBeVisible();
+  await expect.element(moreOptions(row)).toBeVisible();
+  // It says what is in it, in English too, with the list of the language.
+  expect(summaryText(row)).toMatch(/^More options: distance, elevation gain,? and duration$/);
   await expect
     .element(row.getByText("At least one measure is required: distance, duration or time limit."))
     .toBeVisible();
+});
+
+test("FormatFieldset — M6 : le résumé de « Options avancées » dit ce qu'il contient, et suit les champs qui en sortent", async () => {
+  withMeasuredTypes();
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+
+  // A backyard shows its time limit: the other three are in the section.
+  await raceType(row).selectOptions(backyardType.id);
+  expect(summaryText(row)).toBe("Options avancées : distance, D+ et durée");
+  await raceType(row).selectOptions(hyroxType.id);
+  expect(summaryText(row)).toBe("Options avancées : D+, durée et temps max");
+  // One measure left in it.
+  await raceType(row).selectOptions(trailType.id);
+  expect(summaryText(row)).toBe("Options avancées : durée");
+
+  // A field that has a value comes out of the section when it is closed, and the summary follows.
+  await raceType(row).selectOptions(backyardType.id);
+  await moreOptions(row).click();
+  await elevation(row).fill("300");
+  await moreOptions(row).click();
+  await vi.waitFor(() => {
+    expect(summaryText(row)).toBe("Options avancées : distance et durée");
+  });
+});
+
+test("FormatFieldset — T2-2 : une saisie refusée par le navigateur dans « Options avancées » fermé ouvre la section, et le champ prend le focus", async () => {
+  withMeasuredTypes();
+  const { screen } = await renderForm();
+  await name(screen).fill("Backyard du Lac");
+  await location(screen).fill("Annecy");
+  await startDate(screen).fill("2026-06-13");
+  const row = format(screen, 1);
+  await raceType(row).selectOptions(backyardType.id);
+  await hoursOf(row, fr.form.timeLimit).fill("2");
+  await moreOptions(row).click();
+  await distance(row).click();
+  // Not a number: the field reads it as empty, so nothing is filled, but the browser says it is invalid.
+  await userEvent.keyboard("e");
+  const field = distance(row).element();
+  if (!(field instanceof HTMLInputElement)) throw new Error("not an input");
+  expect(field.validity.badInput).toBe(true);
+  expect(field.value).toBe("");
+  await moreOptions(row).click();
+  // Closed, with the invalid field in it: nothing comes out of the section.
+  await vi.waitFor(() => {
+    expect(advancedOf(row)?.open).toBe(false);
+  });
+  expect(inAdvanced(distance(row))).toBe(true);
+
+  await save(screen).click();
+
+  // Nothing is sent, and the browser can report the field, since it is shown now.
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(advancedOf(row)?.open).toBe(true);
+  await expect.element(distance(row)).toBeVisible();
+  await expect.element(distance(row)).toHaveFocus();
 });

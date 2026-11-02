@@ -459,7 +459,15 @@ export const fr = {
     chooseRaceType: "Choisis un type",
     // Above the measures the type of the format uses. The others are in a closed section under them, so it does not count them.
     measuresHint: "Au moins une mesure est obligatoire : distance, durée ou temps max.",
-    moreOptions: "Options avancées",
+    // The summary of the closed section, which says what it holds: the measures, by name (below) and as a list, in the order of the form ("Options avancées : distance, D+ et durée").
+    moreOptions: (measures: string) => `Options avancées : ${measures}`,
+    // A measure by name, in the middle of a sentence.
+    measureNames: {
+      distance: "distance",
+      elevation: "D+",
+      duration: "durée",
+      time_limit: "temps max",
+    },
     distance: "Distance (km)",
     duration: "Durée (course au temps)",
     timeLimit: "Temps max",

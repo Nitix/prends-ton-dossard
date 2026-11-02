@@ -338,9 +338,17 @@ export function FormatFieldset({
           onToggle={(event) => {
             if (!event.currentTarget.open) sortAway();
           }}
+          // A field in the closed section that the browser finds invalid (a number that is not
+          // one, which it reads as empty: nothing is filled, so nothing came out) cannot be
+          // reported, and the form would not be sent without a word. The section opens, so that
+          // the browser can put the focus on the field and say what is wrong. `invalid` does not
+          // bubble: the capture phase is where a parent hears it.
+          onInvalidCapture={(event) => {
+            event.currentTarget.open = true;
+          }}
         >
           <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-neutral-800 marker:text-iris-600">
-            {t.form.moreOptions}
+            {t.form.moreOptions(f.list(away.map((measure) => t.form.measureNames[measure])))}
           </summary>
           <div className="flex flex-col gap-3 pt-1">
             {away.map((measure) => measureFields[measure])}
