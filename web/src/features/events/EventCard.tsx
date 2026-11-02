@@ -29,7 +29,7 @@ export function EventCard({ view }: { view: EventView }) {
   const registration = registrationState(event, useToday());
 
   return (
-    <article className="card card-lift flex flex-col gap-3 p-4">
+    <article className="event-card card card-lift flex flex-col gap-3 p-4">
       <div className="flex gap-3.5">
         <DateChip
           start={start}

@@ -1,0 +1,9 @@
+/* « Exemple (dev) », depth mix: its signature pieces, over the palette. Only in
+   a build at mix or full (src/skins/depth/), never at palette. */
+:root[data-skin="_example"] .event-card {
+  border-radius: 0.375rem;
+  border-left: 4px solid var(--color-iris-600);
+}
+:root[data-skin="_example"] .tabbar ul {
+  border-radius: 0.5rem;
+}

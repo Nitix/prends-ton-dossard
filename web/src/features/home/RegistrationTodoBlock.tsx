@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
+import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { webAddress } from "../../lib/url";
@@ -56,7 +57,8 @@ export function RegistrationTodoBlock({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title">
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title section-title">
+        <SectionMarker />
         {t.home.todoTitle}
       </h2>
       <ul className="flex flex-col gap-3">

@@ -103,7 +103,7 @@ function Track({ points }: { points: TrackPoint[] }) {
           return (
             <span
               key={part}
-              className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-2xl bg-neutral-50 px-2 py-2.5 text-center ring-1 ring-neutral-100"
+              className="stat-tile flex min-w-0 flex-1 flex-col items-center justify-center rounded-2xl bg-neutral-50 px-2 py-2.5 text-center ring-1 ring-neutral-100"
             >
               {i > 0 && <span className="sr-only">{SEPARATOR}</span>}
               <Figure className="font-display text-[1.0625rem] leading-tight font-extrabold tracking-tight text-ink">

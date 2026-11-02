@@ -5,6 +5,7 @@ import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/button
 import { Dialog } from "../../components/Dialog";
 import { Field, INPUT } from "../../components/Field";
 import { SECTION } from "../../components/section";
+import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -70,7 +71,8 @@ export function CommentsSection({ eventId, me }: { eventId: string; me: Me | nul
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title">
+      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title section-title">
+        <SectionMarker />
         {comments ? t.comments.title(comments.length) : t.comments.heading}
       </h2>
       {comments ? (

@@ -42,7 +42,7 @@ export function DateChip({
       <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
-        className={`relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_rgb(214_51_111/0.6)] ${
+        className={`date-chip relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_rgb(214_51_111/0.6)] ${
           big ? "w-[4.75rem] py-2.5" : "w-[3.75rem] py-2"
         }`}
       >

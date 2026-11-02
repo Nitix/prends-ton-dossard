@@ -6,12 +6,20 @@ import { contrast } from "./test/colour";
 import {
   DARK_CHOSEN,
   DARK_FOLLOWED,
+  DEFAULT_SKIN,
+  SKIN_CASES,
   block,
   darkBlocks,
   lightTheme,
   onDawnBlock,
+  rules,
+  skinDeclarations,
+  skinModes,
+  skinSelectors,
+  skinStylesheet,
   themeColour,
-  type Theme,
+  utilityBody,
+  type SkinCase,
 } from "./test/theme";
 
 // « Crête » at night: the sky of the header (the dawn, its map, its ridges, its
@@ -19,19 +27,18 @@ import {
 // it turns dark. These are the numbers that make the dark theme as legible as
 // the light one: text at 4.5:1 on every ground it sits on (WCAG 2, AA), a mark
 // or a line that says something at 3:1, and the white text of the buttons in
-// the colours of the dawn as it was.
+// the colours of the dawn as it was. Every skin of the app (src/skins/) is held
+// to the same numbers, in each mode it has: Crête by day and at night first.
 
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-
-const THEMES: readonly Theme[] = ["light", "dark"];
 
 /** The grounds that text sits on: the sheet, a card, a window or a menu, a field, a soft panel, a hover. */
 const GROUNDS = ["neutral-50", "card", "raised", "field", "neutral-100"] as const;
 
-/** The contrast of a text (or a mark) on a ground, in a theme, and what it is, for a failure to say. */
-function ratio(theme: Theme, text: string, ground: string): [number, string] {
-  const [fore, back] = [themeColour(text, theme), themeColour(ground, theme)];
-  return [contrast(fore, back), `${theme}: ${text} (${fore}) on ${ground} (${back})`];
+/** The contrast of a text (or a mark) on a ground, in a skin and a mode, and what it is, for a failure to say. */
+function ratio({ skin, mode, label }: SkinCase, text: string, ground: string): [number, string] {
+  const [fore, back] = [themeColour(text, mode, skin), themeColour(ground, mode, skin)];
+  return [contrast(fore, back), `${label}: ${text} (${fore}) on ${ground} (${back})`];
 }
 
 test("dark — « Sombre » dans les réglages et un téléphone en sombre donnent les mêmes couleurs", () => {
@@ -85,12 +92,14 @@ test("dark — le ciel de l'entête et des bandeaux reste celui de l'aube", () =
 });
 
 test("dark — le texte blanc des boutons en dégradé ne change pas : 4,5:1 sur chaque couleur de l'aube", () => {
-  const stops = block(styles, "@utility bg-dawn-deep")?.match(/#[0-9a-f]{6}/gi) ?? [];
-  expect(stops.length).toBeGreaterThanOrEqual(3);
   // The text is `text-white`, and the dark theme leaves white alone (see above).
   expect(darkBlocks().chosen.has("--color-white")).toBe(false);
-  for (const stop of stops) {
-    expect(contrast("#ffffff", stop), `white on ${stop}`).toBeGreaterThanOrEqual(4.5);
+  for (const { skin, label } of SKIN_CASES) {
+    const stops = utilityBody("bg-dawn-deep", skin).match(/#[0-9a-f]{6}/gi) ?? [];
+    expect(stops.length, `stops of ${label}`).toBeGreaterThanOrEqual(skin === DEFAULT_SKIN ? 3 : 2);
+    for (const stop of stops) {
+      expect(contrast("#ffffff", stop), `${label}: white on ${stop}`).toBeGreaterThanOrEqual(4.5);
+    }
   }
 });
 
@@ -134,23 +143,83 @@ const PAIRS: readonly [text: string, ground: string, least: number][] = [
 ];
 
 test("dark — le texte a 4,5:1 sur la feuille, les cartes, les fenêtres, les champs et les panneaux ; les liens, les erreurs, les pastilles et l'anneau du focus aussi", () => {
-  for (const theme of THEMES) {
+  for (const one of SKIN_CASES) {
     for (const [text, ground, least] of PAIRS) {
-      const [value, label] = ratio(theme, text, ground);
+      const [value, label] = ratio(one, text, ground);
       expect(value, `contrast of ${label}`).toBeGreaterThanOrEqual(least);
     }
   }
 });
 
 test("dark — un message (toast, hors ligne) : du blanc sur sa pastille", () => {
-  for (const theme of THEMES) {
-    const toast = themeColour("toast", theme);
-    expect(contrast("#ffffff", toast), `${theme}: white on ${toast}`).toBeGreaterThanOrEqual(4.5);
+  for (const { skin, mode, label } of SKIN_CASES) {
+    const toast = themeColour("toast", mode, skin);
+    expect(contrast("#ffffff", toast), `${label}: white on ${toast}`).toBeGreaterThanOrEqual(4.5);
   }
 });
 
 test("dark — l'épingle d'un lieu, rose sur une carte la nuit, a 3:1", () => {
   // By day, the words beside it say the place; the pink is lighter than 3:1 on white.
-  const [value, label] = ratio("dark", "blush-500", "card");
-  expect(value, `contrast of ${label}`).toBeGreaterThanOrEqual(3);
+  for (const one of SKIN_CASES.filter(({ mode }) => mode === "dark")) {
+    const [value, label] = ratio(one, "blush-500", "card");
+    expect(value, `contrast of ${label}`).toBeGreaterThanOrEqual(3);
+  }
+});
+
+// --- The other skins (src/skins/README.md) ---
+
+const OTHER_SKINS = [...new Set(SKIN_CASES.map(({ skin }) => skin))].filter(
+  (skin) => skin !== DEFAULT_SKIN,
+);
+
+test("dark — un skin ne change que des propriétés que Crête déclare, sous son propre sélecteur", () => {
+  // Not an empty search: the example skin of development is one.
+  expect(OTHER_SKINS.length).toBeGreaterThan(0);
+  const known = lightTheme();
+  for (const skin of OTHER_SKINS) {
+    const css = skinStylesheet(skin);
+    const { root, darkChosen, darkFollowed, sky } = skinSelectors(skin);
+    const own = [
+      ...skinDeclarations(css, root).keys(),
+      ...skinDeclarations(css, darkChosen).keys(),
+      ...skinDeclarations(css, darkFollowed, "@media (prefers-color-scheme: dark)").keys(),
+      ...skinDeclarations(css, sky).keys(),
+    ];
+    expect(own.length, `${skin} sets no colour`).toBeGreaterThan(0);
+    for (const property of own) {
+      if (property === "color-scheme") continue;
+      expect(known.has(property), `${skin} sets ${property}, which Crête does not declare`).toBe(
+        true,
+      );
+    }
+    // Every rule is the skin's, in a media query or not: a page in another skin never sees it.
+    const selectors = rules(css)
+      .flatMap((rule) => (rule.prelude.startsWith("@media") ? rules(rule.body) : [rule]))
+      .flatMap(({ prelude }) => prelude.split(","))
+      .map((selector) => selector.trim());
+    expect(selectors.length, `skin ${skin}`).toBeGreaterThan(0);
+    for (const selector of selectors) {
+      expect(selector.startsWith(root), `${skin}: ${selector}`).toBe(true);
+    }
+  }
+});
+
+test("dark — un skin à deux modes : son sombre est le même choisi ou suivi, et redit la nuit ce qu'il change le jour", () => {
+  const night = darkBlocks().chosen;
+  for (const skin of OTHER_SKINS.filter((one) => skinModes(one).length > 1)) {
+    const css = skinStylesheet(skin);
+    const { root, darkChosen, darkFollowed } = skinSelectors(skin);
+    const chosen = skinDeclarations(css, darkChosen);
+    const followed = skinDeclarations(css, darkFollowed, "@media (prefers-color-scheme: dark)");
+    expect(chosen.size, `skin ${skin}`).toBeGreaterThan(0);
+    expect(Object.fromEntries(followed), `skin ${skin}`).toEqual(Object.fromEntries(chosen));
+    // Its colours of the day are outside the layers: one that Crête changes at
+    // night would stay the day's in the dark, unless the skin says it again.
+    const redone = [...skinDeclarations(css, root).keys()].filter((property) =>
+      night.has(property),
+    );
+    for (const property of redone) {
+      expect(chosen.has(property), `${skin} sets ${property} by day, not at night`).toBe(true);
+    }
+  }
 });

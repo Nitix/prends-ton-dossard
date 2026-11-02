@@ -37,7 +37,7 @@ export function ParticipantChips({
           <li
             key={participation.id}
             title={title}
-            className={`-ml-1.5 inline-flex size-9 items-center justify-center rounded-full text-xs font-bold shadow-[0_0_0_2.5px_var(--color-card)] ${
+            className={`chip -ml-1.5 inline-flex size-9 items-center justify-center rounded-full text-xs font-bold shadow-[0_0_0_2.5px_var(--color-card)] ${
               confirmed
                 ? "bg-dawn-deep text-white"
                 : "border-2 border-dashed border-neutral-600 bg-card text-neutral-700"

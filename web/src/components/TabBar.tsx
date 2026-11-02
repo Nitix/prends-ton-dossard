@@ -16,7 +16,7 @@ export function TabBar({ isAdmin }: { isAdmin: boolean }) {
   return (
     <nav
       aria-label={t.nav.main}
-      className="pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 px-3 md:sticky md:top-3 md:bottom-auto md:-mt-[9rem] md:mb-[5.375rem] md:px-5"
+      className="tabbar pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 px-3 md:sticky md:top-3 md:bottom-auto md:-mt-[9rem] md:mb-[5.375rem] md:px-5"
     >
       <div className="mx-auto flex max-w-5xl justify-end">
         <ul className="pointer-events-auto flex w-full gap-1 rounded-[1.75rem] border border-neutral-200/70 bg-raised/95 p-1.5 shadow-bar md:w-auto md:rounded-full">
@@ -48,7 +48,7 @@ function Tab({
       <Link
         to={to}
         activeOptions={{ exact, includeSearch: false }}
-        className="press flex h-14 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.375rem] px-2 text-[0.75rem] font-medium text-neutral-600 hover:bg-iris-50 hover:text-ink aria-[current=page]:bg-dawn-deep aria-[current=page]:font-bold aria-[current=page]:text-white aria-[current=page]:shadow-glow md:h-11 md:flex-row md:gap-2 md:rounded-full md:px-4 md:text-sm"
+        className="tab press flex h-14 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.375rem] px-2 text-[0.75rem] font-medium text-neutral-600 hover:bg-iris-50 hover:text-ink aria-[current=page]:bg-dawn-deep aria-[current=page]:font-bold aria-[current=page]:text-white aria-[current=page]:shadow-glow md:h-11 md:flex-row md:gap-2 md:rounded-full md:px-4 md:text-sm"
       >
         <span aria-hidden="true" className="size-[1.375rem] md:hidden lg:block lg:size-5">
           {icon}

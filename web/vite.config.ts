@@ -5,6 +5,7 @@ import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 import type { BrowserCommand } from "vitest/node";
 
+import { skins } from "./src/skins/plugin.ts";
 import type { Media } from "./src/test/mediaFeatures.ts";
 
 /**
@@ -29,6 +30,10 @@ export default defineConfig({
     // by @vitejs/plugin-react itself, without Babel. It is experimental.
     react({ compiler: true }),
     tailwindcss(),
+    // The skins (src/skins/README.md): the depth of the build (`VITE_SKIN_DEPTH`),
+    // the stylesheets and the variants it bundles, and the table of the skins in
+    // the script of index.html.
+    skins(),
   ],
   server: {
     // The port is part of APP_URL, which is the WebAuthn origin: if 5173 is

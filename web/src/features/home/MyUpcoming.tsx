@@ -3,6 +3,7 @@ import { useId } from "react";
 
 import { CountdownRing } from "../../components/Dawn";
 import { UNCONFIRMED } from "../../components/section";
+import { SectionMarker } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween } from "../../lib/dates";
 import type { ParticipationRecord } from "../../lib/types";
@@ -129,7 +130,8 @@ export function UpcomingSection({
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
+      <h2 id={headingId} className="block-title section-title">
+        <SectionMarker />
         {title}
       </h2>
       {rows === undefined ? (

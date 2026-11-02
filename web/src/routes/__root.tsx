@@ -1,12 +1,12 @@
 import { Outlet, createRootRoute, useLocation } from "@tanstack/react-router";
 
-import { Contours, MotifDefs, Ridges } from "../components/Alpenglow";
 import { AppShell } from "../components/AppShell";
-import { BrandMark } from "../components/Brand";
 import { OfflineBanner } from "../components/OfflineBanner";
 import { Provisional } from "../components/Provisional";
+import { BrandMark, HeaderArt } from "../components/Slots";
 import { isPublicPath, requireSession } from "../features/auth/session";
 import { useFocusOnNavigation } from "../lib/useFocusOnNavigation";
+import { MotifDefs } from "../skins/crete/Alpenglow";
 
 export const Route = createRootRoute({
   // Without a session, every page but the public ones sends to the login
@@ -23,7 +23,7 @@ function Root() {
   useFocusOnNavigation();
   return (
     <>
-      {/* The paths of the motifs, once for every page. */}
+      {/* The paths of Crête's motifs, once for every page (they stand in for a skin's own). */}
       <MotifDefs />
       <Page />
     </>
@@ -35,30 +35,11 @@ function Page() {
 
   // The login and invitation pages have no tabs: nobody is signed in yet. The
   // name of the app is in the sky of a map, the page on a frosted card that
-  // floats over the ridges, where the sun is rising.
+  // floats over the ridges, where the sun is rising (the skin's `HeaderArt`).
   if (isPublicPath(pathname)) {
     return (
       <div className="relative flex min-h-dvh flex-col overflow-hidden bg-dawn-sky">
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-16 -left-20 size-72 rounded-full bg-iris-400/40 blur-3xl" />
-          <Contours className="text-white opacity-[0.16]" />
-          <Ridges
-            className="h-[15.75rem] md:hidden"
-            center={1330}
-            sun={1500}
-            sunSize={30}
-            steep={2.2}
-            sky={300}
-          />
-          <Ridges
-            className="hidden h-[24rem] md:block"
-            center={1560}
-            sun={1500}
-            sunSize={34}
-            steep={2.2}
-            sky={300}
-          />
-        </span>
+        <HeaderArt place="welcome" />
         <OfflineBanner />
         <div className="on-dawn relative pt-[max(3rem,env(safe-area-inset-top))] pb-8 text-white md:pt-20 md:pb-10">
           <div className="relative mx-auto flex max-w-md justify-center px-4">

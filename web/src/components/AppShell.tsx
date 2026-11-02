@@ -3,15 +3,16 @@ import type { ReactNode } from "react";
 
 import { useSession } from "../features/auth/session";
 import { useI18n } from "../i18n/I18nProvider";
-import { BrandMark, DawnSky } from "./Brand";
 import { OfflineBanner } from "./OfflineBanner";
+import { BrandMark, HeaderArt } from "./Slots";
 import { TabBar } from "./TabBar";
 
 /**
  * The frame of every signed-in page: the offline banner, the sky of the header
  * with the name of the app, its map and its mountains, the tabs, the page
  * itself on a sheet that rises over the ridges, and the floating button that
- * creates an event. It owns the
+ * creates an event. The art of the sky and the name of the app are the skin's
+ * (`HeaderArt`, `BrandMark`). It owns the
  * page's `<main>`, so the pages inside must not render another one.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -26,8 +27,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
       <OfflineBanner />
-      <header className="on-dawn relative overflow-hidden bg-dawn-sky text-white">
-        <DawnSky sun={!withHero} />
+      <header className="app-header on-dawn relative overflow-hidden bg-dawn-sky text-white">
+        <HeaderArt place="header" sun={!withHero} />
         <div className="relative mx-auto flex max-w-5xl items-center px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-16 md:h-40 md:items-start md:pt-[1.625rem] md:pb-0">
           {/* The name of the app leads home, as on most sites. */}
           <Link
@@ -50,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Link
         to="/evenements/nouveau"
         aria-label={t.nav.createEvent}
-        className="press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-card/70 hover:brightness-95 md:right-6 md:bottom-6"
+        className="fab press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-card/70 hover:brightness-95 md:right-6 md:bottom-6"
       >
         <svg
           aria-hidden="true"

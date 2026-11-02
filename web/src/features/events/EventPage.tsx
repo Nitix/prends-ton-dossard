@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { Contours, Ridges } from "../../components/Alpenglow";
 import { Avatar } from "../../components/Avatar";
 import { DANGER_TEXT, ON_DAWN, PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
@@ -18,6 +17,7 @@ import {
   UserPlusIcon,
 } from "../../components/icons";
 import { SECTION, UNCONFIRMED_ROW } from "../../components/section";
+import { HeroArt, SectionMarker } from "../../components/Slots";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween, raceStarted } from "../../lib/dates";
@@ -323,21 +323,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
 
   return (
     <article ref={root} className="flex flex-col gap-6">
-      {/* The hero: the sky of the dawn drawn like a map, the name in white, and the sun rising behind the ridges at its foot. */}
-      <header className="on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-20 -left-16 size-56 rounded-full bg-iris-400/35 blur-3xl" />
-          {/* Faint where the words are, clearer down by the mountains. */}
-          <Contours className="mask-[linear-gradient(to_bottom,transparent,rgb(0_0_0/0.4)_40%,#000_85%)] text-white opacity-[0.14]" />
-          <Ridges className="h-28 md:hidden" center={1560} sun={1870} sunSize={28} steep={1.2} />
-          <Ridges
-            className="hidden h-36 md:block"
-            center={1300}
-            sun={1500}
-            sunSize={30}
-            steep={1.25}
-          />
-        </span>
+      {/* The hero: the sky of the dawn drawn like a map (the skin's `HeroArt`), the name in white, and the sun rising behind the ridges at its foot. */}
+      <header className="event-hero on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
+        <HeroArt place="event" />
         <div className="relative flex flex-col gap-3 p-5 pb-[5.25rem] md:p-7 md:pb-24">
           <div className="flex items-start justify-between gap-4">
             <h1
@@ -516,7 +504,8 @@ function EventSection({
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} data-focus={focus} tabIndex={-1} className="block-title">
+      <h2 id={headingId} data-focus={focus} tabIndex={-1} className="block-title section-title">
+        <SectionMarker />
         {title}
       </h2>
       <ul aria-label={t.event.participants} className="flex flex-col gap-2">
@@ -577,7 +566,13 @@ function FormatSection({
 
   return (
     <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} data-focus={formatTitle(format.id)} tabIndex={-1} className="block-title">
+      <h2
+        id={headingId}
+        data-focus={formatTitle(format.id)}
+        tabIndex={-1}
+        className="block-title section-title"
+      >
+        <SectionMarker />
         {/* The name in ink, the measures after it in grey: one text, read as one line. */}
         <span className="min-w-0">
           {first}

@@ -1,5 +1,7 @@
 import { useId, type ReactNode, type Ref } from "react";
 
+import { SectionMarker } from "../../components/Slots";
+
 /**
  * A part of the profile or of the settings page: a heading, and a region named by it.
  * On the settings page, each is a white card (`boxed`); on the profile, the
@@ -30,8 +32,9 @@ export function Section({
         id={headingId}
         ref={headingRef}
         tabIndex={headingRef === undefined ? undefined : -1}
-        className="block-title"
+        className="block-title section-title"
       >
+        <SectionMarker />
         {title}
       </h2>
       {children}

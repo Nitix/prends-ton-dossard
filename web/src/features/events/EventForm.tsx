@@ -5,6 +5,7 @@ import { startTransition, useActionState, useId, useRef, useState } from "react"
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Field, INPUT } from "../../components/Field";
+import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -513,7 +514,13 @@ function EventFields({
       </div>
 
       <section aria-labelledby="formats-title" className="flex flex-col gap-4">
-        <h2 ref={formatsTitle} id="formats-title" tabIndex={-1} className="block-title text-xl">
+        <h2
+          ref={formatsTitle}
+          id="formats-title"
+          tabIndex={-1}
+          className="block-title section-title text-xl"
+        >
+          <SectionMarker />
           {t.form.formatsTitle}
         </h2>
         {draft.rows.map((row, index) => (

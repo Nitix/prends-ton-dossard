@@ -13,6 +13,7 @@ import { ensureTemporal } from "./lib/temporal";
 import { applyTheme, followThemeElsewhere, readTheme } from "./lib/theme";
 import { TodayProvider } from "./lib/useToday";
 import { routeTree } from "./routeTree.gen";
+import { applySkin, followSkinElsewhere, readSkin } from "./skins";
 
 import "./styles.css";
 
@@ -36,6 +37,9 @@ if (!rootElement) {
 // and the one that another tab of the app chooses later, whatever page this one shows.
 applyTheme(readTheme());
 followThemeElsewhere();
+// The same for the skin, after the theme: a skin that has one mode only is drawn in it.
+applySkin(readSkin());
+followSkinElsewhere();
 
 // A tab opened before a deploy reloads when the chunks it asks for are gone.
 reloadOnStaleChunks();

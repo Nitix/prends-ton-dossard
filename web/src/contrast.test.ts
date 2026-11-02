@@ -6,14 +6,14 @@ import { describe, expect, test } from "vitest";
 
 import { INPUT, READ_ONLY_INPUT } from "./components/Field";
 import { contrast } from "./test/colour";
-import { block, themeColour, type Theme } from "./test/theme";
+import { SKIN_CASES, themeColour, utilityBody } from "./test/theme";
 
 // Contrasts that the classes of the app decide, measured on the values of the
-// theme (styles.css) with the formula of WCAG 2, by day and at night.
+// theme (styles.css) with the formula of WCAG 2, by day and at night, and on
+// those of every other skin (src/skins/) in each mode it has.
 
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const root = fileURLToPath(new URL(".", import.meta.url));
-const THEMES: Theme[] = ["light", "dark"];
 
 /** The source files of the app, not its tests. */
 function sources(dir: string): string[] {
@@ -48,14 +48,17 @@ const hexOf = (rgb: number[]) =>
     .join("")}`;
 
 /**
- * The colours of a linear gradient of a `@utility` of styles.css, at its stops
- * and at every sixteenth of the way between two of them (a gradient is mixed
- * in sRGB, and a point between two stops can be lighter than both).
+ * The colours of a linear gradient of a `@utility` of styles.css (or of the
+ * rule of a skin that repaints it), at its stops and at every sixteenth of the
+ * way between two of them (a gradient is mixed in sRGB, and a point between
+ * two stops can be lighter than both).
  */
-function gradientColours(utility: string): string[] {
-  const body = block(styles, `@utility ${utility}`);
-  const stops = [...(body ?? "").matchAll(/(#[0-9a-fA-F]{6})\s+\d+%/g)].map((m) => m[1] ?? "");
-  if (stops.length < 2) throw new Error(`@utility ${utility} has no gradient of #rrggbb stops`);
+function gradientColours(utility: string, skin?: string): string[] {
+  const body = utilityBody(utility, skin);
+  const stops = [...body.matchAll(/(#[0-9a-fA-F]{6})\s+\d+%/g)].map((m) => m[1] ?? "");
+  if (stops.length < 2) {
+    throw new Error(`${utility} has no gradient of #rrggbb stops (${skin ?? "crete"})`);
+  }
   return stops.slice(1).flatMap((to, i) => {
     const from = channels(stops[i] ?? "");
     const end = channels(to);
@@ -75,8 +78,7 @@ describe("contrast", () => {
     const buttons = classStrings("bg-dawn-deep", "text-white");
     expect(buttons.length, "no class string paints white text on bg-dawn-deep").toBeGreaterThan(0);
     // The sunrise is painted in its own colours, whatever the theme: the same
-    // stops by day and at night, as the white of the text.
-    const colours = gradientColours("bg-dawn-deep");
+    // stops by day and at night, as the white of the text. A skin may repaint it.
     for (const { where, classes } of buttons) {
       // The filters of its states (`hover:brightness-110`…), and the button at rest.
       const factors = [
@@ -85,14 +87,15 @@ describe("contrast", () => {
           (match) => Number(match[1]) / 100,
         ),
       ];
-      for (const theme of THEMES) {
+      for (const { skin, label } of SKIN_CASES) {
+        const colours = gradientColours("bg-dawn-deep", skin);
         for (const factor of factors) {
           const worst = Math.min(
             ...colours.map((colour) => contrast("#ffffff", brightened(colour, factor))),
           );
           expect(
             worst,
-            `${where}: white on bg-dawn-deep at brightness ${factor} (${theme})`,
+            `${where}: white on bg-dawn-deep at brightness ${factor} (${label})`,
           ).toBeGreaterThanOrEqual(4.5);
         }
       }
@@ -114,12 +117,12 @@ describe("contrast", () => {
         borders.map(({ state }) => state),
         `the edge of ${what}`,
       ).toContain("at rest");
-      for (const theme of THEMES) {
+      for (const { skin, mode, label } of SKIN_CASES) {
         for (const { state, colour } of borders) {
-          const ratio = contrast(themeColour(colour, theme), themeColour(ground, theme));
+          const ratio = contrast(themeColour(colour, mode, skin), themeColour(ground, mode, skin));
           expect(
             ratio,
-            `${what}: border-${colour} ${state} on ${ground} (${theme})`,
+            `${what}: border-${colour} ${state} on ${ground} (${label})`,
           ).toBeGreaterThanOrEqual(3);
         }
       }
@@ -127,10 +130,10 @@ describe("contrast", () => {
     // The ring of a field with the focus is drawn by styles.css over the classes.
     const focused = /:focus\s*\{\s*border-color:\s*var\(--color-([a-z]+-\d+)\)/.exec(styles)?.[1];
     expect(focused, "the border of a field with the focus in styles.css").toBeDefined();
-    for (const theme of THEMES) {
+    for (const { skin, mode, label } of SKIN_CASES) {
       expect(
-        contrast(themeColour(focused ?? "", theme), themeColour("field", theme)),
-        `a field with the focus: border-${focused} (${theme})`,
+        contrast(themeColour(focused ?? "", mode, skin), themeColour("field", mode, skin)),
+        `a field with the focus: border-${focused} (${label})`,
       ).toBeGreaterThanOrEqual(3);
     }
   });

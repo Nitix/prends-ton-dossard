@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
+import { SectionMarker } from "../../components/Slots";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
@@ -83,7 +84,8 @@ export function ResultsToEnter({ pageHeading }: { pageHeading: RefObject<HTMLEle
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title">
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title section-title">
+        <SectionMarker />
         {t.results.toEnterTitle}
       </h2>
       <ul className="flex flex-col gap-3">

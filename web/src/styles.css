@@ -382,8 +382,10 @@
      event or of a runner, the name of the app on the login page), the colours
      of the day are back, every one that the night changes. A white pill on a
      hero stays white with its violet text, the notes of an event stay a
-     frosted white. */
-  .on-dawn {
+     frosted white. This is Crête's sky (no `data-skin` on <html>): under
+     another skin, the sky has the colours of that skin, unless its stylesheet
+     puts others back there (see src/skins/README.md). */
+  :root:not([data-skin]) .on-dawn {
     color-scheme: light;
     --color-neutral-50: #fbf8ff;
     --color-neutral-100: #f4effa;
@@ -505,7 +507,8 @@
       center / 100% 100% no-repeat;
   }
 
-  /* The title of a block: a small sun on the horizon before it. */
+  /* The title of a block (an `h2.section-title`), after the mark of the skin
+     (its `SectionMarker`, the first child of the title). */
   .block-title {
     display: flex;
     align-items: center;
@@ -517,8 +520,8 @@
     letter-spacing: -0.015em;
     color: var(--color-ink);
   }
-  .block-title::before {
-    content: "";
+  /* Crête's mark: a small sun on the horizon. */
+  .section-marker {
     flex: none;
     width: 0.9rem;
     height: 0.45rem;

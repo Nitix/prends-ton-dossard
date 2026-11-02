@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import { SECONDARY } from "../../components/buttons";
-import { RidgeDivider } from "../../components/RidgeDivider";
+import { Divider } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
@@ -47,7 +47,7 @@ export function HomePage() {
         <>
           <RegistrationTodoBlock views={events.data} runnerId={runner?.id} pageHeading={title} />
           <MyUpcoming views={events.data} runnerId={runner?.id} />
-          <RidgeDivider />
+          <Divider />
           <GroupSoon views={events.data} />
         </>
       ) : events.isError ? (

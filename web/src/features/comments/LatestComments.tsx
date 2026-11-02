@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { SectionMarker } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useLatestComments } from "./api";
 import { excerpt } from "./excerpt";
@@ -22,7 +23,8 @@ export function LatestComments() {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
+      <h2 id={headingId} className="block-title section-title">
+        <SectionMarker />
         {t.home.latestCommentsTitle}
       </h2>
       <ul className="flex flex-col gap-2">

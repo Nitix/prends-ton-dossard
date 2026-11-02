@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { useId, useRef, type ReactNode, type RefObject } from "react";
 
-import { Contours, Ridges } from "../../components/Alpenglow";
 import { Avatar } from "../../components/Avatar";
 import { LoadFailure } from "../../components/LoadFailure";
+import { HeroArt, SectionMarker } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useRunners } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
@@ -34,20 +34,9 @@ export function RunnerProfile({ runnerId, extra }: { runnerId: string; extra?: R
 
   return (
     <div className="flex flex-col gap-8">
-      {/* A hero: the runner on the sky of the dawn drawn like a map, in front of the ridges, the sun rising behind them. */}
-      <header className="on-dawn relative flex items-center gap-4 overflow-hidden rounded-[1.75rem] bg-dawn-hero p-5 pb-12 text-white shadow-glow md:gap-6 md:p-7 md:pb-14">
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-16 -left-12 size-48 rounded-full bg-iris-400/35 blur-3xl" />
-          <Contours className="mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000_80%)] text-white opacity-[0.14]" />
-          <Ridges className="h-24 md:hidden" center={1560} sun={1870} sunSize={24} steep={1.1} />
-          <Ridges
-            className="hidden h-28 md:block"
-            center={1300}
-            sun={1500}
-            sunSize={26}
-            steep={1.15}
-          />
-        </span>
+      {/* A hero: the runner on the sky of the dawn drawn like a map (the skin's `HeroArt`), in front of the ridges, the sun rising behind them. */}
+      <header className="runner-hero on-dawn relative flex items-center gap-4 overflow-hidden rounded-[1.75rem] bg-dawn-hero p-5 pb-12 text-white shadow-glow md:gap-6 md:p-7 md:pb-14">
+        <HeroArt place="runner" />
         {/* On the narrowest phones (under 360 px) the photo is smaller and the name scales down
             with the screen, so that a first name such as « Guillaume » or « Maximilien » fits
             beside the photo: the name wraps between its words, never inside one. Only a word
@@ -116,7 +105,8 @@ function Years({ rows }: { rows: ResultRow[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
+      <h2 id={headingId} className="block-title section-title">
+        <SectionMarker />
         {t.runner.years}
       </h2>
       <TotalsTable
@@ -139,7 +129,8 @@ function History({ rows }: { rows: ResultRow[] }) {
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
+      <h2 id={headingId} className="block-title section-title">
+        <SectionMarker />
         {t.runner.history}
       </h2>
       {rows.length === 0 ? (
