@@ -128,6 +128,7 @@ export const en = {
     onlyLight: "This theme only has a light mode.",
     onlyDark: "This theme only has a dark mode.",
     fontSample: "Aa",
+    skinLoadFailed: "This theme could not be loaded: check your connection.",
     themeAuto: "Auto (like your system)",
     themeLight: "Light",
     themeDark: "Dark",

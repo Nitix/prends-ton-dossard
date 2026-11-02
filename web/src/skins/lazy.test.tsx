@@ -61,6 +61,7 @@ vi.mock("../lib/pb", () => ({
       getList: () => Promise.resolve({ items: [], page: 1, perPage: 1, totalItems: 0 }),
       getFirstListItem: () => Promise.resolve(aliceRunner),
       authRefresh: () => Promise.resolve({}),
+      update: () => Promise.resolve({}),
     }),
   },
 }));
@@ -151,8 +152,10 @@ async function freshPage() {
   const registry = await import(".");
   const { AppearanceSection } = await import("../features/profile/AppearanceSection");
   const { I18nProvider: FreshI18n } = await import("../i18n/I18nProvider");
+  // The messages are those of this registry's page too: its own context.
+  const { ToastProvider: FreshToast } = await import("../components/Toast");
   const { slots: crete } = await import("./crete");
-  return { registry, AppearanceSection, I18nProvider: FreshI18n, crete };
+  return { registry, AppearanceSection, I18nProvider: FreshI18n, ToastProvider: FreshToast, crete };
 }
 
 test("lazy — avant tout choix, la page n'a rien d'un autre skin que Crête : ni sa palette, ni ses polices", () => {
@@ -181,7 +184,9 @@ test("lazy — dans le sélecteur, le thème choisi est coché dès le clic, et 
   );
   const screen = await render(
     <fresh.I18nProvider languages={["fr"]}>
-      <fresh.AppearanceSection />
+      <fresh.ToastProvider>
+        <fresh.AppearanceSection />
+      </fresh.ToastProvider>
     </fresh.I18nProvider>,
   );
   try {

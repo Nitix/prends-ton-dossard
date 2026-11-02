@@ -153,6 +153,8 @@ export const fr = {
     onlyDark: "Ce thème n'a qu'un mode sombre.",
     // A few letters in the font of a theme, on its card.
     fontSample: "Aa",
+    // The message when a theme chosen cannot be loaded (offline, and never chosen on this device): the page keeps the theme it had.
+    skinLoadFailed: "Ce thème n'a pas pu se charger : vérifie ta connexion.",
     themeAuto: "Auto (comme le système)",
     themeLight: "Clair",
     themeDark: "Sombre",

@@ -1,9 +1,12 @@
 import { useId, useState } from "react";
 
+import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useThemeChoice, type ThemeChoice } from "../../lib/theme";
 import { SKINS, useSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
+import { chooseSkinOnAccount } from "../auth/accountSkin";
+import { useUserId } from "../auth/session";
 import { Section } from "./Section";
 
 // The faces of the samples of the cards (« Aa » in the font of each skin's
@@ -20,8 +23,11 @@ const CHOICES: readonly ThemeChoice[] = ["auto", "light", "dark"];
  * both: Auto follows the setting of the phone; Clair and Sombre win over it.
  * A skin with one mode says so instead, and the mode chosen is kept for the
  * others. Each choice applies at once and is kept on the device (see
- * skins/index.ts and lib/theme.ts). The sky of Crête's header is the same in
- * both modes.
+ * skins/index.ts and lib/theme.ts). The skin is kept on the account too, so
+ * that it follows the person to their other devices (features/auth/accountSkin.ts);
+ * the mode is not: it stays the device's. A skin whose look cannot be loaded
+ * (offline, never chosen on this device) says so in a message, and the page
+ * keeps the one it had. The sky of Crête's header is the same in both modes.
  *
  * Radio buttons, each a whole card or line: the native radio is stretched over
  * it, without its own look, so that the card is the tap target (and has the
@@ -31,12 +37,25 @@ const CHOICES: readonly ThemeChoice[] = ["auto", "light", "dark"];
 export function AppearanceSection() {
   const { t, lang } = useI18n();
   const [choice, choose] = useThemeChoice();
-  const [skin, chooseSkin] = useSkin();
+  const [skin] = useSkin();
+  const userId = useUserId();
+  const toast = useToast();
   // The skin just chosen, while its look loads (skins/index.ts): its card says
   // so at once; the page takes it once its look is there (or keeps its own, if
   // the look cannot be loaded).
   const [pending, setPending] = useState<string | null>(null);
   const skinTitle = useId();
+
+  async function chooseSkin(id: string) {
+    setPending(id);
+    try {
+      if ((await chooseSkinOnAccount(id, userId)) === "failed") {
+        toast.show(t.settings.skinLoadFailed);
+      }
+    } finally {
+      setPending((now) => (now === id ? null : now));
+    }
+  }
   const labels: Record<ThemeChoice, string> = {
     auto: t.settings.themeAuto,
     light: t.settings.themeLight,
@@ -58,10 +77,7 @@ export function AppearanceSection() {
               sample={t.settings.fontSample}
               checked={one.id === (pending ?? skin.id)}
               onChoose={() => {
-                setPending(one.id);
-                void chooseSkin(one.id).finally(() => {
-                  setPending((now) => (now === one.id ? null : now));
-                });
+                void chooseSkin(one.id);
               }}
             />
           ))}

@@ -67,6 +67,9 @@ const byId = (id: string | null): Skin | undefined => SKINS.find((skin) => skin.
 /** The default skin: Crête, as registered. */
 const DEFAULT: Skin = byId(crete.id) ?? crete;
 
+/** Its id: what the device keeps as nothing, and what an account that chose Crête keeps. */
+export const DEFAULT_SKIN = DEFAULT.id;
+
 /**
  * The skin kept on the device, by its id. Nothing kept, a skin that is not (or
  * no longer) in the app, or a storage that refuses (some private windows): Crête.
@@ -163,31 +166,42 @@ function keepSkin(skin: Skin): void {
 }
 
 /**
+ * What came of asking for a skin: it is on the page (`chosen`); another one was
+ * asked for in the meantime, and wins (`replaced`); its look could not be loaded,
+ * and the page is as it was (`failed`).
+ */
+export type Choice = "chosen" | "replaced" | "failed";
+
+/**
  * Puts a skin on the page once its look is loaded, unless another one was
  * asked for in the meantime: the page is never in a skin without its
  * stylesheets. `before` runs just before (to keep the choice). A look that
  * cannot be loaded leaves the page as it was.
  */
-async function showLoaded(id: string, before: (skin: Skin) => void = () => {}): Promise<void> {
+async function showLoaded(id: string, before: (skin: Skin) => void = () => {}): Promise<Choice> {
   const ask = ++asked;
   let skin: Skin;
   try {
     skin = await loadSkin(id);
   } catch {
-    return;
+    // A look that fails after another skin was asked for is of no concern.
+    return ask === asked ? "failed" : "replaced";
   }
-  if (ask !== asked) return;
+  if (ask !== asked) return "replaced";
   before(skin);
   applySkin(skin.id);
+  return "chosen";
 }
 
 /**
  * Chooses a skin: its look loaded, then kept on the device, applied, told to
  * whoever shows it. Two choices in a row (the arrows of the picker): the last
  * one wins, whichever loads first. A look that cannot be loaded (offline, never
- * loaded before) leaves the page and the device as they were.
+ * loaded before) leaves the page and the device as they were. What came of the
+ * choice is told (`Choice`), for whoever has more to do when it worked (the
+ * account keeps it) or something to say when it did not (the picker).
  */
-export function chooseSkin(id: string): Promise<void> {
+export function chooseSkin(id: string): Promise<Choice> {
   return showLoaded(id, keepSkin);
 }
 
@@ -240,7 +254,7 @@ function subscribe(listener: () => void): () => void {
 export const currentSkin = (): Skin => (shown ??= byId(readSkin()) ?? DEFAULT);
 
 /** The skin of the page, and how to choose another (by its id). */
-export function useSkin(): [Skin, (id: string) => Promise<void>] {
+export function useSkin(): [Skin, (id: string) => Promise<Choice>] {
   const skin = useSyncExternalStore(subscribe, currentSkin, () => DEFAULT);
   return [skin, chooseSkin];
 }

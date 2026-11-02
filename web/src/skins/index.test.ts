@@ -289,12 +289,12 @@ test("skins — rien de gardé, un skin inconnu ou un stockage qui refuse : Crê
 });
 
 test("skins — le skin choisi est sur <html> et gardé sur l'appareil ; Crête, c'est rien", async () => {
-  await chooseSkin("_example");
+  await expect(chooseSkin("_example")).resolves.toBe("chosen");
   expect(stored.get(SKIN_KEY)).toBe("_example");
   expect(root.dataset.skin).toBe("_example");
   expect(readSkin()).toBe("_example");
 
-  await chooseSkin("crete");
+  await expect(chooseSkin("crete")).resolves.toBe("chosen");
   expect(stored.has(SKIN_KEY)).toBe(false);
   expect(root.dataset.skin).toBeUndefined();
   expect(readSkin()).toBe("crete");
@@ -334,10 +334,11 @@ test("chooseSkin — deux choix coup sur coup : le dernier l'emporte, même si l
   if (first === undefined || second === undefined) throw new Error("two skins besides Crête");
   const open = hold(first.id);
   const slow = choose(first.id);
-  await choose(second.id);
+  await expect(choose(second.id)).resolves.toBe("chosen");
   expect(root.dataset.skin).toBe(second.id);
   open();
-  await slow;
+  // The first one was not put on the page, nor kept: a choice that was replaced is not a failure.
+  await expect(slow).resolves.toBe("replaced");
   expect(root.dataset.skin).toBe(second.id);
   expect(stored.get(SKIN_KEY)).toBe(second.id);
 });
@@ -347,7 +348,8 @@ test("chooseSkin — un look qui ne se charge pas (hors ligne, jamais chargé) :
   const [skin] = OTHERS;
   if (skin === undefined) throw new Error("a skin besides Crête");
   looks.failing.add(skin.id);
-  await expect(choose(skin.id)).resolves.toBeUndefined();
+  // Told to whoever asked (the picker says so), as a failure and not as a choice that was replaced.
+  await expect(choose(skin.id)).resolves.toBe("failed");
   expect(root.dataset.skin).toBeUndefined();
   expect(stored.has(SKIN_KEY)).toBe(false);
   expect(current().id).toBe("crete");
@@ -455,9 +457,9 @@ test("skins — un skin à un seul mode est dessiné dans ce mode, et le choix C
 
 test("skins — un stockage qui refuse ne casse rien : le choix vaut pour la page", async () => {
   refuse = true;
-  await expect(chooseSkin("_example")).resolves.toBeUndefined();
+  await expect(chooseSkin("_example")).resolves.toBe("chosen");
   expect(root.dataset.skin).toBe("_example");
-  await expect(chooseSkin("crete")).resolves.toBeUndefined();
+  await expect(chooseSkin("crete")).resolves.toBe("chosen");
   expect(root.dataset.skin).toBeUndefined();
 });
 

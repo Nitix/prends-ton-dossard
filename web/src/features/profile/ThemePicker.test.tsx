@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 import { userEvent } from "vitest/browser";
 
+import { ToastProvider } from "../../components/Toast";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -50,7 +51,9 @@ async function renderAppearance(languages = ["fr"]) {
   const { AppearanceSection } = await section();
   return render(
     <I18nProvider languages={languages}>
-      <AppearanceSection />
+      <ToastProvider>
+        <AppearanceSection />
+      </ToastProvider>
     </I18nProvider>,
   );
 }
