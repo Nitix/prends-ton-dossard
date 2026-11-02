@@ -15,6 +15,31 @@ by the script of `index.html` before the page is first drawn, then by
 `applySkin`. Each skin but Crête is loaded when it is chosen (see Loading on
 demand): a person who stays on Crête loads nothing of the others.
 
+The skin follows the account (`features/auth/accountSkin.ts`): chosen while
+signed in, it is kept on the account too (`users.skin`, a text of at most 32
+characters that the server does not interpret), so that it follows the person to
+their other devices. The device's copy stays what the page reads before anybody
+signs in, and after they sign out. The light or dark mode (`lib/theme.ts`) is
+not part of it: it stays the device's own.
+
+- **Signing in, restoring a session** (`syncAccountSkin`, from `session.ts`:
+  `restoreSession` when the app starts, the auth store's change for a sign-in,
+  whichever way): the skin of the account, if this build has it, is put on the
+  page and kept on the device. An account that has none gets the device's skin,
+  unless it is Crête's (nobody having chosen is Crête). A skin that this build
+  does not have is Crête on the device, and the account is left alone. A
+  renewal of the session that is already open does not do this: it would undo a
+  choice that is on its way.
+- **Offline**: a choice whose save fails stays on the device, which remembers
+  that the account was not told (`localStorage["ptd-skin-unsaved"]`, the id of
+  the account). The next sign-in or restored session of that account sends the
+  device's skin to it, instead of reading the account's. Nothing else retries,
+  and the choice shows no error.
+- **Signing out** leaves the skin on the device and on the page.
+- A skin whose look cannot be loaded when it is chosen (offline, never chosen
+  on this device) gives a message (« Ce thème n'a pas pu se charger : vérifie ta
+  connexion. »), and the page, the device and the account keep the skin they had.
+
 ## The folder of a skin
 
 ```
@@ -579,3 +604,9 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   font of each skin (neither declared nor asked for before the module of the
   section), the edge of a swatch (3:1 on its card, in every skin and mode).
 - `../features/pwa/sw.test.ts`: a skin chosen once is drawn offline.
+- `../features/auth/accountSkin.test.ts`, `accountSkin.signin.test.tsx`,
+  `session.test.ts`, `../features/profile/ThemePicker.account.test.tsx`: the
+  skin on the account (what is saved, and in which order; sign-in, session
+  restore and sign-out; an unknown skin; the choice that did not reach the
+  account), the picker saving it, and its message when a look cannot be loaded.
+  The rules of the field are the server's (`server/migrations/9j_user_skin.go`).
