@@ -1,0 +1,189 @@
+/* « Nuit », depth palette: a city run at night. Asphalt grounds, one reflective
+   accent (a neon lime, for what one acts on and what is active), a touch of
+   electric cyan for the information, a coral red for what deletes.
+
+   The only skin that is dark and nothing else: the page is always drawn in this
+   mode (see ../README.md, « Dark mode »), so these are the night colours, set
+   over Crête's own night. Each step keeps its role there: the 50–200 steps are
+   the grounds, the 600–900 steps the text, from the muted to the brightest.
+
+   The scales of Crête's three colours are re-read in the colours of the variant:
+   iris (the accent: links, the focus ring, what is chosen) is the reflective
+   lime, peach (the reminder to register) its tint, blush (the pin of a place,
+   what is to confirm) the cyan. Every step of the lime that carries a text is
+   4.5:1 on the grounds it sits on (src/dark.test.ts). */
+:root[data-skin="nuit"] {
+  /* The asphalt: the page (50), what a soft panel or a hover rises to (100),
+     the hairlines (200, 300), the edge of a control (400, 500), then the text. */
+  --color-neutral-50: #0e1116;
+  --color-neutral-100: #1e2430;
+  --color-neutral-200: #262e3b;
+  --color-neutral-300: #343d4d;
+  --color-neutral-400: #566175;
+  --color-neutral-500: #64708a;
+  --color-neutral-600: #9aa4b2;
+  --color-neutral-700: #c5ccd6;
+  --color-neutral-800: #d9dee6;
+  --color-neutral-900: #e8ecf2;
+  --color-neutral-950: #f4f6f9;
+  --color-ink: #e8ecf2;
+
+  /* The reflective lime. */
+  --color-iris-50: #1c2511;
+  --color-iris-100: #29360f;
+  --color-iris-200: #435414;
+  --color-iris-300: #6f8c18;
+  --color-iris-400: #9fc01f;
+  --color-iris-500: #b5d928;
+  --color-iris-600: #c6f432;
+  --color-iris-700: #d9ff63;
+  --color-iris-800: #e6ffa0;
+  --color-iris-900: #f1ffc8;
+
+  /* Its tint, for the reminder to register and the soft ends of the avatars. */
+  --color-peach-50: #1b2410;
+  --color-peach-100: #27320f;
+  --color-peach-200: #3f4f12;
+  --color-peach-300: #7c9a16;
+  --color-peach-400: #a3c51f;
+  --color-peach-500: #bfe02a;
+  --color-peach-600: #c6f432;
+  --color-peach-700: #c6f432;
+  --color-peach-800: #dcff7a;
+
+  /* The cyan of the information: the pin of a place, what is still to confirm. */
+  --color-blush-50: #0b2530;
+  --color-blush-100: #0f3342;
+  --color-blush-200: #17536b;
+  --color-blush-300: #1f86a8;
+  --color-blush-400: #29b6e0;
+  --color-blush-500: #33d1ff;
+  --color-blush-600: #33d1ff;
+  --color-blush-700: #6ee0ff;
+  --color-blush-800: #a8eeff;
+
+  /* What deletes: a coral red that reads on the dark, with the night on it. */
+  --color-red-50: #331a1c;
+  --color-red-200: #6b2b2b;
+  --color-red-700: #ff7b6e;
+  --color-red-800: #ff9a90;
+
+  /* The surfaces that rise from the page: a card, what floats, a field (the
+     variant's inputs are raised ones), the edge of a window, a message. */
+  --color-card: #171c25;
+  --color-raised: #1e2430;
+  --color-field: #1e2430;
+  --color-rim: #343d4d;
+  --color-toast: #283040;
+  --color-scrim: rgb(6 8 11 / 0.72);
+  --color-relief: #ffffff;
+
+  /* The five zones of the slope, flat to steep, 3:1 on the card and with the
+     white line: a cold blue, green, mustard, orange, hot pink. */
+  --color-slope-1: #2a8fc4;
+  --color-slope-2: #1a8660;
+  --color-slope-3: #b88c00;
+  --color-slope-4: #c13c00;
+  --color-slope-5: #eb3394;
+
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.375rem;
+  --radius-card: 1rem;
+
+  /* The shadows are deep, on a ground that is nearly black already. */
+  --shade-card: rgb(0 0 0 / 0.9);
+  --shade-lift: rgb(0 0 0 / 0.85);
+  --shade-bar: rgb(0 0 0 / 0.8);
+  --shade-edge: rgb(0 0 0 / 0.5);
+  --shade-edge-lift: rgb(0 0 0 / 0.5);
+  /* The map keeps its light tiles; it gets the cyan halo of the variant. */
+  --map-frame: 0 0 0 1px rgb(51 209 255 / 0.1), 0 18px 48px -20px rgb(51 209 255 / 0.35);
+  --map-veil: none;
+  /* The light of a headlamp at the top of the page: a lime cone, a cyan halo. */
+  --sheet-glow:
+    radial-gradient(56rem 14rem at 50% 0, rgb(198 244 50 / 0.075), transparent 70%),
+    radial-gradient(36rem 12rem at 100% 0, rgb(51 209 255 / 0.07), transparent 70%);
+
+  /* The track on the light tiles, in the lime and the cyan (a deep step of
+     each, to be seen on a pale map), its start (3:1 on white), its finish and
+     the links of its attribution (4.5:1 on white). */
+  --map-line-from: #6c8f00;
+  --map-line-via: #2f8f55;
+  --map-line-to: #0b7f9f;
+  --map-line: #2f8f55;
+  --map-start: #0b86a8;
+  --map-finish: #0e1116;
+  --map-link: #0b6f8c;
+
+  /* Crête's motifs that « Nuit » does not draw (the empty lists): lime and
+     cyan hills, a sun as a headlamp. The ridges and the peaks are here for
+     completeness: the header, the heroes and the mark are drawn by the skin. */
+  --motif-ridge-far-from: #3a4d12;
+  --motif-ridge-far-to: #1f2a10;
+  --motif-ridge-mid-from: #1f2a10;
+  --motif-ridge-mid-to: #161d12;
+  --motif-ridge-near-from: #121820;
+  --motif-ridge-near-to: #0e1116;
+  --motif-ridge-light: #c6f432;
+  --motif-sun-core: #f4ffc2;
+  --motif-sun-mid: #c6f432;
+  --motif-sun-rim: #33d1ff;
+  --motif-halo-from: #c6f432;
+  --motif-halo-to: #33d1ff;
+  --motif-dawn-1: #d9ff63;
+  --motif-dawn-2: #7fe38b;
+  --motif-dawn-3: #33d1ff;
+  --motif-peak-far: #435414;
+  --motif-peak-near-from: #6f8c18;
+  --motif-peak-near-to: #1c2511;
+  --motif-hill-near-from: #3a4d12;
+  --motif-hill-near-to: #1c2511;
+
+  /* The paints of the dawn, as the night leaves them: no sunrise here, the
+     reflective tape and the headlamp. What carries white text is the deepest
+     step of the lime (4.5:1 with white at every stop, as Crête's pills), going
+     to the cyan: the variant's main buttons are lime with dark text, which
+     waits for the deeper levels (the text of a button is a class of the app). */
+  --dawn-soft: linear-gradient(110deg, #c6f432 0%, #d9ff63 50%, #33d1ff 100%);
+  --dawn-deep: linear-gradient(110deg, #5f7d00 0%, #3d7a2e 55%, #0b6f8c 100%);
+  /* The sky of the header: the night, a headlamp lighting it from the top (a
+     lime cone, a cyan halo). */
+  --dawn-sky-color: #0a0d12;
+  --dawn-sky:
+    radial-gradient(56rem 26rem at 50% -10rem, rgb(198 244 50 / 0.12), transparent 70%),
+    radial-gradient(36rem 22rem at 100% -8rem, rgb(51 209 255 / 0.1), transparent 70%),
+    linear-gradient(180deg, #0a0d12 0%, #0e1116 100%);
+  /* A hero is a surface under the headlamp (`.headlamp` of the variant). */
+  --dawn-hero-color: #171c25;
+  --dawn-hero:
+    radial-gradient(120% 90% at 18% -30%, rgb(198 244 50 / 0.13), transparent 60%),
+    radial-gradient(90% 80% at 100% 0%, rgb(51 209 255 / 0.08), transparent 60%),
+    linear-gradient(150deg, #1c2330 0%, #171c25 55%, #131821 100%);
+  --dawn-text: linear-gradient(100deg, #c6f432 0%, #33d1ff 100%);
+  --dawn-line: linear-gradient(90deg, #c6f432, #33d1ff);
+  --dawn-marker-shadow: 0 0 10px rgb(198 244 50 / 0.55);
+  --dawn-horizon: linear-gradient(
+    90deg,
+    rgb(198 244 50 / 0.55),
+    rgb(51 209 255 / 0.25) 45%,
+    transparent
+  );
+  --dawn-ring-from: #33d1ff;
+  --dawn-ring-via: #7fe38b;
+  --dawn-ring-to: #c6f432;
+  --dawn-chip-glow: rgb(198 244 50 / 0.4);
+  /* The halo of the main buttons: the lime glow of the variant, its cyan under it. */
+  --dawn-glow-warm: rgb(198 244 50 / 0.45);
+  --dawn-glow-cool: rgb(51 209 255 / 0.3);
+  --focus-glow: rgb(198 244 50 / 0.2);
+  --sky-focus: #c6f432;
+}
+
+/* The sky is dark like the page, so it keeps these colours; except the white
+   pill on a hero (« S'inscrire »), which carries a text in `iris-700`, and its
+   hover, `iris-50`: they are put back to a deep lime on a pale one. */
+:root[data-skin="nuit"] .on-dawn {
+  --color-iris-50: #f1fbd2;
+  --color-iris-700: #4a6000;
+}
