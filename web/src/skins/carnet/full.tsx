@@ -16,8 +16,12 @@ const SEPARATOR = " · ";
 /** The name of a format in ink, its measures quieter. */
 const QUIET: FormatMarks = {
   name: (name) => <span className="format-name font-semibold text-ink">{name}</span>,
+  // After a space, the place where a line may break (the hidden separator is no space to the eye).
   measure: (measure) => (
-    <span className="format-measures ml-2 font-medium text-neutral-600">{measure}</span>
+    <>
+      {" "}
+      <span className="format-measures font-medium text-neutral-600">{measure}</span>
+    </>
   ),
 };
 

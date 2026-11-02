@@ -64,10 +64,32 @@
   padding-top: 1.25rem;
   border-top: 1px solid var(--color-neutral-200);
 }
-:root[data-skin="carnet"] .page-block[data-block] .section-title {
+:root[data-skin="carnet"]
+  .page-block:is(
+    [data-block="pending"],
+    [data-block="results"],
+    [data-block="registrations"],
+    [data-block="upcoming"],
+    [data-block="group"],
+    [data-block="comments"],
+    [data-block="years"],
+    [data-block="history"]
+  )
+  .section-title {
   flex-wrap: wrap;
 }
-:root[data-skin="carnet"] .page-block[data-block] .section-title::before {
+:root[data-skin="carnet"]
+  .page-block:is(
+    [data-block="pending"],
+    [data-block="results"],
+    [data-block="registrations"],
+    [data-block="upcoming"],
+    [data-block="group"],
+    [data-block="comments"],
+    [data-block="years"],
+    [data-block="history"]
+  )
+  .section-title::before {
   content: "";
   flex: 0 0 100%;
   height: 1.5rem;
@@ -91,8 +113,29 @@
 :root[data-skin="carnet"] .page-block[data-block="group"] .section-title::before {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='9' cy='12' r='6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='0.1 3'/%3E%3Ccircle cx='15' cy='12' r='6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='0.1 3'/%3E%3C/svg%3E");
 }
+:root[data-skin="carnet"] .page-block[data-block="years"] .section-title::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 20V12M12 20V5M18 20V9' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='0.1 3.2'/%3E%3C/svg%3E");
+}
+:root[data-skin="carnet"] .page-block[data-block="history"] .section-title::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='0.1 3.2'/%3E%3Cpath d='M12 7v5l3.5 2' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
 :root[data-skin="carnet"] .page-block[data-block="comments"] .section-title::before {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' stroke-dasharray='0.1 3.2'/%3E%3C/svg%3E");
+}
+
+/* The title of a format on the page of an event has one mark, the square of its
+   kind of race (the variant): the dotted marker of the title is not drawn there. A
+   measure stays in one piece, with a dot before it (the empty alternative: the
+   words have their separator for a screen reader). */
+:root[data-skin="carnet"] .format-section .section-title .ring-marker {
+  display: none;
+}
+:root[data-skin="carnet"] .format-title .format-measures {
+  white-space: nowrap;
+}
+:root[data-skin="carnet"] .format-title .format-measures::before {
+  content: "·" / "";
+  margin-right: 0.5em;
 }
 
 /* The card that offers a key to sign in: « Masquer » is an outline of white on

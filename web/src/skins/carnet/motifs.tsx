@@ -222,7 +222,12 @@ export function Divider({ className = "" }: DividerProps) {
 /** Before the title of a block: a ring of dots, and a node of data on it. */
 export function SectionMarker() {
   return (
-    <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" className="size-4 flex-none">
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 16 16"
+      className="ring-marker size-4 flex-none"
+    >
       <circle
         cx="8"
         cy="8"

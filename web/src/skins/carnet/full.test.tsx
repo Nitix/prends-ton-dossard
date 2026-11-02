@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeAll, expect, test } from "vitest";
 
 import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
-import { SECONDARY } from "../../components/buttons";
+import { BlockTitle } from "../../components/BlockTitle";
+import { DANGER_TEXT, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
 import { Dialog } from "../../components/Dialog";
 import { ToastProvider, useToast } from "../../components/Toast";
@@ -15,6 +16,7 @@ import { TrackFigures } from "../../features/route/TrackFigures";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { contrast } from "../../test/colour";
 import { colourOf, rgbaOf } from "../../test/computed";
 import { hex, inApp, plain, said } from "../../test/variant";
 
@@ -241,7 +243,23 @@ test.skipIf(!FULL)(
   },
 );
 
-/** A block of the home page, with its title. */
+/** Every `data-block` that a page of the app writes (the sources of the features are read). */
+const SOURCES = import.meta.glob<string>("../../features/**/*.tsx", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+const BLOCKS = [
+  ...new Set(
+    Object.entries(SOURCES)
+      .filter(([path]) => !path.includes(".test."))
+      .flatMap(([, text]) =>
+        [...text.matchAll(/data-block="([a-z-]+)"/gu)].map((one) => one[1] ?? ""),
+      ),
+  ),
+].toSorted();
+
+/** A block of a page, with its title. */
 const block = (kind: string) => (
   <section className="page-block flex flex-col gap-3" data-block={kind}>
     <h2 className="block-title section-title">Titre {kind}</h2>
@@ -249,26 +267,102 @@ const block = (kind: string) => (
   </section>
 );
 
+test("carnet — la source de l'app écrit bien les huit sortes de blocs que les feuilles doivent connaître", () => {
+  expect(BLOCKS).toEqual(
+    expect.arrayContaining([
+      "comments",
+      "group",
+      "history",
+      "pending",
+      "registrations",
+      "results",
+      "upcoming",
+      "years",
+    ]),
+  );
+});
+
 test.skipIf(!FULL)(
-  "carnet — chaque bloc de la page d'accueil est une bande entre deux filets, et son titre a une icône en pointillés au-dessus",
+  "carnet — chaque bloc de la page d'accueil et de celle d'un coureur est une bande entre deux filets, et son titre a une icône en pointillés au-dessus : une icône pour chaque sorte, jamais une barre pleine",
   async () => {
     await inApp(
       <div className="home-page">
-        {["pending", "results", "registrations", "upcoming", "group", "comments"].map((kind) => (
+        {BLOCKS.map((kind) => (
           <div key={kind}>{block(kind)}</div>
         ))}
       </div>,
       (drawn) => {
         const icons = new Set<string>();
-        for (const section of drawn.querySelectorAll(".page-block")) {
-          expect(style(section).borderTopWidth, "a hairline above the band").toBe("1px");
+        for (const section of drawn.querySelectorAll<HTMLElement>(".page-block")) {
+          const kind = section.dataset.block ?? "";
+          expect(style(section).borderTopWidth, `a hairline above the band of ${kind}`).toBe("1px");
           const icon = style(section.querySelector("h2"), "::before");
-          expect(icon.content, "an icon over the title").not.toBe("none");
-          expect(icon.maskImage, "drawn by a mask").toContain("url(");
+          expect(icon.content, `an icon over the title of ${kind}`).not.toBe("none");
+          expect(icon.maskImage, `drawn by a mask for ${kind}`).toContain("url(");
           expect(Number.parseFloat(icon.width)).toBeGreaterThanOrEqual(20);
           icons.add(icon.maskImage);
         }
-        expect(icons.size, "an icon for each kind of block").toBe(6);
+        expect(icons.size, "an icon for each kind of block").toBe(BLOCKS.length);
+      },
+      { skin: ID },
+    );
+    // A kind that the sheet does not know has no mark at all: never a plain bar.
+    await inApp(
+      block("inconnu"),
+      (drawn) => {
+        const icon = style(drawn.querySelector(".page-block h2"), "::before");
+        expect(icon.content, "no mark for an unknown kind").toBe("none");
+      },
+      { skin: ID },
+    );
+  },
+);
+
+test.skipIf(!FULL)(
+  "carnet — le titre d'un format n'a qu'une marque, le carré de son type ; sur le plus petit téléphone chaque mesure reste d'un bloc, et un « · » les sépare",
+  async () => {
+    const formats = toEventView(eventRecord).formats;
+    await inApp(
+      <div style={{ width: 256 }}>
+        {formats.map((formatView) => (
+          <section key={formatView.format.id} className="format-section">
+            <BlockTitle>
+              <FormatTitle
+                formatView={formatView}
+                parts={formatMeasures(formatView.format, formatView.raceType.label, f, fr)}
+              />
+            </BlockTitle>
+          </section>
+        ))}
+      </div>,
+      (drawn) => {
+        const headings = [...drawn.querySelectorAll("h2")];
+        expect(headings.length).toBe(formats.length);
+        for (const heading of headings) {
+          // A line may break between two measures (never inside one): the heading does not overflow.
+          expect(heading.scrollWidth, "the title fits its heading").toBeLessThanOrEqual(
+            heading.clientWidth,
+          );
+          // The dotted marker of the title is not drawn: the square of the kind is the one mark.
+          const marks = [...heading.children].filter(
+            (child) =>
+              child.getAttribute("aria-hidden") === "true" &&
+              getComputedStyle(child).display !== "none",
+          );
+          const squares = heading.querySelectorAll(".format-title [aria-hidden=true][style]");
+          expect(squares.length, "the square of the kind").toBe(1);
+          expect(marks.length, "no other mark beside the title").toBe(0);
+          const measures = [...heading.querySelectorAll(".format-measures")];
+          expect(measures.length).toBeGreaterThan(0);
+          for (const measure of measures) {
+            expect(style(measure).whiteSpace, "never broken inside").toBe("nowrap");
+            expect(
+              measure.getClientRects().length,
+              `${plain(measure.textContent)} in one piece`,
+            ).toBe(1);
+            expect(style(measure, "::before").content, "a dot before it").toContain("·");
+          }
+        }
       },
       { skin: ID },
     );
@@ -302,3 +396,20 @@ test("carnet — les feuilles ne nomment aucun type d'élément : seulement les 
   }
   expect(named, "selectors that name an element type").toEqual([]);
 });
+
+test.skipIf(!FULL)(
+  "carnet — une action qui supprime reste rouge, lisible à 4,5:1 sur la feuille",
+  async () => {
+    await inApp(
+      <button type="button" className={`${SECONDARY} ${DANGER_TEXT}`}>
+        Supprimer
+      </button>,
+      (drawn) => {
+        const color = style(drawn.querySelector("button")).color;
+        expect(hex(color)).toBe(hex(colourOf("--color-red-700")));
+        expect(contrast(hex(color), hex(colourOf("--color-card")))).toBeGreaterThanOrEqual(4.5);
+      },
+      { skin: ID },
+    );
+  },
+);
