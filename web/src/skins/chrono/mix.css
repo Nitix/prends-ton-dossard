@@ -7,7 +7,7 @@
 
 /* The tabs: a flat bar with a hairline. The current tab, the ink pill, has the
    orange line of the fourth zone under its word. */
-:root[data-skin="chrono"] .tabbar ul {
+:root[data-skin="chrono"] .tabbar-list {
   border-color: var(--color-neutral-300);
   box-shadow: none;
 }
@@ -52,11 +52,20 @@
   color: var(--color-ink);
 }
 
-/* The screen of an event and of a runner: no halo, the corners of an instrument. */
-:root[data-skin="chrono"] .event-hero,
+/* The top of a runner's page: no halo, the corners of an instrument. */
 :root[data-skin="chrono"] .runner-hero {
   border-radius: var(--radius-2xl);
   box-shadow: none;
+}
+
+/* The screen of the watch, at the top of the page of an event: a white card on
+   the thin grid of a chart. */
+:root[data-skin="chrono"] .watch-screen {
+  background-image:
+    linear-gradient(var(--color-neutral-100) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-neutral-100) 1px, transparent 1px);
+  background-size: 14px 14px;
+  background-position: -1px -1px;
 }
 :root[data-skin="chrono"] .runner-hero .avatar-soft {
   box-shadow:

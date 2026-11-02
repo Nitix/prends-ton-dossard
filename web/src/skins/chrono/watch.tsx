@@ -51,11 +51,17 @@ export function raceTypeZone(label: string): Zone | null {
 }
 
 /** The small bar of a zone, before the words it goes with: a kind of race, a deadline. */
-export function ZoneBar({ zone }: { zone: Zone | null }) {
+export function ZoneBar({
+  zone,
+  className = "h-3.5 w-1",
+}: {
+  zone: Zone | null;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden="true"
-      className="inline-block h-3.5 w-1 shrink-0 rounded-full"
+      className={`inline-block shrink-0 rounded-full ${className}`}
       style={{ backgroundColor: zoneColour(zone) }}
     />
   );
@@ -70,10 +76,15 @@ export function WatchRing({
   days,
   size = 48,
   light = false,
+  silent = false,
+  className = "",
 }: {
   days: number;
   size?: number;
   light?: boolean;
+  /** A picture that says nothing: the words beside it say the days (a screen reader has none of the ring). */
+  silent?: boolean;
+  className?: string;
 }) {
   const { f, formatLocale } = useI18n();
   const left = Math.max(0, days);
@@ -88,7 +99,8 @@ export function WatchRing({
 
   return (
     <span
-      className="relative inline-grid shrink-0 place-items-center"
+      aria-hidden={silent ? "true" : undefined}
+      className={`relative inline-grid shrink-0 place-items-center ${className}`}
       style={{ width: size, height: size }}
     >
       <svg
@@ -127,7 +139,7 @@ export function WatchRing({
       >
         {written}
       </span>
-      <span className="sr-only">{f.inDays(left)}</span>
+      {!silent && <span className="sr-only">{f.inDays(left)}</span>}
     </span>
   );
 }

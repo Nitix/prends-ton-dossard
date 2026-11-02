@@ -2,20 +2,18 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { DateChip } from "../../components/Dawn";
-import { CalendarIcon, ClockIcon, PinIcon } from "../../components/icons";
-import { HeroArt } from "../../components/Slots";
-import type { FormatView } from "../../features/events/api";
-import { formatMeasures } from "../../features/events/formatName";
+import { PinIcon } from "../../components/icons";
+import { FormatLine } from "../../features/events/FormatLine";
 import { ParticipantChips } from "../../features/events/ParticipantChips";
 import { starters } from "../../features/events/participants";
 import { RegisterLink } from "../../features/events/RegisterLink";
 import {
-  DAYS_LEFT_SHOWN,
+  deadlineText,
   registrationLabel,
   registrationState,
 } from "../../features/events/registration";
 import { useI18n } from "../../i18n/I18nProvider";
-import { daysBetween } from "../../lib/dates";
+import { daysToGo as daysToGoOf } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import type { EventCardProps, EventHeroProps, Variants } from "../types";
@@ -32,29 +30,6 @@ import { countdownZone, raceTypeZone, WatchRing, ZoneBar } from "./watch";
 // is Crête's own `DateChip`, dressed by mix.css. What these import is only
 // used while they render (see ../README.md).
 
-const SEPARATOR = " · ";
-
-/** A format of the card: the bar of its zone, its first measure in bold, then the others. */
-function ZonedFormat({ formatView, showDate }: { formatView: FormatView; showDate: boolean }) {
-  const { t, f } = useI18n();
-  const { format, raceType, date } = formatView;
-  const [first, ...rest] = formatMeasures(format, raceType.label, f, t);
-
-  return (
-    <>
-      {/* On an event of several days, the day of each format is worth knowing. */}
-      {showDate && <p className="eyebrow">{f.date(date)}</p>}
-      <p className="flex items-center gap-2 text-sm text-neutral-700">
-        <ZoneBar zone={raceTypeZone(raceType.label)} />
-        <span>
-          <span className="font-semibold text-ink">{first}</span>
-          {rest.length > 0 && `${SEPARATOR}${rest.join(SEPARATOR)}`}
-        </span>
-      </p>
-    </>
-  );
-}
-
 /**
  * An event in a list, on the screen of a watch: its day, its name (the link to
  * its page, a bar tall enough to tap), its place, where its registration
@@ -70,8 +45,7 @@ function WatchCard({ view }: EventCardProps) {
   const interested = starters(view.interested);
   const registration = registrationState(event, today);
   // Under way, it is on today; over, it has no ring.
-  const daysToGo =
-    Temporal.PlainDate.compare(end, today) < 0 ? null : Math.max(0, daysBetween(today, start));
+  const daysToGo = daysToGoOf(start, end, today);
   const hasPeople = interested.length > 0 || formats.length > 0 || view.supporters.length > 0;
 
   return (
@@ -120,7 +94,12 @@ function WatchCard({ view }: EventCardProps) {
             <ul className="flex flex-col gap-3">
               {formats.map((formatView) => (
                 <li key={formatView.format.id} className="flex flex-col gap-1.5">
-                  <ZonedFormat formatView={formatView} showDate={severalDays} />
+                  <FormatLine
+                    formatView={formatView}
+                    showDate={severalDays}
+                    marks={{ before: <ZoneBar zone={raceTypeZone(formatView.raceType.label)} /> }}
+                    className="flex items-center gap-2 text-sm text-neutral-700"
+                  />
                   <ParticipantChips participations={starters(formatView.participations)} />
                 </li>
               ))}
@@ -180,13 +159,13 @@ function Measure({
 }
 
 /**
- * The top of the page of an event, as the screen of a watch: the name (the
- * title of the page) with the ring of the days left, the date and the place,
- * where the registration stands (with the bar of its zone), the notes and the
- * link to register, then a white screen with the figures of its formats, in the
- * mono face: the distance, the elevation gain, the duration and the time limit
- * when a format has them, a range when they differ. The grid of a chart and the
- * strip of the zones are the skin's `HeroArt`.
+ * The top of the page of an event, a light head as the variant has it: the date
+ * in small mono capitals over the name (the title of the page), its place, then
+ * the screen of the watch, a white card on the grid of a chart: the figures of
+ * its formats in the mono face (the distance, the elevation gain, the duration
+ * and the time limit when a format has them, a range when they differ) and the
+ * ring of the days left in it, on its zone; under it where the registration
+ * stands (with the bar of its zone), the notes and the link to register.
  */
 function WatchHero({ view, heading }: EventHeroProps) {
   const { t, f, formatLocale } = useI18n();
@@ -195,7 +174,7 @@ function WatchHero({ view, heading }: EventHeroProps) {
   const severalDays = !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
-  const daysToGo = daysBetween(today, start);
+  const daysToGo = daysToGoOf(start, end, today);
 
   const distance = span(formats.map(({ format }) => format.distance_km));
   const elevation = span(formats.map(({ format }) => format.elevation_gain_m));
@@ -234,66 +213,64 @@ function WatchHero({ view, heading }: EventHeroProps) {
       value: minutes(limit),
     });
   }
+  const counting = daysToGo !== null && daysToGo > 0;
 
   return (
-    <header className="event-hero on-dawn relative overflow-hidden bg-dawn-hero text-white">
-      <HeroArt place="event" />
-      <div className="relative flex flex-col gap-3 p-5 pb-6 md:p-7 md:pb-8">
-        <div className="flex items-start justify-between gap-4">
-          <h1
-            {...heading}
-            className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-bold display-title break-words md:text-[2.375rem]"
-          >
-            {event.name}
-          </h1>
-          {daysToGo > 0 && (
-            <span className="mt-1">
-              <WatchRing days={daysToGo} size={56} light />
-            </span>
+    <header className="event-hero flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h1
+          {...heading}
+          className="event-hero-title font-display text-[1.75rem] leading-tight font-bold display-title tracking-[-0.02em] break-words text-ink md:text-[2.125rem]"
+        >
+          {event.name}
+        </h1>
+        {/* Above the name, as on a watch; read after it. */}
+        <p className="event-hero-date order-first font-mono text-[0.6875rem] leading-4 font-semibold tracking-[0.08em] text-neutral-700 uppercase">
+          {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
+        </p>
+        <p className="event-hero-place flex items-center gap-1.5 text-neutral-700">
+          <PinIcon className="size-[1.125rem] shrink-0 text-neutral-600" />
+          {event.location}
+        </p>
+      </div>
+      {(figures.length > 0 || counting) && (
+        <div className="watch-screen card flex items-stretch overflow-hidden">
+          {figures.length > 0 && (
+            <dl className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3 bg-card/75 px-4 py-3 sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 sm:px-5">
+              {figures.map(({ key, label, value }) => (
+                <div key={key} className="flex min-w-0 flex-col gap-1">
+                  <dt className="eyebrow">{label}</dt>
+                  <dd className="font-mono text-lg leading-tight font-semibold tracking-tight break-words text-ink sm:text-2xl sm:whitespace-nowrap">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {counting && (
+            <div
+              className={`flex items-center justify-center bg-card/75 px-4 py-3 sm:px-6 ${
+                figures.length > 0 ? "border-l border-neutral-200" : "flex-1"
+              }`}
+            >
+              <WatchRing days={daysToGo} size={68} />
+            </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5 text-[0.9375rem] font-medium">
-          <p className="flex items-center gap-2">
-            <CalendarIcon className="size-[1.125rem] shrink-0 opacity-90" />
-            {severalDays
-              ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
-              : f.dateLong(start)}
-          </p>
-          <p className="flex items-center gap-2">
-            <PinIcon className="size-[1.125rem] shrink-0 opacity-90" />
-            {event.location}
-          </p>
-        </div>
-        {deadline && (
-          <p className="flex items-start gap-2 self-start rounded-lg border border-white/25 px-3 py-2 text-sm font-semibold">
-            <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
-            <span>
-              {registrationLabel(deadline, f, t)}
-              {deadline.kind === "open" &&
-                deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-                `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
-            </span>
-          </p>
-        )}
-        {event.notes && (
-          <p className="self-start rounded-lg glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink">
-            {event.notes}
-          </p>
-        )}
-        {registration && <RegisterLink href={registration} tone="onDawn" className="mt-1" />}
-        {figures.length > 0 && (
-          <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-card px-4 py-3 text-ink sm:flex sm:flex-wrap sm:gap-x-8">
-            {figures.map(({ key, label, value }) => (
-              <div key={key} className="flex min-w-0 flex-col gap-1">
-                <dt className="eyebrow">{label}</dt>
-                <dd className="font-mono text-lg leading-tight font-semibold tracking-tight break-words sm:text-2xl sm:whitespace-nowrap">
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </div>
+      )}
+      {deadline && (
+        <p
+          data-kind={deadline.kind}
+          className="event-hero-deadline flex items-center gap-2.5 text-sm font-medium text-ink"
+        >
+          <ZoneBar zone={deadline.kind === "open" ? countdownZone(deadline.daysLeft) : null} />
+          <span>{deadlineText(deadline, f, t)}</span>
+        </p>
+      )}
+      {event.notes && (
+        <p className="event-hero-notes whitespace-pre-line text-neutral-800">{event.notes}</p>
+      )}
+      {registration && <RegisterLink href={registration} />}
     </header>
   );
 }

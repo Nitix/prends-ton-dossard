@@ -1,12 +1,3 @@
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { afterEach, beforeAll, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
@@ -20,10 +11,10 @@ import {
   pNinaUndecided,
   withParticipations,
 } from "../../features/events/testFixture";
-import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
-import { TodayProvider } from "../../lib/useToday";
-import { withoutIds } from "../../test/ids";
+import { contrast } from "../../test/colour";
+import { groundsBehind, textContrast } from "../../test/computed";
+import { hex, inApp, keepsEverything, plain } from "../../test/variant";
 import { HeaderArt } from "./motifs";
 
 import "../../styles.css";
@@ -32,7 +23,8 @@ import "../../skins/styles";
 // « Chrono » at depth mix: the card and the top of the page of an event keep
 // what Crête's show (every text, every link, every list with its name), and draw
 // the markup of a watch. In a build at palette it redraws nothing: the checks
-// then say the piece is Crête's own.
+// then say the piece is Crête's own. The shapes an event takes are held by
+// skins/variants.test.tsx.
 
 const ID = "chrono";
 
@@ -58,65 +50,17 @@ const view = () =>
     ),
   );
 
-/** What a piece draws in the app (its language, its day, a router for its links). */
-async function drawn(element: ReactNode) {
-  const root = createRootRoute({
-    component: () => (
-      <I18nProvider languages={["fr"]}>
-        <TodayProvider value={Temporal.PlainDate.from("2026-06-01")}>
-          <div data-drawn="">
-            <Outlet />
-          </div>
-        </TodayProvider>
-      </I18nProvider>
-    ),
-  });
-  const index = createRoute({ getParentRoute: () => root, path: "/", component: () => element });
-  const router = createRouter({
-    routeTree: root.addChildren([index]),
-    history: createMemoryHistory({ initialEntries: ["/"] }),
-  });
-  await router.load();
-  const screen = await render(<RouterProvider router={router} />);
-  await expect.poll(() => screen.container.querySelector("[data-drawn] > *")).not.toBeNull();
-  const box = screen.container.querySelector<HTMLElement>("[data-drawn]");
-  if (box === null) throw new Error("the piece was not drawn");
-  return { box, unmount: () => screen.unmount() };
-}
+/** An element that the test needs: it fails with a name when it is missing. */
+const must = <T,>(element: T | null | undefined): T => {
+  if (element === null || element === undefined) throw new Error("the element is missing");
+  return element;
+};
 
-const plain = (text: string | null) => (text ?? "").replace(/\s+/g, " ").trim();
-
-/** What a piece says: each of its texts, its links (words and address), the names of its lists. */
-function said(box: Element) {
-  const texts: string[] = [];
-  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    const text = plain(node.textContent);
-    if (text !== "") texts.push(text);
-  }
-  return {
-    texts,
-    flat: plain(box.textContent),
-    links: [...box.querySelectorAll("a[href]")].map(
-      (link) => `${plain(link.textContent)} → ${link.getAttribute("href")}`,
-    ),
-    names: [...box.querySelectorAll("[aria-label]")].map((one) => one.getAttribute("aria-label")),
-    buttons: [...box.querySelectorAll("button")].map((one) => plain(one.textContent)),
-  };
-}
-
-/** The skin's piece says everything that Crête's says. */
-async function keepsEverything(skinned: ReactNode, base: ReactNode) {
-  const [own, crete] = [await drawn(skinned), await drawn(base)];
-  const [ours, theirs] = [said(own.box), said(crete.box)];
-  for (const text of theirs.texts) expect(ours.flat, `the text « ${text} »`).toContain(text);
-  expect(ours.links, "its links").toEqual(expect.arrayContaining(theirs.links));
-  expect(ours.names, "its lists").toEqual(expect.arrayContaining(theirs.names));
-  expect(ours.buttons, "its buttons").toEqual(expect.arrayContaining(theirs.buttons));
-  const html = [withoutIds(own.box.innerHTML), withoutIds(crete.box.innerHTML)];
-  await own.unmount();
-  await crete.unmount();
-  return html;
+/** The parts of an HTML string, to look into what a test has drawn. */
+function parsed(html: string): HTMLElement {
+  const box = document.createElement("div");
+  box.innerHTML = html;
+  return box;
 }
 
 test("chrono — la carte et le haut de la page viennent de mix.tsx : à mix la variante, à palette rien ; le jour est la puce de Crête", () => {
@@ -129,18 +73,17 @@ test("chrono — la carte et le haut de la page viennent de mix.tsx : à mix la 
 });
 
 test("chrono — la carte d'un événement garde tout ce que celle de Crête dit, avec l'anneau des jours et la barre de zone de chaque épreuve", async () => {
-  chooseSkin(ID);
   const [own, crete] = await keepsEverything(
     <EventCard view={view()} list="upcoming" />,
     <EventCardBase view={view()} list="upcoming" />,
+    { skin: ID, what: "the card" },
   );
-  const card = document.createElement("div");
-  card.innerHTML = own ?? "";
+  const card = parsed(own);
   expect(card.querySelector("article.event-card")).not.toBeNull();
   expect(card.querySelector(".date-chip"), "the day").not.toBeNull();
   // The marks are pictures: each is hidden, and what it means is written beside it.
-  for (const mark of card.querySelectorAll("li > p > span[style]")) {
-    expect(mark.getAttribute("aria-hidden")).toBe("true");
+  for (const mark of card.querySelectorAll("[style*=slope]")) {
+    expect(mark.closest("[aria-hidden=true]"), "hidden from a screen reader").not.toBeNull();
   }
   expect(own !== crete, "drawn by the skin").toBe(SKIN_DEPTH !== "palette");
   expect(card.querySelectorAll("[aria-hidden=true][style*=slope]").length > 0).toBe(
@@ -150,15 +93,33 @@ test("chrono — la carte d'un événement garde tout ce que celle de Crête dit
   expect(card.textContent?.includes("dans 12 jours")).toBe(SKIN_DEPTH !== "palette");
 });
 
+test.skipIf(SKIN_DEPTH === "palette")(
+  "chrono — chaque épreuve de la carte a la barre de sa zone avant sa ligne, qui est celle de Crête (le nom, les mesures)",
+  async () => {
+    const [own] = await keepsEverything(
+      <EventCard view={view()} list="upcoming" />,
+      <EventCardBase view={view()} list="upcoming" />,
+      { skin: ID, what: "the card" },
+    );
+    const lines = [...parsed(own).querySelectorAll(".format-line")];
+    expect(lines.length, "a line for each format").toBe(view().formats.length);
+    for (const line of lines) {
+      // The bar of the zone is in the line, a picture hidden from a screen reader.
+      const bar = line.querySelector("[aria-hidden=true][style*=slope]");
+      expect(bar, "the bar of its zone").not.toBeNull();
+      expect(plain(line.textContent), "its words").not.toBe("");
+    }
+  },
+);
+
 test("chrono — le haut de la page d'un événement garde tout ce que celui de Crête dit, et montre les chiffres de ses épreuves", async () => {
-  chooseSkin(ID);
   const heading = { id: "title", "data-focus": "page-title", tabIndex: -1 } as const;
   const [own, crete] = await keepsEverything(
     <EventHero view={view()} heading={heading} />,
     <EventHeroBase view={view()} heading={heading} />,
+    { skin: ID, what: "the hero" },
   );
-  const hero = document.createElement("div");
-  hero.innerHTML = own ?? "";
+  const hero = parsed(own);
   expect(hero.querySelector("header.event-hero")).not.toBeNull();
   const title = hero.querySelector("h1");
   expect(title?.id).toBe("title");
@@ -176,6 +137,61 @@ test("chrono — le haut de la page d'un événement garde tout ce que celui de 
   );
   expect(shown).toEqual(SKIN_DEPTH === "palette" ? [false, false, false] : [true, true, true]);
 });
+
+test.skipIf(SKIN_DEPTH === "palette")(
+  "chrono — le haut de la page est une tête claire, comme celle de la variante : l'écran des chiffres en haut avec l'anneau dedans, tout à 4,5:1, « S'inscrire » aussi",
+  async () => {
+    const heading = { id: "title", "data-focus": "page-title", tabIndex: -1 } as const;
+    await inApp(
+      <EventHero view={view()} heading={heading} />,
+      (drawn) => {
+        const hero = drawn.querySelector(".event-hero");
+        expect(hero, "the hero").not.toBeNull();
+        if (hero === null) return;
+        // A light head: the page behind everything, not the ink of the sky.
+        for (const ground of groundsBehind(hero)) {
+          expect(contrast(ground, "#ffffff"), `the ground of the hero, ${ground}`).toBeLessThan(
+            1.3,
+          );
+        }
+        const register = hero.querySelector<HTMLElement>("a.register-link");
+        expect(register, "the link to register").not.toBeNull();
+        const speaking = [
+          hero.querySelector("h1"),
+          ...hero.querySelectorAll("p, dt, dd"),
+          register,
+        ].filter((one): one is HTMLElement => one !== null);
+        expect(speaking.length, "the texts of the hero").toBeGreaterThanOrEqual(8);
+        for (const one of speaking) {
+          expect(
+            textContrast(one),
+            `the words « ${plain(one.textContent).slice(0, 30)} » of the hero`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+        expect(hex(getComputedStyle(register ?? hero).color), "the ink of « S'inscrire »").not.toBe(
+          "#f6f7f9",
+        );
+        // The screen of the figures is above the end of the registrations, the ring is in it.
+        const screen = hero.querySelector(".watch-screen");
+        expect(screen, "the screen of the figures").not.toBeNull();
+        expect(screen?.querySelector("svg"), "the ring, in the screen").not.toBeNull();
+        const deadline = [...hero.querySelectorAll("p")].find((p) =>
+          p.textContent?.includes("Inscriptions"),
+        );
+        expect(deadline, "the end of the registrations").toBeDefined();
+        expect(
+          must(screen).compareDocumentPosition(must(deadline)) & Node.DOCUMENT_POSITION_FOLLOWING,
+          "the screen comes first",
+        ).not.toBe(0);
+        // The deadline in one sentence, as Crête's hero says it (`deadlineText`).
+        expect(plain(hero.textContent)).toContain(
+          "Inscriptions jusqu'au ven. 5 juin · plus que 4 jours",
+        );
+      },
+      { skin: ID },
+    );
+  },
+);
 
 test("chrono — le cadran de la page de connexion tient sous la carte : pas plus de 13 rem, entier", async () => {
   chooseSkin(ID);
