@@ -30,35 +30,45 @@ const MEADOW = "color-mix(in srgb, var(--motif-ridge-light) 30%, transparent)";
 export function HeaderArt({ place, sun = true }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <Contours tiled className="opacity-[0.09]" />
-        <span className="absolute -top-20 -left-16 size-64 rounded-full bg-iris-400/30 blur-3xl" />
+      <span
+        aria-hidden="true"
+        className="alpage:pointer-events-none alpage:absolute alpage:inset-0 alpage:overflow-hidden"
+      >
+        <Contours tiled className="alpage:opacity-[0.09]" />
+        <span className="alpage:absolute alpage:-top-20 alpage:-left-16 alpage:size-64 alpage:rounded-full alpage:bg-iris-400/30 alpage:blur-3xl" />
         <span
-          className="absolute -right-16 -bottom-28 size-72 rounded-full blur-3xl"
+          className="alpage:absolute alpage:-right-16 alpage:-bottom-28 alpage:size-72 alpage:rounded-full alpage:blur-3xl"
           style={{ backgroundColor: MEADOW }}
         />
         {sun && (
-          <Sun className="right-[7%] bottom-[2.25rem] size-11 animate-rise md:right-auto md:bottom-[1.6rem] md:left-[calc(50%-8rem)] md:size-14" />
+          <Sun className="alpage:right-[7%] alpage:bottom-[2.25rem] alpage:size-11 alpage:animate-rise alpage:md:right-auto alpage:md:bottom-[1.6rem] alpage:md:left-[calc(50%-8rem)] alpage:md:size-14" />
         )}
         <Ridges
           far={FAR}
           near={NEAR}
-          className="inset-x-0 bottom-0 h-[4.75rem] w-full md:h-[5.25rem]"
+          className="alpage:inset-x-0 alpage:bottom-0 alpage:h-[4.75rem] alpage:w-full alpage:md:h-[5.25rem]"
         />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <Contours className="text-white opacity-[0.09]" />
-      <span className="absolute -top-20 -left-16 size-64 rounded-full bg-iris-400/30 blur-3xl" />
+    <span
+      aria-hidden="true"
+      className="alpage:pointer-events-none alpage:absolute alpage:inset-0 alpage:overflow-hidden"
+    >
+      <Contours className="alpage:text-white alpage:opacity-[0.09]" />
+      <span className="alpage:absolute alpage:-top-20 alpage:-left-16 alpage:size-64 alpage:rounded-full alpage:bg-iris-400/30 alpage:blur-3xl" />
       <span
-        className="absolute -right-16 -bottom-28 size-72 rounded-full blur-3xl"
+        className="alpage:absolute alpage:-right-16 alpage:-bottom-28 alpage:size-72 alpage:rounded-full alpage:blur-3xl"
         style={{ backgroundColor: MEADOW }}
       />
-      <span className="absolute inset-x-0 bottom-0 h-[34%] min-h-44 overflow-hidden">
-        <Sun className="right-[14%] bottom-[46%] size-16 animate-rise md:right-[24%] md:bottom-[56%] md:size-32" />
-        <Ridges far={FAR} near={NEAR} className="bottom-0 left-0 h-full w-[240%] md:w-full" />
+      <span className="alpage:absolute alpage:inset-x-0 alpage:bottom-0 alpage:h-[34%] alpage:min-h-44 alpage:overflow-hidden">
+        <Sun className="alpage:right-[14%] alpage:bottom-[46%] alpage:size-16 alpage:animate-rise alpage:md:right-[24%] alpage:md:bottom-[56%] alpage:md:size-32" />
+        <Ridges
+          far={FAR}
+          near={NEAR}
+          className="alpage:bottom-0 alpage:left-0 alpage:h-full alpage:w-[240%] alpage:md:w-full"
+        />
       </span>
     </span>
   );
@@ -73,13 +83,13 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const big = size === "lg";
 
   return (
-    <span className="flex items-center gap-3">
+    <span className="alpage:flex alpage:items-center alpage:gap-3">
       <TrailPatch
-        className={`shrink-0 drop-shadow-[0_6px_14px_var(--motif-mark-shade)] ${big ? "size-12" : "size-10"}`}
+        className={`alpage:shrink-0 alpage:drop-shadow-[0_6px_14px_var(--motif-mark-shade)] ${big ? "alpage:size-12" : "alpage:size-10"}`}
       />
       <span
-        className={`font-display leading-none font-bold tracking-tight text-white drop-shadow-[0_1px_8px_var(--motif-name-shade)] ${
-          big ? "text-[1.875rem]" : "text-[1.375rem]"
+        className={`alpage:font-display alpage:leading-none alpage:font-bold alpage:tracking-tight alpage:text-white alpage:drop-shadow-[0_1px_8px_var(--motif-name-shade)] ${
+          big ? "alpage:text-[1.875rem]" : "alpage:text-[1.375rem]"
         }`}
       >
         {t.common.appName}
@@ -96,20 +106,31 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 export function HeroArt({ place }: HeroArtProps) {
   if (place === "event") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <Contours className="text-white opacity-[0.08]" />
-        <span className="absolute -top-20 -left-16 size-56 rounded-full bg-iris-400/30 blur-3xl" />
-        <Sun className="right-[7%] bottom-[1.6rem] size-14 animate-rise md:right-[12%] md:bottom-[2.1rem] md:size-20" />
-        <Ridges far={HERO_FAR} near={NEAR} className="inset-x-0 bottom-0 h-16 w-full md:h-20" />
+      <span
+        aria-hidden="true"
+        className="alpage:pointer-events-none alpage:absolute alpage:inset-0"
+      >
+        <Contours className="alpage:text-white alpage:opacity-[0.08]" />
+        <span className="alpage:absolute alpage:-top-20 alpage:-left-16 alpage:size-56 alpage:rounded-full alpage:bg-iris-400/30 alpage:blur-3xl" />
+        <Sun className="alpage:right-[7%] alpage:bottom-[1.6rem] alpage:size-14 alpage:animate-rise alpage:md:right-[12%] alpage:md:bottom-[2.1rem] alpage:md:size-20" />
+        <Ridges
+          far={HERO_FAR}
+          near={NEAR}
+          className="alpage:inset-x-0 alpage:bottom-0 alpage:h-16 alpage:w-full alpage:md:h-20"
+        />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <Contours className="text-white opacity-[0.08]" />
-      <span className="absolute -top-16 -left-12 size-48 rounded-full bg-iris-400/30 blur-3xl" />
-      <Sun className="right-[10%] bottom-[1.1rem] size-12 animate-rise md:bottom-[1.5rem] md:size-16" />
-      <Ridges far={HERO_FAR} near={NEAR} className="inset-x-0 bottom-0 h-12 w-full md:h-16" />
+    <span aria-hidden="true" className="alpage:pointer-events-none alpage:absolute alpage:inset-0">
+      <Contours className="alpage:text-white alpage:opacity-[0.08]" />
+      <span className="alpage:absolute alpage:-top-16 alpage:-left-12 alpage:size-48 alpage:rounded-full alpage:bg-iris-400/30 alpage:blur-3xl" />
+      <Sun className="alpage:right-[10%] alpage:bottom-[1.1rem] alpage:size-12 alpage:animate-rise alpage:md:bottom-[1.5rem] alpage:md:size-16" />
+      <Ridges
+        far={HERO_FAR}
+        near={NEAR}
+        className="alpage:inset-x-0 alpage:bottom-0 alpage:h-12 alpage:w-full alpage:md:h-16"
+      />
     </span>
   );
 }
@@ -119,7 +140,7 @@ export function HeroArt({ place }: HeroArtProps) {
  * the words of an empty list.
  */
 export function EmptyArt() {
-  return <SunRidge className="mb-2 w-44" />;
+  return <SunRidge className="alpage:mb-2 alpage:w-44" />;
 }
 
 /**

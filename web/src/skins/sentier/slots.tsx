@@ -24,29 +24,39 @@ const DEEP = "var(--motif-ridge-mid-from)";
 export function HeaderArt({ place, sun = true }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <Contours tiled className="opacity-[0.14]" />
+      <span
+        aria-hidden="true"
+        className="sentier:pointer-events-none sentier:absolute sentier:inset-0 sentier:overflow-hidden"
+      >
+        <Contours tiled className="sentier:opacity-[0.14]" />
         {sun && (
-          <Sun className="header-sun right-[21%] bottom-[2.8rem] size-9 animate-rise md:right-auto md:bottom-[3.6rem] md:left-[44%] md:size-12" />
+          <Sun className="header-sun sentier:right-[21%] sentier:bottom-[2.8rem] sentier:size-9 sentier:animate-rise sentier:md:right-auto sentier:md:bottom-[3.6rem] sentier:md:left-[44%] sentier:md:size-12" />
         )}
         <Ridges
           far={FAR}
           near={PAGE}
-          className="header-ridges inset-x-0 bottom-7 h-12 w-full md:h-[4.5rem]"
+          className="header-ridges sentier:inset-x-0 sentier:bottom-7 sentier:h-12 sentier:w-full sentier:md:h-[4.5rem]"
         />
         {/* What continues the near ridge under the ridges, behind the round corners of the sheet. */}
         <span
-          className="header-foot absolute inset-x-0 bottom-0 h-7"
+          className="header-foot sentier:absolute sentier:inset-x-0 sentier:bottom-0 sentier:h-7"
           style={{ backgroundColor: PAGE }}
         />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <Contours className="text-white opacity-[0.15]" />
-      <Sun className="right-[19%] bottom-12 size-12 animate-rise md:right-[22%] md:bottom-[4.4rem] md:size-20" />
-      <Ridges far={FAR} near={PAGE} className="inset-x-0 bottom-0 h-24 w-full md:h-36" />
+    <span
+      aria-hidden="true"
+      className="sentier:pointer-events-none sentier:absolute sentier:inset-0"
+    >
+      <Contours className="sentier:text-white sentier:opacity-[0.15]" />
+      <Sun className="sentier:right-[19%] sentier:bottom-12 sentier:size-12 sentier:animate-rise sentier:md:right-[22%] sentier:md:bottom-[4.4rem] sentier:md:size-20" />
+      <Ridges
+        far={FAR}
+        near={PAGE}
+        className="sentier:inset-x-0 sentier:bottom-0 sentier:h-24 sentier:w-full sentier:md:h-36"
+      />
     </span>
   );
 }
@@ -60,13 +70,13 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const big = size === "lg";
 
   return (
-    <span className="flex items-center gap-3">
+    <span className="sentier:flex sentier:items-center sentier:gap-3">
       <TrailPatch
-        className={`shrink-0 drop-shadow-[0_1px_2px_var(--motif-mark-shade)] ${big ? "size-12" : "size-9"}`}
+        className={`sentier:shrink-0 sentier:drop-shadow-[0_1px_2px_var(--motif-mark-shade)] ${big ? "sentier:size-12" : "sentier:size-9"}`}
       />
       <span
-        className={`font-display leading-none font-bold tracking-tight text-white ${
-          big ? "text-[1.75rem]" : "text-[1.3125rem]"
+        className={`sentier:font-display sentier:leading-none sentier:font-bold sentier:tracking-tight sentier:text-white ${
+          big ? "sentier:text-[1.75rem]" : "sentier:text-[1.3125rem]"
         }`}
       >
         {t.common.appName}
@@ -84,17 +94,31 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 export function HeroArt({ place }: HeroArtProps) {
   if (place === "event") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <Contours className="mask-[linear-gradient(to_bottom,transparent,rgb(0_0_0/0.4)_40%,#000_85%)] text-white opacity-[0.14]" />
-        <Sun className="right-[17%] bottom-5 size-12 animate-rise md:bottom-7 md:size-16" />
-        <Ridges far={FAR} near={DEEP} className="inset-x-0 bottom-0 h-14 w-full md:h-20" />
+      <span
+        aria-hidden="true"
+        className="sentier:pointer-events-none sentier:absolute sentier:inset-0"
+      >
+        <Contours className="sentier:mask-[linear-gradient(to_bottom,transparent,rgb(0_0_0/0.4)_40%,#000_85%)] sentier:text-white sentier:opacity-[0.14]" />
+        <Sun className="sentier:right-[17%] sentier:bottom-5 sentier:size-12 sentier:animate-rise sentier:md:bottom-7 sentier:md:size-16" />
+        <Ridges
+          far={FAR}
+          near={DEEP}
+          className="sentier:inset-x-0 sentier:bottom-0 sentier:h-14 sentier:w-full sentier:md:h-20"
+        />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <Contours className="mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000_80%)] text-white opacity-[0.14]" />
-      <Ridges far={FAR} near={DEEP} className="inset-x-0 bottom-0 h-8 w-full md:h-12" />
+    <span
+      aria-hidden="true"
+      className="sentier:pointer-events-none sentier:absolute sentier:inset-0"
+    >
+      <Contours className="sentier:mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000_80%)] sentier:text-white sentier:opacity-[0.14]" />
+      <Ridges
+        far={FAR}
+        near={DEEP}
+        className="sentier:inset-x-0 sentier:bottom-0 sentier:h-8 sentier:w-full sentier:md:h-12"
+      />
     </span>
   );
 }
@@ -106,12 +130,12 @@ export function HeroArt({ place }: HeroArtProps) {
 export function EmptyArt() {
   return (
     <>
-      <Contours className="-z-10 text-iris-700 opacity-[0.09]" />
+      <Contours className="sentier:-z-10 sentier:text-iris-700 sentier:opacity-[0.09]" />
       <span
         aria-hidden="true"
-        className="mb-2 flex size-10 shrink-0 items-center justify-center rounded-full bg-card text-iris-600 shadow-card ring-1 ring-neutral-300"
+        className="sentier:mb-2 sentier:flex sentier:size-10 sentier:shrink-0 sentier:items-center sentier:justify-center sentier:rounded-full sentier:bg-card sentier:text-iris-600 sentier:shadow-card sentier:ring-1 sentier:ring-neutral-300"
       >
-        <SummitIcon className="size-5" />
+        <SummitIcon className="sentier:size-5" />
       </span>
     </>
   );

@@ -82,8 +82,8 @@ function SunArc({
 function Glows() {
   return (
     <>
-      <span className="absolute -top-16 -left-20 size-64 rounded-full bg-iris-400/40 blur-3xl" />
-      <span className="absolute -right-10 -bottom-24 size-72 rounded-full bg-peach-300/50 blur-3xl" />
+      <span className="aurore:absolute aurore:-top-16 aurore:-left-20 aurore:size-64 aurore:rounded-full aurore:bg-iris-400/40 aurore:blur-3xl" />
+      <span className="aurore:absolute aurore:-right-10 aurore:-bottom-24 aurore:size-72 aurore:rounded-full aurore:bg-peach-300/50 aurore:blur-3xl" />
     </>
   );
 }
@@ -98,21 +98,27 @@ function Glows() {
 export function HeaderArt({ place, sun = true }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <span
+        aria-hidden="true"
+        className="aurore:pointer-events-none aurore:absolute aurore:inset-0 aurore:overflow-hidden"
+      >
         <Glows />
         {sun && (
-          <span className="absolute right-[-2.5rem] bottom-8 w-[15rem] animate-rise md:right-auto md:left-[calc(50%-17rem)] md:w-[17rem]">
-            <SunArc className="block w-full" />
+          <span className="aurore:absolute aurore:right-[-2.5rem] aurore:bottom-8 aurore:w-[15rem] aurore:animate-rise aurore:md:right-auto aurore:md:left-[calc(50%-17rem)] aurore:md:w-[17rem]">
+            <SunArc className="aurore:block aurore:w-full" />
           </span>
         )}
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+    <span
+      aria-hidden="true"
+      className="aurore:pointer-events-none aurore:absolute aurore:inset-0 aurore:overflow-hidden"
+    >
       <Glows />
-      <span className="absolute bottom-6 left-1/2 w-[min(34rem,140%)] -translate-x-1/2 animate-rise">
-        <SunArc className="block w-full" />
+      <span className="aurore:absolute aurore:bottom-6 aurore:left-1/2 aurore:w-[min(34rem,140%)] aurore:-translate-x-1/2 aurore:animate-rise">
+        <SunArc className="aurore:block aurore:w-full" />
       </span>
     </span>
   );
@@ -128,14 +134,14 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const big = size === "lg";
 
   return (
-    <span className="flex items-center gap-3">
+    <span className="aurore:flex aurore:items-center aurore:gap-3">
       <span
         aria-hidden="true"
-        className={`flex shrink-0 items-end justify-center overflow-hidden rounded-xl bg-white shadow-[0_6px_18px_-6px_var(--motif-mark-shade)] ${
-          big ? "size-11" : "size-9"
+        className={`aurore:flex aurore:shrink-0 aurore:items-end aurore:justify-center aurore:overflow-hidden aurore:rounded-xl aurore:bg-white aurore:shadow-[0_6px_18px_-6px_var(--motif-mark-shade)] ${
+          big ? "aurore:size-11" : "aurore:size-9"
         }`}
       >
-        <svg viewBox="0 0 36 36" focusable="false" className="size-full">
+        <svg viewBox="0 0 36 36" focusable="false" className="aurore:size-full">
           <defs>
             <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
               <stop offset="0" style={{ stopColor: "var(--motif-dawn-1)" }} />
@@ -166,8 +172,8 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
         </svg>
       </span>
       <span
-        className={`font-display leading-none font-extrabold tracking-tight text-white drop-shadow-[0_1px_8px_var(--motif-name-shade)] ${
-          big ? "text-[1.75rem]" : "text-[1.3125rem]"
+        className={`aurore:font-display aurore:leading-none aurore:font-extrabold aurore:tracking-tight aurore:text-white aurore:drop-shadow-[0_1px_8px_var(--motif-name-shade)] ${
+          big ? "aurore:text-[1.75rem]" : "aurore:text-[1.3125rem]"
         }`}
       >
         {t.common.appName}
@@ -183,19 +189,22 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 export function HeroArt({ place }: HeroArtProps) {
   if (place === "event") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <span className="absolute -top-20 -left-16 size-56 rounded-full bg-iris-400/35 blur-3xl" />
-        <span className="absolute right-[-2.5rem] bottom-0 w-[13rem] animate-rise md:right-4 md:w-[16rem]">
-          <SunArc className="block w-full" />
+      <span
+        aria-hidden="true"
+        className="aurore:pointer-events-none aurore:absolute aurore:inset-0"
+      >
+        <span className="aurore:absolute aurore:-top-20 aurore:-left-16 aurore:size-56 aurore:rounded-full aurore:bg-iris-400/35 aurore:blur-3xl" />
+        <span className="aurore:absolute aurore:right-[-2.5rem] aurore:bottom-0 aurore:w-[13rem] aurore:animate-rise aurore:md:right-4 aurore:md:w-[16rem]">
+          <SunArc className="aurore:block aurore:w-full" />
         </span>
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <span className="absolute -top-16 -left-12 size-48 rounded-full bg-iris-400/35 blur-3xl" />
-      <span className="absolute right-[-3rem] bottom-0 w-[12rem] animate-rise md:right-4 md:w-[15rem]">
-        <SunArc className="block w-full" />
+    <span aria-hidden="true" className="aurore:pointer-events-none aurore:absolute aurore:inset-0">
+      <span className="aurore:absolute aurore:-top-16 aurore:-left-12 aurore:size-48 aurore:rounded-full aurore:bg-iris-400/35 aurore:blur-3xl" />
+      <span className="aurore:absolute aurore:right-[-3rem] aurore:bottom-0 aurore:w-[12rem] aurore:animate-rise aurore:md:right-4 aurore:md:w-[15rem]">
+        <SunArc className="aurore:block aurore:w-full" />
       </span>
     </span>
   );
@@ -206,5 +215,5 @@ export function HeroArt({ place }: HeroArtProps) {
  * dawn, over the words of an empty list.
  */
 export function EmptyArt() {
-  return <SunArc tone="color" className="mb-2 w-44" />;
+  return <SunArc tone="color" className="aurore:mb-2 aurore:w-44" />;
 }

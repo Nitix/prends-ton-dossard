@@ -12,11 +12,15 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const big = size === "lg";
 
   return (
-    <span className="flex items-center gap-2.5">
-      <BibMark className={`w-auto shrink-0 -rotate-6 ${big ? "h-8" : "h-7"}`} />
+    <span className="dossard:flex dossard:items-center dossard:gap-2.5">
+      <BibMark
+        className={`dossard:w-auto dossard:shrink-0 dossard:-rotate-6 ${big ? "dossard:h-8" : "dossard:h-7"}`}
+      />
       <span
-        className={`brand-name px-0.5 font-display leading-none font-black tracking-tight text-white ${
-          big ? "text-[1.25rem] min-[24rem]:text-[1.5rem] sm:text-[1.75rem]" : "text-[1.3125rem]"
+        className={`brand-name dossard:px-0.5 dossard:font-display dossard:leading-none dossard:font-black dossard:tracking-tight dossard:text-white ${
+          big
+            ? "dossard:text-[1.25rem] dossard:min-[24rem]:text-[1.5rem] dossard:sm:text-[1.75rem]"
+            : "dossard:text-[1.3125rem]"
         }`}
         style={{
           backgroundImage:

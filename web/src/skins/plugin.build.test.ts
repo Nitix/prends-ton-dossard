@@ -89,7 +89,23 @@ type Built = {
   linked: string[];
   /** The sheets that the table of the skins, in the page, names for each skin, by its id. */
   table: Map<string, string[]>;
+  /** The parts of JS that the table names for each skin, to preload, by its id. */
+  scripts: Map<string, string[]>;
 };
+
+/** A list of files that the table of the skins names for each skin (`sheets`, `scripts`), by its id. */
+function namedInTable(table: unknown, kind: "sheets" | "scripts"): Map<string, string[]> {
+  if (typeof table !== "object" || table === null) return new Map();
+  return new Map(
+    Object.entries(table).map(([id, value]: [string, unknown]) => {
+      const named: unknown =
+        typeof value === "object" && value !== null && kind in value
+          ? Object.entries(value).find(([key]) => key === kind)?.[1]
+          : [];
+      return [id, Array.isArray(named) ? named.map(String) : []];
+    }),
+  );
+}
 
 /** A build of the small app, in memory. */
 async function built(): Promise<Built> {
@@ -118,15 +134,8 @@ async function built(): Promise<Built> {
     linked: [...html.matchAll(/<link rel="stylesheet"[^>]*href="\/([^"]+)"/g)].map(
       (match) => files.get(match[1] ?? "") ?? "",
     ),
-    table: new Map(
-      typeof table === "object" && table !== null
-        ? Object.entries(table).map(([id, value]: [string, unknown]) => {
-            const sheets: unknown =
-              typeof value === "object" && value !== null && "sheets" in value ? value.sheets : [];
-            return [id, Array.isArray(sheets) ? sheets.map(String) : []];
-          })
-        : [],
-    ),
+    table: namedInTable(table, "sheets"),
+    scripts: namedInTable(table, "scripts"),
   };
 }
 
@@ -190,4 +199,44 @@ test("plugin.build — rien d'un skin de développement : ni son index, ni son l
     expect(code, `${name}: the sheets of the dev skin`).not.toContain(".dev-");
   }
   expect(app.table.has("_dev")).toBe(false);
+});
+
+/**
+ * What Vite preloads when the entry imports the look of each skin, in order:
+ * the files of `__vite__mapDeps` for each `import("./look-….js")`.
+ */
+function preloadedByVite(): Map<string, string[]> {
+  const code = app.entry;
+  const listed: unknown = JSON.parse(/m\.f=(\[[^\]]*\])/.exec(code)?.[1] ?? "[]");
+  const files = Array.isArray(listed) ? listed.map(String) : [];
+  return new Map(
+    [...code.matchAll(/import\("\.\/([^"]+)"\)\s*,\s*__vite__mapDeps\(\[([\d,\s]*)\]\)/g)].map(
+      ([, look = "", indexes = ""]) => [
+        `assets/${look}`,
+        indexes.split(",").map((index) => files[Number(index)] ?? `?${index}`),
+      ],
+    ),
+  );
+}
+
+test("plugin.build — la table nomme les fichiers d'un look dans l'ordre où Vite les charge, et ses parties à précharger", () => {
+  // The script of index.html links the sheets of the skin kept, and Vite those
+  // of a look chosen later: the same sheets, in the same order.
+  const vite = preloadedByVite();
+  expect(vite.size, "the looks that the entry imports").toBe(2);
+  for (const id of ["real", "other"]) {
+    const scripts = app.scripts.get(id) ?? [];
+    const sheets = app.table.get(id) ?? [];
+    expect(scripts.length, `the parts of ${id}`).toBeGreaterThan(0);
+    const [look = ""] = scripts;
+    const deps = vite.get(look.slice(1)) ?? [];
+    expect(deps.length, `what Vite preloads for ${id}`).toBeGreaterThan(0);
+    expect(sheets, `the sheets of ${id}`).toEqual(
+      deps.filter((file) => file.endsWith(".css")).map((file) => `/${file}`),
+    );
+    // Vite's list starts with the look itself, then the parts it imports.
+    expect(scripts, `the parts of ${id}`).toEqual(
+      deps.filter((file) => file.endsWith(".js")).map((file) => `/${file}`),
+    );
+  }
 });

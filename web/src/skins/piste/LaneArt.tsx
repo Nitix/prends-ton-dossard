@@ -24,7 +24,7 @@ function LaneArt({ className = "" }: { className?: string }) {
       focusable="false"
       viewBox="0 0 260 150"
       preserveAspectRatio="xMaxYMax slice"
-      className={`pointer-events-none absolute right-0 ${className}`}
+      className={`piste:pointer-events-none piste:absolute piste:right-0 ${className}`}
     >
       <path
         d={arc((INNER + OUTER) / 2)}
@@ -59,17 +59,23 @@ function LaneArt({ className = "" }: { className?: string }) {
 export function HeaderArt({ place }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <LaneArt className="inset-y-0 h-full w-[17rem] opacity-90 md:opacity-60" />
+      <span
+        aria-hidden="true"
+        className="piste:pointer-events-none piste:absolute piste:inset-0 piste:overflow-hidden"
+      >
+        <LaneArt className="piste:inset-y-0 piste:h-full piste:w-[17rem] piste:opacity-90 piste:md:opacity-60" />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <LaneArt className="top-0 h-28 w-[13rem] opacity-70" />
-      <LaneArt className="bottom-0 h-[22rem] w-full max-w-[40rem] opacity-90" />
+    <span
+      aria-hidden="true"
+      className="piste:pointer-events-none piste:absolute piste:inset-0 piste:overflow-hidden"
+    >
+      <LaneArt className="piste:top-0 piste:h-28 piste:w-[13rem] piste:opacity-70" />
+      <LaneArt className="piste:bottom-0 piste:h-[22rem] piste:w-full piste:max-w-[40rem] piste:opacity-90" />
       <span
-        className="absolute inset-x-0 top-[7.25rem] mx-auto h-2.5 w-24 rounded-[2px] opacity-80 md:top-36"
+        className="piste:absolute piste:inset-x-0 piste:top-[7.25rem] piste:mx-auto piste:h-2.5 piste:w-24 piste:rounded-[2px] piste:opacity-80 piste:md:top-36"
         style={{
           backgroundColor: "var(--color-neutral-900)",
           backgroundImage:
@@ -84,9 +90,12 @@ export function HeaderArt({ place }: HeaderArtProps) {
 /** The art behind a hero: the same bend, in the corner of the band. */
 export function HeroArt({ place }: HeroArtProps) {
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+    <span
+      aria-hidden="true"
+      className="piste:pointer-events-none piste:absolute piste:inset-0 piste:overflow-hidden"
+    >
       <LaneArt
-        className={`inset-y-0 h-full opacity-80 ${place === "event" ? "w-[17rem]" : "w-[14rem]"}`}
+        className={`piste:inset-y-0 piste:h-full piste:opacity-80 ${place === "event" ? "piste:w-[17rem]" : "piste:w-[14rem]"}`}
       />
     </span>
   );

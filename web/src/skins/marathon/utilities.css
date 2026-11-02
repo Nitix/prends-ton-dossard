@@ -1,11 +1,12 @@
-/* The utilities of Tailwind that the motifs of this folder use, which
-   styles.css does not scan (../README.md, « Utilities »): in the sheet of the
-   look that imports this one, loaded with it. The theme is the app's
-   (../../theme.css), so that a utility reads the same custom property as in
-   styles.css; the order of the layers is the app's, for a sheet that the page
-   reads before styles.css (index.html links the sheets of the skin kept first). */
+/* The utilities of Tailwind that the motifs of this folder use, in the sheet of
+   the look that imports this one (../README.md, « Utilities »). Their names
+   carry the folder's prefix (`marathon:size-12`), so that none of them is a
+   selector of styles.css: the two sheets never meet, in whichever order the page
+   has them. They read the app's theme (../../theme.css), and the colours,
+   radii and fonts of the page (../theme-vars.css). */
 @layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "../../theme.css";
+@import "tailwindcss/theme.css" layer(theme) prefix(marathon);
+@import "../../theme.css" prefix(marathon);
+@import "../theme-vars.css" prefix(marathon);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 @source "./*.tsx";

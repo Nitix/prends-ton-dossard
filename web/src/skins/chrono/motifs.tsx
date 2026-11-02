@@ -23,7 +23,7 @@ function ZoneStrip({ className = "" }: { className?: string }) {
       height="3"
       viewBox="0 0 100 3"
       preserveAspectRatio="none"
-      className={`pointer-events-none block ${className}`}
+      className={`chrono:pointer-events-none chrono:block ${className}`}
     >
       {ZONES.map((color, i) => (
         <rect key={color} x={i * 20.2} y="0" width="19.2" height="3" fill={color} />
@@ -77,7 +77,7 @@ function Dial() {
       aria-hidden="true"
       focusable="false"
       viewBox="0 0 200 200"
-      className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 block size-[min(13rem,88vw)] -translate-x-1/2"
+      className="chrono:pointer-events-none chrono:absolute chrono:bottom-[max(1.5rem,env(safe-area-inset-bottom))] chrono:left-1/2 chrono:block chrono:size-[min(13rem,88vw)] chrono:-translate-x-1/2"
     >
       <path d={BIG_BEZEL.short} fill="none" stroke="#fff" strokeOpacity="0.16" strokeWidth="1" />
       <path d={BIG_BEZEL.long} fill="none" stroke="#fff" strokeOpacity="0.3" strokeWidth="1.8" />
@@ -119,23 +119,26 @@ function Dial() {
 export function HeaderArt({ place }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+      <span
+        aria-hidden="true"
+        className="chrono:pointer-events-none chrono:absolute chrono:inset-0"
+      >
         <span
-          className="absolute inset-0 mask-[linear-gradient(to_left,#000,transparent_70%)]"
+          className="chrono:absolute chrono:inset-0 chrono:mask-[linear-gradient(to_left,#000,transparent_70%)]"
           style={GRID}
         />
-        <ZoneStrip className="absolute inset-x-0 bottom-7 w-full" />
+        <ZoneStrip className="chrono:absolute chrono:inset-x-0 chrono:bottom-7 chrono:w-full" />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+    <span aria-hidden="true" className="chrono:pointer-events-none chrono:absolute chrono:inset-0">
       <span
-        className="absolute inset-0 mask-[radial-gradient(closest-side,#000,transparent)]"
+        className="chrono:absolute chrono:inset-0 chrono:mask-[radial-gradient(closest-side,#000,transparent)]"
         style={GRID}
       />
       <Dial />
-      <ZoneStrip className="absolute inset-x-0 top-0 w-full" />
+      <ZoneStrip className="chrono:absolute chrono:inset-x-0 chrono:top-0 chrono:w-full" />
     </span>
   );
 }
@@ -156,7 +159,7 @@ function BrandRing({ className = "" }: { className?: string }) {
       aria-hidden="true"
       focusable="false"
       viewBox="0 0 36 36"
-      className={`shrink-0 ${className}`}
+      className={`chrono:shrink-0 ${className}`}
     >
       <g transform="rotate(-90 18 18)" fill="none" strokeWidth={stroke} strokeLinecap="round">
         {ZONES.map((color, i) => (
@@ -191,11 +194,11 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const big = size === "lg";
 
   return (
-    <span className="flex items-center gap-3">
-      <BrandRing className={`text-white ${big ? "size-11" : "size-9"}`} />
+    <span className="chrono:flex chrono:items-center chrono:gap-3">
+      <BrandRing className={`chrono:text-white ${big ? "chrono:size-11" : "chrono:size-9"}`} />
       <span
-        className={`font-display leading-none font-bold tracking-[-0.02em] text-white ${
-          big ? "text-[1.75rem]" : "text-[1.3125rem]"
+        className={`chrono:font-display chrono:leading-none chrono:font-bold chrono:tracking-[-0.02em] chrono:text-white ${
+          big ? "chrono:text-[1.75rem]" : "chrono:text-[1.3125rem]"
         }`}
       >
         {t.common.appName}
@@ -207,16 +210,16 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 /** The poster of an event or of a runner: the grid of a chart behind the figures, the strip of the zones along the foot. */
 export function HeroArt({ place }: HeroArtProps) {
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+    <span aria-hidden="true" className="chrono:pointer-events-none chrono:absolute chrono:inset-0">
       <span
-        className={`absolute inset-0 ${
+        className={`chrono:absolute chrono:inset-0 ${
           place === "event"
-            ? "mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000)]"
-            : "mask-[linear-gradient(to_left,#000,transparent_80%)]"
+            ? "chrono:mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000)]"
+            : "chrono:mask-[linear-gradient(to_left,#000,transparent_80%)]"
         }`}
         style={GRID}
       />
-      <ZoneStrip className="absolute inset-x-0 bottom-0 w-full" />
+      <ZoneStrip className="chrono:absolute chrono:inset-x-0 chrono:bottom-0 chrono:w-full" />
     </span>
   );
 }
@@ -224,9 +227,12 @@ export function HeroArt({ place }: HeroArtProps) {
 /** Between two blocks of the home page: the ruler of the axis of a chart, a tick every 6 px and a longer one every 30. */
 export function Divider({ className = "" }: DividerProps) {
   return (
-    <div aria-hidden="true" className={`flex h-8 w-full items-center ${className}`}>
+    <div
+      aria-hidden="true"
+      className={`chrono:flex chrono:h-8 chrono:w-full chrono:items-center ${className}`}
+    >
       <span
-        className="block h-2 w-full"
+        className="chrono:block chrono:h-2 chrono:w-full"
         style={{
           background:
             "linear-gradient(var(--color-neutral-300), var(--color-neutral-300)) bottom / 100% 1px no-repeat, repeating-linear-gradient(to right, var(--color-neutral-300) 0 1px, transparent 1px 6px) bottom / 100% 4px no-repeat, repeating-linear-gradient(to right, var(--color-neutral-400) 0 1px, transparent 1px 30px) bottom / 100% 8px no-repeat",
@@ -245,7 +251,7 @@ export function SectionMarker() {
       width="16"
       height="12"
       viewBox="0 0 16 12"
-      className="flex-none"
+      className="chrono:flex-none"
     >
       {[1, 2, 3, 4, 5].map((zone) => (
         <rect
@@ -272,14 +278,24 @@ export function EmptyArt() {
       aria-hidden="true"
       focusable="false"
       viewBox="0 0 100 100"
-      className="mb-2 size-[4.5rem] shrink-0"
+      className="chrono:mb-2 chrono:size-[4.5rem] chrono:shrink-0"
     >
-      <path d={SMALL_BEZEL.short} fill="none" className="stroke-neutral-300" strokeWidth="1" />
-      <path d={SMALL_BEZEL.long} fill="none" className="stroke-neutral-500" strokeWidth="1.6" />
+      <path
+        d={SMALL_BEZEL.short}
+        fill="none"
+        className="chrono:stroke-neutral-300"
+        strokeWidth="1"
+      />
+      <path
+        d={SMALL_BEZEL.long}
+        fill="none"
+        className="chrono:stroke-neutral-500"
+        strokeWidth="1.6"
+      />
       <g
         transform="rotate(-90 50 50)"
         fill="none"
-        className="stroke-neutral-200"
+        className="chrono:stroke-neutral-200"
         strokeWidth="5"
         strokeLinecap="round"
       >
@@ -299,11 +315,11 @@ export function EmptyArt() {
         y1="50"
         x2="50"
         y2="30"
-        className="stroke-neutral-600"
+        className="chrono:stroke-neutral-600"
         strokeWidth="2.4"
         strokeLinecap="round"
       />
-      <circle cx="50" cy="50" r="3" className="fill-neutral-600" />
+      <circle cx="50" cy="50" r="3" className="chrono:fill-neutral-600" />
     </svg>
   );
 }

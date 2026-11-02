@@ -136,7 +136,7 @@ function dotsOfFrance(): { x: number; y: number }[] {
  * (`at`, the first point of a track), the mark of coral of where it starts.
  */
 export function DotFrance({
-  className = "w-28",
+  className = "carnet:w-28",
   at,
 }: {
   className?: string;
@@ -149,7 +149,7 @@ export function DotFrance({
       aria-hidden="true"
       focusable="false"
       viewBox={`0 0 ${width} ${height}`}
-      className={`block h-auto ${className}`}
+      className={`carnet:block carnet:h-auto ${className}`}
     >
       {dotsOfFrance().map(({ x, y }) => (
         <circle
@@ -157,7 +157,7 @@ export function DotFrance({
           cx={x}
           cy={y}
           r={STEP * 0.24}
-          className="fill-neutral-400"
+          className="carnet:fill-neutral-400"
         />
       ))}
       {at && (
@@ -168,14 +168,14 @@ export function DotFrance({
             r={STEP * 1.5}
             fill="none"
             strokeWidth={STEP * 0.3}
-            className="stroke-iris-600"
+            className="carnet:stroke-iris-600"
           />
           <circle
             data-start=""
             cx={(at.lon - WEST) * SQUEEZE}
             cy={NORTH - at.lat}
             r={STEP * 0.75}
-            className="fill-iris-600"
+            className="carnet:fill-iris-600"
           />
         </>
       )}
@@ -208,9 +208,9 @@ const path = (points: P3[]) =>
 function Box({
   from,
   to,
-  top = "fill-white/15",
-  left = "fill-white/5",
-  right = "fill-white/10",
+  top = "carnet:fill-white/15",
+  left = "carnet:fill-white/5",
+  right = "carnet:fill-white/10",
 }: {
   from: P3;
   to: P3;
@@ -221,7 +221,7 @@ function Box({
   const [x0, y0, z0] = from;
   const [x1, y1, z1] = to;
   return (
-    <g className="stroke-white/60" strokeWidth={0.9} strokeLinejoin="round">
+    <g className="carnet:stroke-white/60" strokeWidth={0.9} strokeLinejoin="round">
       <path
         className={top}
         d={path([
@@ -258,7 +258,7 @@ function Box({
  * chequered face and a coral edge, a pennant, the road that runs under it with
  * its lanes and its chequered line, on a dotted ground.
  */
-export function IsoArch({ className = "w-64" }: { className?: string }) {
+export function IsoArch({ className = "carnet:w-64" }: { className?: string }) {
   // The ground: a dotted plane, a little wider along the road.
   const ground: P3[] = [];
   for (let x = -4; x <= 12; x += 1) for (let y = -6; y <= 9; y += 1) ground.push([x, y, 0]);
@@ -331,7 +331,7 @@ export function IsoArch({ className = "w-64" }: { className?: string }) {
       aria-hidden="true"
       focusable="false"
       viewBox={`${minX.toFixed(1)} ${minY.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)}`}
-      className={`block h-auto ${className}`}
+      className={`carnet:block carnet:h-auto ${className}`}
     >
       {ground.map((p) => {
         const [x, y] = iso(p);
@@ -342,26 +342,26 @@ export function IsoArch({ className = "w-64" }: { className?: string }) {
             cx={x}
             cy={y}
             r={near ? 1 : 0.8}
-            className={near ? "fill-white/45" : "fill-white/25"}
+            className={near ? "carnet:fill-white/45" : "carnet:fill-white/25"}
           />
         );
       })}
       {/* The road, its two edges and its middle line. */}
       <g fill="none" strokeWidth={0.9}>
-        <path d={segment([road.x0, -6, 0], [road.x0, 9, 0])} className="stroke-white/55" />
-        <path d={segment([road.x1, -6, 0], [road.x1, 9, 0])} className="stroke-white/55" />
+        <path d={segment([road.x0, -6, 0], [road.x0, 9, 0])} className="carnet:stroke-white/55" />
+        <path d={segment([road.x1, -6, 0], [road.x1, 9, 0])} className="carnet:stroke-white/55" />
         <path
           d={segment([4, -6, 0], [4, -0.4, 0])}
           strokeDasharray="6 6"
-          className="stroke-white/30"
+          className="carnet:stroke-white/30"
         />
         <path
           d={segment([4, 1.4, 0], [4, 9, 0])}
           strokeDasharray="6 6"
-          className="stroke-white/30"
+          className="carnet:stroke-white/30"
         />
       </g>
-      <g className="fill-white/70">
+      <g className="carnet:fill-white/70">
         {line.map((d) => (
           <path key={d} d={d} />
         ))}
@@ -369,7 +369,7 @@ export function IsoArch({ className = "w-64" }: { className?: string }) {
       <Box from={[left.x0, 0, 0]} to={[left.x1, post.depth, post.height]} />
       <Box from={[right.x0, 0, 0]} to={[right.x1, post.depth, post.height]} />
       <Box from={[beam.x0, beam.y0, beam.z0]} to={[beam.x1, beam.y1, beam.z1]} />
-      <g className="fill-white/85">
+      <g className="carnet:fill-white/85">
         {checker.map((d) => (
           <path key={d} d={d} />
         ))}
@@ -377,14 +377,14 @@ export function IsoArch({ className = "w-64" }: { className?: string }) {
       {/* The coral edge under the banner. */}
       <path
         d={segment([beam.x0, beam.y1, beam.z0], [beam.x1, beam.y1, beam.z0])}
-        className="stroke-iris-400"
+        className="carnet:stroke-iris-400"
         strokeWidth={2.2}
         strokeLinecap="round"
       />
       {/* A pennant over the right end of the banner. */}
       <path
         d={segment([beam.x1 - 0.5, 0.5, beam.z1], [beam.x1 - 0.5, 0.5, beam.z1 + 1.8])}
-        className="stroke-white/70"
+        className="carnet:stroke-white/70"
         strokeWidth={0.9}
       />
       <path
@@ -393,7 +393,7 @@ export function IsoArch({ className = "w-64" }: { className?: string }) {
           [beam.x1 + 1.1, 0.5, beam.z1 + 1.4],
           [beam.x1 - 0.5, 0.5, beam.z1 + 1.0],
         ])}
-        className="fill-iris-400 stroke-iris-200"
+        className="carnet:fill-iris-400 carnet:stroke-iris-200"
         strokeWidth={0.8}
         strokeLinejoin="round"
       />

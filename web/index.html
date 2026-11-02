@@ -15,7 +15,8 @@
          their colours and their stylesheets that the build writes in place of the empty
          one (skins/plugin.ts): a skin with one mode only is drawn in it, whatever the theme.
          Its stylesheets are written into the page as it is read, as if it had them: the
-         browser draws nothing, and runs no script after them, before they are loaded. -->
+         browser draws nothing, and runs no script after them, before they are loaded.
+         The parts of its look are preloaded with them, for the app's first render. -->
     <script>
       try {
         const theme = localStorage.getItem("ptd-theme");
@@ -26,8 +27,11 @@
         const skins = /* skins */ {};
         const skin = localStorage.getItem("ptd-skin");
         if (skin !== null && Object.hasOwn(skins, skin)) {
-          const { modes, themeColor, sheets } = skins[skin];
+          const { modes, themeColor, sheets, scripts } = skins[skin];
           for (const sheet of sheets) document.write(`<link rel="stylesheet" href="${sheet}">`);
+          for (const script of scripts) {
+            document.write(`<link rel="modulepreload" crossorigin href="${script}">`);
+          }
           document.documentElement.dataset.skin = skin;
           if (modes.length === 1) {
             document.documentElement.dataset.theme = modes[0];

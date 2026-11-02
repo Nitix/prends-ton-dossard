@@ -33,14 +33,19 @@ function inlineScripts(html: string): string[] {
   return [...head.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1] ?? "");
 }
 
+/** What the script reads of the page and of the device: the keys of the storage, the properties of `location`. */
+type Seen = { keys: string[]; location: string[] };
+
 /**
  * Runs the inline script of the page, built with `table`, against what the
- * device keeps (or a storage that refuses), at a path of the site.
+ * device keeps (or a storage that refuses), at a path of the site; `seen`
+ * gathers what it reads.
  */
 function firstPaint(
   table: SkinTable,
   kept: Readonly<Record<string, string>> | Error,
   path = "/",
+  seen: Seen = { keys: [], location: [] },
 ): Painted {
   const [script = ""] = inlineScripts(withSkins(page, table));
   const root: Root = { dataset: {}, style: {} };
@@ -48,6 +53,7 @@ function firstPaint(
   const written: string[] = [];
   const localStorage = {
     getItem: (key: string) => {
+      seen.keys.push(key);
       if (kept instanceof Error) throw kept;
       return kept[key] ?? null;
     },
@@ -60,27 +66,44 @@ function firstPaint(
       written.push(html);
     },
   };
-  runInNewContext(script, { document, localStorage, location: { pathname: path } });
+  const location = new Proxy(new URL(path, "https://courses.example.test"), {
+    get: (url, property) => {
+      seen.location.push(String(property));
+      return Reflect.get(url, property, url);
+    },
+  });
+  runInNewContext(script, { document, localStorage, location });
   return { ...root, bar: bar.content, written };
 }
 
-/** The stylesheets of a skin, as a build names them in the table. */
-const SHEETS = {
-  nuit: ["/assets/look-Nu1t.css"],
-  alpage: ["/assets/look-A1pa.css", "/assets/look-Shar.css"],
-  carnet: ["/assets/look-Carn.css"],
+/** The files of the look of a skin, as a build names them in the table: its sheets, and its parts. */
+const LOOKS = {
+  nuit: { sheets: ["/assets/look-Nu1t.css"], scripts: ["/assets/look-Nu1t.js"] },
+  alpage: {
+    sheets: ["/assets/trail-Shar.css", "/assets/look-A1pa.css", "/assets/fonts-Shar.css"],
+    scripts: ["/assets/look-A1pa.js", "/assets/trail-Shar.js"],
+  },
+  carnet: { sheets: ["/assets/look-Carn.css"], scripts: ["/assets/look-Carn.js"] },
 };
 
-/** The links that the script writes for the sheets of a skin. */
-const linksTo = (sheets: readonly string[]) =>
-  sheets.map((href) => `<link rel="stylesheet" href="${href}">`);
+/** The links that the script writes for the look of a skin: its sheets, then its parts to preload, in order. */
+const linksTo = ({
+  sheets,
+  scripts,
+}: {
+  sheets: readonly string[];
+  scripts: readonly string[];
+}) => [
+  ...sheets.map((href) => `<link rel="stylesheet" href="${href}">`),
+  ...scripts.map((href) => `<link rel="modulepreload" crossorigin href="${href}">`),
+];
 
 /** The skins of a build, and three that the app does not have yet: dark only, both modes, light only. */
 const TABLE: SkinTable = {
   ...skinTable(dir, { dev: false }),
-  nuit: { modes: ["dark"], themeColor: "#0e1116", sheets: SHEETS.nuit },
-  alpage: { modes: ["light", "dark"], themeColor: "#2f6b3a", sheets: SHEETS.alpage },
-  carnet: { modes: ["light"], themeColor: "#f4ecd8", sheets: SHEETS.carnet },
+  nuit: { modes: ["dark"], themeColor: "#0e1116", ...LOOKS.nuit },
+  alpage: { modes: ["light", "dark"], themeColor: "#2f6b3a", ...LOOKS.alpage },
+  carnet: { modes: ["light"], themeColor: "#f4ecd8", ...LOOKS.carnet },
 };
 
 test("noFlash — index.html applique le skin gardé avant le premier dessin, avec ses feuilles, le thème et la couleur de la barre", () => {
@@ -95,14 +118,14 @@ test("noFlash — index.html applique le skin gardé avant le premier dessin, av
     dataset: { skin: "alpage" },
     style: {},
     bar: "#2f6b3a",
-    written: linksTo(SHEETS.alpage),
+    written: linksTo(LOOKS.alpage),
   });
   // Both modes: the theme kept applies as it does with Crête.
   expect(firstPaint(TABLE, { [SKIN_KEY]: "alpage", [THEME_KEY]: "dark" })).toEqual({
     dataset: { skin: "alpage", theme: "dark" },
     style: { colorScheme: "dark" },
     bar: "#2f6b3a",
-    written: linksTo(SHEETS.alpage),
+    written: linksTo(LOOKS.alpage),
   });
 });
 
@@ -113,12 +136,14 @@ test("noFlash — les feuilles du skin gardé sont liées par le parseur : la pa
   const [script = ""] = inlineScripts(withSkins(page, TABLE));
   expect(script).toMatch(/document\.write\(/);
   expect(script).not.toMatch(/createElement|appendChild|\.append\(/);
-  // Every sheet of the skin, once each, and nothing for a skin without any (development).
+  // Every sheet of the skin, once each, in the order of the table (Vite's),
+  // then its parts to preload for the first render of the app; nothing for a
+  // skin without any (development).
   const { written } = firstPaint(TABLE, { [SKIN_KEY]: "alpage" });
-  expect(written).toEqual(linksTo(SHEETS.alpage));
+  expect(written).toEqual(linksTo(LOOKS.alpage));
   expect(
     firstPaint(
-      { nuit: { modes: ["dark"], themeColor: "#0e1116", sheets: [] } },
+      { nuit: { modes: ["dark"], themeColor: "#0e1116", sheets: [], scripts: [] } },
       { [SKIN_KEY]: "nuit" },
     ).written,
   ).toEqual([]);
@@ -131,13 +156,13 @@ test("noFlash — un skin à un seul mode est dessiné dans ce mode dès le prem
       dataset: { skin: "nuit", theme: "dark" },
       style: { colorScheme: "dark" },
       bar: "#0e1116",
-      written: linksTo(SHEETS.nuit),
+      written: linksTo(LOOKS.nuit),
     });
     expect(firstPaint(TABLE, { ...kept, [SKIN_KEY]: "carnet" }), `theme ${theme}`).toEqual({
       dataset: { skin: "carnet", theme: "light" },
       style: { colorScheme: "light" },
       bar: "#f4ecd8",
-      written: linksTo(SHEETS.carnet),
+      written: linksTo(LOOKS.carnet),
     });
   }
 });
@@ -168,15 +193,22 @@ test("noFlash — Crête, un skin inconnu ou retiré depuis, un skin de dévelop
 });
 
 test("noFlash — sans session, sur la page de connexion ou d'une invitation, le skin gardé est là, avec ses feuilles", () => {
-  // Signing out forgets the session (its own key of the storage), not the skin:
-  // the pages without a session are drawn in it from their first paint too.
+  // Signing out forgets the session (PocketBase's own key of the storage), not
+  // the skin. The script reads the skin and the theme kept on the device, and
+  // nothing of the session or of the page it is on: the pages without a
+  // session (the server answers them with index.html) are drawn in the skin
+  // from their first paint, as the others.
+  const signedIn = { [SKIN_KEY]: "nuit", pocketbase_auth: '{"token":"t"}' };
+  const signedOut = { [SKIN_KEY]: "nuit" };
+  const inSession = firstPaint(TABLE, signedIn, "/");
+  expect(inSession.written).toEqual(linksTo(LOOKS.nuit));
   for (const path of ["/connexion", "/invitation"]) {
-    expect(firstPaint(TABLE, { [SKIN_KEY]: "nuit" }, path), `at ${path}`).toEqual({
-      dataset: { skin: "nuit", theme: "dark" },
-      style: { colorScheme: "dark" },
-      bar: "#0e1116",
-      written: linksTo(SHEETS.nuit),
-    });
+    const seen: Seen = { keys: [], location: [] };
+    expect(firstPaint(TABLE, signedOut, path, seen), `at ${path}`).toEqual(inSession);
+    expect(seen.keys.toSorted(), `at ${path}: what it reads of the device`).toEqual(
+      [SKIN_KEY, THEME_KEY].toSorted(),
+    );
+    expect(seen.location, `at ${path}: what it reads of the page`).toEqual([]);
   }
 });
 

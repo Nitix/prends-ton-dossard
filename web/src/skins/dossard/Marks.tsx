@@ -6,9 +6,12 @@ import type { DividerProps } from "../types";
  */
 export function Divider({ className = "" }: DividerProps) {
   return (
-    <div aria-hidden="true" className={`flex h-8 w-full items-center ${className}`}>
+    <div
+      aria-hidden="true"
+      className={`dossard:flex dossard:h-8 dossard:w-full dossard:items-center ${className}`}
+    >
       <span
-        className="h-0.5 w-full"
+        className="dossard:h-0.5 dossard:w-full"
         style={{
           backgroundImage:
             "repeating-linear-gradient(90deg, var(--color-neutral-300) 0 8px, transparent 8px 14px)",
@@ -27,7 +30,7 @@ export function EmptyArt() {
   return (
     <span
       aria-hidden="true"
-      className="mb-1 h-12 w-full"
+      className="dossard:mb-1 dossard:h-12 dossard:w-full"
       style={{
         backgroundImage: [
           dot("12% 30%", "--color-peach-500", 3),

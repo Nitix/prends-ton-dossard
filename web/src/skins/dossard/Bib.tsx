@@ -19,15 +19,15 @@ const STEEL = "color-mix(in srgb, var(--color-neutral-600) 75%, var(--color-card
  * they must sit in the middle of a band (0.625rem otherwise).
  */
 export function BibHoles({ top }: { top?: string } = {}) {
-  const hole = "absolute size-2 rounded-full";
+  const hole = "dossard:absolute dossard:size-2 dossard:rounded-full";
   // A given `top` is set inline, over the class that says 0.625rem.
   const upper = top === undefined ? HOLE : { ...HOLE, top };
   return (
     <>
-      <span className={`${hole} top-2.5 left-2.5`} style={upper} />
-      <span className={`${hole} top-2.5 right-2.5`} style={upper} />
-      <span className={`${hole} bottom-2.5 left-2.5`} style={HOLE} />
-      <span className={`${hole} right-2.5 bottom-2.5`} style={HOLE} />
+      <span className={`${hole} dossard:top-2.5 dossard:left-2.5`} style={upper} />
+      <span className={`${hole} dossard:top-2.5 dossard:right-2.5`} style={upper} />
+      <span className={`${hole} dossard:bottom-2.5 dossard:left-2.5`} style={HOLE} />
+      <span className={`${hole} dossard:right-2.5 dossard:bottom-2.5`} style={HOLE} />
     </>
   );
 }

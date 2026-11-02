@@ -31,7 +31,7 @@ export function Ridges({
       focusable="false"
       viewBox="0 0 1200 120"
       preserveAspectRatio="none"
-      className={`pointer-events-none absolute ${className}`}
+      className={`shared:pointer-events-none shared:absolute ${className}`}
     >
       <path d={RIDGE_FAR_PATH} style={{ fill: far }} />
       <path d={RIDGE_NEAR_PATH} style={{ fill: near }} />
@@ -44,7 +44,7 @@ export function Sun({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={`pointer-events-none absolute rounded-full ${className}`}
+      className={`shared:pointer-events-none shared:absolute shared:rounded-full ${className}`}
       style={{
         backgroundImage:
           "linear-gradient(to bottom, var(--motif-sun-core), var(--motif-sun-mid), var(--motif-sun-rim))",
@@ -58,7 +58,7 @@ export function Sun({ className = "" }: { className?: string }) {
  * The mark of the app: a round patch, like the badge of a trail race, with the
  * sun rising behind two summits and a path that climbs to the top.
  */
-export function TrailPatch({ className = "size-9" }: { className?: string }) {
+export function TrailPatch({ className = "shared:size-9" }: { className?: string }) {
   const clip = `patch${useId().replace(/[^\w-]/g, "")}`;
   const ring = { fill: "var(--color-card)" };
   return (
@@ -102,7 +102,7 @@ export function TrailPatch({ className = "size-9" }: { className?: string }) {
 }
 
 /** A summit and its path, in a 24 grid. */
-export function SummitIcon({ className = "size-5" }: { className?: string }) {
+export function SummitIcon({ className = "shared:size-5" }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -113,7 +113,7 @@ export function SummitIcon({ className = "size-5" }: { className?: string }) {
       strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`shrink-0 ${className}`}
+      className={`shared:shrink-0 ${className}`}
     >
       <path d="m2.5 19.5 6.5-11 4 6.5 2.5-3.5 6 8Z" />
       <path d="m7.4 11.2 1.6 1.3 1.4-1.4" />
@@ -129,7 +129,7 @@ export function Blaze() {
   return (
     <span
       aria-hidden="true"
-      className="h-2.5 w-3.5 flex-none -rotate-4 rounded-[2px]"
+      className="shared:h-2.5 shared:w-3.5 shared:flex-none shared:-rotate-4 shared:rounded-[2px]"
       style={{
         backgroundImage:
           "linear-gradient(var(--color-peach-400) 0 50%, var(--color-iris-600) 50% 100%)",

@@ -38,7 +38,7 @@ function RouteDoodle({ className = "" }: { className?: string }) {
       focusable="false"
       viewBox="0 0 240 120"
       fill="none"
-      className={`pointer-events-none ${className}`}
+      className={`nuit:pointer-events-none ${className}`}
     >
       <path
         d="M8 104c22-4 30-30 54-30s28 22 50 18 18-40 44-50 34 14 52 2 16-26 22-32"
@@ -86,18 +86,24 @@ function RouteDoodle({ className = "" }: { className?: string }) {
 export function HeaderArt({ place }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <span className="absolute inset-x-0 bottom-9 h-[3px]" style={SILVER_TAPE} />
+      <span
+        aria-hidden="true"
+        className="nuit:pointer-events-none nuit:absolute nuit:inset-0 nuit:overflow-hidden"
+      >
+        <span
+          className="nuit:absolute nuit:inset-x-0 nuit:bottom-9 nuit:h-[3px]"
+          style={SILVER_TAPE}
+        />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+    <span aria-hidden="true" className="nuit:pointer-events-none nuit:absolute nuit:inset-0">
       <span
-        className="absolute inset-x-0 top-[7.25rem] mx-auto h-0.5 w-24 rounded-[1px] opacity-80 md:top-36"
+        className="nuit:absolute nuit:inset-x-0 nuit:top-[7.25rem] nuit:mx-auto nuit:h-0.5 nuit:w-24 nuit:rounded-[1px] nuit:opacity-80 nuit:md:top-36"
         style={ROAD_DASHES}
       />
-      <RouteDoodle className="absolute inset-x-0 bottom-4 mx-auto h-[30vh] w-full max-w-3xl px-6 opacity-60" />
+      <RouteDoodle className="nuit:absolute nuit:inset-x-0 nuit:bottom-4 nuit:mx-auto nuit:h-[30vh] nuit:w-full nuit:max-w-3xl nuit:px-6 nuit:opacity-60" />
     </span>
   );
 }
@@ -109,10 +115,13 @@ export function HeaderArt({ place }: HeaderArtProps) {
  */
 export function HeroArt({ place }: HeroArtProps) {
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <span className="absolute top-0 left-5 h-1 w-16 rounded-b-[2px] md:left-7" style={TAPE} />
+    <span aria-hidden="true" className="nuit:pointer-events-none nuit:absolute nuit:inset-0">
+      <span
+        className="nuit:absolute nuit:top-0 nuit:left-5 nuit:h-1 nuit:w-16 nuit:rounded-b-[2px] nuit:md:left-7"
+        style={TAPE}
+      />
       {place === "runner" && (
-        <RouteDoodle className="absolute right-3 bottom-3 w-40 opacity-80 md:right-6 md:w-56" />
+        <RouteDoodle className="nuit:absolute nuit:right-3 nuit:bottom-3 nuit:w-40 nuit:opacity-80 nuit:md:right-6 nuit:md:w-56" />
       )}
     </span>
   );

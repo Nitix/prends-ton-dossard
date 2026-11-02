@@ -14,19 +14,24 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const lead = cut === -1 ? "" : name.slice(0, cut);
   const last = cut === -1 ? name : name.slice(cut + 1);
   // The big one is tall and tight: on the narrowest phones it steps down, so that the name fits.
-  const text = size === "lg" ? "text-[2rem] sm:text-[2.5rem]" : "text-[1.75rem] md:text-[1.875rem]";
+  const text =
+    size === "lg"
+      ? "piste:text-[2rem] piste:sm:text-[2.5rem]"
+      : "piste:text-[1.75rem] piste:md:text-[1.875rem]";
 
   return (
-    <span className={`font-display leading-none font-extrabold uppercase italic ${text}`}>
+    <span
+      className={`piste:font-display piste:leading-none piste:font-extrabold piste:uppercase piste:italic ${text}`}
+    >
       {lead !== "" && (
-        <span className="tracking-[0.02em]" style={{ color: "var(--color-neutral-50)" }}>
+        <span className="piste:tracking-[0.02em]" style={{ color: "var(--color-neutral-50)" }}>
           {lead}
         </span>
       )}{" "}
-      <span className="relative isolate ml-1 inline-block px-1.5 text-white">
+      <span className="piste:relative piste:isolate piste:ml-1 piste:inline-block piste:px-1.5 piste:text-white">
         <span
           aria-hidden="true"
-          className="absolute inset-x-0 -inset-y-0.5 -z-10 -skew-x-[16deg] rounded-[3px]"
+          className="piste:absolute piste:inset-x-0 piste:-inset-y-0.5 piste:-z-10 piste:-skew-x-[16deg] piste:rounded-[3px]"
           style={{
             backgroundImage:
               "linear-gradient(to bottom right, var(--color-iris-500), var(--color-iris-700))",

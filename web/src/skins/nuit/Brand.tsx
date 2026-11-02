@@ -34,11 +34,11 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
   const big = size === "lg";
 
   return (
-    <span className={`flex items-center ${big ? "gap-3.5" : "gap-2.5"}`}>
-      <BibMark className={`w-auto shrink-0 ${big ? "h-9" : "h-7"}`} />
+    <span className={`nuit:flex nuit:items-center ${big ? "nuit:gap-3.5" : "nuit:gap-2.5"}`}>
+      <BibMark className={`nuit:w-auto nuit:shrink-0 ${big ? "nuit:h-9" : "nuit:h-7"}`} />
       <span
-        className={`font-display leading-none font-bold tracking-tight text-white ${
-          big ? "text-[1.75rem]" : "text-[1.3125rem]"
+        className={`nuit:font-display nuit:leading-none nuit:font-bold nuit:tracking-tight nuit:text-white ${
+          big ? "nuit:text-[1.75rem]" : "nuit:text-[1.3125rem]"
         }`}
       >
         {t.common.appName}

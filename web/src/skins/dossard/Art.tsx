@@ -16,7 +16,7 @@ function Garland() {
     <svg
       aria-hidden="true"
       focusable="false"
-      className="pointer-events-none absolute inset-x-0 top-0 h-3 w-full"
+      className="dossard:pointer-events-none dossard:absolute dossard:inset-x-0 dossard:top-0 dossard:h-3 dossard:w-full"
     >
       <defs>
         <pattern id={id} width="48" height="12" patternUnits="userSpaceOnUse">
@@ -61,19 +61,25 @@ const CONFETTI = [
 export function HeaderArt({ place }: HeaderArtProps) {
   if (place === "header") {
     return (
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <span
+        aria-hidden="true"
+        className="dossard:pointer-events-none dossard:absolute dossard:inset-0 dossard:overflow-hidden"
+      >
         <Garland />
       </span>
     );
   }
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+    <span
+      aria-hidden="true"
+      className="dossard:pointer-events-none dossard:absolute dossard:inset-0 dossard:overflow-hidden"
+    >
       <Garland />
       <span
-        className="absolute inset-x-0 bottom-6 h-[18rem] mask-[linear-gradient(to_bottom,transparent,#000_30%)]"
+        className="dossard:absolute dossard:inset-x-0 dossard:bottom-6 dossard:h-[18rem] dossard:mask-[linear-gradient(to_bottom,transparent,#000_30%)]"
         style={{ backgroundImage: CONFETTI }}
       />
-      <span className="absolute inset-x-0 bottom-0 block h-3 -scale-y-100">
+      <span className="dossard:absolute dossard:inset-x-0 dossard:bottom-0 dossard:block dossard:h-3 dossard:-scale-y-100">
         <Garland />
       </span>
     </span>
@@ -86,12 +92,15 @@ export function HeaderArt({ place }: HeaderArtProps) {
  */
 export function HeroArt({ place }: HeroArtProps) {
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+    <span
+      aria-hidden="true"
+      className="dossard:pointer-events-none dossard:absolute dossard:inset-0"
+    >
       <BibHoles />
       {place === "event" && (
         <>
-          <SafetyPin className="absolute top-1 left-1.5 w-14 -rotate-6" />
-          <SafetyPin className="absolute top-1 right-1.5 w-14 -scale-x-100 rotate-6" />
+          <SafetyPin className="dossard:absolute dossard:top-1 dossard:left-1.5 dossard:w-14 dossard:-rotate-6" />
+          <SafetyPin className="dossard:absolute dossard:top-1 dossard:right-1.5 dossard:w-14 dossard:-scale-x-100 dossard:rotate-6" />
         </>
       )}
     </span>
