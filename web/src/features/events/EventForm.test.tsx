@@ -1,26 +1,44 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  useParams,
-} from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
-import { beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
-import { page, userEvent } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
-import { ensureTemporal } from "../../lib/temporal";
-import { TodayProvider } from "../../lib/useToday";
-import { fontsReady } from "../../test/fontsReady";
-import { emulateMedia, resetMedia } from "../../test/media";
-import { EditEventPage, EventForm } from "./EventForm";
+import { EditEventPage } from "./EventForm";
+import {
+  GPX,
+  GPX_FLAT,
+  addFormat,
+  distance,
+  elevation,
+  fillEvent,
+  format,
+  formatDate,
+  gpxField,
+  gpxFile,
+  hoursOf,
+  location,
+  minutesOf,
+  mountForm,
+  name,
+  price,
+  raceType,
+  renderEdit,
+  renderForm,
+  reuse,
+  routeUrl,
+  save,
+  savedEvent,
+  setUpFormTests,
+  signIn,
+  startDate,
+  trackRead,
+  type Row,
+  type Screen,
+} from "./formHarness";
+import { mocks, type Rec } from "./formMocks";
 import {
   aliceRunner,
   bobRunner,
@@ -32,92 +50,9 @@ import {
   trailType,
 } from "./testFixture";
 
-// The tap targets are a matter of the styles, which are not loaded otherwise.
-import "../../styles.css";
+vi.mock("../../lib/pb", async () => (await import("./formMocks")).pbModule);
 
-type Rec = Record<string, unknown>;
-type Call = { action: string; collection: string; id?: string; body?: Rec };
-
-const mocks = vi.hoisted(() => ({
-  user: null as Rec | null,
-  calls: [] as Call[],
-  send: vi.fn<() => Promise<unknown>>(),
-  raceTypes: vi.fn<() => Promise<unknown>>(),
-  getOne: vi.fn<(id: string, options: Rec) => Promise<unknown>>(),
-  getList: vi.fn<(page: number, perPage: number, options: Rec) => Promise<unknown>>(),
-  myRunner: vi.fn<(filter: string) => Promise<unknown>>(),
-  /** The update of a format on its own: that is how its track is sent, after the batch. */
-  updateFormat: vi.fn<(id: string, body: unknown) => Promise<unknown>>(),
-}));
-
-vi.mock("../../lib/pb", () => ({
-  pb: {
-    authStore: {
-      // A new object on every read, like the SDK's LocalAuthStore.
-      get record() {
-        return mocks.user && { ...mocks.user };
-      },
-      onChange: () => () => {},
-    },
-    filter: (raw: string, params: Rec) => `${raw} ${JSON.stringify(params)}`,
-    createBatch: () => ({
-      collection: (collection: string) => ({
-        create: (body: Rec) => mocks.calls.push({ action: "create", collection, body }),
-        update: (id: string, body: Rec) =>
-          mocks.calls.push({ action: "update", collection, id, body }),
-        delete: (id: string) => mocks.calls.push({ action: "delete", collection, id }),
-      }),
-      send: mocks.send,
-    }),
-    collection: (name: string) =>
-      ({
-        race_types: { getFullList: mocks.raceTypes },
-        events: { getOne: mocks.getOne, getList: mocks.getList },
-        runners: { getFirstListItem: mocks.myRunner },
-        formats: { update: mocks.updateFormat },
-      })[name],
-  },
-}));
-
-const base = { created: "", updated: "", collectionId: "", collectionName: "" };
-const adminRunner = { ...base, id: "adminRunner0000", name: "Admin", user: "u-admin" };
-
-// Alice wrote the event of the fixture; Bob is a member; the admin is a runner of the group too.
-const users = {
-  alice: { id: "u-alice", collectionName: "users", role: "member", runner: aliceRunner },
-  bob: { id: "u-bob", collectionName: "users", role: "member", runner: bobRunner },
-  admin: { id: "u-admin", collectionName: "users", role: "admin", runner: adminRunner },
-};
-
-function signIn(who: keyof typeof users) {
-  const { runner, ...user } = users[who];
-  mocks.user = user;
-  mocks.myRunner.mockResolvedValue(runner);
-}
-
-beforeAll(async () => {
-  await ensureTemporal();
-});
-
-beforeEach(() => {
-  mocks.calls.length = 0;
-  for (const fn of [
-    mocks.send,
-    mocks.raceTypes,
-    mocks.getOne,
-    mocks.getList,
-    mocks.myRunner,
-    mocks.updateFormat,
-  ]) {
-    fn.mockReset();
-  }
-  mocks.send.mockResolvedValue([]);
-  mocks.updateFormat.mockResolvedValue({});
-  mocks.raceTypes.mockResolvedValue([trailType, roadType]);
-  mocks.getOne.mockResolvedValue(eventRecord);
-  mocks.getList.mockResolvedValue({ items: [] });
-  signIn("alice");
-});
+setUpFormTests();
 
 /** What PocketBase answers when the request number `index` of a batch fails. */
 function refused(index: number, status: number, data: Rec = {}) {
@@ -142,112 +77,11 @@ function refused(index: number, status: number, data: Rec = {}) {
 
 const field = (code: string) => ({ code, message: "server text, never shown" });
 
-/** The page of an event, where saving leads. */
-function Page() {
-  const { id } = useParams({ strict: false });
-  return <p>{`Fiche de ${id}`}</p>;
-}
-
-/** The page of the edit route, as the route of the app gives it its `id`. */
-function Routed() {
-  const { id } = useParams({ strict: false });
-  return <EditEventPage id={id ?? ""} />;
-}
-
-/** The day of the tests: before the races of the examples (13 and 14 June), none of them has started. */
-const TODAY = "2026-06-01";
-
-/** Opens the app at a page of the form, without waiting for anything. */
-async function mountForm(options: { at?: string; languages?: string[]; today?: string } = {}) {
-  const { at = "/evenements/nouveau", languages = ["fr"], today = TODAY } = options;
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-  const root = createRootRoute({ component: Outlet });
-  const routes = [
-    createRoute({ getParentRoute: () => root, path: "/evenements/nouveau", component: EventForm }),
-    createRoute({
-      getParentRoute: () => root,
-      path: "/evenements/$id/modifier",
-      component: Routed,
-    }),
-    createRoute({ getParentRoute: () => root, path: "/evenements/$id", component: Page }),
-    createRoute({ getParentRoute: () => root, path: "/liste", component: () => <p>Liste</p> }),
-  ];
-  const router = createRouter({
-    routeTree: root.addChildren(routes),
-    history: createMemoryHistory({ initialEntries: [at] }),
-  });
-  const screen = await render(
-    <QueryClientProvider client={queryClient}>
-      <I18nProvider languages={languages}>
-        <TodayProvider value={Temporal.PlainDate.from(today)}>
-          <ToastProvider>
-            <RouterProvider router={router} />
-          </ToastProvider>
-        </TodayProvider>
-      </I18nProvider>
-    </QueryClientProvider>,
-  );
-  return { screen, router, invalidate, queryClient };
-}
-
-/** Opens the form and waits until it is there: its title is the one given. */
-async function renderForm(
-  options: { at?: string; languages?: string[]; heading?: string; today?: string } = {},
-) {
-  const { heading = fr.form.createTitle, ...mount } = options;
-  const opened = await mountForm(mount);
-  await expect
-    .element(opened.screen.getByRole("heading", { level: 1, name: heading }))
-    .toBeVisible();
-  return opened;
-}
-
-type Screen = Awaited<ReturnType<typeof renderForm>>["screen"];
-
-const renderEdit = (id = "event") =>
-  renderForm({ at: `/evenements/${id}/modifier`, heading: fr.form.editTitle });
-
-const name = (screen: Screen) => screen.getByLabelText(fr.form.name);
-const location = (screen: Screen) => screen.getByLabelText(fr.form.location);
-const startDate = (screen: Screen) => screen.getByLabelText(fr.form.startDate);
-/** The line under the start date that says the days of the event: an <output>, which is read out when it changes. */
-const period = (screen: Screen) => screen.getByText(/^(Un jour|Du|One day|From)\b/);
-
-/** What the line under the start date says now, to poll: it changes as the form is filled in. */
-const periodNow = (screen: Screen) => () => period(screen).element().textContent;
 const registrationDeadline = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationDeadline);
 const notes = (screen: Screen) => screen.getByLabelText(fr.form.notes);
-const save = (screen: Screen) => screen.getByRole("button", { name: fr.common.save });
-const addFormat = (screen: Screen) => screen.getByRole("button", { name: fr.form.addFormat });
 const removes = (screen: Screen) => screen.getByRole("button", { name: fr.common.remove });
 const joinBox = (screen: Screen) => screen.getByRole("checkbox", { name: fr.form.join });
-
-/** The group of fields of the format `n`, from 1. */
-const format = (screen: Screen, n: number) =>
-  screen.getByRole("group", { name: fr.form.formatTitle(n), exact: true });
-
-type Row = ReturnType<typeof format>;
-const raceType = (row: Row) => row.getByLabelText(fr.form.raceType);
-const distance = (row: Row) => row.getByLabelText(fr.form.distance);
-const hoursOf = (row: Row, label: string) => row.getByLabelText(`${label}, ${fr.form.hours}`);
-const minutesOf = (row: Row, label: string) => row.getByLabelText(`${label}, ${fr.form.minutes}`);
-const elevation = (row: Row) => row.getByLabelText(fr.form.elevation);
-const price = (row: Row) => row.getByLabelText(fr.format.price);
-const formatDate = (row: Row) => row.getByLabelText(fr.form.formatDate);
-const gpxField = (row: Row) => row.getByLabelText(fr.format.gpx, { exact: true });
-const routeUrl = (row: Row) => row.getByLabelText(fr.format.routeUrl, { exact: true });
-
-/** The event of the fixture's second example: a name, a place, one day, one 42 km trail. */
-async function fillEvent(screen: Screen) {
-  await name(screen).fill("Trail du Lac");
-  await location(screen).fill("Annecy");
-  await startDate(screen).fill("2026-06-13");
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(trailType.id);
-  await distance(row).fill("42");
-}
 
 // Intl separates a number from its unit with a no-break space: tests read the
 // text as it looks.
@@ -843,212 +677,6 @@ test("EventForm — après un refus, on peut corriger et enregistrer", async () 
     .not.toBeInTheDocument();
 });
 
-// --- The end date comes from the formats ---
-
-test("EventForm — plus de champ « date de fin »", async () => {
-  const { screen } = await renderForm();
-
-  await expect.element(screen.getByLabelText(/date de fin/i)).not.toBeInTheDocument();
-  expect(screen.container.querySelector('[name="end_date"]')).toBeNull();
-  expect(screen.container.textContent).not.toContain("plusieurs jours");
-});
-
-test("EventForm — plus de champ « date de fin » à la modification, ni en anglais", async () => {
-  const { screen } = await renderForm({
-    at: "/evenements/event/modifier",
-    heading: "Edit the event",
-    languages: ["en-GB"],
-  });
-
-  await expect.element(screen.getByLabelText(/end date/i)).not.toBeInTheDocument();
-  expect(screen.container.querySelector('[name="end_date"]')).toBeNull();
-  // The start date is still there.
-  await expect.element(screen.getByLabelText("Start date")).toHaveValue("2026-06-13");
-});
-
-test("EventForm — la période affichée suit les dates des épreuves", async () => {
-  const { screen } = await renderForm();
-  // No start day yet: nothing to say.
-  await expect.element(period(screen)).not.toBeInTheDocument();
-
-  await startDate(screen).fill("2026-06-13");
-  // Alone, the event is one day. The line is an <output>: a change is read out.
-  await expect.poll(periodNow(screen)).toBe("Un jour : sam. 13 juin");
-  expect(period(screen).element().tagName).toBe("OUTPUT");
-
-  await formatDate(format(screen, 1)).fill("2026-06-15");
-  await expect
-    .poll(periodNow(screen))
-    .toBe("Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves");
-
-  // A format with no day is the first day: it moves nothing. The latest of the days is the end.
-  await addFormat(screen).click();
-  await expect
-    .poll(periodNow(screen))
-    .toBe("Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves");
-  await formatDate(format(screen, 2)).fill("2026-06-16");
-  await expect
-    .poll(periodNow(screen))
-    .toBe("Du sam. 13 juin au mar. 16 juin, d'après les dates des épreuves");
-  await formatDate(format(screen, 2)).fill("2026-06-14");
-  await expect
-    .poll(periodNow(screen))
-    .toBe("Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves");
-
-  // No format after the first day: one day again.
-  await formatDate(format(screen, 1)).fill("");
-  await formatDate(format(screen, 2)).fill("2026-06-13");
-  await expect.poll(periodNow(screen)).toBe("Un jour : sam. 13 juin");
-
-  // A later start moves the first day, and the days of the formats are compared with the new one.
-  await formatDate(format(screen, 1)).fill("2026-06-15");
-  await startDate(screen).fill("2026-06-20");
-  await expect.poll(periodNow(screen)).toBe("Un jour : sam. 20 juin");
-});
-
-test("EventForm — la période est dite en anglais, avec la langue des dates", async () => {
-  const { screen } = await renderForm({ languages: ["en-GB"], heading: "Create an event" });
-  await screen.getByLabelText("Start date").fill("2026-06-13");
-
-  await expect.poll(periodNow(screen)).toMatch(/^One day: Sat,? 13 Jun$/);
-
-  await screen.getByLabelText("Race date").fill("2026-06-15");
-  await expect
-    .poll(periodNow(screen))
-    .toMatch(/^From Sat,? 13 Jun to Mon,? 15 Jun, from the formats' dates$/);
-});
-
-test("EventForm — la période d'un événement dont les épreuves ne changent rien n'a pas d'« avant »", async () => {
-  const { screen } = await renderEdit();
-
-  // F42 is on the 14th, the event ends on the 14th.
-  await expect
-    .poll(periodNow(screen))
-    .toMatch(/^Du sam\. 13 juin au dim\. 14 juin, d'après les dates des épreuves$/);
-});
-
-test("EventForm — la période affichée suit les dates des épreuves : un événement de plusieurs jours dont les épreuves n'ont pas de date devient d'un jour, et le formulaire le dit avant l'enregistrement", async () => {
-  // Review focus 3: the event lasts two days, no format has a day of its own.
-  mocks.getOne.mockResolvedValue({
-    ...eventRecord,
-    expand: { ...eventRecord.expand, formats_via_event: [{ ...f42, date: "" }, f15] },
-  });
-  const { screen, router } = await renderEdit();
-
-  await expect
-    .poll(periodNow(screen))
-    .toBe("Un jour : sam. 13 juin (avant : du sam. 13 juin au dim. 14 juin)");
-
-  await save(screen).click();
-
-  await vi.waitFor(() => {
-    expect(router.state.location.pathname).toBe("/evenements/event");
-  });
-  // What the line said is what was saved.
-  expect(mocks.calls.find(({ collection }) => collection === "events")?.body).toMatchObject({
-    start_date: "2026-06-13",
-    end_date: "",
-  });
-});
-
-test("EventForm — la période dit aussi « avant » quand une épreuve change la fin, et plus rien quand la fin redevient celle qu'elle était", async () => {
-  const { screen } = await renderEdit();
-
-  await formatDate(format(screen, 2)).fill("2026-06-15");
-  await expect
-    .poll(periodNow(screen))
-    .toBe(
-      "Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves (avant : du sam. 13 juin au dim. 14 juin)",
-    );
-
-  // Back to the stored end: nothing changes any more.
-  await formatDate(format(screen, 2)).fill("2026-06-14");
-  await expect
-    .poll(periodNow(screen))
-    .toMatch(/^Du sam\. 13 juin au dim\. 14 juin, d'après les dates des épreuves$/);
-});
-
-test("EventForm — la période dit « was » en anglais, avec la langue des dates", async () => {
-  mocks.getOne.mockResolvedValue({
-    ...eventRecord,
-    expand: { ...eventRecord.expand, formats_via_event: [{ ...f42, date: "" }, f15] },
-  });
-  const { screen } = await renderForm({
-    at: "/evenements/event/modifier",
-    heading: "Edit the event",
-    languages: ["en-GB"],
-  });
-
-  await expect
-    .poll(periodNow(screen))
-    .toMatch(/^One day: Sat,? 13 Jun \(was: from Sat,? 13 Jun to Sun,? 14 Jun\)$/);
-});
-
-test("EventForm — un événement d'un jour à qui une épreuve donne une fin n'a pas d'« avant »", async () => {
-  mocks.getOne.mockResolvedValue(event2Record);
-  const { screen } = await renderEdit("event2");
-
-  await expect.poll(periodNow(screen)).toBe("Un jour : lun. 22 juin");
-  await formatDate(format(screen, 1)).fill("2026-06-23");
-
-  await expect
-    .poll(periodNow(screen))
-    .toMatch(/^Du lun\. 22 juin au mar\. 23 juin, d'après les dates des épreuves$/);
-});
-
-test("EventForm — le lot envoie la date de fin calculée : la plus tardive des épreuves", async () => {
-  const { screen, router } = await renderForm();
-  await fillEvent(screen);
-  await formatDate(format(screen, 1)).fill("2026-06-14");
-  await addFormat(screen).click();
-  await distance(format(screen, 2)).fill("10");
-  await formatDate(format(screen, 2)).fill("2026-06-16");
-  await addFormat(screen).click();
-  await distance(format(screen, 3)).fill("5");
-
-  await save(screen).click();
-
-  await savedEvent(router);
-  expect(mocks.calls.find(({ collection }) => collection === "events")?.body).toMatchObject({
-    start_date: "2026-06-13",
-    end_date: "2026-06-16",
-  });
-  // The server checks each format against it: they all are in 13-16 June.
-  const days = mocks.calls.filter(({ collection }) => collection === "formats");
-  expect(days.map(({ body }) => body?.date)).toEqual(["2026-06-14", "2026-06-16", ""]);
-});
-
-test("EventForm — le lot envoie une date de fin vide quand aucune épreuve n'est après le début", async () => {
-  const { screen, router } = await renderForm();
-  await fillEvent(screen);
-  await formatDate(format(screen, 1)).fill("2026-06-13");
-
-  await save(screen).click();
-
-  await savedEvent(router);
-  const body = mocks.calls.find(({ collection }) => collection === "events")?.body;
-  // Always sent, an empty text included: that is how a date of the event is cleared.
-  expect(body).toHaveProperty("end_date", "");
-});
-
-test("EventForm — la modification envoie la date de fin calculée, avec l'épreuve déplacée après le lot si le jour est nouveau", async () => {
-  const { screen, router } = await renderEdit();
-  // F15 (no day) goes to the 16th, after the stored end (the 14th): the event gains days.
-  await formatDate(format(screen, 1)).fill("2026-06-16");
-
-  await save(screen).click();
-
-  await vi.waitFor(() => {
-    expect(router.state.location.pathname).toBe("/evenements/event");
-  });
-  expect(mocks.send).toHaveBeenCalledOnce();
-  // F15 and F42 first, F15 without the day the event does not have yet, then the event, then F15's day.
-  expect(mocks.calls.map(({ id }) => id)).toEqual(["f15", "f42", "event", "f15"]);
-  expect(mocks.calls[0]?.body).toMatchObject({ date: "" });
-  expect(mocks.calls[2]?.body).toMatchObject({ start_date: "2026-06-13", end_date: "2026-06-16" });
-  expect(mocks.calls[3]?.body).toEqual({ date: "2026-06-16" });
-});
-
 // --- Duplicates ---
 
 const lac = {
@@ -1526,25 +1154,6 @@ test("EventForm — en anglais, les textes sont anglais", async () => {
 
 // --- The track and the link of the course ---
 
-const GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1";
-
-/** 0.1° of latitude is 11.12 km: 22.2 km, 200 m up then 100 m down. */
-const GPX = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" xmlns="${GPX_NAMESPACE}"><trk><trkseg>
-  <trkpt lat="45.0" lon="6"><ele>450</ele></trkpt>
-  <trkpt lat="45.1" lon="6"><ele>650</ele></trkpt>
-  <trkpt lat="45.2" lon="6"><ele>550</ele></trkpt>
-</trkseg></trk></gpx>`;
-
-/** The same, with no altitude. */
-const GPX_FLAT = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" xmlns="${GPX_NAMESPACE}"><trk><trkseg>
-  <trkpt lat="45.0" lon="6"/><trkpt lat="45.1" lon="6"/><trkpt lat="45.2" lon="6"/>
-</trkseg></trk></gpx>`;
-
-const gpxFile = (text = GPX, filename = "trace.gpx") =>
-  new File([text], filename, { type: "application/gpx+xml" });
-
 /** The event of the fixture, whose 15 km (the first format of the form) has a track and a link. */
 function withTrack() {
   mocks.getOne.mockResolvedValue({
@@ -1580,18 +1189,8 @@ function filesIn(input: { element(): Element }): number {
   return element.files?.length ?? 0;
 }
 
-const reuse = (row: Row) => row.getByRole("button", { name: fr.format.gpxReuse });
 const removeTrack = (row: Row) =>
   row.getByRole("button", { name: fr.format.gpxRemove, exact: true });
-/** The line that says what a chosen file holds. */
-const trackRead = (row: Row) => row.getByText(/^(Trace|Track) ?: /);
-
-/** Waits for the page of the event that has just been saved. */
-async function savedEvent(router: Awaited<ReturnType<typeof renderForm>>["router"]) {
-  await vi.waitFor(() => {
-    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
-  });
-}
 
 test("EventForm — une trace choisie affiche sa distance et son D+, « Reprendre ces valeurs » les recopie", async () => {
   const { screen } = await renderForm();
@@ -2217,396 +1816,4 @@ test("EventForm — un fichier illisible, ou trop lourd, laisse le retrait en at
     expect(router.state.location.pathname).toBe("/evenements/event");
   });
   expect(mocks.updateFormat).toHaveBeenCalledExactlyOnceWith("f15", { gpx: null });
-});
-
-// --- The measures of the race type ---
-
-const trailOfMeasures = { ...trailType, measures: ["distance", "elevation", "time_limit"] };
-const backyardType = { ...base, id: "backyard000000", label: "Backyard", measures: ["time_limit"] };
-const hyroxType = { ...base, id: "hyrox00000000", label: "Hyrox", measures: ["distance"] };
-/** A type that only says its elevation: a format has to be measured, so the distance is shown too. */
-const climbType = { ...base, id: "climb000000000", label: "Montée", measures: ["elevation"] };
-
-/** The types that say which measures they use, and one (Route) that says nothing. */
-function withMeasuredTypes() {
-  mocks.raceTypes.mockResolvedValue([
-    trailOfMeasures,
-    backyardType,
-    hyroxType,
-    climbType,
-    roadType,
-  ]);
-}
-
-/** What a locator finds, for the checks that read the page itself. */
-type Located = { element(): Element };
-
-/** The section « Options avancées » of the row, or null when it has none. */
-const advancedOf = (row: Row): HTMLDetailsElement | null => row.element().querySelector("details");
-const moreOptions = (row: Row) => row.getByText(fr.form.moreOptions, { exact: true });
-/** Whether a field of the row is put away in « Options avancées ». */
-const inAdvanced = (located: Located) => located.element().closest("details") !== null;
-/** Whether `first` comes before `second` in the page. */
-const comesBefore = (first: Located, second: Located) =>
-  (first.element().compareDocumentPosition(second.element()) & Node.DOCUMENT_POSITION_FOLLOWING) !==
-  0;
-
-/** The fields of the four measures, by name. */
-const measuresOfRow = (row: Row) => ({
-  distance: distance(row),
-  elevation: elevation(row),
-  duration: hoursOf(row, fr.form.duration),
-  timeLimit: hoursOf(row, fr.form.timeLimit),
-});
-
-test("FormatFieldset — les mesures du type d'abord, les autres dans « Options avancées »", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-
-  // No type chosen yet: the four measures, and nothing to put away.
-  expect(advancedOf(row)).toBeNull();
-  for (const measure of Object.values(measuresOfRow(row)))
-    await expect.element(measure).toBeVisible();
-
-  // A backyard has a time limit: it comes first, the others are in a closed section.
-  await raceType(row).selectOptions(backyardType.id);
-  const backyard = measuresOfRow(row);
-  await expect.element(backyard.timeLimit).toBeVisible();
-  expect(inAdvanced(backyard.timeLimit)).toBe(false);
-  for (const away of [backyard.distance, backyard.elevation, backyard.duration]) {
-    expect(inAdvanced(away)).toBe(true);
-  }
-  expect(advancedOf(row)?.open).toBe(false);
-  await expect.element(moreOptions(row)).toBeVisible();
-  expect(moreOptions(row).element().tagName).toBe("SUMMARY");
-  // The section follows the measures and comes before the rest of the fields.
-  expect(comesBefore(backyard.timeLimit, moreOptions(row))).toBe(true);
-  for (const later of [gpxField(row), routeUrl(row), price(row), formatDate(row)]) {
-    expect(comesBefore(moreOptions(row), later)).toBe(true);
-    expect(inAdvanced(later)).toBe(false);
-  }
-  // The hint is above the measures that are shown, not in the section.
-  const hint = row.getByText(fr.form.measuresHint);
-  await expect.element(hint).toBeVisible();
-  expect(inAdvanced(hint)).toBe(false);
-  expect(comesBefore(hint, backyard.timeLimit)).toBe(true);
-
-  // The summary opens it, and the fields are there.
-  await moreOptions(row).click();
-  expect(advancedOf(row)?.open).toBe(true);
-  for (const away of [backyard.distance, backyard.elevation, backyard.duration]) {
-    await expect.element(away).toBeVisible();
-  }
-
-  // A trail: its distance, its elevation and its time limit, in the order of the form; the duration is put away.
-  await raceType(row).selectOptions(trailType.id);
-  const trail = measuresOfRow(row);
-  for (const shown of [trail.distance, trail.elevation, trail.timeLimit]) {
-    expect(inAdvanced(shown)).toBe(false);
-  }
-  expect(comesBefore(trail.distance, trail.elevation)).toBe(true);
-  expect(comesBefore(trail.elevation, trail.timeLimit)).toBe(true);
-  expect(inAdvanced(trail.duration)).toBe(true);
-
-  // Hyrox: the distance only.
-  await raceType(row).selectOptions(hyroxType.id);
-  const hyrox = measuresOfRow(row);
-  expect(inAdvanced(hyrox.distance)).toBe(false);
-  for (const away of [hyrox.elevation, hyrox.duration, hyrox.timeLimit]) {
-    expect(inAdvanced(away)).toBe(true);
-  }
-
-  // A type that has chosen nothing shows the four.
-  await raceType(row).selectOptions(roadType.id);
-  expect(advancedOf(row)).toBeNull();
-});
-
-test("FormatFieldset — une épreuve se mesure toujours : un type sans distance, durée ni temps max montre la distance", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-
-  await raceType(row).selectOptions(climbType.id);
-
-  const fields = measuresOfRow(row);
-  expect(inAdvanced(fields.distance)).toBe(false);
-  expect(inAdvanced(fields.elevation)).toBe(false);
-  expect(inAdvanced(fields.duration)).toBe(true);
-  expect(inAdvanced(fields.timeLimit)).toBe(true);
-  await expect.element(row.getByText(fr.form.measuresHint)).toBeVisible();
-});
-
-test("FormatFieldset — sans mesure remplie, l'erreur est dite avec les mesures montrées, sans ouvrir les options", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  await name(screen).fill("Backyard du Lac");
-  await location(screen).fill("Annecy");
-  await startDate(screen).fill("2026-06-13");
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(backyardType.id);
-
-  await save(screen).click();
-
-  const message = row.getByText(fr.errors.format_measure_required);
-  await expect.element(message).toBeVisible();
-  expect(inAdvanced(message)).toBe(false);
-  expect(advancedOf(row)?.open).toBe(false);
-  // The measure that is shown is linked to the message.
-  expect(hoursOf(row, fr.form.timeLimit).element().getAttribute("aria-describedby")).toContain(
-    message.element().id,
-  );
-  expect(mocks.send).not.toHaveBeenCalled();
-});
-
-test("FormatFieldset — une mesure remplie reste visible quand le type ne l'utilise pas", async () => {
-  withMeasuredTypes();
-  // The first format of the form (F15: 15 km, 700 m) is a backyard: its type only says the time limit.
-  mocks.getOne.mockResolvedValue({
-    ...eventRecord,
-    expand: {
-      ...eventRecord.expand,
-      formats_via_event: [f42, { ...f15, race_type: backyardType.id }],
-    },
-  });
-  const { screen } = await renderEdit();
-  const first = format(screen, 1);
-
-  await expect.element(raceType(first)).toHaveValue(backyardType.id);
-  await expect.element(distance(first)).toHaveValue(15);
-  await expect.element(elevation(first)).toHaveValue(700);
-  await expect.element(distance(first)).toBeVisible();
-  await expect.element(elevation(first)).toBeVisible();
-  expect(inAdvanced(distance(first))).toBe(false);
-  expect(inAdvanced(elevation(first))).toBe(false);
-  // What is empty and not used is put away: the duration only.
-  expect(advancedOf(first)?.open).toBe(false);
-  expect(inAdvanced(hoursOf(first, fr.form.duration))).toBe(true);
-  expect(advancedOf(first)?.querySelectorAll("input")).toHaveLength(2); // its hours and its minutes
-
-  // The second format is a trail, which uses what it has.
-  const second = format(screen, 2);
-  expect(inAdvanced(distance(second))).toBe(false);
-  expect(inAdvanced(hoursOf(second, fr.form.timeLimit))).toBe(false);
-});
-
-test("FormatFieldset — une valeur saisie puis un autre type : la mesure reste visible, celle qui est vide s'en va", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(trailType.id);
-  await distance(row).fill("42");
-  await elevation(row).fill("2400");
-
-  // A backyard does not use the distance or the elevation, but they are filled.
-  await raceType(row).selectOptions(backyardType.id);
-  expect(inAdvanced(distance(row))).toBe(false);
-  expect(inAdvanced(elevation(row))).toBe(false);
-  await expect.element(distance(row)).toBeVisible();
-  await expect.element(elevation(row)).toBeVisible();
-  expect(inAdvanced(hoursOf(row, fr.form.duration))).toBe(true);
-
-  // Emptied, the elevation goes away with the next change of type.
-  await elevation(row).fill("");
-  await raceType(row).selectOptions(hyroxType.id);
-  expect(inAdvanced(distance(row))).toBe(false);
-  expect(inAdvanced(elevation(row))).toBe(true);
-});
-
-test("FormatFieldset — changer de type ne perd aucune valeur", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  await name(screen).fill("Trail du Lac");
-  await location(screen).fill("Annecy");
-  await startDate(screen).fill("2026-06-13");
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(trailType.id);
-  await distance(row).fill("42");
-  await elevation(row).fill("2400");
-  await hoursOf(row, fr.form.timeLimit).fill("10");
-  // The duration is not one of a trail's: it is typed in the section of the others.
-  await moreOptions(row).click();
-  await hoursOf(row, fr.form.duration).fill("6");
-  await minutesOf(row, fr.form.duration).fill("30");
-
-  for (const type of [backyardType, hyroxType, climbType, roadType, trailType, backyardType]) {
-    await raceType(row).selectOptions(type.id);
-    await expect.element(distance(row)).toHaveValue(42);
-    await expect.element(elevation(row)).toHaveValue(2400);
-    await expect.element(hoursOf(row, fr.form.timeLimit)).toHaveValue(10);
-    await expect.element(hoursOf(row, fr.form.duration)).toHaveValue(6);
-    await expect.element(minutesOf(row, fr.form.duration)).toHaveValue(30);
-    // All four have a value: none is put away.
-    expect(advancedOf(row)).toBeNull();
-  }
-
-  await save(screen).click();
-  await vi.waitFor(() => {
-    expect(mocks.send).toHaveBeenCalledOnce();
-  });
-  expect(mocks.calls[1]?.body).toMatchObject({
-    race_type: backyardType.id,
-    distance_km: 42,
-    elevation_gain_m: 2400,
-    duration_min: 390,
-    time_limit_min: 600,
-  });
-});
-
-test("FormatFieldset — saisir dans « Options avancées » garde le focus, et le champ ne bouge pas pendant la frappe", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(backyardType.id);
-  await moreOptions(row).click();
-
-  await distance(row).click();
-  await userEvent.keyboard("1");
-  await userEvent.keyboard("2");
-  await userEvent.keyboard("5");
-
-  await expect.element(distance(row)).toHaveValue(125);
-  await expect.element(distance(row)).toHaveFocus();
-  // It stays where the person is typing, in the section.
-  expect(inAdvanced(distance(row))).toBe(true);
-});
-
-test("FormatFieldset — refermer « Options avancées » sur des valeurs les met avec les mesures, et le focus va au titre de l'épreuve", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(hyroxType.id);
-  await moreOptions(row).click();
-  await elevation(row).fill("300");
-  await hoursOf(row, fr.form.duration).fill("2");
-  await hoursOf(row, fr.form.timeLimit).fill("5");
-
-  // Closing the section on filled fields: they come out of it, and it has nothing left.
-  await moreOptions(row).click();
-
-  await vi.waitFor(() => {
-    expect(advancedOf(row)).toBeNull();
-  });
-  await expect.element(elevation(row)).toHaveValue(300);
-  await expect.element(elevation(row)).toBeVisible();
-  await expect.element(hoursOf(row, fr.form.duration)).toBeVisible();
-  // The summary that had the focus is gone with the section: the focus goes to the title of the format.
-  await expect.element(row.getByText(fr.form.formatTitle(1), { exact: true })).toHaveFocus();
-});
-
-test("FormatFieldset — refermer « Options avancées » ne fait sortir que les champs remplis, et le focus reste sur le résumé", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(backyardType.id);
-  await moreOptions(row).click();
-  await elevation(row).fill("300");
-
-  await moreOptions(row).click();
-
-  // The elevation has a value: it comes out. The distance and the duration are empty: they stay in the section.
-  await vi.waitFor(() => {
-    expect(inAdvanced(elevation(row))).toBe(false);
-  });
-  expect(inAdvanced(distance(row))).toBe(true);
-  expect(advancedOf(row)?.open).toBe(false);
-  await expect.element(moreOptions(row)).toHaveFocus();
-});
-
-test("FormatFieldset — « Options avancées » s'ouvre et se ferme au clavier", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(backyardType.id);
-
-  const toggle = moreOptions(row).element();
-  if (!(toggle instanceof HTMLElement)) throw new Error("not an element");
-  toggle.focus();
-  await userEvent.keyboard("{Enter}");
-  expect(advancedOf(row)?.open).toBe(true);
-  await expect.element(distance(row)).toBeVisible();
-  await userEvent.keyboard("{Enter}");
-  expect(advancedOf(row)?.open).toBe(false);
-  await userEvent.keyboard(" ");
-  expect(advancedOf(row)?.open).toBe(true);
-});
-
-test("FormatFieldset — « Reprendre ces valeurs » montre la distance et le D+ même quand le type ne les utilise pas", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(backyardType.id);
-  expect(inAdvanced(distance(row))).toBe(true);
-
-  await gpxField(row).upload(gpxFile());
-  await expect.element(trackRead(row)).toBeVisible();
-  await reuse(row).click();
-
-  await expect.element(distance(row)).toHaveValue(22.2);
-  await expect.element(elevation(row)).toHaveValue(200);
-  expect(inAdvanced(distance(row))).toBe(false);
-  expect(inAdvanced(elevation(row))).toBe(false);
-  await expect.element(distance(row)).toBeVisible();
-  // The button that was pressed is still there, with the focus.
-  await expect.element(reuse(row)).toHaveFocus();
-});
-
-test("FormatFieldset — le résumé de « Options avancées » fait au moins 44 px, sur un téléphone", async () => {
-  await page.viewport(375, 812);
-  try {
-    withMeasuredTypes();
-    const { screen } = await renderForm();
-    const row = format(screen, 1);
-    await raceType(row).selectOptions(backyardType.id);
-    await fontsReady();
-
-    const box = moreOptions(row).element().getBoundingClientRect();
-    expect(box.height).toBeGreaterThanOrEqual(44);
-    expect(box.width).toBeGreaterThanOrEqual(44);
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
-  } finally {
-    await page.viewport(414, 896);
-  }
-});
-
-test("FormatFieldset — le résumé de « Options avancées » se lit le jour, la nuit et en couleurs forcées", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm();
-  const row = format(screen, 1);
-  await raceType(row).selectOptions(backyardType.id);
-  const opener = moreOptions(row).element();
-  // By day and by night, its text is the text of the labels of the fields, whose contrast is pinned (dark.test.ts).
-  const label = row.getByText(fr.format.price, { exact: true }).element();
-
-  try {
-    await emulateMedia({ colorScheme: "light", forcedColors: "none" });
-    const day = getComputedStyle(opener).color;
-    expect(day).toBe(getComputedStyle(label).color);
-    await emulateMedia({ colorScheme: "dark", forcedColors: "none" });
-    const night = getComputedStyle(opener).color;
-    expect(night).toBe(getComputedStyle(label).color);
-    expect(night).not.toBe(day);
-
-    // In forced colours the browser picks the colours: the text, and the marker that says open or closed, are not the colour of the ground.
-    await emulateMedia({ colorScheme: "light", forcedColors: "active" });
-    const ground = getComputedStyle(row.element()).backgroundColor;
-    expect(getComputedStyle(opener).color).not.toBe(ground);
-    expect(getComputedStyle(opener, "::marker").color).not.toBe(ground);
-    expect(getComputedStyle(opener).display).toBe("list-item");
-  } finally {
-    await resetMedia();
-  }
-});
-
-test("FormatFieldset — en anglais, « More options » et le rappel de la mesure sont en anglais", async () => {
-  withMeasuredTypes();
-  const { screen } = await renderForm({ languages: ["en-GB"], heading: "Create an event" });
-  const row = screen.getByRole("group", { name: "Race 1", exact: true });
-
-  await row.getByLabelText("Race type").selectOptions(backyardType.id);
-
-  await expect.element(row.getByText("More options", { exact: true })).toBeVisible();
-  await expect
-    .element(row.getByText("At least one measure is required: distance, duration or time limit."))
-    .toBeVisible();
 });
