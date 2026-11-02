@@ -135,12 +135,15 @@ looks which share them share).
   code is loaded `loadSkin` checks that the palette is in the page, asks again
   for the sheets that are missing (a link with no rule: Chromium gives a failed
   link an empty sheet), and rejects if it is still not there. A choice that
-  failed so is tried again, sheets included, the next time.
+  failed so is tried again, sheets included, the next time. A sheet asked for
+  again lands after `styles.css`, whatever its place was: the sheets of a look
+  do not depend on that order (below), which is also why this and the order of
+  `lookFiles` need nothing of each other.
 - **At start** (`showKeptSkin`, `main.tsx`): the skin kept is applied at once
   (its mode, the colour of the bar), and its look loaded before the app is
   first drawn, so its motifs are there from the first render. A skin kept that
   is no longer in the app (a skin removed since), or whose look cannot be
-  loaded (its code, or a sheet that stays missing: all or nothing, below), is
+  loaded (its code, or a sheet that stays missing: all or nothing, above), is
   Crête for this page, with no error; the device keeps the choice, and a sheet
   that failed once is asked for again before that.
 - **Before the first paint**: the build writes into `index.html` the table of
