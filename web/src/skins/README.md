@@ -1,38 +1,42 @@
 # Skins
 
-A skin dresses the app; it never changes what the app does. Each one is a folder
-of this one, found by `import.meta.glob("./*/index.ts")` in `index.ts`: adding a
-skin is adding a folder, no shared file is edited. « Crête » (`crete/`) is the
-default: `styles.css` draws it, and a page without `data-skin` on `<html>` is in it.
+A skin dresses the app; it never changes what the app does. It sets the
+colours, the fonts and the motifs of the app on Crête's markup, which is the
+same in every skin. Each one is a folder of this one, found by
+`import.meta.glob("./*/index.ts")` in `index.ts`: adding a skin is adding a
+folder, and its name to the list of `styles.css` (see Utilities). « Crête »
+(`crete/`) is the default: `styles.css` draws it, and a page without
+`data-skin` on `<html>` is in it.
 
 The skin is chosen in Réglages → Apparence → « Thème », kept on the device
-(`localStorage["ptd-skin"]`, nothing for Crête) and put on `<html data-skin="<id>">`,
-with its mode and the colour of the browser's bar, by the script of `index.html`
-before the page is first drawn, then by `applySkin`.
+(`localStorage["ptd-skin"]`, nothing for Crête; signing out leaves it) and put
+on `<html data-skin="<id>">`, with its mode and the colour of the browser's bar,
+by the script of `index.html` before the page is first drawn, then by
+`applySkin`. Each skin but Crête is loaded when it is chosen (see Loading on
+demand): a person who stays on Crête loads nothing of the others.
 
 ## The folder of a skin
 
 ```
 skins/<id>/
-  index.ts     the skin (required): `export const skin: Skin`
-  fonts.css    its @font-face rules and `--font-*` (every depth)
-  palette.css  its custom properties: colours, radii, colours of shadows, paints of the dawn,
-               of the map and of Crête's motifs (depth palette)
-  mix.css      its signature pieces (depth mix)
-  full.css     every other piece (depth full)
-  mix.tsx      components it replaces at depth mix:  `export const variants: Variants`
-  full.tsx     components it replaces at depth full: `export const variants: Variants`
-  *.tsx        its motifs, for the slots
+  index.ts       the skin (required): `export const skin: Skin`, in the entry of the app
+  look.ts        its look (required but for Crête), loaded when it is chosen:
+                 `export const slots: Partial<Slots>`, and `import` of its sheets
+  fonts.css      its @font-face rules and `--font-*`
+  palette.css    its custom properties: colours, radii, colours of shadows, paints of the dawn,
+                 of the map and of Crête's motifs
+  utilities.css  the utilities of Tailwind that its motifs use (see Utilities)
+  *.tsx          its motifs, for the slots
 ```
 
-`index.ts` (see `types.ts`):
+`index.ts` (see `types.ts`) says only what the registry and the picker read,
+and imports nothing but types: it is in the entry of the app, for everyone.
 
 ```ts
 export const skin: Skin = {
   id: "<id>", // the name of the folder
   label: { fr: "…", en: "…" }, // its name in the picker
   modes: ["light"], // ["light"], ["dark"] or ["light", "dark"]
-  slots: { HeaderArt, BrandMark }, // the motifs it draws (Crête's stand in for the others)
   swatches: ["#rrggbb", "#rrggbb"], // two colours on its card
   fontSample: '"Its Font", serif', // the font-family of its titles, for the sample on its card
   themeColor: "#rrggbb", // the browser's bar (<meta name="theme-color">): the top of its header
@@ -42,25 +46,89 @@ export const skin: Skin = {
 `modes` and `themeColor` are read by the build too (`plugin.ts`, for the script
 of `index.html`): keep them literal.
 
+`look.ts` is everything else, in a part of the build of its own:
+
+```ts
+import "./fonts.css";
+import "./palette.css";
+import "./utilities.css";
+import type { Slots } from "../types";
+import { BrandMark, HeaderArt } from "./motifs";
+
+export const slots: Partial<Slots> = { HeaderArt, BrandMark }; // the motifs it draws (Crête's stand in for the others)
+```
+
+Crête has no look: its colours and fonts are `styles.css`'s, and its motifs
+(`crete/index.ts`, `slots`) are in the entry, where they stand in for those a
+skin does not draw.
+
 A folder whose name starts with `_` is a skin of development (`_example/`): the
 dev server and the tests have it, in the picker too; a build has nothing of it
-(`plugin.ts` makes each of its files an empty module exporting `skin` and
-`variants`, the registry leaves it out, the table of `index.html` does not name
-it, and `styles.css` does not scan its folder for classes: it styles its few
-pieces inline).
+(`plugin.ts` makes each of its files an empty module exporting `skin`,
+`looks.ts` leaves its look out, the registry leaves it out, the table of
+`index.html` does not name it, and `styles.css` does not scan its folder for
+classes: it styles its few pieces inline).
+
+## Loading on demand
+
+What every page loads, for every person: the stylesheet of the entry
+(`styles.css`, Crête's, with `theme.css`), and in the entry's script the
+registry (each skin's `index.ts`), Crête's motifs and the picker's logic
+(`index.ts` of this folder). Nothing of another skin: `build.test.ts` builds the
+real app and checks it.
+
+Each other skin is its look: `looks.ts` has a loader for each `<id>/look.ts`
+(a `import.meta.glob` that is not eager), so the build makes each one a part of
+its own, with a sheet of its own (its `fonts.css`, `palette.css` and
+`utilities.css`, and the sheets of `shared/` it imports, in a sheet that the
+looks which share them share).
+
+- **Choosing** (`chooseSkin`, the picker, another tab): the look is loaded, then
+  the choice is kept and applied. Vite adds the look's sheets to the page and
+  waits for them, so the page is never in a skin without its colours. Two
+  choices in a row: the last one wins, whichever loads first. A look that
+  cannot be loaded (offline, never loaded before) leaves the page and the
+  device as they were.
+- **At start** (`showKeptSkin`, `main.tsx`): the skin kept is applied at once
+  (its mode, the colour of the bar), and its look loaded before the app is
+  first drawn, so its motifs are there from the first render. A skin kept that
+  is no longer in the app (a skin removed since), or whose look cannot be
+  loaded, is Crête, with no error.
+- **Before the first paint**: the build writes into `index.html` the table of
+  the skins (`plugin.ts`): for each, its modes, its colour and the files of
+  its sheets (`sheets`, from the bundle: `lookSheets`). The script of the page
+  writes a `<link rel="stylesheet">` for each sheet of the skin kept
+  (`document.write`, while the page is read): a stylesheet of the parser blocks
+  the first paint and the scripts after it in every browser, so someone who
+  chose Nuit never sees Crête first, on every page, the pages to sign in
+  included. The look's own import finds those links in the page and adds none.
+  In the dev server, the table has no sheets: the look brings them, after a
+  short flash.
+- **Offline**: the service worker (`public/sw.js`) keeps every file of
+  `/assets/` the first time it is asked for (sheets, parts, faces) and the page:
+  a skin chosen once is drawn offline the next time (`sw.test.ts`).
+
+The rules of a skin's sheets do not depend on their order with `styles.css`'s:
+the palette's are outside the layers, so they win over `@theme` (layer `theme`)
+and the dark blocks of Crête (layer `base`); `utilities.css` declares the order
+of the layers first, as `styles.css` does (the sheets of the skin kept come
+before it in the page).
 
 ## Adding a skin, step by step
 
 1. Create `skins/<id>/index.ts` as above.
 2. Write `fonts.css` (see Fonts), and `palette.css`: custom properties only (see
    Colours), under the skin's selectors.
-3. Draw its motifs as components of the slots it changes, and list them in `slots`.
-4. Run `pnpm --dir web test`, and with `VITE_SKIN_DEPTH=mix` and `=full` once it has
-   deeper files. The tests go through the new skin in each of its modes, without
-   being edited: the contrast tests (`dark`, `contrast`, `dashed`, `slope`, the
-   sky included), the guards of its stylesheets, the registry, the table of
-   `index.html`, the picker, and the smoke battery of the pages at 320 px.
-5. Deeper: `mix.css`, `full.css`, and `mix.tsx` / `full.tsx` for markup variants.
+3. Draw its motifs as components of the slots it changes; write `utilities.css`
+   as the other skins' (see Utilities) and add the folder to the list of
+   `styles.css`.
+4. Write `look.ts`: the imports of its sheets, and `slots`.
+5. If its titles' font is new, add its latin face to `samples.css` (see Fonts).
+6. Run `pnpm --dir web test`. The tests go through the new skin in each of its
+   modes, without being edited: the contrast tests (`dark`, `contrast`,
+   `dashed`, `slope`, the sky included), the guards of its stylesheets, the
+   registry and its look, the table of `index.html`, the build, the picker, and
+   the smoke battery of the pages at 320 px.
 
 ## Colours (palette.css)
 
@@ -110,7 +178,7 @@ What a palette sets:
   | `--shade-on-dawn` | `rgb(36 27 53 / 0.5)`     | the shadow of a white pill on a hero (`ON_DAWN`, « S'inscrire »)                             |
   | `--hero-veil`     | `rgb(36 27 53 / 0.2)`     | the veil under the end of the registrations on a hero; at 90 %, in the ring of the days left |
 
-  Fainter shades are still written out, for mix and full: the secondary button
+  Fainter shades are still written out, in Crête's pieces: the secondary button
   (`buttons.ts`), the tabs of the admin (`AdminLayout`), a field (`Field`), the
   close button of a window (`Dialog`), the glint of the day of an event (`Dawn`).
 
@@ -173,7 +241,7 @@ What a palette sets:
   | `--dawn-chip-glow`                 | the glow under the day of an event (DateChip)                                                                                  |
   | `--dawn-glow-warm`, `-cool`        | the halo of what `--dawn-deep` paints (`shadow-glow`: main buttons, current tab, «+»)                                          |
   | `--focus-glow`                     | the halo of a field with the focus                                                                                             |
-  | `--sky-focus`                      | the ring of the focus on the sky                                                                                               |
+  | `--sky-focus`                      | the ring of the focus on the sky: 3:1 on every stop of `--dawn-sky` and `--dawn-hero`                                          |
 
 A skin without a halo sets both glows to `transparent` (`--dawn-glow-warm:
 transparent; --dawn-glow-cool: transparent;`): `shadow-glow` is then drawn in
@@ -242,29 +310,28 @@ In forced colours (a high-contrast mode), the browser drops backgrounds and
 gradients. `styles.css` gives an edge to what was a pill of colour (`.bg-dawn-deep`,
 `.bg-red-700`, the current tab) and the colour of the text to the line of the
 elevation profile; those rules hold under every skin (the smoke battery checks
-the current tab and the «+»). A skin that paints a meaning with a background of
-its own, in `mix.css` or `full.css`, adds its edge under
-`@media (forced-colors: active)`, scoped to `:root[data-skin="<id>"]`.
+the current tab and the «+»).
 
 ### Fonts
 
 `fonts.css` holds the faces of the skin and the stacks that name them, and
 nothing else (a test says so): `@font-face` rules, and `--font-sans`,
 `--font-display` (and `--font-mono`, `--font-serif` when it has them) under
-`:root[data-skin="<id>"]`. It is bundled at every depth, before the palette.
+`:root[data-skin="<id>"]`. Its look imports it, with its palette.
 
 ```css
 @font-face {
-  font-family: "Outfit Variable";
+  font-family: "Space Grotesk Variable";
   font-style: normal;
   font-display: swap;
-  font-weight: 500 800;
-  src: url("@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2");
+  font-weight: 500 700;
+  src: url("@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2")
+    format("woff2");
   unicode-range: U+0000-00FF, …; /* the package's own, for this file */
 }
 :root[data-skin="<id>"] {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Outfit Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 }
 ```
 
@@ -274,22 +341,46 @@ nothing else (a test says so): `@font-face` rules, and `--font-sans`,
   latin-ext face and a latin face, with the unicode-range of the package's own
   CSS, `font-display: swap`, the weights the skin uses and no others. Never the
   package's stylesheet (it brings every script), never a host.
-- A family is declared once, in the `fonts.css` of the first skin that uses it
-  (Outfit: « Sentier », also « Alpage »; Inter Tight: « Marathon », also
-  « Chrono »), for the union of their weights; the other skin only names it in
-  its stacks. Inter and Plus Jakarta Sans are declared in `styles.css`: name
-  them, do not declare them again. A `_` folder is left out of a build, so
-  nothing shared goes in one.
-- The browser fetches a face only when text is drawn in its family. Every
-  `fonts.css` is in the build, but a person who stays on Crête (no `data-skin`)
-  draws nothing in them: no file is requested, none is preloaded (`index.html`
-  has no preload) or precached (`public/sw.js` keeps the page only; a file of
-  `/assets/` is kept when it is first requested).
+- A family is declared once. One that two skins use is in `shared/fonts.css`,
+  for the union of their weights (Outfit: « Sentier » and « Alpage »; Inter
+  Tight: « Marathon » and « Chrono »), and both looks import that sheet: a look
+  brings every face its stacks name (`fonts.test.ts` checks it). Inter and Plus
+  Jakarta Sans are declared in `styles.css`: name them, do not declare them
+  again.
+- The browser fetches a face only when text is drawn in its family. None is
+  preloaded (`index.html` has no preload) or precached (`public/sw.js` keeps
+  the page only; a file of `/assets/` is kept when it is first requested).
 - `fontSample` is the `--font-display` stack of the skin's `fonts.css` (Crête's
-  when it has none; a test compares their families): the picker draws « Aa » in
-  it once loaded, and never loads a font to show it.
+  when it has none; a test compares their families). The picker draws its
+  « Aa » in it, whether the skin is worn or not: `samples.css`, which the section
+  « Apparence » imports (so it comes with the settings page and no other),
+  declares for each family that draws a sample its latin face at 700, the very
+  file of the skin's own face. A face is fetched when its sample is drawn.
 - Every family named in a stack of a `fonts.css` is declared by a face, of
   `styles.css` or of a `fonts.css` (a test checks every folder that has one).
+
+## Utilities
+
+`styles.css` scans the source of the app for the utilities of Tailwind it
+uses, but not the folders of the skins other than Crête's, nor `shared/`
+(`@source not "./skins/{alpage,…,shared}/**"`: a new skin adds its folder to
+that list, `plugin.test.ts` says so). Each of these folders has its own
+`utilities.css`, which its look imports:
+
+```css
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "../../theme.css";
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./*.tsx";
+```
+
+It makes the utilities of the folder's motifs with the app's theme
+(`theme.css`: the `@theme` and the `@utility` of the app, which `styles.css`
+imports in its place), so a class reads the same custom property as in
+`styles.css`; it declares the order of the layers first, for a page that reads
+it before `styles.css`. So the stylesheet of every page has only Crête's
+utilities.
 
 ## Slots (motifs)
 
@@ -316,26 +407,38 @@ one element: the smoke battery finds it on the sign-in pages by its text
 two faces) keeps the whole name in one element, its parts drawn by CSS or
 hidden from that search.
 
+A screen reader has nothing of a motif but the name of the app in `BrandMark`:
+`components.test.tsx` draws every motif of every skin and checks what it says
+(`said`, in `../test/said.ts`).
+
 ### What skins share
 
-A skin may use the files of another, but the other then holds it:
+A skin's folder takes nothing from another skin's: its look is loaded alone.
+What two skins share is in `shared/`, a folder with no `index.ts` (neither the
+registry nor the table takes it), which their looks import:
 
-- `alpage/` imports `../sentier/motifs` (the blaze, the patch, the ridges, the sun);
-- `alpage/full.tsx` imports `terrainOf` from `../sentier/terrain` (the terrain of a
-  race type, from its label);
-- `sentier/` and `alpage/` import `Contours` from `../crete/Alpenglow`, and
-  `sentier/motifs.tsx` (so Alpage too) a path of `../crete/motifPaths`;
-- `Contours` draws with the paths of Crête's `MotifDefs`, which `routes/__root.tsx`
-  renders once for every page, whatever the skin. It must stay there: under
-  Crête's `HeaderArt`, it would be missing from the pages of the other skins, and
-  Sentier's and Alpage's contours would vanish without an error.
+- `shared/fonts.css`: the faces of Outfit and of Inter Tight (see Fonts);
+- `shared/trail.tsx` (and `trailRidge.ts`): the art of a trail, the ridges, the
+  sun, the patch and the blaze before a title, which « Sentier » and « Alpage »
+  draw; `shared/utilities.css`, its utilities.
 
-## Semantic classes (mix and full)
+Crête's folder is in the entry, for everyone: `sentier/` and `alpage/` import
+`Contours` from `../crete/Alpenglow`, and `shared/trail.tsx` a path of
+`../crete/motifPaths`. `Contours` draws with the paths of Crête's `MotifDefs`,
+which `routes/__root.tsx` renders once for every page, whatever the skin. It
+must stay there: under Crête's `HeaderArt`, it would be missing from the pages
+of the other skins, and Sentier's and Alpage's contours would vanish without an
+error. `plugin.test.ts` checks that no folder of a skin imports another's.
 
-The signature pieces carry a class of their own beside their Tailwind classes,
-for a deeper skin to restyle them in `mix.css` or `full.css`. Crête draws them with
-the Tailwind classes; the semantic classes carry no style of Crête but
-`.page-title` and `.block-title`.
+## Semantic classes
+
+The pieces of the app carry a class of their own beside their Tailwind
+classes: stable hooks for the tests (the smoke battery finds `.event-hero`,
+`.btn-primary`…) and for any later sheet of a skin. They carry no style of
+Crête but `.page-title` and `.block-title`, and none is a utility of Tailwind
+(`classes.test.ts`). A sheet that hooks on them hooks on these classes and on
+the attributes of a state, never on a utility class or on the place of an
+element in the markup.
 
 | Class                                                           | Element                                                     |
 | --------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -351,8 +454,7 @@ the Tailwind classes; the semantic classes carry no style of Crête but
 | `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-on-dawn` | the buttons (`components/buttons.ts`)                       |
 | `.card`, `.month-title`, `.eyebrow`, `.sheet`                   | already in `styles.css`                                     |
 
-The pieces made skinnable (below) also carry classes of `styles.css`, which draw
-Crête's look and which a sheet may restyle there too:
+They also carry classes of `styles.css`, which draw Crête's look:
 
 | Class                       | Element                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------- |
@@ -362,9 +464,7 @@ Crête's look and which a sheet may restyle there too:
 | `.avatar-soft`              | the photo of a runner on their hero (the pastel of their initials)              |
 | `display-title` (a utility) | the title of a hero, of an event card, of a window, the month of the agenda     |
 
-Every other piece that a variant restyles has a class of its own too (Task 5),
-for `full.css`. The parts of a piece are named after it (`.dialog-title` is in
-`.dialog`):
+The parts of a piece are named after it (`.dialog-title` is in `.dialog`):
 
 | Area                   | Classes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -384,277 +484,64 @@ for `full.css`. The parts of a piece are named after it (`.dialog-title` is in
 A state is an attribute, never a utility: `data-kind` (`open`, `closed`) on a
 deadline, `data-confirmed` (`true`, `false`) on a chip or a row, `aria-current`
 on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
-`data-action` (`join`, `add`, `calendar`, `edit`, `delete`). A rule hooks on
-these classes and attributes, and on nothing else of the markup: never on a
-utility class (`p.rounded-full`, `.bg-neutral-100`, `.hover\:bg-iris-50`), never
-on the place of an element in Crête's markup (`.event-hero > div`,
-`.event-card > div + div`, `> span:nth-child(2)`). A piece that has no class
-is asked for in `README.md` and in the shared code, not hooked another way.
-
-A dashed border or outline in `mix.css` or `full.css` is either a state, in a
-colour of the theme with 3:1 on a card and on the sheet in each mode of the
-skin, or a decoration of the list in `../dashed.test.ts` (`DECORATION`, by the
-class of its piece: `.bib-tear`, `.perforation`…), which is never read as « not
-confirmed ».
-
-`mix.css` and `full.css` set no custom property (the colours stay in the palette,
-where the contrast tests read them), and every rule is the skin's. The forms they
-may use, and only these (`sheetProblems` in `../test/theme.ts`, tested on sheets of
-its own in `../test/skinSheets.test.ts`, and run on every skin by `../dark.test.ts`):
-
-- A rule whose every selector is `:root[data-skin="<id>"]`, then, for a rule of
-  one mode, `[data-theme="dark"]`, `[data-theme="light"]` or
-  `:not([data-theme="light"])`, then a combinator (a space, `>`, `+`, `~`) and the
-  piece. A list is split at its own commas, not at those of `:is(a, b)` or
-  `:where(…)`, so each of its selectors starts so.
-- Such rules wrapped in `@media`, `@supports` or `@container`, as deep as needed
-  (the night followed: `@media (prefers-color-scheme: dark)` with
-  `:not([data-theme="light"])`; forced colours: `@media (forced-colors: active)`).
-- `@keyframes <id>-<name>`: a name of the skin, since keyframes are global.
-- Nothing else: no rule without the piece (`:root[data-skin="<id>"]` alone is the
-  palette's), no nested rule, no `@font-face`, `@import` or `@layer`.
-
-```css
-/* mix.css */
-:root[data-skin="<id>"] .event-card {
-  border-radius: 0.375rem;
-}
-:root[data-skin="<id>"][data-theme="dark"] .tabbar ul,
-:root[data-skin="<id>"] .tab:is([aria-current="page"], :hover) {
-  box-shadow: none;
-}
-@media (min-width: 48rem) {
-  :root[data-skin="<id>"] .app-header {
-    min-height: 10rem;
-  }
-}
-@keyframes <id>-rise {
-  from {
-    opacity: 0;
-  }
-}
-```
-
-## Depth (`VITE_SKIN_DEPTH`)
-
-`palette` (default), `mix` or `full`, read at build time by `plugin.ts` (from the
-environment, or the `.env` files of Vite's `envDir`), which fails the build on any
-other value. It is a constant of the build: `SKIN_DEPTH` in `index.ts`
-(`BUILD_SKIN_DEPTH`). The plugin points two modules at the files of the depth,
-whose `import.meta.glob` calls take the files of that level and of the ones before
-it, in order (a deeper sheet wins):
-
-- `virtual:skin-styles` → `depth/<depth>.styles.ts`, the stylesheets. Only
-  `styles.ts` imports it, and only `main.tsx` imports `styles.ts`, right after
-  `styles.css`: the sheets of the skins are in the entry stylesheet, the one the
-  page links, after Crête's. Imported by the registry (which Vite puts in a part
-  shared with the pages), they would be a second stylesheet that every page
-  waits for. A browser test that draws a skin imports `skins/styles` as it imports
-  `styles.css`. The map's sheet stays its own, loaded with the map.
-- `virtual:skin-depth` → `depth/<depth>.ts`, the variants, for the registry.
-
-| Depth     | Stylesheets                                       | Variants              |
-| --------- | ------------------------------------------------- | --------------------- |
-| `palette` | `fonts.css`, `palette.css`                        | none                  |
-| `mix`     | `fonts.css`, `palette.css`, `mix.css`             | `mix.tsx`             |
-| `full`    | `fonts.css`, `palette.css`, `mix.css`, `full.css` | `mix.tsx`, `full.tsx` |
-
-The files of a deeper level are not in the build at all (`plugin.build.test.ts`
-builds a small app at each depth). The whole suite runs at each depth:
-`VITE_SKIN_DEPTH=mix pnpm --dir web test`.
-
-### Markup variants
-
-A piece whose markup must change (the bib of « Dossard », the ticket of
-« Rétro ») is made skinnable once, at the top of its module, under a name that
-`VariantProps` (`types.ts`) gives with its props:
-
-```tsx
-// types.ts
-export type VariantProps = { EmptyState: EmptyStateProps; EventCard: EventCardProps; … };
-
-// features/events/EventCard.tsx
-export function EventCardBase(props: EventCardProps) { … }
-export const EventCard = skinnable("EventCard", EventCardBase);
-```
-
-The app draws the skinnable one (`EventCard`); `…Base` is Crête's, exported for
-the tests. The pieces made skinnable:
-
-| Name            | Where                             | Props (`types.ts`)                               | What it is                                                                                                   |
-| --------------- | --------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `EmptyState`    | `components/EmptyState.tsx`       | `title`, `hint`                                  | a list with nothing in it                                                                                    |
-| `EventCard`     | `features/events/EventCard.tsx`   | `view`, `list`                                   | an event in a list (`.event-card`): home, upcoming, past, agenda                                             |
-| `EventHero`     | `features/events/EventHero.tsx`   | `view`, `heading`                                | the top of the page of an event (`.event-hero`), its `h1`                                                    |
-| `DateChip`      | `components/Dawn.tsx`             | `start`, `end?`, `label`, `size?` (`md`, `lg`)   | the day or days of an event (`.date-chip`), a picture; `label` says it                                       |
-| `RunnerHero`    | `features/runners/RunnerHero.tsx` | `runner` (undefined while loading), `heading`    | the top of the page of a runner (`.runner-hero`), their photo and their `h1`                                 |
-| `FormatTitle`   | `features/events/FormatTitle.tsx` | `formatView`, `parts`                            | the words of the title of a format on the page of an event: its name, then its measures (`.format-title`)    |
-| `TrackFigures`  | `features/route/TrackFigures.tsx` | `figures`, `altitude`, `start?`                  | the figures of a track over its map: length, gain, loss, then the altitudes (`.route-figures`, `.stat-tile`) |
-| `CountdownRing` | `components/Dawn.tsx`             | `days`, `tone?` (`color`, `light`), `className?` | the days left before a race or a deadline, a picture (`.countdown-ring`); the words beside it say them       |
-
-- `view` is the event as the app has it (`EventView`): the event, its formats with
-  who starts them, the interested and the supporters, its days.
-- `list` tells the lists apart, for a variant that marks them (Crête does not):
-  `home` (the group's next events), `upcoming` and `past` (the list), `agenda`.
-- `decorFormat` is for a variant of `EventCard` that keeps Crête's card and
-  marks its formats: it gives it to its `Base`, which puts each format's `kind`
-  on its `.event-card-format` (`data-format-kind`) and its `marks` on its line.
-  A page never gives it.
-- `parts` are the words of a format as `formatMeasures` gives them (its name,
-  then its measures); `figures` the figures of a track in words (« 12,6 km »,
-  « 724 m D+ », « 728 m D− »), `altitude` its lowest and highest points in
-  words or null, `start` its first point (for a picture of where it starts). A
-  variant keeps every word, in its order (a measure in a tag keeps its
-  separator « · » in the text, `sr-only`).
-- A `CountdownRing` is decoration: a variant stays hidden from screen readers
-  (`aria-hidden`), or draws nothing. On the home page the words beside it say
-  the days (a skin that marks them otherwise styles `.days-left`); Crête's hero
-  has no such words, so a skin whose ring draws nothing, or whose hero has
-  none, writes the days in its hero (`f.inDays`). `components.test.tsx` checks
-  every hero shows them.
-- `heading` is what the `h1` of a hero carries: spread it on the variant's `h1`
-  (`<h1 {...heading}>`). It holds its id (the actions name it), the attribute the
-  page gives the focus by, `tabIndex={-1}`, and the ref of a runner's title.
-- What a piece shows besides, it reads as Crête's does, with the shared
-  helpers rather than a copy of their code:
-  - the day: `useToday`, `daysBetween`, and `daysToGo(start, end, today)`
-    (`lib/dates.ts`), the days left before an event for a countdown: 0 on its
-    first day and while it is under way, null once it is over;
-  - the registration: `registrationState`, `registrationLabel` (« Inscriptions
-    jusqu'au … », « Inscriptions closes »), and `deadlineText(state, f, t)`
-    (`features/events/registration.ts`), the sentence of a hero: the label, and
-    in the last week the days left after « · » (`DAYS_LEFT_SHOWN`); `webAddress`,
-    and the link to register, `RegisterLink`;
-  - the formats: `FormatLine` (`features/events/FormatLine.tsx`), the line of a
-    format on a card, which a variant marks its own way with `marks` (`before`:
-    a picture before the parts; `name`: how the name is drawn; `measure`: how
-    each measure is drawn, a tag or a chip, its separator kept in the text and
-    hidden from the eye) and the classes of its line (`className`); `FormatParts`,
-    the same parts with their marks, for a title of a variant's own
-    (`FormatTitle`); `formatMeasures` for the words alone;
-  - the runners: `ParticipantChips`; the days left: `CountdownRing`
-    (`components/Dawn.tsx`).
-
-The skin exports the variant from `mix.tsx` or `full.tsx` (full wins over mix):
-
-```tsx
-export const variants: Variants = { EventCard: BibCard };
-```
-
-A name that is not in `VariantProps`, or a variant with other props, does not
-typecheck.
-
-**A variant gets the base as a prop.** `skinnable` draws the variant with the
-props of the piece and `Base`, the piece as Crête draws it (with the skin's own
-motifs in its slots), so that the variant can frame or wrap it rather than draw
-it again (`VariantPropsOf<N>` in `types.ts`). Take `Base` out of the props
-before passing them on; `Base` takes the props alone. A variant of `full.tsx`
-gets Crête's piece too, not the variant of `mix.tsx`. The pieces nest: Crête's
-card draws its day with `DateChip`, so a skin's day is in its card, base or not.
-
-```tsx
-// skins/<id>/mix.tsx: a frame around Crête's card
-function BibCard({ Base, ...props }: VariantPropsOf<"EventCard">) {
-  return (
-    <div className="bib">
-      <Base {...props} />
-    </div>
-  );
-}
-```
-
-A variant that draws its own markup instead keeps everything the base shows and
-does: every text (the statuses, the counts, the D+ figures, the dates), every
-link and every action, the `h1` with `heading`, the date in words (`label`) for
-a picture hidden from screen readers. Only the markup differs. It keeps the
-semantic class of the piece (`.event-card`, `.event-hero`, `.runner-hero` on its
-outer element, `.date-chip` on the picture of the day), which `mix.css` restyles
-and the smoke battery finds. The variant of `DateChip` sits in the card's row of
-flex items: its outer element must not shrink (`shrink-0 self-start`, as Crête's
-picture has), or the day is squashed on a narrow screen.
-
-`_example/mix.tsx` replaces `EmptyState`, frames Crête's `EventCard` (a thick
-line, dashed in the agenda) and puts a line over Crête's `EventHero`.
-`components.test.tsx` checks, in every skin, that a hero keeps the title its page
-gives it (`heading`).
-
-**A variant closes a cycle of imports.** A `mix.tsx` that imports a module of
-the app (`RegisterLink`, `FormatLine`, `DateChip`…) is reached from
-`skins/index` through the depth module, and reaches it back. It is safe while
-both hold:
-
-- the variant uses what it imports while it renders, never when its module is
-  evaluated (no call or read at the top of the file);
-- nothing imports a `mix.tsx` or `full.tsx` directly, in the app or in a test:
-  a variant is reached through the registry (`variantOf(skinId, name)`, or the
-  app's piece). A module that entered a `mix.tsx` before the registry would find
-  it unfinished: natively, an error (« Cannot access … before initialization »);
-  bundled, that skin's variants silently missing. The one exception,
-  `components.test.tsx`, imports the registry first.
-- A variant never imports the piece it replaces: it gets it as `Base`.
+`data-action` (`join`, `add`, `calendar`, `edit`, `delete`).
 
 ## Tests
 
-- `index.test.ts`: the registry, the choice (kept, applied, refused storage,
-  other tabs, the skin of the page kept in memory), the mode of a single-mode
-  skin, the bar's colour, the slots' fallback, the variants.
-- `plugin.test.ts`, `plugin.build.test.ts`, `noFlash.test.ts`: the depth, the files of
-  each depth in a real build (a skin of development included), the `.env`
-  directory, the table of the skins written in `index.html` and its script
-  before the first paint.
-- `components.test.tsx`: `slotted` and `skinnable` in each skin, at the depth of
-  the run: each piece of `VariantProps` draws its base, or the skin's variant
-  given the base (which then differs from it); the example's card frames the
-  base it gets.
-- `variants.test.tsx`: the feature test of every variant, whoever writes it: in
-  each skin, each piece it replaces at the depth of the run says everything its
-  base says (every text a screen reader has, every link, every named list, every
-  button), over the shapes an event takes (`EVENT_SHAPES`: rich, closed, no
-  format, a single day, under way, a one-word name, next year); a ring says
-  nothing, as its base. A skin's own tests use the same harness,
-  `../test/variant.tsx`: `inApp` (a piece in the app: French, a day, a router,
-  a skin, the frame of a page), `said` (what a screen reader has, never what is
-  `aria-hidden`), `keepsEverything`, `EVENT_SHAPES`, `hex`; with the module of
-  PocketBase made for it, `../test/pbMock.ts` (its first lines say how to mock
-  `lib/pb` with it).
+- `index.test.ts`: the registry, each skin's index (nothing but types) and its
+  look (its sheets, nothing of another skin), the choice (kept, applied after
+  its look is loaded, the last one winning, a look that fails, refused
+  storage, other tabs, the skin of the page kept in memory), the start
+  (`showKeptSkin`: a skin removed since, a look that fails), the mode of a
+  single-mode skin, the bar's colour, the slots' fallback.
+- `plugin.test.ts`, `plugin.build.test.ts`, `noFlash.test.ts`: the skins of
+  development out of a build, the table of the skins written in `index.html`
+  with the sheets of each look (a small app built for real), the script before
+  the first paint (the sheets of the skin kept linked by the parser, on every
+  page, signed in or not), no folder of a skin importing another's, the list of
+  folders that `styles.css` does not scan.
+- `build.test.ts`: the real app, built: the page of a person who stays on Crête
+  links one stylesheet with nothing of another skin, and its entry and what it
+  preloads have no motif of another skin; each other skin is a part of its
+  own, with its sheets in the table; the faces of the samples come with the
+  section « Apparence » only; nothing of the skin of development.
+- `lazy.test.tsx`: in a browser, a page before any choice has nothing of
+  another skin; a skin chosen has its palette in the page, once; signing out
+  keeps the skin, on the device and on the page, and the page to sign in is
+  drawn in it; a page without a session opened with a skin kept has it.
+- `components.test.tsx`: `slotted` in each skin, and what every motif says to a
+  screen reader (nothing; the name of the app for `BrandMark`).
 - `tokens.test.tsx`: in each skin, Crête's motifs and the map of a track take
   every colour from a `--motif-*` or `--map-*` property: none written out, in an
   attribute, a style or the arbitrary value of a class (`shadow-[…]`,
   `drop-shadow-[…]`; a mask's is only an alpha); a window, `--shade-dialog`; a
   toast, the white pill and the ring of the days left on a hero, their shades
-  and veil; the titles, the style of `--display-*`. These pieces are checked at
-  every depth: a rule of `mix.css` or `full.css` on the window of a dialog
-  (`.dialog`), a message (`.toast`), the labels or the zoom of the map, or the
-  titles, reads the property (a colour or a style written out there would fail
-  them). The white pill is checked at palette only (`--shade-on-dawn`): at mix
-  and full a skin may draw « S'inscrire » its own way.
+  and veil; the titles, the style of `--display-*`.
 - `smoke.test.tsx`: every skin × mode, at 320 px: home, an event with its map,
   profile and a dialog, a runner, the form, a public page (its card in
   `--shade-welcome`, `--welcome-card` and `--welcome-rim`), the settings, forced
   colours; 44 px targets, the marks of the titles, the current tab, the «+» and
-  the main button in the skin's paint, ink and halo (the halo of `shadow-glow` in
-  the skin, transparent too; at palette only, since mix and full may draw them
-  their own way); at every depth, the current tab told apart from the others by
-  more than the colour of its words (`toldApart`: its weight, a fill, a shadow,
-  a border, a mark before or after it), and its words 4.5:1 on what is behind
-  them (`textContrast` of `../test/computed.ts`: a fill that covers the tab, else
-  what is under it; a bar cut out of the paint is not behind the words); what the heroes say whoever draws them (the end
-  of the registrations, the notes, the link to register, the photo), the shades
-  of the hero's pieces and the style of its title (at palette only, since mix
-  and full may restyle them); the skins' sheets in the page, and what the
-  skin's own sheet sets (`ownDeclaration` of
-  `../test/computed.ts`: Crête declares every property, so the page alone would
-  not say whether the skin set one).
-- `../test/skinSheets.test.ts`: the forms a palette, a mix and a full sheet may
-  and may not use (`sheetProblems`), and the stops a gradient may have.
+  the main button in the skin's paint, ink and halo (the halo of `shadow-glow`
+  in the skin, transparent too), the current tab told apart from the others by
+  more than the colour of its words (`toldApart`) and its words 4.5:1 on what is
+  behind them (`textContrast` of `../test/computed.ts`); what the heroes say, the
+  shades of their pieces and the style of their titles; what the skin's own
+  sheet sets (`ownDeclaration` of `../test/computed.ts`: Crête declares every
+  property, so the page alone would not say whether the skin set one).
+- `../test/skinSheets.test.ts`: the forms a palette may and may not use
+  (`sheetProblems`), and the stops a gradient may have.
 - `../dark.test.ts`, `../contrast.test.ts`, `../dashed.test.ts`,
   `../features/route/slope.test.ts`: every skin × mode (`SKIN_CASES` of
-  `../test/theme.ts`), the sky included, and the guards of the stylesheets
-  (`dark.test.ts`: the three levels, and the `fonts.css` of every folder;
-  `dashed.test.ts`: every dashed border or outline of a `mix.css` or `full.css`,
-  `sheetDashes`, a state at 3:1 or a decoration of its list).
-- `../fonts.test.ts`: the faces of every `fonts.css` (the package's files, its own
-  declaration of each, each once), the families and weights each skin needs, and
-  the faces of an italic or wider title (`--display-style`, `--display-stretch`).
-- `../features/profile/ThemePicker.test.tsx`: the picker, its font samples, the
-  edge of a swatch (3:1 on its card, in every skin and mode).
+  `../test/theme.ts`), the sky included (white text, « S'inscrire », the notes,
+  and the ring of the focus at 3:1 on every stop), and the guards of the
+  stylesheets (`dark.test.ts`: each `palette.css`, and the `fonts.css` of every
+  folder).
+- `../fonts.test.ts`: the faces of every `fonts.css` (the package's files, its
+  own declaration of each, each once), the families and weights each skin
+  needs, the faces each look brings, the faces of an italic or wider title
+  (`--display-style`, `--display-stretch`), and those of the samples
+  (`samples.css`).
+- `../features/profile/ThemePicker.test.tsx`: the picker, its samples in the
+  font of each skin (not asked for before the section shows), the edge of a
+  swatch (3:1 on its card, in every skin and mode).
+- `../features/pwa/sw.test.ts`: a skin chosen once is drawn offline.

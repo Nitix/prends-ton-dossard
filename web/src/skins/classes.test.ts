@@ -9,10 +9,7 @@ import { expect, test } from "vitest";
 // later use of the utility.
 
 const readme = readFileSync(new URL("README.md", import.meta.url), "utf8");
-const section = readme.slice(
-  readme.indexOf("## Semantic classes"),
-  readme.indexOf("## Depth (`VITE_SKIN_DEPTH`)"),
-);
+const section = readme.slice(readme.indexOf("## Semantic classes"), readme.indexOf("## Tests"));
 const classes = [
   ...new Set(Array.from(section.matchAll(/`\.([a-z][a-z0-9-]*)/g), ([, name = ""]) => name)),
 ];
