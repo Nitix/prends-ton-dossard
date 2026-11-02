@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { pb } from "../../lib/pb";
 import { onResume } from "../../lib/resume";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
+import { syncAccountSkin } from "./accountSkin";
 
 /** The pages anybody can open, signed in or not. */
 const PUBLIC_PATHS: readonly string[] = ["/connexion", "/invitation"];
@@ -29,25 +30,40 @@ export function safeRedirect(redirect: string | undefined): string {
 const REFUSED = new Set([400, 401, 403, 404]);
 
 /**
- * Checks, when the app starts, that the stored session still works, and
- * renews it. The store is emptied when the token is expired or when the
- * server refuses it (it was replaced, or the account is disabled).
+ * Asks the server to renew the stored session, and tells whether it did. The
+ * store is emptied when the token is expired or when the server refuses it (it
+ * was replaced, or the account is disabled).
  *
  * A failure to reach the server leaves the session alone: opening the app
  * offline must not sign anybody out.
  */
-export async function restoreSession(): Promise<void> {
+async function renewSession(): Promise<boolean> {
   if (!pb.authStore.isValid) {
     pb.authStore.clear();
-    return;
+    return false;
   }
   try {
     await pb.collection("users").authRefresh();
+    return true;
   } catch (err) {
     if (err instanceof ClientResponseError && REFUSED.has(err.status)) {
       pb.authStore.clear();
     }
+    return false;
   }
+}
+
+/**
+ * Checks, when the app starts, that the stored session still works, and
+ * renews it (see renewSession). When the server accepts it, the skin of the
+ * account and the device's are put in agreement (accountSkin.ts), so that the
+ * app is first drawn in the account's skin: it is not done offline, where the
+ * device keeps its own.
+ */
+export async function restoreSession(): Promise<void> {
+  if (!(await renewSession())) return;
+  const record = pb.authStore.record;
+  if (isUser(record)) await syncAccountSkin(record);
 }
 
 /** How often, at most, the server is asked whether the session still works. */
@@ -86,7 +102,10 @@ export function sessionCheck({
     }
     if (now() - lastAsked < interval) return;
     lastAsked = now();
-    await restoreSession();
+    // Not restoreSession: the skin is put in agreement when the app starts and
+    // when somebody signs in. A renewal that left before a choice reached the
+    // server comes back with the skin the account had, which must not undo it.
+    await renewSession();
   };
 }
 
@@ -96,14 +115,32 @@ export function sessionCheck({
  * last user saw is forgotten and the router checks the page again: the guard
  * of the root route sends to the login page. While the app is open, the
  * session is checked (sessionCheck). Returns the function that stops it all.
+ *
+ * Whoever signs in (the password, a passkey, the demo, an invitation: they all
+ * end in the auth store) gets the skin of their account in agreement with the
+ * device's (accountSkin.ts). The skin stays on the device at sign-out, so the
+ * pages to sign in are drawn in it. The light or dark mode is not part of this:
+ * it stays the device's own (lib/theme.ts).
  */
 export function connectSession(
   router: { invalidate: () => Promise<unknown> },
   queryClient: QueryClient,
   options?: Parameters<typeof sessionCheck>[0],
 ): () => void {
-  const stopListening = pb.authStore.onChange((token) => {
-    if (token) return;
+  // The account whose skin is in agreement: the one the app started with
+  // (restoreSession did it), then each one that signs in. A renewal of the same
+  // account is not a sign-in.
+  const started = pb.authStore.record;
+  let synced = isUser(started) ? started.id : "";
+  const stopListening = pb.authStore.onChange((token, record) => {
+    if (token) {
+      if (isUser(record) && record.id !== synced) {
+        synced = record.id;
+        void syncAccountSkin(record);
+      }
+      return;
+    }
+    synced = "";
     queryClient.clear();
     void router.invalidate();
   });
