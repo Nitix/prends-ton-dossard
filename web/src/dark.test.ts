@@ -17,6 +17,7 @@ import {
   skinModes,
   skinSelectors,
   skinStylesheet,
+  skinsWithFonts,
   linearStops,
   skyColour,
   themeColour,
@@ -300,6 +301,47 @@ test("dark — un skin ne fait que changer, sous son propre sélecteur, des prop
       }
     }
   }
+});
+
+/** What a face of a font may say: nothing that paints, nothing that loads more than its file. */
+const FACE_PROPERTIES = [
+  "font-family",
+  "font-style",
+  "font-weight",
+  "font-stretch",
+  "font-display",
+  "src",
+  "unicode-range",
+  "size-adjust",
+];
+
+/** The custom properties of fonts a skin may set (Tailwind's `font-sans`, `font-mono`, `font-serif`, and the titles). */
+const FONT_PROPERTIES = ["--font-sans", "--font-display", "--font-mono", "--font-serif"];
+
+test("dark — les polices d'un skin (fonts.css, présent à toute profondeur) : des @font-face, et ses --font-* sous son seul sélecteur", () => {
+  // Every folder that has one, a skin or the start of one: Task 2 of v6 adds
+  // the fonts before the skins.
+  const folders = skinsWithFonts();
+  expect(folders.length).toBeGreaterThan(0);
+  const problems = folders.flatMap((skin) => {
+    const { root } = skinSelectors(skin);
+    const sheet = skinRules(skinStylesheet(skin, "fonts"));
+    return sheet.flatMap(({ selectors, properties, media }) => {
+      const isFace = selectors.length === 1 && selectors[0] === "@font-face";
+      const allowed = isFace ? FACE_PROPERTIES : FONT_PROPERTIES;
+      return [
+        // Nothing in a media query: the same fonts, whatever the mode.
+        ...(media ? [`${skin}: a rule in a media query`] : []),
+        ...(isFace || (selectors.length === 1 && selectors[0] === root)
+          ? []
+          : [`${skin}: the selector ${selectors.join(", ")}`]),
+        ...properties
+          .filter((property) => !allowed.includes(property))
+          .map((property) => `${skin}: ${isFace ? "@font-face" : root} sets ${property}`),
+      ];
+    });
+  });
+  expect(problems).toEqual([]);
 });
 
 test("dark — un skin à deux modes : son sombre est le même choisi ou suivi, et redit la nuit ce qu'il change le jour", () => {

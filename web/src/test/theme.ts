@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 import { SKINS } from "../skins";
 import type { Depth } from "../skins/types";
@@ -98,13 +98,25 @@ export function skinSelectors(skin: string) {
 
 /**
  * A stylesheet of a skin, by its level: its `palette.css` (its colours, the
- * only one that sets custom properties), `mix.css` or `full.css`; nothing when
- * it has none.
+ * only one that sets custom properties of the theme), `mix.css` or `full.css`,
+ * or its `fonts.css` (its faces and `--font-*`, whatever the depth); nothing
+ * when it has none.
  */
-export function skinStylesheet(skin: string, level: Depth = "palette"): string {
+export function skinStylesheet(skin: string, level: Depth | "fonts" = "palette"): string {
   if (skin === DEFAULT_SKIN) return "";
   const url = new URL(`../skins/${skin}/${level}.css`, import.meta.url);
   return existsSync(url) ? readFileSync(url, "utf8") : "";
+}
+
+/**
+ * The folders of src/skins/ that have a `fonts.css`, skins or not yet (a folder
+ * with that file only is the start of a skin): the guards of the stylesheets
+ * read the fonts of all of them.
+ */
+export function skinsWithFonts(): string[] {
+  return readdirSync(new URL("../skins/", import.meta.url), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && skinStylesheet(entry.name, "fonts") !== "")
+    .map((entry) => entry.name);
 }
 
 /** The rules of a stylesheet at its top level (or of a block), comments out: what is before each `{`, and inside it. */

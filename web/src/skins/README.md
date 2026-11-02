@@ -15,7 +15,8 @@ before the page is first drawn, then by `applySkin`.
 ```
 skins/<id>/
   index.ts     the skin (required): `export const skin: Skin`
-  palette.css  its custom properties: colours, fonts, paints of the dawn (depth palette)
+  fonts.css    its @font-face rules and `--font-*` (every depth)
+  palette.css  its custom properties: colours, radii, shadows, paints of the dawn (depth palette)
   mix.css      its signature pieces (depth mix)
   full.css     every other piece (depth full)
   mix.tsx      components it replaces at depth mix:  `export const variants: Variants`
@@ -50,7 +51,8 @@ pieces inline).
 ## Adding a skin, step by step
 
 1. Create `skins/<id>/index.ts` as above.
-2. Write `palette.css`: custom properties only (see Colours), under the skin's selectors.
+2. Write `fonts.css` (see Fonts), and `palette.css`: custom properties only (see
+   Colours), under the skin's selectors.
 3. Draw its motifs as components of the slots it changes, and list them in `slots`.
 4. Run `pnpm --dir web test`, and with `VITE_SKIN_DEPTH=mix` and `=full` once it has
    deeper files. The tests go through the new skin in each of its modes, without
@@ -70,7 +72,7 @@ so a skin that sets them is followed everywhere.
   `--color-peach-*`, `--color-blush-*`, `--color-red-*`, `--color-card`,
   `--color-raised`, `--color-field`, `--color-rim`, `--color-toast`,
   `--color-scrim`, `--color-relief`, `--color-slope-1…5`.
-- The rest of the theme: `--font-sans`, `--font-display`, `--radius-*`, `--shadow-*`
+- The rest of the theme: `--radius-*`, `--shadow-*`
   (`--shadow-glow` is the halo of the buttons of the dawn), `--shade-*`,
   `--map-frame`, `--map-veil`, `--sheet-glow`.
 - The paints of the dawn, which Crête writes out and the night leaves alone:
@@ -158,9 +160,45 @@ its own, in `mix.css` or `full.css`, adds its edge under
 
 ### Fonts
 
-`--font-sans` and `--font-display` name its families; their files are served by
-the site and loaded only when the skin is used (Task 2 of v6). `fontSample` is
-the family the picker draws « Aa » in, once loaded: the picker never loads a font.
+`fonts.css` holds the faces of the skin and the stacks that name them, and
+nothing else (a test says so): `@font-face` rules, and `--font-sans`,
+`--font-display` (and `--font-mono`, `--font-serif` when it has them) under
+`:root[data-skin="<id>"]`. It is bundled at every depth, before the palette.
+
+```css
+@font-face {
+  font-family: "Outfit Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500 800;
+  src: url("@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, …; /* the package's own, for this file */
+}
+:root[data-skin="<id>"] {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+```
+
+- The files are the ones of a package (`@fontsource-variable/<name>`, exact
+  version in `package.json`; `@fontsource/<name>` for a font with no variable
+  build, one file per weight and style), written by hand as Crête's are: a
+  latin-ext face and a latin face, with the unicode-range of the package's own
+  CSS, `font-display: swap`, the weights the skin uses and no others. Never the
+  package's stylesheet (it brings every script), never a host.
+- A family is declared once, in the `fonts.css` of the first skin that uses it
+  (Outfit: « Sentier », also « Alpage »; Inter Tight: « Marathon », also
+  « Chrono »), for the union of their weights; the other skin only names it in
+  its stacks. Inter and Plus Jakarta Sans are declared in `styles.css`: name
+  them, do not declare them again. A `_` folder is left out of a build, so
+  nothing shared goes in one.
+- The browser fetches a face only when text is drawn in its family. Every
+  `fonts.css` is in the build, but a person who stays on Crête (no `data-skin`)
+  draws nothing in them: no file is requested, none is preloaded (`index.html`
+  has no preload) or precached (`public/sw.js` keeps the page only; a file of
+  `/assets/` is kept when it is first requested).
+- `fontSample` is the family the picker draws « Aa » in, once loaded: it names a
+  family of this file, and the picker never loads a font.
 
 ## Slots (motifs)
 
@@ -222,11 +260,11 @@ other value. It is a constant of the build: `SKIN_DEPTH` in `index.ts`
 `depth/<depth>.ts`, whose `import.meta.glob` calls take the files of that level
 and of the ones before it, in order (a deeper sheet wins):
 
-| Depth     | Stylesheets                          | Variants              |
-| --------- | ------------------------------------ | --------------------- |
-| `palette` | `palette.css`                        | none                  |
-| `mix`     | `palette.css`, `mix.css`             | `mix.tsx`             |
-| `full`    | `palette.css`, `mix.css`, `full.css` | `mix.tsx`, `full.tsx` |
+| Depth     | Stylesheets                                       | Variants              |
+| --------- | ------------------------------------------------- | --------------------- |
+| `palette` | `fonts.css`, `palette.css`                        | none                  |
+| `mix`     | `fonts.css`, `palette.css`, `mix.css`             | `mix.tsx`             |
+| `full`    | `fonts.css`, `palette.css`, `mix.css`, `full.css` | `mix.tsx`, `full.tsx` |
 
 The files of a deeper level are not in the build at all (`plugin.build.test.ts`
 builds a small app at each depth). The whole suite runs at each depth:
@@ -271,5 +309,8 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
   the marks of the titles, the current tab in the skin's paint.
 - `../dark.test.ts`, `../contrast.test.ts`, `../dashed.test.ts`,
   `../features/route/slope.test.ts`: every skin × mode (`SKIN_CASES` of
-  `../test/theme.ts`), the sky included, and the guards of the three stylesheets.
+  `../test/theme.ts`), the sky included, and the guards of the stylesheets
+  (`dark.test.ts`: the three levels, and the `fonts.css` of every folder).
+- `../fonts.test.ts`: the faces of every `fonts.css` (the package's files, its own
+  declaration of each, each once), and the families and weights each skin needs.
 - `../features/profile/ThemePicker.test.tsx`: the picker, its font samples.

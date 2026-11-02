@@ -9,8 +9,9 @@ import { DEPTHS, type Depth } from "./types";
 
 // The plugin of the skins in a real build, on a small app of its own: two
 // skins, one of them of development, each with a stylesheet and a variant at
-// every depth, and the real files of the depths. A build at each depth keeps
-// the files of that depth and of the ones before it, of the real skin only.
+// every depth, a stylesheet of fonts, and the real files of the depths. A build
+// at each depth keeps the files of that depth and of the ones before it, of the
+// real skin only, and the fonts (fonts.css) at every depth.
 
 const skinsDir = fileURLToPath(new URL(".", import.meta.url));
 let root = "";
@@ -31,7 +32,7 @@ beforeAll(() => {
   }
   for (const id of ["real", "_dev"]) {
     write(`src/skins/${id}/index.ts`, `export const skin = { id: "${id}" };\n`);
-    for (const level of DEPTHS) {
+    for (const level of ["fonts", ...DEPTHS]) {
       write(`src/skins/${id}/${level}.css`, `.${id.replace("_", "dev")}-${level} { order: 1; }\n`);
     }
     for (const level of ["mix", "full"]) {
@@ -89,14 +90,14 @@ async function built(depth: Depth): Promise<{ js: string; css: string }> {
 
 test("plugin.build — à chaque profondeur, le build réussit, garde ses niveaux et rien d'un skin de développement", async () => {
   const levels = {
-    palette: ["palette"],
-    mix: ["palette", "mix"],
-    full: ["palette", "mix", "full"],
+    palette: ["fonts", "palette"],
+    mix: ["fonts", "palette", "mix"],
+    full: ["fonts", "palette", "mix", "full"],
   };
   for (const depth of DEPTHS) {
     // A dev skin with a variant at mix and full: its module is empty in a build, with the names it should have.
     const { js, css } = await built(depth);
-    for (const level of DEPTHS) {
+    for (const level of ["fonts", ...DEPTHS]) {
       const kept = levels[depth].includes(level);
       expect(css.includes(`.real-${level}`), `${depth}: the ${level}.css of a skin`).toBe(kept);
       expect(css.includes(`.dev-${level}`), `${depth}: the ${level}.css of a dev skin`).toBe(false);

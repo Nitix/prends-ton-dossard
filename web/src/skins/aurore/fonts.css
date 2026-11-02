@@ -1,0 +1,10 @@
+/* « Aurore »: Plus Jakarta Sans for the titles, over Inter, the two fonts of
+   « Crête », whose faces styles.css declares: nothing to add. It names them
+   itself, so that it does not follow « Crête » if that one changes. */
+:root[data-skin="aurore"] {
+  --font-sans:
+    "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display:
+    "Plus Jakarta Sans Variable", "Inter Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+}

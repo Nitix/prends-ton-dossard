@@ -45,14 +45,17 @@ function globs(file: string): string[] {
 
 test("plugin — un build garde les feuilles et les variantes de sa profondeur et de celles d'avant, pas des suivantes", () => {
   expect(DEPTH_MODULE).toBe("virtual:skin-depth");
-  // Each level in its own call, in this order: a deeper sheet comes after, and wins.
-  expect(globs(depthFile(dir, "palette"))).toEqual(["../*/palette.css"]);
+  // The fonts at every depth, first (a palette may still set a `--font-*`); then
+  // each level in its own call, in this order: a deeper sheet comes after, and wins.
+  expect(globs(depthFile(dir, "palette"))).toEqual(["../*/fonts.css", "../*/palette.css"]);
   expect(globs(depthFile(dir, "mix"))).toEqual([
+    "../*/fonts.css",
     "../*/palette.css",
     "../*/mix.css",
     "../*/mix.tsx",
   ]);
   expect(globs(depthFile(dir, "full"))).toEqual([
+    "../*/fonts.css",
     "../*/palette.css",
     "../*/mix.css",
     "../*/full.css",

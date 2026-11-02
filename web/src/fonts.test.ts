@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 import { expect, test } from "vitest";
 
@@ -7,9 +7,21 @@ import { expect, test } from "vitest";
 // the service worker), not by Google: a font that comes from another host tells
 // that host who opens the app, and it is missing when the installed app opens
 // without a network. Nothing in these files names that host or breaks that.
+// The same goes for the fonts of the other skins (src/skins/<id>/fonts.css).
 
 const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+/** The stylesheet of fonts of every folder of src/skins/ that has one, by the id of the folder. */
+const skinFonts: Record<string, string> = Object.fromEntries(
+  readdirSync(new URL("./skins/", import.meta.url), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(skinFontsUrl(entry.name)))
+    .map((entry) => [entry.name, readFileSync(skinFontsUrl(entry.name), "utf8")]),
+);
+
+function skinFontsUrl(id: string): URL {
+  return new URL(`./skins/${id}/fonts.css`, import.meta.url);
+}
 
 /** The value of a custom property declared in the theme, on one or several lines. */
 function themeValue(css: string, name: string): string {
@@ -95,4 +107,353 @@ test("fonts — every face names a file that the package has", () => {
       `the file of ${file}`,
     ).toBe(true);
   }
+});
+
+// --- The fonts of the other skins (src/skins/README.md, « Fonts ») ---
+//
+// Each skin has a src/skins/<id>/fonts.css: the faces of its fonts, written by
+// hand like Crête's (the latin and latin-ext files of a package), and its
+// `--font-*` under `:root[data-skin="<id>"]`. Every one is in the build, at
+// every depth, and the browser fetches a face only when a page draws text in
+// its family: a person who stays on « Crête » downloads none of them.
+
+type Span = [number, number];
+type Subset = "latin-ext" | "latin";
+type Kind = "sans" | "display" | "mono" | "serif";
+
+/** What a skin needs of a font: a family, its style, the weights (and widths) the variant was drawn with. */
+type Need = {
+  family: string;
+  style?: "italic";
+  weights: Span;
+  stretch?: Span;
+  /** The subsets of the file, when it is not both of them. */
+  subsets?: Subset[];
+};
+
+const INTER: Need = { family: "Inter Variable", weights: [400, 700] };
+const statics = (family: string, weights: number[], style?: "italic"): Need[] =>
+  weights.map((weight) => ({ family, weights: [weight, weight], ...(style ? { style } : {}) }));
+
+/**
+ * The ten skins and their fonts, from the plan of v6 (Task 2): the families
+ * their stacks name besides the system ones, in order, and the faces they need
+ * under them. A family shared by two skins (Outfit, Inter Tight) is declared
+ * once, for the weights of both.
+ */
+const SKIN_FONTS: Record<string, { stacks: Partial<Record<Kind, string[]>>; faces: Need[] }> = {
+  piste: {
+    stacks: { sans: ["Inter Variable"], display: ["Barlow Condensed", "Inter Variable"] },
+    faces: [
+      INTER,
+      ...statics("Barlow Condensed", [600, 700, 800]),
+      ...statics("Barlow Condensed", [700, 800], "italic"),
+    ],
+  },
+  sentier: {
+    stacks: { sans: ["Inter Variable"], display: ["Outfit Variable", "Inter Variable"] },
+    faces: [INTER, { family: "Outfit Variable", weights: [500, 700] }],
+  },
+  nuit: {
+    stacks: { sans: ["Inter Variable"], display: ["Space Grotesk Variable", "Inter Variable"] },
+    faces: [INTER, { family: "Space Grotesk Variable", weights: [500, 700] }],
+  },
+  dossard: {
+    stacks: { sans: ["Inter Variable"], display: ["Archivo Variable"] },
+    faces: [INTER, { family: "Archivo Variable", weights: [700, 900], stretch: [62, 125] }],
+  },
+  marathon: {
+    stacks: { sans: ["Inter Variable"], display: ["Inter Tight Variable", "Inter Variable"] },
+    faces: [
+      INTER,
+      { family: "Inter Tight Variable", weights: [600, 900] },
+      { family: "Inter Tight Variable", style: "italic", weights: [800, 900] },
+    ],
+  },
+  aurore: {
+    stacks: { sans: ["Inter Variable"], display: ["Plus Jakarta Sans Variable", "Inter Variable"] },
+    faces: [INTER, { family: "Plus Jakarta Sans Variable", weights: [600, 800] }],
+  },
+  retro: {
+    stacks: {
+      sans: ["Inter Variable"],
+      display: ["Bricolage Grotesque Variable", "Inter Variable"],
+    },
+    faces: [INTER, { family: "Bricolage Grotesque Variable", weights: [600, 800] }],
+  },
+  chrono: {
+    // The digits of JetBrains Mono come first, in front of the letters of Inter Tight.
+    stacks: {
+      sans: ["Chrono Digits", "Inter Tight Variable"],
+      display: ["Chrono Digits", "Inter Tight Variable"],
+      mono: ["JetBrains Mono Variable"],
+    },
+    faces: [
+      { family: "Inter Tight Variable", weights: [400, 700] },
+      { family: "JetBrains Mono Variable", weights: [500, 700] },
+      { family: "Chrono Digits", weights: [400, 700], subsets: ["latin"] },
+    ],
+  },
+  alpage: {
+    stacks: { sans: ["Inter Variable"], display: ["Outfit Variable", "Inter Variable"] },
+    faces: [INTER, { family: "Outfit Variable", weights: [500, 800] }],
+  },
+  carnet: {
+    stacks: {
+      sans: ["Geist Variable"],
+      display: ["Geist Variable"],
+      serif: ["Instrument Serif"],
+    },
+    faces: [
+      { family: "Geist Variable", weights: [300, 700] },
+      { family: "Instrument Serif", style: "italic", weights: [400, 400] },
+    ],
+  },
+};
+
+/** A font of the system that a stack may name; any other quoted family has to be declared. */
+const SYSTEM_FONTS = [
+  "Segoe UI",
+  "Arial Narrow",
+  "Arial Black",
+  "SFMono-Regular",
+  "Times New Roman",
+  "Helvetica Neue",
+];
+
+/** The faces made of a package's file for only a part of its range: the digits of JetBrains Mono. */
+const PARTIAL_FACES = ["Chrono Digits"];
+
+type Face = {
+  sheet: string;
+  family: string;
+  style: string;
+  weights: Span;
+  stretch: Span | undefined;
+  /** The file, as the `url()` says it (`@fontsource-variable/inter/files/inter-latin-wght-normal.woff2`). */
+  file: string;
+  subset: Subset | undefined;
+  /** The unicode-range, with no space in it. */
+  range: string;
+};
+
+const noComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** The declarations of a block, by property. */
+function declared(body: string): Record<string, string> {
+  return Object.fromEntries(
+    [...body.matchAll(/([a-z-]+)\s*:\s*([^;}]+)/g)].map((match) => [
+      match[1] ?? "",
+      (match[2] ?? "").trim(),
+    ]),
+  );
+}
+
+/** `500 800` or `700` or `62% 125%`: the two ends of a range. */
+function span(value: string | undefined): Span | undefined {
+  if (value === undefined) return undefined;
+  const [from, to] = value.replace(/%/g, "").trim().split(/\s+/).map(Number);
+  return [from ?? Number.NaN, to ?? from ?? Number.NaN];
+}
+
+function subsetOf(file: string): Subset | undefined {
+  const subset = /-(latin-ext|latin)-[^/]*$/.exec(file)?.[1];
+  return subset === "latin" || subset === "latin-ext" ? subset : undefined;
+}
+
+/** The faces that the `@font-face` rules of a stylesheet declare, comments out. */
+function facesOf(css: string, sheet: string): Face[] {
+  return (noComments(css).match(/@font-face\s*\{[^}]*\}/g) ?? []).map((rule) => {
+    const props = declared(rule.slice(rule.indexOf("{") + 1, -1));
+    const file = /url\("([^"]+)"\)/.exec(props.src ?? "")?.[1] ?? "";
+    return {
+      sheet,
+      family: (props["font-family"] ?? "").replace(/"/g, ""),
+      style: props["font-style"] ?? "",
+      weights: span(props["font-weight"]) ?? [Number.NaN, Number.NaN],
+      stretch: span(props["font-stretch"]),
+      file,
+      subset: subsetOf(file),
+      range: (props["unicode-range"] ?? "").replace(/\s+/g, ""),
+    };
+  });
+}
+
+const sheets = [
+  { sheet: "styles.css", css: styles },
+  ...Object.entries(skinFonts).map(([id, css]) => ({ sheet: `skins/${id}/fonts.css`, css })),
+];
+const allFaces = sheets.flatMap(({ sheet, css }) => facesOf(css, sheet));
+
+/** What the package itself declares for a file of its own: its style, weights, widths and range. */
+function packageFace(file: string): Omit<Face, "sheet" | "file" | "subset"> | undefined {
+  const [scope, name, , basename] = file.split("/");
+  const dir = new URL(`../node_modules/${scope}/${name}/`, import.meta.url);
+  if (!existsSync(dir)) return undefined;
+  for (const css of readdirSync(dir).filter((entry) => entry.endsWith(".css"))) {
+    const text = readFileSync(new URL(css, dir), "utf8");
+    for (const rule of text.match(/@font-face\s*\{[^}]*\}/g) ?? []) {
+      if (!rule.includes(`./files/${basename})`)) continue;
+      const props = declared(rule.slice(rule.indexOf("{") + 1, -1));
+      return {
+        family: (props["font-family"] ?? "").replace(/'/g, ""),
+        style: props["font-style"] ?? "",
+        weights: span(props["font-weight"]) ?? [Number.NaN, Number.NaN],
+        stretch: span(props["font-stretch"]),
+        range: (props["unicode-range"] ?? "").replace(/\s+/g, ""),
+      };
+    }
+  }
+  return undefined;
+}
+
+/** The stack of a `--font-<kind>` that the fonts.css of a skin sets under its own selector. */
+function stackOf(id: string, kind: Kind): string | undefined {
+  const rule = new RegExp(`:root\\[data-skin="${id}"\\]\\s*\\{([^}]*)\\}`).exec(
+    noComments(skinFonts[id] ?? ""),
+  );
+  return declared(rule?.[1] ?? "")[`--font-${kind}`];
+}
+
+/** The families of a stack that are not the system's, in order: what has to be declared. */
+function fontsOf(stack: string): string[] {
+  return [...stack.matchAll(/"([^"]+)"/g)]
+    .map((match) => match[1] ?? "")
+    .filter((family) => !SYSTEM_FONTS.includes(family));
+}
+
+test("fonts — every skin has its fonts.css, and none names a host or imports a package's stylesheet", () => {
+  expect(Object.keys(skinFonts)).toEqual(expect.arrayContaining(Object.keys(SKIN_FONTS)));
+  for (const [id, css] of Object.entries(skinFonts)) {
+    // Neither Google nor any other host, in a face or in a comment.
+    expect(css, `skins/${id}/fonts.css`).not.toMatch(/googleapis|gstatic|https?:|\/\//);
+    // As Crête's: the faces are written by hand (the package's CSS would bring every script).
+    expect(noComments(css).replace(/url\([^)]*\)/g, "url()"), `skins/${id}/fonts.css`).not.toMatch(
+      /@import|@fontsource/,
+    );
+  }
+  // Nothing of the page loads a font ahead of the use of its face.
+  expect(page).not.toMatch(/rel="(preload|prefetch|modulepreload)"[^>]*(woff|font)/);
+});
+
+test("fonts — the faces of every skin are the latin and latin-ext woff2 files of the exact packages", () => {
+  expect(allFaces.some((face) => face.sheet.startsWith("skins/"))).toBe(true);
+  const problems = allFaces.flatMap((face) => {
+    const where = `${face.sheet}: ${face.family} ${face.file}`;
+    return [
+      // A path of the build, never a host...
+      /^@fontsource(-variable)?\/[a-z-]+\/files\/[^/]+\.woff2$/.test(face.file)
+        ? []
+        : [`${where}: not a woff2 file of a package`],
+      // ...and the file is there (Vite would leave a `url()` it cannot resolve
+      // as it is, with a warning only).
+      existsSync(new URL(`../node_modules/${face.file}`, import.meta.url))
+        ? []
+        : [`${where}: the package has no such file`],
+      // Only the two subsets that French needs: the others would be built into
+      // /assets/ and embedded in the program for nothing.
+      face.subset === undefined ? [`${where}: neither latin nor latin-ext`] : [],
+      face.range === "" ? [`${where}: no unicode-range`] : [],
+    ].flat();
+  });
+  expect(problems).toEqual([]);
+});
+
+/** Whether a range lies inside another one. */
+const within = (inner: Span, outer: Span) => outer[0] <= inner[0] && inner[1] <= outer[1];
+
+test("fonts — each face says what its package says of its file: style, weights, widths, range", () => {
+  // A hand-written face copied from another one would keep its range: the
+  // browser would then look for the letters of one subset in the file of the
+  // other. The package's own declaration is the truth; the weights and widths
+  // of a face may only be a part of the ones of the file (the ones the skin uses).
+  const problems = allFaces.flatMap((face) => {
+    const where = `${face.sheet}: ${face.family} ${face.file}`;
+    const own = packageFace(face.file);
+    if (own === undefined) return [`${where}: the package does not declare it`];
+    // The digits of JetBrains Mono: a part of the range of its latin file, and no other.
+    const range = PARTIAL_FACES.includes(face.family)
+      ? { subset: "latin", range: "U+0030-0039" }
+      : { subset: face.subset, range: own.range };
+    return [
+      face.style === own.style
+        ? []
+        : [`${where}: style ${face.style}, the package's is ${own.style}`],
+      within(face.weights, own.weights) ? [] : [`${where}: weights ${face.weights.join(" ")}`],
+      face.stretch === undefined || (own.stretch && within(face.stretch, own.stretch))
+        ? []
+        : [`${where}: widths ${face.stretch?.join(" ")}`],
+      face.subset === range.subset ? [] : [`${where}: subset ${face.subset}`],
+      face.range === range.range ? [] : [`${where}: unicode-range ${face.range}`],
+    ].flat();
+  });
+  expect(problems).toEqual([]);
+});
+
+test("fonts — a face is declared once: a file twice under one family and style is a duplicate", () => {
+  // Outfit is « Sentier »'s and « Alpage »'s, Inter Tight « Marathon »'s and
+  // « Chrono »'s, Inter and Plus Jakarta Sans are Crête's (styles.css): each in one place.
+  const keys = allFaces.map((face) => `${face.family}|${face.style}|${face.file}`);
+  const twice = keys.filter((key, at) => keys.indexOf(key) !== at);
+  expect(twice).toEqual([]);
+});
+
+const KINDS = ["sans", "display", "mono", "serif"] as const;
+
+test("fonts — each skin names its families, declared, with system fonts after them", () => {
+  const declaredFamilies = new Set(allFaces.map((face) => face.family));
+  for (const [id, { stacks }] of Object.entries(SKIN_FONTS)) {
+    for (const kind of KINDS) {
+      const stack = stackOf(id, kind);
+      // A stack the skin does not need is not set: Crête's would stay.
+      expect(stack === undefined, `${id}: --font-${kind} only when the skin names one`).toBe(
+        stacks[kind] === undefined,
+      );
+      // The families it names (besides the system ones), in order, and declared:
+      // a family that is named but never declared silently falls back to the system font.
+      const named = fontsOf(stack ?? "");
+      expect(named, `${id}: --font-${kind}`).toEqual(stacks[kind] ?? []);
+      expect(
+        named.filter((family) => !declaredFamilies.has(family)),
+        `${id}: --font-${kind}, the families that no face declares`,
+      ).toEqual([]);
+      // The system fonts keep the text readable while a file loads, or fails.
+      expect(stack ?? "sans-serif", `${id}: --font-${kind}`).toMatch(
+        /(?:sans-serif|serif|monospace)$/,
+      );
+    }
+  }
+});
+
+test("fonts — each skin has every face it needs, in both subsets, at the weights of its variant", () => {
+  const missing = Object.entries(SKIN_FONTS).flatMap(([id, { faces }]) =>
+    faces.flatMap((need) =>
+      (need.subsets ?? ["latin-ext", "latin"]).flatMap((subset) => {
+        const found = allFaces.filter(
+          (face) =>
+            face.family === need.family &&
+            face.style === (need.style ?? "normal") &&
+            face.subset === subset &&
+            within(need.weights, face.weights) &&
+            (need.stretch === undefined ||
+              (face.stretch !== undefined && within(need.stretch, face.stretch))),
+        );
+        // Exactly one: a second one would be declared twice.
+        return found.length === 1
+          ? []
+          : [`${id}: ${need.family} ${need.style ?? ""} ${need.weights.join("–")} ${subset}`];
+      }),
+    ),
+  );
+  expect(missing).toEqual([]);
+});
+
+test("fonts — Crête names only its own families: a skin's are named by its own rule", () => {
+  // A face is fetched when text is drawn in its family: with no data-skin on
+  // the page, only Inter and Plus Jakarta Sans are, and nothing else is fetched.
+  const own = ["Inter Variable", "Plus Jakarta Sans Variable"];
+  const named = [...noComments(styles).matchAll(/--font-[a-z]+:\s*([^;]+);/g)].flatMap((match) =>
+    fontsOf(match[1] ?? ""),
+  );
+  expect(new Set(named)).toEqual(new Set(own));
 });
