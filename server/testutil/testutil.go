@@ -39,6 +39,14 @@ type Fixture struct {
 // APP_URL set to http://localhost:5173. It is cleaned up when the test ends.
 func NewApp(t testing.TB) *tests.TestApp {
 	t.Helper()
+	return NewAppWith(t, nil)
+}
+
+// NewAppWith is NewApp with more environment variables for the configuration
+// (DEMO_LOGIN_EMAIL, for instance). APP_URL is the one of NewApp unless env
+// gives another.
+func NewAppWith(t testing.TB, env map[string]string) *tests.TestApp {
+	t.Helper()
 
 	// An empty directory to clone: PocketBase's own test data would bring
 	// collections that are not ours.
@@ -49,6 +57,9 @@ func NewApp(t testing.TB) *tests.TestApp {
 	t.Cleanup(app.Cleanup)
 
 	cfg, err := config.Load(func(key string) string {
+		if value, ok := env[key]; ok {
+			return value
+		}
 		if key == "APP_URL" {
 			return "http://localhost:5173"
 		}

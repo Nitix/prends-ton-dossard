@@ -20,6 +20,10 @@ type Config struct {
 	Origin string
 	// RPID is the WebAuthn relying party ID: the hostname of the origin.
 	RPID string
+	// DemoLoginEmail is the email of the account that anybody can sign in to
+	// with one click (see the demo package), from DEMO_LOGIN_EMAIL. Empty, the
+	// default, means no demo: the real site never sets it.
+	DemoLoginEmail string
 }
 
 // Load builds a Config from the environment. getenv is typically os.Getenv.
@@ -68,6 +72,8 @@ func Load(getenv func(string) string) (Config, error) {
 		AppURL: origin,
 		Origin: origin,
 		RPID:   host,
+
+		DemoLoginEmail: strings.TrimSpace(getenv("DEMO_LOGIN_EMAIL")),
 	}, nil
 }
 

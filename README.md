@@ -292,6 +292,20 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] Mettre quelqu'un en « Non partant » depuis le menu de sa participation : il quitte les listes et apparaît dans la section repliée « Non partants » (l'ouvrir pour le voir). Le remettre dans un autre statut le fait revenir dans les listes.
 - [ ] Désactiver le compte de test.
 
+## Démo
+
+Une instance à part du vrai site (son domaine, son volume, son `.env`) peut laisser des curieux entrer sans compte : la page de connexion y montre un bouton « Entrer dans la démo », qui ouvre le compte d'Alice sans rien taper. Ce que les visiteurs y font reste : rien ne la remet à zéro. **Le vrai site ne définit jamais `DEMO_LOGIN_EMAIL`** : n'importe qui entrerait dans ce compte.
+
+1. **Installer l'instance** comme le vrai site (« Mise en service »), avec son propre `APP_URL` (par exemple `https://demo-prends-ton-dossard.ketra.fr`). Pas de `bootstrap-admin` : la base vient du `seed`.
+
+2. **La remplir des données de test.** Le programme de production refuse `seed` hors de `localhost` sans `--force`. Les comptes ont tous le même mot de passe, public s'il n'est pas donné : en choisir un au hasard, que personne n'a besoin de connaître (le bouton ne le demande pas), garde fermés les comptes Admin et Bob.
+
+   ```sh
+   docker compose exec -e SEED_PASSWORD="$(openssl rand -base64 24)" courses /app/courses seed --force
+   ```
+
+3. **Activer le bouton.** Dans le `.env` de l'instance, ajouter `DEMO_LOGIN_EMAIL=alice@example.test` (un membre, pas `admin@example.test`), puis `docker compose up -d`. La variable ouvre `GET` et `POST /api/app/demo` ; sans elle, ces routes n'existent pas (404). Le compte doit exister, ne pas être désactivé et avoir un coureur, sinon le bouton s'affiche, mais son clic échoue (404).
+
 ## Feuille de route
 
 Les tests de bout en bout (Playwright, sur trois navigateurs) sont prévus pour la v5.

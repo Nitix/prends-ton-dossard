@@ -46,6 +46,9 @@ export const fr = {
     saving: "Enregistrement…",
     passkeyLogin: "Se connecter avec une clé d'accès",
     passkeyWaiting: "Vérification de la clé d'accès…",
+    // The demo instance only (see features/auth/demo.ts): a button that signs in to the shared account, and what it warns about.
+    demoEnter: "Entrer dans la démo",
+    demoNote: "Démo : tout le monde partage ce compte, ce que tu fais reste visible.",
   },
   // The profile page (the runner of the user, as the others see them) and the
   // settings page it leads to: the name, the email and the password of the

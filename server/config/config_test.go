@@ -63,3 +63,30 @@ func TestLoad(t *testing.T) {
 		})
 	}
 }
+
+// The demo is off unless DEMO_LOGIN_EMAIL names an account: the real site
+// never sets it. Spaces around the value are what a .env file or a shell
+// leaves by mistake, and would make the lookup of the account fail.
+func TestLoad_DemoLoginEmail(t *testing.T) {
+	for _, tc := range []struct{ name, value, want string }{
+		{name: "unset", value: "", want: ""},
+		{name: "set", value: "alice@example.test", want: "alice@example.test"},
+		{name: "spaces trimmed", value: "  alice@example.test \t", want: "alice@example.test"},
+		{name: "only spaces", value: "   ", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Load(func(key string) string {
+				if key == "DEMO_LOGIN_EMAIL" {
+					return tc.value
+				}
+				return ""
+			})
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.DemoLoginEmail != tc.want {
+				t.Errorf("DemoLoginEmail = %q, want %q", cfg.DemoLoginEmail, tc.want)
+			}
+		})
+	}
+}

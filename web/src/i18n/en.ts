@@ -43,6 +43,8 @@ export const en = {
     saving: "Saving…",
     passkeyLogin: "Sign in with a passkey",
     passkeyWaiting: "Checking the passkey…",
+    demoEnter: "Enter the demo",
+    demoNote: "Demo: everyone shares this account, what you do stays visible.",
   },
   profile: {
     settings: "Settings",
