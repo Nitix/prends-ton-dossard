@@ -110,8 +110,11 @@ test.skipIf(SKIN_DEPTH === "palette")(
           deadline.getBoundingClientRect().height /
           Number.parseFloat(getComputedStyle(deadline).lineHeight);
         expect(lines, "lines of the end of the registrations").toBeLessThan(1.5);
-        // The ring is still on the card, beside its head.
-        expect(drawn.querySelector("article svg"), "the ring of the days left").not.toBeNull();
+        // The ring is still on the card, beside its head: its days, hidden from screen readers.
+        const ring = [...drawn.querySelectorAll('article [aria-hidden="true"]')].find((one) =>
+          /\d\s?j/u.test(one.textContent ?? ""),
+        );
+        expect(ring, "the ring of the days left").toBeDefined();
       },
       { skin: ID },
     );
