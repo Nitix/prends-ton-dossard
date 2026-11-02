@@ -442,6 +442,25 @@
   }
 }
 
+/* What can be clicked shows the hand, as a link does (Tailwind 4 leaves buttons
+   the arrow of the system), and what is out of reach says so. `:where` keeps
+   them weightless: a `cursor-*` utility still wins. */
+@layer base {
+  :where(
+    button,
+    summary,
+    select,
+    input:is([type="checkbox"], [type="radio"], [type="file"]),
+    label:has(input:is([type="checkbox"], [type="radio"]))
+  ) {
+    cursor: pointer;
+  }
+  :where(button, select, input):disabled,
+  :where([aria-disabled="true"], label:has(input:disabled)) {
+    cursor: not-allowed;
+  }
+}
+
 @layer components {
   /* What sits on the sky takes a white focus ring. */
   .on-dawn :focus-visible {
