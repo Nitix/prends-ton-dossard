@@ -1,0 +1,140 @@
+/* « Carnet », depth palette: a training logbook drawn like a technical sheet,
+   on the structure of Crête. A warm paper, ink, white cards with a hairline, a
+   coral for what is done (the main actions, the current tab, the focus), and a
+   quiet indigo, gold and teal for what is counted. It has no dark mode: the
+   page is drawn in this one whatever the theme chosen (lib/theme.ts), so
+   Crête's light values stand for every colour it does not set, and its sky
+   (`.on-dawn`) has these colours as they are.
+
+   Coral is the accent of the app (`iris`: the focus ring, the links, the chosen
+   day; the main button, the current tab and the «+» are coral through
+   `--dawn-deep`), gold is the reminder to register (`peach`), indigo is what
+   the data are painted with (`blush`: the pin of a place, a participation to
+   confirm). The variant had no header: its one dark surface was the navy of a
+   card and of the toasts, and Crête's header carries white text on its sky, so
+   the sky is that navy, with the fine dots of the sheet in it. Nothing here is
+   a shadow or a font (a palette cannot set them): `--shade-*` are the colours
+   of the shadows, fonts.css has the faces. */
+
+:root[data-skin="carnet"] {
+  /* The warm greys: `neutral-50` is the lightest grey of a card, 600 the
+     secondary text, 400 the dashes of what is not confirmed. */
+  --color-neutral-50: #faf9f6;
+  --color-neutral-100: #f2f0eb;
+  --color-neutral-200: #e6e3dc;
+  --color-neutral-300: #d4d0c7;
+  --color-neutral-400: #a9a499;
+  --color-neutral-500: #807b70;
+  --color-neutral-600: #5f5b52;
+  --color-neutral-700: #47443d;
+  --color-neutral-800: #2e2c28;
+  --color-neutral-900: #1c1b18;
+  --color-neutral-950: #11100e;
+  --color-ink: #1c1b18;
+
+  /* Coral, the accent: white on 600 is 4.8:1. */
+  --color-iris-50: #fcefec;
+  --color-iris-100: #f9ded8;
+  --color-iris-200: #f2bfb4;
+  --color-iris-300: #e99a8a;
+  --color-iris-400: #e07560;
+  --color-iris-500: #d15b47;
+  --color-iris-600: #c24a3a;
+  --color-iris-700: #a33a2c;
+  --color-iris-800: #7f2d23;
+  --color-iris-900: #5e2019;
+
+  /* Gold: the reminder to register. */
+  --color-peach-50: #fbf6e8;
+  --color-peach-100: #f8edcf;
+  --color-peach-200: #f2d99c;
+  --color-peach-300: #ebc36a;
+  --color-peach-400: #e2ae45;
+  --color-peach-500: #d4972c;
+  --color-peach-600: #b07a1c;
+  --color-peach-700: #7a5a12;
+  --color-peach-800: #5c430e;
+
+  /* Indigo: the data. */
+  --color-blush-50: #f0effc;
+  --color-blush-100: #e3e2fa;
+  --color-blush-200: #c9c7f4;
+  --color-blush-300: #a9a6ee;
+  --color-blush-400: #8683e6;
+  --color-blush-500: #6461db;
+  --color-blush-600: #4f4cc9;
+  --color-blush-700: #403da6;
+  --color-blush-800: #312f7c;
+
+  /* Danger keeps a red of its own, deeper than the coral. */
+  --color-red-50: #fef3f2;
+  --color-red-200: #f9c6c1;
+  --color-red-700: #b42318;
+  --color-red-800: #912018;
+
+  /* White cards on the paper; a message is the navy pill of the variant. */
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #ffffff;
+  --color-toast: #161b2e;
+  --color-scrim: rgb(22 27 46 / 0.5);
+  --color-relief: #11100e;
+
+  /* The five steps of the slope, from flat to steep, in the data colours of
+     the variant: a light teal, a deep teal, gold, bronze, indigo. Each has 3:1
+     on a white card and with the ink line, and none melts into another, with a
+     colour vision deficiency either (src/features/route/slope.test.ts). */
+  --color-slope-1: #2e9e95;
+  --color-slope-2: #226d62;
+  --color-slope-3: #b98a36;
+  --color-slope-4: #8c5b00;
+  --color-slope-5: #746fd5;
+
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-card: 0.75rem;
+
+  /* The shadows are warm ink, soft and wide: the colours inside Crête's shadows.
+     The variant has no halo: the glows are none. */
+  --shade-card: rgb(28 27 24 / 0.14);
+  --shade-lift: rgb(28 27 24 / 0.22);
+  --shade-bar: rgb(28 27 24 / 0.16);
+  --shade-edge: rgb(28 27 24 / 0.05);
+  --shade-edge-lift: rgb(28 27 24 / 0.06);
+  --dawn-glow-warm: transparent;
+  --dawn-glow-cool: transparent;
+  --map-frame: 0 0 0 1px #e2dfd7, 0 16px 40px -18px rgb(28 27 24 / 0.2);
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The paints. A flat colour is a gradient of one stop. The main button, the
+     current tab and the «+» are coral (white on it 4.8:1); the header is the
+     navy of the variant's dark card, the heroes a navy a little lighter. */
+  --dawn-soft: linear-gradient(110deg, #f9ded8 0%, #f8edcf 52%, #d9f0ec 100%);
+  --dawn-deep: linear-gradient(110deg, #c24a3a 0%, #c24a3a 100%);
+  --dawn-sky-color: #161b2e;
+  --dawn-sky: linear-gradient(160deg, #161b2e 0%, #161b2e 100%);
+  --dawn-hero-color: #232a42;
+  --dawn-hero: linear-gradient(150deg, #232a42 0%, #232a42 100%);
+  --dawn-text: linear-gradient(100deg, #a33a2c 0%, #c24a3a 100%);
+  --dawn-line: linear-gradient(90deg, #e07560, #e2ae45 55%, #52b2a4);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #d4d0c7, transparent);
+  --dawn-ring-from: #2f998b;
+  --dawn-ring-via: #6461db;
+  --dawn-ring-to: #d4972c;
+  --dawn-chip-glow: rgb(28 27 24 / 0.2);
+  --focus-glow: rgb(194 74 58 / 0.18);
+  --sky-focus: #ffffff;
+
+  /* The map of a track: an indigo line, a teal start, an ink finish. */
+  --map-line-from: #8683e6;
+  --map-line-via: #6461db;
+  --map-line-to: #403da6;
+  --map-line: #4f4cc9;
+  --map-start: #217d72;
+  --map-finish: #1c1b18;
+  --map-link: #403da6;
+}
