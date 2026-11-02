@@ -38,7 +38,11 @@ not part of it: it stays the device's own.
 - **Signing out** leaves the skin on the device and on the page.
 - A skin whose look cannot be loaded when it is chosen (offline, never chosen
   on this device) gives a message (« Ce thème n'a pas pu se charger : vérifie ta
-  connexion. »), and the page, the device and the account keep the skin they had.
+  connexion. »), and the page, the device and the account keep the skin they had
+  (see Loading on demand: the page is not reloaded for it).
+- On a demo instance (`DEMO_LOGIN_EMAIL`), every visitor is the same account:
+  the server keeps no skin on it (`server/demo`; an update of its `skin` is
+  dropped without an error), so each visitor keeps their device's.
 
 ## The folder of a skin
 
@@ -113,12 +117,32 @@ looks which share them share).
   waits for them, so the page is never in a skin without its colours. Two
   choices in a row: the last one wins, whichever loads first. A look that
   cannot be loaded (offline, never loaded before) leaves the page and the
-  device as they were.
+  device as they were, and `chooseSkin` says so (`failed`), for the picker to
+  tell the person. The page is **not reloaded** for it: the look goes through
+  Vite's preload helper, which fires `vite:preloadError` when an import fails,
+  and `reloadOnStaleChunks` (`lib/staleChunks.ts`, `main.tsx`) reloads the
+  page for a route chunk that is gone after a deploy; it is told to leave a
+  failure alone while a look is loading (`isLoadingLook`), and while the
+  browser is offline (it also tells TanStack Router, which reloads once by
+  itself for a route component it cannot import, that it has). The picker says
+  « Chargement du thème… » to a screen reader while it waits (a polite status),
+  and the focus stays on the skins when « Clair ou sombre » gives way to a
+  sentence.
+- **All or nothing** (`sheets.ts`, `loadSkin`): a look is its code and its
+  sheets, and a page with the code and not the sheets is neither Crête nor the
+  skin. Vite's helper takes a failed sheet for done and never asks for it again
+  (nor does it see that a link written by `index.html` failed), so after the
+  code is loaded `loadSkin` checks that the palette is in the page, asks again
+  for the sheets that are missing (a link with no rule: Chromium gives a failed
+  link an empty sheet), and rejects if it is still not there. A choice that
+  failed so is tried again, sheets included, the next time.
 - **At start** (`showKeptSkin`, `main.tsx`): the skin kept is applied at once
   (its mode, the colour of the bar), and its look loaded before the app is
   first drawn, so its motifs are there from the first render. A skin kept that
   is no longer in the app (a skin removed since), or whose look cannot be
-  loaded, is Crête, with no error.
+  loaded (its code, or a sheet that stays missing: all or nothing, below), is
+  Crête for this page, with no error; the device keeps the choice, and a sheet
+  that failed once is asked for again before that.
 - **Before the first paint**: the build writes into `index.html` the table of
   the skins (`plugin.ts`), in the order of their names: for each, its modes,
   its colour and the files of its look, from the bundle (`lookFiles`): its
@@ -604,6 +628,12 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   font of each skin (neither declared nor asked for before the module of the
   section), the edge of a swatch (3:1 on its card, in every skin and mode).
 - `../features/pwa/sw.test.ts`: a skin chosen once is drawn offline.
+- `lookFailure.test.ts`: the real app, built, in a real Chromium, with Vite's
+  own helper loading the looks and the routes: a look that fails (404 or
+  offline) does not reload the page and is chosen with its sheets once the
+  network is back; a route chunk gone, online, reloads, and offline does not; a
+  kept skin whose sheet fails is Crête, and one that fails once is asked for
+  again. `sheets.test.tsx`: what the page has of a look's sheets.
 - `../features/auth/accountSkin.test.ts`, `accountSkin.signin.test.tsx`,
   `session.test.ts`, `../features/profile/ThemePicker.account.test.tsx`: the
   skin on the account (what is saved, and in which order; sign-in, session
