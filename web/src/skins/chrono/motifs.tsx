@@ -57,11 +57,15 @@ function bezel(c: number, outer: number, short: number, long: number) {
   return paths;
 }
 
-/** The bezel of the big dial behind the card of the pages to sign in, and of the small one of an empty list. */
+/** The bezel of the big dial under the card of the pages to sign in, and of the small one of an empty list. */
 const BIG_BEZEL = bezel(100, 98, 5, 10);
 const SMALL_BEZEL = bezel(50, 48, 3.5, 7);
 
-/** The dial of the sky: the zones in arcs round a dial, a bezel of ticks round them. */
+/**
+ * The dial of the sky: the zones in arcs round a dial, a bezel of ticks round
+ * them, the hand of the stopwatch on its hub. Under the card, whole and as wide
+ * as a phone allows (a dial cut by the edges of the page would be stray arcs).
+ */
 function Dial() {
   const radius = 62;
   const circumference = 2 * Math.PI * radius;
@@ -72,7 +76,7 @@ function Dial() {
       aria-hidden="true"
       focusable="false"
       viewBox="0 0 200 200"
-      className="pointer-events-none absolute -bottom-52 left-1/2 block size-[44rem] max-w-none -translate-x-1/2"
+      className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 block size-[min(24rem,88vw)] -translate-x-1/2"
     >
       <path d={BIG_BEZEL.short} fill="none" stroke="#fff" strokeOpacity="0.16" strokeWidth="1" />
       <path d={BIG_BEZEL.long} fill="none" stroke="#fff" strokeOpacity="0.3" strokeWidth="1.8" />
@@ -90,6 +94,17 @@ function Dial() {
           />
         ))}
       </g>
+      <line
+        x1="100"
+        y1="100"
+        x2="132"
+        y2="78"
+        stroke="#fff"
+        strokeOpacity="0.4"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <circle cx="100" cy="100" r="6" fill="#fff" fillOpacity="0.45" />
     </svg>
   );
 }
@@ -98,7 +113,7 @@ function Dial() {
  * The sky behind the name: the grid of a chart, fading to the left, and the
  * strip of the zones along the foot of the header, just over the sheet of the
  * page. On the pages to sign in: the strip on the top edge, as on a watch,
- * the grid over the page and the big dial rising behind the card.
+ * the grid over the page and the big dial under the card.
  */
 export function HeaderArt({ place }: HeaderArtProps) {
   if (place === "header") {
