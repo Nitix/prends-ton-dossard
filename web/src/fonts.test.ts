@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 import { SKINS } from "./skins";
+import { block } from "./test/theme";
 
 // « Crête » is set in Inter and Plus Jakarta Sans. They are served by the site
 // itself (the @fontsource-variable packages, built into /assets/ and kept by
@@ -492,6 +493,55 @@ test("fonts — each skin has every face it needs, in both subsets, at the weigh
     ),
   );
   expect(missing).toEqual([]);
+});
+
+/** The value of a custom property that the palette of a skin sets on its page, if any. */
+function paletteValue(id: string, property: string): string | undefined {
+  const url = new URL(`./skins/${id}/palette.css`, import.meta.url);
+  if (!existsSync(url)) return undefined;
+  const rule = new RegExp(`:root\\[data-skin="${id}"\\]\\s*\\{([^}]*)\\}`).exec(
+    noComments(readFileSync(url, "utf8")),
+  );
+  return declared(rule?.[1] ?? "")[property];
+}
+
+/** The weights of the titles that take the style of the display face (`.page-title` 800, a block's and a card's 700). */
+const TITLE_WEIGHTS = [700, 800];
+
+test("fonts — the titles of a skin in italic or wider (--display-style, --display-stretch) have faces of that style and width", () => {
+  // Crête's titles are upright, at the width of the face: its four values are declared.
+  const crete = declared(
+    /:root\s*\{([^}]*)\}/.exec(noComments(block(styles, "@layer base") ?? ""))?.[1] ?? "",
+  );
+  expect(
+    ["--display-style", "--display-transform", "--display-stretch", "--display-tracking"].map(
+      (property) => crete[property],
+    ),
+  ).toEqual(["normal", "none", "normal", "-0.025em"]);
+  // A skin that asks its titles for a style or a width that no face has would
+  // have them drawn by the browser: a slanted upright face, a width unchanged.
+  const problems = Object.keys(skinFonts).flatMap((id) => {
+    const style = paletteValue(id, "--display-style") ?? "normal";
+    const stretch = paletteValue(id, "--display-stretch") ?? "normal";
+    if (style === "normal" && stretch === "normal") return [];
+    const [family] = fontsOf(stackOf(id, "display") ?? themeValue(styles, "--font-display"));
+    const width = stretch === "normal" ? undefined : span(stretch);
+    return TITLE_WEIGHTS.flatMap((weight) =>
+      (["latin-ext", "latin"] as const).flatMap((subset) =>
+        allFaces.some(
+          (face) =>
+            face.family === family &&
+            face.subset === subset &&
+            face.style === style &&
+            within([weight, weight], face.weights) &&
+            (width === undefined || (face.stretch !== undefined && within(width, face.stretch))),
+        )
+          ? []
+          : [`${id}: ${family} ${style} ${weight} at ${stretch} (${subset})`],
+      ),
+    );
+  });
+  expect(problems).toEqual([]);
 });
 
 test("fonts — Crête names only its own families: a skin's are named by its own rule", () => {

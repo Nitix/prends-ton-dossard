@@ -46,13 +46,13 @@ export function RunnerProfile({ runnerId, extra }: { runnerId: string; extra?: R
           <Avatar
             runner={runner}
             thumb="256x256"
-            className="avatar-soft relative size-20 shrink-0 text-2xl font-extrabold shadow-[0_0_0_4px_rgb(255_255_255/0.85),0_12px_30px_-10px_rgb(36_27_53/0.6)] min-[22.5rem]:size-24 min-[22.5rem]:text-3xl md:size-28"
+            className="avatar-soft relative size-20 shrink-0 text-2xl font-extrabold shadow-[0_0_0_4px_var(--photo-ring),0_12px_30px_-10px_var(--shade-photo)] min-[22.5rem]:size-24 min-[22.5rem]:text-3xl md:size-28"
           />
         )}
         <h1
           ref={heading}
           tabIndex={-1}
-          className="relative min-w-0 font-display text-[clamp(1.5rem,8vw,1.875rem)] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.25rem]"
+          className="relative min-w-0 font-display text-[clamp(1.5rem,8vw,1.875rem)] leading-[1.1] font-extrabold display-title break-words md:text-[2.25rem]"
         >
           {runner ? runner.name : t.runner.title}
         </h1>

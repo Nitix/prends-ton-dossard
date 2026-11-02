@@ -98,7 +98,7 @@ export function SkinCard({
               // The two colours, always in that order: their place is their key.
               key={i}
               data-swatch
-              className="size-5 rounded-full ring-2 ring-card not-first:-ml-1.5"
+              className="size-5 rounded-full ring-2 inset-ring ring-card inset-ring-neutral-600 not-first:-ml-1.5"
               style={{ backgroundColor: colour }}
             />
           ))}

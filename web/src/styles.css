@@ -195,6 +195,14 @@
   }
 }
 
+/* The ink of what the deep dawn paints, as a colour of Tailwind
+   (`text-dawn-deep-ink`, `border-dawn-deep-ink`, `bg-dawn-deep-ink`): the value
+   is the paint of the theme, `--dawn-deep-ink` (`:root` below), read where it
+   is used. */
+@theme inline {
+  --color-dawn-deep-ink: var(--dawn-deep-ink);
+}
+
 /* The paints of the dawn are custom properties (`--dawn-*`, in `:root` below):
    a skin sets them, and every utility that paints with them follows, whatever
    its variant (`aria-[current=page]:bg-dawn-deep`, `hover:`…). */
@@ -205,8 +213,9 @@
   background-image: var(--dawn-soft);
 }
 
-/* The same sunrise, a few steps deeper, for what carries white text: every
-   stop is at least 4.6:1 with white. */
+/* The same sunrise, a few steps deeper, for what carries a text: its ink is
+   `--dawn-deep-ink` (`text-dawn-deep-ink`), white in Crête, at least 4.6:1 on
+   every stop. */
 @utility bg-dawn-deep {
   background-image: var(--dawn-deep);
 }
@@ -244,6 +253,24 @@
   }
 }
 
+/* The card of the sign-in pages (routes/__root), over its frosted glass: the
+   ground a skin lays on it (`--welcome-card`), none in Crête. A skin whose sky
+   is dark gives it the opaque card of its variant: the glass of a white card
+   over a dark sky would be a flat grey. */
+@utility welcome-card {
+  background-image: linear-gradient(var(--welcome-card), var(--welcome-card));
+}
+
+/* A title outside the titles of styles.css (the hero of an event or of a
+   runner, a card of an event, a window): the style of the display face of the
+   theme, as `.page-title` has it. */
+@utility display-title {
+  font-style: var(--display-style);
+  text-transform: var(--display-transform);
+  font-stretch: var(--display-stretch);
+  letter-spacing: var(--display-tracking);
+}
+
 @layer base {
   /* The light theme is the theme when nothing says otherwise. Saying so keeps
      browsers from darkening the page on their own. Besides the colours of
@@ -262,6 +289,29 @@
        pages (routes/__root), the same by day and at night. */
     --shade-dialog: rgb(42 32 112 / 0.55);
     --shade-welcome: rgb(42 32 112 / 0.6);
+    /* The ground laid over the frosted glass of that card (none: the glass of a
+       card shows the sky through), and its rim (the rim of a window, at 70 %). */
+    --welcome-card: transparent;
+    --welcome-rim: color-mix(in oklab, var(--color-rim) 70%, transparent);
+    /* The shade of a message (components/Toast); on the sky of a hero, the
+       shade of the notes of an event, of the photo of a runner and of a white
+       pill (`ON_DAWN`), the ring that cuts the photo out of the sky, and the
+       veil under the end of the registrations (and, a little lighter, in the
+       ring of the days left). */
+    --shade-toast: rgb(36 27 53 / 0.7);
+    --shade-notes: rgb(36 27 53 / 0.6);
+    --shade-photo: rgb(36 27 53 / 0.6);
+    --shade-on-dawn: rgb(36 27 53 / 0.5);
+    --photo-ring: rgb(255 255 255 / 0.85);
+    --hero-veil: rgb(36 27 53 / 0.2);
+    /* The style of the display face in the titles (`.page-title`, `.block-title`,
+       `.card-title`, `display-title`): upright, as written, at the width of the
+       face; the letter-spacing of the title of a page (a block's and a card's
+       are 0.01em wider). */
+    --display-style: normal;
+    --display-transform: none;
+    --display-stretch: normal;
+    --display-tracking: -0.025em;
     --map-frame:
       0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
       0 6px 24px -12px rgb(94 74 227 / 0.45);
@@ -323,6 +373,9 @@
        measure the white text on them. */
     --dawn-soft: linear-gradient(110deg, #ffb38a 0%, #ff7eb3 52%, #8b7cff 100%);
     --dawn-deep: linear-gradient(110deg, #d6336f 0%, #a63fae 52%, #5e4ae3 100%);
+    /* The ink of what the deep dawn paints (`text-dawn-deep-ink`): its words,
+       its icons, the ring and the dots of a chosen day. */
+    --dawn-deep-ink: #ffffff;
     --dawn-sky-color: #5e4ae3;
     --dawn-sky:
       radial-gradient(
@@ -595,7 +648,10 @@
     font-size: 1.75rem;
     line-height: 1.15;
     font-weight: 800;
-    letter-spacing: -0.025em;
+    font-style: var(--display-style);
+    font-stretch: var(--display-stretch);
+    text-transform: var(--display-transform);
+    letter-spacing: var(--display-tracking);
     color: var(--color-ink);
   }
   .page-title::after {
@@ -619,7 +675,10 @@
     font-size: 1.125rem;
     line-height: 1.3;
     font-weight: 700;
-    letter-spacing: -0.015em;
+    font-style: var(--display-style);
+    font-stretch: var(--display-stretch);
+    text-transform: var(--display-transform);
+    letter-spacing: calc(var(--display-tracking) + 0.01em);
     color: var(--color-ink);
   }
   /* Crête's mark: a small sun on the horizon. */
@@ -638,7 +697,10 @@
     font-size: 1.0625rem;
     line-height: 1.3;
     font-weight: 700;
-    letter-spacing: -0.015em;
+    font-style: var(--display-style);
+    font-stretch: var(--display-stretch);
+    text-transform: var(--display-transform);
+    letter-spacing: calc(var(--display-tracking) + 0.01em);
   }
 
   /* The month over a list of events: in capitals, then the horizon. */

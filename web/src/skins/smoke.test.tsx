@@ -21,6 +21,7 @@ import { ensureTemporal } from "../lib/temporal";
 import { chooseTheme } from "../lib/theme";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
+import { colourOf, ownDeclaration, shadowLayers } from "../test/computed";
 import { fontsReady } from "../test/fontsReady";
 import { withoutIds } from "../test/ids";
 import { emulateMedia, resetMedia } from "../test/media";
@@ -38,9 +39,16 @@ import "../skins/styles";
 // where it draws none), and the utilities of the dawn take its paints. Nothing
 // here names a skin: a new one is tested as it is added.
 
-/** An event of the fixture whose 42 km has a track. */
+/**
+ * An event of the fixture whose 42 km has a track, with what its hero shows on
+ * the sky: the end of the registrations (on a veil), the notes (a frosted card)
+ * and the link to register (a white pill).
+ */
 const event = {
   ...eventRecord,
+  registration_deadline: "2026-06-08",
+  registration_url: "https://inscriptions.example.test/trail",
+  notes: "Navette depuis la gare à 6 h 30.",
   expand: {
     ...eventRecord.expand,
     formats_via_event: eventRecord.expand.formats_via_event.map((format) =>
@@ -166,13 +174,13 @@ function targets(scope: ParentNode = document): HTMLElement[] {
  * What every page has, in every skin: the tabs, the button to create, nothing
  * wider than the phone, and targets of 44 px at least.
  */
-async function framed(screen: Screen) {
+async function framed(screen: Screen, { least = 6 } = {}) {
   await expect.element(screen.getByRole("navigation", { name: fr.nav.main })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.nav.createEvent })).toBeVisible();
   await fontsReady();
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
-  // Not an empty search: the tabs, the « + », and what the page has.
-  expect(targets().length).toBeGreaterThan(5);
+  // Not an empty search: the tabs, the « + », and what the page has (`least` in all).
+  expect(targets().length).toBeGreaterThanOrEqual(least);
   const small = targets()
     .filter((element) => element.getBoundingClientRect().height < 44)
     .map(
@@ -190,24 +198,17 @@ async function markerHtml(skin: Skin): Promise<string> {
   return html;
 }
 
-/** How a paint of the skin (`--dawn-deep`…) is drawn as a background, here and now. */
-function painted(property: string): string {
+/**
+ * How a paint of the skin (`--dawn-deep`…) is drawn as a background, here and
+ * now; a colour (`--welcome-card`) in the image that `imageOf` makes of it.
+ */
+function painted(property: string, imageOf = (value: string) => value): string {
   const probe = document.createElement("span");
-  probe.style.backgroundImage = `var(${property})`;
+  probe.style.backgroundImage = imageOf(`var(${property})`);
   document.body.append(probe);
   const image = getComputedStyle(probe).backgroundImage;
   probe.remove();
   return image;
-}
-
-/** A colour of the skin (`--shade-welcome`…) as the browser computes it, here and now. */
-function colourOf(property: string): string {
-  const probe = document.createElement("span");
-  probe.style.color = `var(${property}, transparent)`;
-  document.body.append(probe);
-  const colour = getComputedStyle(probe).color;
-  probe.remove();
-  return colour;
 }
 
 /**
@@ -215,18 +216,6 @@ function colourOf(property: string): string {
  * current tab, the «+»). A skin without a halo sets both to `transparent`.
  */
 const GLOWS = ["--dawn-glow-warm", "--dawn-glow-cool"];
-
-/** The empty layer that Tailwind puts in a `box-shadow` for a ring or an inset shadow it does not draw. */
-const EMPTY_LAYER = "rgba(0, 0, 0, 0) 0px 0px 0px 0px";
-
-/** The layers of a computed `box-shadow`, without Tailwind's empty ones. */
-function shadowLayers(shadow: string): string[] {
-  if (shadow === "none") return [];
-  return shadow
-    .split(/,(?![^(]*\))/)
-    .map((layer) => layer.trim())
-    .filter((layer) => layer !== EMPTY_LAYER);
-}
 
 /** The halo that `shadow-glow` draws in the skin of the page, here and now. */
 function glowOfSkin(): string[] {
@@ -241,14 +230,14 @@ function glowOfSkin(): string[] {
 /**
  * The halo of a piece of the dawn is the skin's: the one `shadow-glow` draws from
  * the skin's `--dawn-glow-*`, coloured or transparent (a skin without a halo),
- * never Crête's left behind. At mix and full a skin may restyle the piece itself
- * (`box-shadow: none` on the current tab, README.md): there, only the properties
- * are checked.
+ * never Crête's left behind: the skin's own sheet sets both (Crête declares
+ * them, so the page alone would not say it). At mix and full a skin may restyle
+ * the piece itself (`box-shadow: none` on the current tab, README.md): there,
+ * only the properties are checked.
  */
-function expectGlowOfSkin(element: Element, what: string) {
-  const root = getComputedStyle(document.documentElement);
+function expectGlowOfSkin(skin: Skin, element: Element, what: string) {
   for (const glow of GLOWS) {
-    expect(root.getPropertyValue(glow).trim(), `${glow} is defined`).not.toBe("");
+    expect(ownDeclaration(skin.id, glow), `${skin.id} sets ${glow}`).not.toBe("");
   }
   if (SKIN_DEPTH !== "palette") return;
   const halo = glowOfSkin();
@@ -258,16 +247,42 @@ function expectGlowOfSkin(element: Element, what: string) {
 }
 
 /**
- * A piece is shaded in a colour of the skin (`--shade-welcome`…), which is
- * declared. At mix and full a skin may restyle the piece: there, only the
- * property is checked.
+ * A piece is shaded in a colour of the theme (`--shade-notes`…), one of
+ * Crête's (a name the test had wrong would read as `transparent`). At mix and
+ * full a skin may restyle the piece: there, only the property is checked.
  */
 function expectShadeOfSkin(element: Element, property: string, what: string) {
-  const root = getComputedStyle(document.documentElement);
-  expect(root.getPropertyValue(property).trim(), `${property} is declared`).not.toBe("");
+  expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
   if (SKIN_DEPTH !== "palette") return;
   const layers = shadowLayers(getComputedStyle(element).boxShadow).join(", ");
   expect(layers, `the shade of ${what}`).toContain(colourOf(property));
+}
+
+/**
+ * A piece is drawn in a value of the skin (computed as `expected`). At mix and
+ * full a skin may restyle the piece: there, nothing is checked.
+ */
+function expectOfSkin(actual: string, expected: string, what: string) {
+  if (SKIN_DEPTH !== "palette") return;
+  expect(actual, `${what}, in the skin`).toBe(expected);
+}
+
+/**
+ * A title is drawn in the style of the display face that the skin gives
+ * (`--display-*`: italic, capitals, a width, a spacing), as `page-title` is
+ * (tokens.test.tsx). At mix and full a skin may restyle it.
+ */
+function expectDisplayStyle(title: Element, what: string) {
+  if (SKIN_DEPTH !== "palette") return;
+  const probe = document.createElement("span");
+  probe.style.cssText =
+    "font-style: var(--display-style); text-transform: var(--display-transform); font-stretch: var(--display-stretch); letter-spacing: var(--display-tracking)";
+  title.append(probe);
+  const [own, expected] = [getComputedStyle(title), getComputedStyle(probe)];
+  for (const property of ["fontStyle", "textTransform", "fontStretch", "letterSpacing"] as const) {
+    expect(own[property], `${what}, its ${property}`).toBe(expected[property]);
+  }
+  probe.remove();
 }
 
 const CASES = SKINS.flatMap((skin) => skin.modes.map((mode) => ({ skin, mode })));
@@ -328,8 +343,25 @@ for (const { skin, mode } of CASES) {
     const own = painted("--dawn-deep");
     expect(own).toMatch(/gradient/);
     expect(getComputedStyle(current).backgroundImage).toBe(own);
-    expectGlowOfSkin(current, "the current tab");
-    expectGlowOfSkin(screen.getByRole("link", { name: fr.nav.createEvent }).element(), "the «+»");
+    const plus = screen.getByRole("link", { name: fr.nav.createEvent }).element();
+    expectGlowOfSkin(skin, current, "the current tab");
+    expectGlowOfSkin(skin, plus, "the «+»");
+    // Their words and their icon in the ink of the deep dawn (`--dawn-deep-ink`).
+    for (const [piece, what] of [
+      [current, "the current tab"],
+      [plus, "the «+»"],
+    ] as const) {
+      expectOfSkin(
+        getComputedStyle(piece).color,
+        colourOf("--dawn-deep-ink"),
+        `the ink of ${what}`,
+      );
+    }
+    // The title of the page in the style of the skin's titles.
+    expectDisplayStyle(
+      screen.getByRole("heading", { level: 1, name: fr.nav.home }).element(),
+      "the title of the page",
+    );
   });
 
   test(`smoke — ${name} : la page d'un événement, sa carte, le profil de sa trace et une fenêtre`, async () => {
@@ -345,7 +377,29 @@ for (const { skin, mode } of CASES) {
       .toBeVisible();
     await expect.element(trail42.getByText(/D\+/).first()).toBeVisible();
     await framed(screen);
-    expect(document.querySelector(".event-hero")).not.toBeNull();
+    const hero = document.querySelector(".event-hero");
+    expect(hero).not.toBeNull();
+    // On the sky of the hero: its title in the style of the skin's titles, the
+    // end of the registrations on its veil, the notes and the white pill to
+    // register in the shades of the skin.
+    expectDisplayStyle(
+      screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" }).element(),
+      "the title of the hero",
+    );
+    const notes = screen.getByText(event.notes).element();
+    expectShadeOfSkin(notes, "--shade-notes", "the notes on the hero");
+    const register = hero?.querySelector(".btn-on-dawn");
+    expect(register?.textContent, "the white pill to register").toContain(fr.event.register);
+    expectShadeOfSkin(register ?? document.body, "--shade-on-dawn", "the white pill on the hero");
+    const veil = [...(hero?.querySelectorAll("p") ?? [])].find((p) =>
+      p.textContent?.includes(fr.event.registrationUntil("")),
+    );
+    expect(veil, "the end of the registrations").toBeDefined();
+    expectOfSkin(
+      getComputedStyle(veil ?? document.body).backgroundColor,
+      colourOf("--hero-veil"),
+      "the veil of the end of the registrations",
+    );
 
     // A dialog: within the phone, its actions 44 px tall.
     await screen
@@ -375,6 +429,26 @@ for (const { skin, mode } of CASES) {
           `${element.getBoundingClientRect().height}px: ${element.outerHTML.slice(0, 120)}`,
       );
     expect(small).toEqual([]);
+    // Its title in the style of the skin's titles.
+    expectDisplayStyle(
+      dialog.getByRole("heading", { name: fr.participation.addSomeoneTitle }).element(),
+      "the title of the dialog",
+    );
+  });
+
+  test(`smoke — ${name} : la page d'un coureur, sa photo sur le ciel`, async () => {
+    dress(skin, mode);
+    const screen = await openApp(`/coureurs/${aliceRunner.id}`);
+    const title = screen.getByRole("heading", { level: 1, name: aliceRunner.name });
+    await expect.element(title).toBeVisible();
+    // The tabs and the « + »: the page of a runner with no results has nothing else to tap.
+    await framed(screen, { least: 5 });
+    expectDisplayStyle(title.element(), "the title of the hero");
+    // The photo (here its initials) cut out of the sky by a ring, over its shade.
+    const photo = document.querySelector(".runner-hero .avatar-soft");
+    expect(photo, "the photo of the runner").not.toBeNull();
+    expectShadeOfSkin(photo ?? document.body, "--photo-ring", "the ring of the photo");
+    expectShadeOfSkin(photo ?? document.body, "--shade-photo", "the shade of the photo");
   });
 
   test(`smoke — ${name} : le formulaire d'un nouvel événement`, async () => {
@@ -389,7 +463,7 @@ for (const { skin, mode } of CASES) {
     // The main button of the form (`PRIMARY`): its halo is the skin's.
     const primary = document.querySelector("main .btn-primary");
     expect(primary, "the main button of the form").not.toBeNull();
-    if (primary !== null) expectGlowOfSkin(primary, "the main button");
+    if (primary !== null) expectGlowOfSkin(skin, primary, "the main button");
   });
 
   test(`smoke — ${name} : une page publique, sa carte sur le ciel`, async () => {
@@ -401,8 +475,20 @@ for (const { skin, mode } of CASES) {
     // Within the phone (it has no tabs: `framed` is for the signed-in pages).
     await fontsReady();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
-    // The card of the page floats over the ridges, in the shade of the skin.
-    expectShadeOfSkin(screen.getByRole("main").element(), "--shade-welcome", "the card");
+    // The card of the page floats over the ridges, in the shade of the skin, on
+    // the ground and in the rim that the skin gives it (Crête's: none over its
+    // frosted glass, and the rim of a window).
+    const card = screen.getByRole("main").element();
+    expectShadeOfSkin(card, "--shade-welcome", "the card");
+    for (const property of ["--welcome-card", "--welcome-rim"]) {
+      expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
+    }
+    expectOfSkin(
+      getComputedStyle(card).backgroundImage,
+      painted("--welcome-card", (colour) => `linear-gradient(${colour}, ${colour})`),
+      "the ground of the card",
+    );
+    expectOfSkin(getComputedStyle(card).borderTopColor, colourOf("--welcome-rim"), "its rim");
   });
 
   test(`smoke — ${name} : les réglages, avec le choix du thème`, async () => {

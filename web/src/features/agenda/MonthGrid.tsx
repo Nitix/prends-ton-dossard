@@ -110,8 +110,8 @@ function DayCell({
   // neither is told by the colour alone.
   const ring = isToday ? "font-bold" : "border-transparent";
   const number = `flex size-7 items-center justify-center rounded-full border-2 text-sm tabular-nums ${ring}`;
-  // On the sunrise of the selected day, the ring of today is white.
-  const numberOnPhone = `${number} ${isToday ? (isSelected ? "border-white" : "border-iris-600 text-iris-700") : ""}`;
+  // On the sunrise of the selected day, the ring of today is in its ink (white in Crête).
+  const numberOnPhone = `${number} ${isToday ? (isSelected ? "border-dawn-deep-ink" : "border-iris-600 text-iris-700") : ""}`;
   const numberOnDesktop = `${number} ${isToday ? "border-iris-600 bg-iris-600 text-card" : ""}`;
 
   return (
@@ -128,7 +128,7 @@ function DayCell({
         }}
         className={`press flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl md:hidden ${
           isSelected
-            ? "bg-dawn-deep text-white shadow-glow"
+            ? "bg-dawn-deep text-dawn-deep-ink shadow-glow"
             : inMonth
               ? "hover:bg-iris-50"
               : "text-neutral-600 hover:bg-iris-50"
@@ -141,7 +141,7 @@ function DayCell({
             <span
               key={i}
               data-testid="dot"
-              className={`size-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blush-500"}`}
+              className={`size-1.5 rounded-full ${isSelected ? "bg-dawn-deep-ink" : "bg-blush-500"}`}
             />
           ))}
           {more > 0 && <span>+{more}</span>}

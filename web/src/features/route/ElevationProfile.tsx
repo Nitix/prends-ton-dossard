@@ -461,7 +461,7 @@ function Profile({
         {/* The highest altitude, over the summit; the cursor's figures in its place while it is there. */}
         <p
           aria-hidden="true"
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-dawn-deep px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-white tabular-nums shadow-glow"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-dawn-deep px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-dawn-deep-ink tabular-nums shadow-glow"
           style={{
             left: Math.min(
               Math.max(x(at ? at.km : summit.km), MARGIN.left + 44),

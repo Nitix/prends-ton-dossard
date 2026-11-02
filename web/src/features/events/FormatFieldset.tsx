@@ -270,7 +270,7 @@ export function FormatFieldset({
       <legend
         ref={title}
         tabIndex={-1}
-        className="rounded-full bg-dawn-deep px-3.5 py-1 font-display text-sm font-bold text-white shadow-glow"
+        className="rounded-full bg-dawn-deep px-3.5 py-1 font-display text-sm font-bold text-dawn-deep-ink shadow-glow"
       >
         {t.form.formatTitle(number)}
       </legend>

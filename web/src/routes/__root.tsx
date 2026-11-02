@@ -46,7 +46,7 @@ function Page() {
             <BrandMark size="lg" />
           </div>
         </div>
-        <main className="relative z-10 mx-4 mb-56 rounded-[1.75rem] border border-rim/70 glass p-6 shadow-[0_30px_80px_-24px_var(--shade-welcome)] sm:mx-auto sm:w-full sm:max-w-md md:mb-64 md:p-8">
+        <main className="relative z-10 mx-4 mb-56 rounded-[1.75rem] border border-(--welcome-rim) glass welcome-card p-6 shadow-[0_30px_80px_-24px_var(--shade-welcome)] sm:mx-auto sm:w-full sm:max-w-md md:mb-64 md:p-8">
           <Outlet />
         </main>
       </div>

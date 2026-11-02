@@ -333,7 +333,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
               id={titleId}
               data-focus={PAGE_TITLE}
               tabIndex={-1}
-              className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.375rem]"
+              className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold display-title break-words md:text-[2.375rem]"
             >
               {event.name}
             </h1>
@@ -352,7 +352,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             </p>
           </div>
           {deadline && (
-            <p className="flex items-start gap-2 self-start rounded-2xl bg-[rgb(36_27_53/0.2)] px-3 py-2 text-sm font-semibold ring-1 ring-white/25">
+            <p className="flex items-start gap-2 self-start rounded-2xl bg-(--hero-veil) px-3 py-2 text-sm font-semibold ring-1 ring-white/25">
               <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
               <span>
                 {registrationLabel(deadline, f, t)}
@@ -363,7 +363,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             </p>
           )}
           {event.notes && (
-            <p className="self-start rounded-2xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink shadow-[0_8px_24px_-14px_rgb(36_27_53/0.6)]">
+            <p className="self-start rounded-2xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink shadow-[0_8px_24px_-14px_var(--shade-notes)]">
               {event.notes}
             </p>
           )}

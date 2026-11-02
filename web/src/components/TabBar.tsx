@@ -48,7 +48,7 @@ function Tab({
       <Link
         to={to}
         activeOptions={{ exact, includeSearch: false }}
-        className="tab press flex h-14 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.375rem] px-2 text-[0.75rem] font-medium text-neutral-600 hover:bg-iris-50 hover:text-ink aria-[current=page]:bg-dawn-deep aria-[current=page]:font-bold aria-[current=page]:text-white aria-[current=page]:shadow-glow md:h-11 md:flex-row md:gap-2 md:rounded-full md:px-4 md:text-sm"
+        className="tab press flex h-14 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[1.375rem] px-2 text-[0.75rem] font-medium text-neutral-600 hover:bg-iris-50 hover:text-ink aria-[current=page]:bg-dawn-deep aria-[current=page]:font-bold aria-[current=page]:text-dawn-deep-ink aria-[current=page]:shadow-glow md:h-11 md:flex-row md:gap-2 md:rounded-full md:px-4 md:text-sm"
       >
         <span aria-hidden="true" className="size-[1.375rem] md:hidden lg:block lg:size-5">
           {icon}

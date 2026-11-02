@@ -59,7 +59,7 @@ export function Dialog({
             className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-dawn"
           />
           <div className="relative mb-4 flex items-start justify-between gap-2">
-            <h2 id={titleId} className="pt-1.5 font-display text-xl font-extrabold tracking-tight">
+            <h2 id={titleId} className="pt-1.5 font-display text-xl font-extrabold display-title">
               {title}
             </h2>
             <button

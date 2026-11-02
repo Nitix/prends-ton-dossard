@@ -71,13 +71,50 @@ function gradientColours(property: string, mode: Theme, skin: string): string[] 
 const brightened = (hex: string, factor: number) =>
   hexOf(channels(hex).map((value) => value * factor));
 
+/**
+ * A class of a class string, under any variants (`aria-[current=page]:bg-dawn-deep`),
+ * with those variants. A string may be a template with strings in it (`${a ? "x" : ""}`):
+ * a class ends at a space or a quote.
+ */
+function withVariants(classes: string, name: string): string[] {
+  return [
+    ...classes.matchAll(
+      new RegExp(`(?:^|[\\s"'])((?:[a-z-]+(?:-\\[[^\\]\\s]*\\])?:)*)${name}(?=[\\s"']|$)`, "g"),
+    ),
+  ].map((match) => match[1] ?? "");
+}
+
 describe("contrast", () => {
-  test("contrast — le texte blanc d'un bouton en dégradé garde 4,5:1 au survol, à l'appui et au focus, le jour et la nuit", () => {
-    // The pills of sunrise that carry white text: the main button, the + button, a chosen tab or day…
-    const buttons = classStrings("bg-dawn-deep", "text-white");
-    expect(buttons.length, "no class string paints white text on bg-dawn-deep").toBeGreaterThan(0);
+  test("contrast — ce que peint l'aube profonde écrit dans --dawn-deep-ink, jamais en blanc écrit dans la classe", () => {
+    // What `bg-dawn-deep` paints (the main button, the «+», the current tab, a
+    // chosen day, a chip…) writes its text in `text-dawn-deep-ink`, under the
+    // same variants: white in Crête, the dark of a skin whose deep dawn is light.
+    const painted = sources(root).flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(/"([^"\n]*)"|`([^`]*)`/g)]
+        .map((match) => match[1] ?? match[2] ?? "")
+        .filter((text) => withVariants(text, "bg-dawn-deep").length > 0)
+        .map((text) => ({ where: relative(root, file), classes: text })),
+    );
+    // Not an empty search: the pieces above, and those of a variant (the current tab).
+    expect(painted.length).toBeGreaterThanOrEqual(8);
+    expect(painted.some(({ classes }) => /aria-\[current=page\]:bg-dawn-deep/.test(classes))).toBe(
+      true,
+    );
+    const problems = painted.flatMap(({ where, classes }) => [
+      ...withVariants(classes, "text-white").map((variant) => `${where}: ${variant}text-white`),
+      ...withVariants(classes, "bg-dawn-deep")
+        .filter((variant) => !withVariants(classes, "text-dawn-deep-ink").includes(variant))
+        .map((variant) => `${where}: ${variant}bg-dawn-deep without ${variant}text-dawn-deep-ink`),
+    ]);
+    expect(problems).toEqual([]);
+  });
+
+  test("contrast — le texte d'un bouton en dégradé (--dawn-deep-ink) garde 4,5:1 au survol, à l'appui et au focus, le jour et la nuit", () => {
+    // The pills of sunrise that carry a text: the main button, the + button, a chosen tab or day…
+    const buttons = classStrings("bg-dawn-deep", "text-dawn-deep-ink");
+    expect(buttons.length, "no class string writes on bg-dawn-deep").toBeGreaterThan(0);
     // The sunrise is painted in its own colours, whatever the theme: the same
-    // stops by day and at night, as the white of the text. A skin sets its own (`--dawn-deep`).
+    // stops by day and at night, as its ink. A skin sets its own (`--dawn-deep`, `--dawn-deep-ink`).
     for (const { where, classes } of buttons) {
       // The filters of its states (`hover:brightness-110`…), and the button at rest.
       const factors = [
@@ -88,13 +125,14 @@ describe("contrast", () => {
       ];
       for (const { skin, mode, label } of SKIN_CASES) {
         const colours = gradientColours("--dawn-deep", mode, skin);
+        const ink = themeValue("--dawn-deep-ink", mode, skin);
         for (const factor of factors) {
           const worst = Math.min(
-            ...colours.map((colour) => contrast("#ffffff", brightened(colour, factor))),
+            ...colours.map((colour) => contrast(ink, brightened(colour, factor))),
           );
           expect(
             worst,
-            `${where}: white on bg-dawn-deep at brightness ${factor} (${label})`,
+            `${where}: ${ink} on bg-dawn-deep at brightness ${factor} (${label})`,
           ).toBeGreaterThanOrEqual(4.5);
         }
       }

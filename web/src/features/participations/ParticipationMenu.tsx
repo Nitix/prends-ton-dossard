@@ -167,7 +167,7 @@ export function ParticipationMenu({
                   <span
                     aria-hidden="true"
                     className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
-                      current ? "animate-pop bg-dawn-deep text-white" : ""
+                      current ? "animate-pop bg-dawn-deep text-dawn-deep-ink" : ""
                     }`}
                   >
                     {current ? "✓" : ""}

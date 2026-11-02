@@ -1,12 +1,17 @@
+import { useEffect, useRef } from "react";
 import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
 import { SKINS, chooseSkin } from ".";
+import { ON_DAWN } from "../components/buttons";
+import { CountdownRing } from "../components/Dawn";
 import { Dialog } from "../components/Dialog";
+import { ToastProvider, useToast } from "../components/Toast";
 import { toTrack } from "../features/route/gpx";
 import TrackMap from "../features/route/TrackMap";
 import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
+import { EMPTY_LAYER, colourOf, ownDeclaration } from "../test/computed";
 import { BLANK_TILE } from "../test/tiles";
 import { MotifDefs } from "./crete/Alpenglow";
 import { BrandMark } from "./crete/Brand";
@@ -23,22 +28,15 @@ import "../skins/styles";
 // motifs (they stand in for those a skin does not draw) and the map of a track
 // are painted with `--motif-*` and `--map-*`, never with a colour written in
 // them (an attribute, a style, a class): in every skin, each colour they show
-// is the one the skin gives the property. So is the shade of a window
-// (`--shade-dialog`). Nothing here names a skin.
+// is the one the skin gives the property. So are the shade of a window
+// (`--shade-dialog`), of a message and of the pieces on the sky of a hero, and
+// the style of the titles (`--display-*`). These pieces are measured at every
+// depth: a rule of mix or full on them reads the property (README.md).
+// Nothing here names a skin.
 
 afterEach(() => {
   chooseSkin("crete");
 });
-
-/** A colour of the theme as the browser computes it, here and now. */
-function colourOf(property: string): string {
-  const probe = document.createElement("span");
-  probe.style.color = `var(${property}, transparent)`;
-  document.body.append(probe);
-  const colour = getComputedStyle(probe).color;
-  probe.remove();
-  return colour;
-}
 
 /** The custom property that an inline style of an element reads for `property`, if any. */
 function tokenOf(element: Element, property: string): string | undefined {
@@ -59,13 +57,14 @@ const WRITABLE = /^(none|#fff|#ffffff|white|currentColor|url\(#[^)]+\))$/i;
 const COLOUR_LITERAL =
   /#[0-9a-f]{3,8}(?![0-9a-z])|(?<![a-z-])(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i;
 
-/** The empty layer that Tailwind puts in a `box-shadow` for a ring or an inset shadow it does not draw. */
-const EMPTY_LAYER = "rgba(0, 0, 0, 0) 0px 0px 0px 0px";
-
-/** A shadow (or a drop shadow) is drawn in the colour of a property of the theme, which is declared. */
+/**
+ * A shadow (or a drop shadow) is drawn in the colour of a property of the
+ * theme. The property is one of Crête's (a name the test had wrong would read
+ * as `transparent`). Crête declares every one, so whether a skin sets it is for
+ * the skin's own sheet to say (`ownDeclaration`), where the skin must.
+ */
 function expectShadowOf(shadow: string, property: string, what: string) {
-  const declared = getComputedStyle(document.documentElement).getPropertyValue(property);
-  expect(declared.trim(), `${property} is declared`).not.toBe("");
+  expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
   expect(shadow.replaceAll(EMPTY_LAYER, ""), `${what}: its shade`).toContain(colourOf(property));
 }
 
@@ -187,6 +186,185 @@ test("tokens — la fenêtre d'un dialogue a l'ombre --shade-dialog, dans chaque
       `the dialog in ${skin.id}`,
     );
     await screen.unmount();
+  }
+});
+
+/** A message shown as soon as it is drawn. */
+function Toaster({ message }: { message: string }) {
+  const toasts = useToast();
+  const shown = useRef(false);
+  useEffect(() => {
+    // Once, as the page would after an action.
+    if (shown.current) return;
+    shown.current = true;
+    toasts.show(message);
+  }, [toasts, message]);
+  return null;
+}
+
+/** A colour as the browser computes it for the fill of an SVG, from a CSS value. */
+function fillOf(value: string): string {
+  const probe = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  probe.style.fill = value;
+  svg.append(probe);
+  document.body.append(svg);
+  const fill = getComputedStyle(probe).fill;
+  svg.remove();
+  return fill;
+}
+
+test("tokens — les ombres et les voiles des pièces sur le ciel et des messages prennent leurs couleurs des propriétés du thème, dans chaque skin", async () => {
+  for (const skin of SKINS) {
+    chooseSkin(skin.id);
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <ToastProvider>
+          <Toaster message="Enregistré" />
+        </ToastProvider>
+        <div className="on-dawn">
+          <a href="#inscription" className={ON_DAWN}>
+            S'inscrire
+          </a>
+          <CountdownRing days={9} tone="light" />
+        </div>
+      </I18nProvider>,
+    );
+    // The pill of a message (a toast).
+    const toast = screen.getByText("Enregistré");
+    await expect.element(toast).toBeVisible();
+    expectShadowOf(
+      getComputedStyle(toast.element()).boxShadow,
+      "--shade-toast",
+      `${skin.id}: a toast`,
+    );
+    // The white pill on a hero (« S'inscrire »).
+    expectShadowOf(
+      getComputedStyle(screen.getByRole("link", { name: "S'inscrire" }).element()).boxShadow,
+      "--shade-on-dawn",
+      `${skin.id}: the white pill on the sky`,
+    );
+    // The veil inside the ring of the days left on a hero: the veil of a hero, a little lighter.
+    const track = screen.container.querySelector(".on-dawn svg circle");
+    expect(track, `${skin.id}: the ring of the days left`).not.toBeNull();
+    expect(ownDeclaration("crete", "--hero-veil"), "--hero-veil is one of Crête's").not.toBe("");
+    expect(getComputedStyle(track ?? screen.container).fill, `${skin.id}: its veil`).toBe(
+      fillOf("color-mix(in srgb, var(--hero-veil) 90%, transparent)"),
+    );
+    await screen.unmount();
+  }
+});
+
+/** The style of the display face that the titles take from the theme. */
+const DISPLAY = [
+  "--display-style",
+  "--display-transform",
+  "--display-stretch",
+  "--display-tracking",
+];
+
+/**
+ * The titles of the app, with the letter-spacing each has from `--display-tracking`:
+ * the title of a page (and of a hero, of a window) has it as it is, the title of a
+ * block or of a card 0.01em more.
+ */
+const TITLES = [
+  {
+    what: "the title of a page",
+    element: "h1",
+    className: "page-title",
+    tracking: "var(--display-tracking)",
+  },
+  {
+    what: "the title of a block",
+    element: "h2",
+    className: "block-title",
+    tracking: "calc(var(--display-tracking) + 0.01em)",
+  },
+  {
+    what: "the title of a card",
+    element: "h3",
+    className: "card-title",
+    tracking: "calc(var(--display-tracking) + 0.01em)",
+  },
+  {
+    what: "the title of a hero or a window",
+    element: "h2",
+    className: "display-title font-display text-xl",
+    tracking: "var(--display-tracking)",
+  },
+] as const;
+
+/** Each title is drawn in the style that the properties give, here and now. */
+async function expectDisplayStyle(label: string) {
+  const screen = await render(
+    <div>
+      {TITLES.map(({ element: Title, className, what }) => (
+        <Title key={what} className={className}>
+          {what}
+        </Title>
+      ))}
+    </div>,
+  );
+  for (const { what, tracking } of TITLES) {
+    const title = screen.getByText(what).element();
+    // A probe in the title (its size, so its `em`) with the properties as they are.
+    const probe = document.createElement("span");
+    probe.style.cssText = `font-style: var(--display-style); text-transform: var(--display-transform); font-stretch: var(--display-stretch); letter-spacing: ${tracking}`;
+    title.append(probe);
+    const [own, expected] = [getComputedStyle(title), getComputedStyle(probe)];
+    for (const property of [
+      "fontStyle",
+      "textTransform",
+      "fontStretch",
+      "letterSpacing",
+    ] as const) {
+      expect(own[property], `${label}: ${what}, its ${property}`).toBe(expected[property]);
+    }
+    probe.remove();
+  }
+  await screen.unmount();
+}
+
+test("tokens — les titres prennent le style de la police des titres (--display-*), dans chaque skin", async () => {
+  for (const property of DISPLAY) {
+    expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
+  }
+  for (const skin of SKINS) {
+    chooseSkin(skin.id);
+    await expectDisplayStyle(skin.id);
+  }
+  // Values that a skin may give (italic capitals, a wider face, more space):
+  // the titles follow them, not only the values that are Crête's.
+  chooseSkin("crete");
+  const root = document.documentElement.style;
+  const given = {
+    "--display-style": "italic",
+    "--display-transform": "uppercase",
+    "--display-stretch": "125%",
+    "--display-tracking": "0.04em",
+  };
+  try {
+    for (const [property, value] of Object.entries(given)) root.setProperty(property, value);
+    const screen = await render(
+      <h1 className="page-title" data-testid="title">
+        Accueil
+      </h1>,
+    );
+    const title = getComputedStyle(screen.getByTestId("title").element());
+    expect([title.fontStyle, title.textTransform, title.fontStretch]).toEqual([
+      "italic",
+      "uppercase",
+      "125%",
+    ]);
+    expect(Number.parseFloat(title.letterSpacing)).toBeCloseTo(
+      0.04 * Number.parseFloat(title.fontSize),
+      2,
+    );
+    await screen.unmount();
+    await expectDisplayStyle("italic, capitals, wide");
+  } finally {
+    for (const property of Object.keys(given)) root.removeProperty(property);
   }
 });
 

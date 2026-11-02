@@ -103,14 +103,18 @@ test("dark — le ciel de l'entête et des bandeaux reste celui de l'aube", () =
   }
 });
 
-test("dark — le texte blanc des boutons en dégradé ne change pas : 4,5:1 sur chaque couleur de l'aube", () => {
-  // The text is `text-white`, and the dark theme leaves white alone (see above).
-  expect(darkBlocks().chosen.has("--color-white")).toBe(false);
+test("dark — le texte des boutons en dégradé (--dawn-deep-ink) ne change pas la nuit : 4,5:1 sur chaque couleur de l'aube", () => {
+  // The text is `text-dawn-deep-ink`, white in Crête, a paint of the dawn that
+  // the night leaves alone (see above); a skin whose deep dawn is light (a lime)
+  // writes on it in a dark ink of its own.
+  expect(themeValue("--dawn-deep-ink")).toBe("#ffffff");
   for (const { skin, mode, label } of SKIN_CASES) {
+    const ink = themeValue("--dawn-deep-ink", mode, skin);
+    expect(ink, `${label}: --dawn-deep-ink`).toMatch(/^#[0-9a-f]{6}$/i);
     const stops = linearStops(themeValue("--dawn-deep", mode, skin));
     expect(stops.length, `stops of ${label}`).toBeGreaterThanOrEqual(skin === DEFAULT_SKIN ? 3 : 2);
     for (const stop of stops) {
-      expect(contrast("#ffffff", stop), `${label}: white on ${stop}`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(ink, stop), `${label}: ${ink} on ${stop}`).toBeGreaterThanOrEqual(4.5);
     }
   }
 });
@@ -241,6 +245,9 @@ const PAIRS: readonly [text: string, ground: string, least: number][] = [
     3,
   ]),
   ["peach-700", "peach-50", 3],
+  // The ring of a swatch in the picker of the skins, on a card and on a chosen
+  // or hovered card: it draws the edge of a swatch whatever its colour.
+  ...["card", "iris-50"].map((ground): [string, string, number] => ["neutral-600", ground, 3]),
 ];
 
 test("dark — le texte a 4,5:1 sur la feuille, les cartes, les fenêtres, les champs et les panneaux ; les liens, les erreurs, les pastilles et l'anneau du focus aussi", () => {

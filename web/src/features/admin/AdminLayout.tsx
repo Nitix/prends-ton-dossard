@@ -35,7 +35,7 @@ function NavLink({
     <li>
       <Link
         to={to}
-        className="press flex min-h-11 min-w-11 items-center rounded-full border border-neutral-200 bg-card px-3 text-sm font-medium shadow-[0_1px_2px_rgb(36_27_53/0.05)] hover:bg-iris-50 aria-[current=page]:border-transparent aria-[current=page]:bg-dawn-deep aria-[current=page]:font-bold aria-[current=page]:text-white aria-[current=page]:shadow-glow"
+        className="press flex min-h-11 min-w-11 items-center rounded-full border border-neutral-200 bg-card px-3 text-sm font-medium shadow-[0_1px_2px_rgb(36_27_53/0.05)] hover:bg-iris-50 aria-[current=page]:border-transparent aria-[current=page]:bg-dawn-deep aria-[current=page]:font-bold aria-[current=page]:text-dawn-deep-ink aria-[current=page]:shadow-glow"
       >
         {label}
       </Link>

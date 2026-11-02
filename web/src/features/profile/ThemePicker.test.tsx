@@ -9,6 +9,8 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { THEME_KEY, chooseTheme } from "../../lib/theme";
 import { SKIN_KEY, SKINS, applySkin, chooseSkin, readSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
+import { contrast } from "../../test/colour";
+import { shadowLayers } from "../../test/computed";
 import { fontsReady } from "../../test/fontsReady";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { AppearanceSection, SkinCard } from "./AppearanceSection";
@@ -150,6 +152,54 @@ test("Thème — chaque carte montre les deux couleurs du skin, et son échantil
   }
   // Crête's font is on the page (its titles): its card shows it.
   expect(sampleOf(cardOf(screen, crete)).style.fontFamily).not.toBe("");
+});
+
+/** A colour as `getComputedStyle` gives it (`rgb(r, g, b)`), as `#rrggbb`. */
+function hexOf(rgb: string): string {
+  const channels = /^rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)$/.exec(rgb);
+  if (channels === null || (channels[4] !== undefined && Number(channels[4]) !== 1)) {
+    throw new Error(`not an opaque rgb() colour: ${rgb}`);
+  }
+  return `#${channels
+    .slice(1, 4)
+    .map((value) => Number(value).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+test("Thème — chaque pastille a un bord qui se voit sur sa carte, cochée ou non, claire ou sombre : 3:1, dans chaque skin et chaque mode", async () => {
+  // A dark swatch on a dark card (or a light one on a light card) would be
+  // only the other one of its pair: its edge, a ring inside it, says where it
+  // is, whatever its colour (WCAG 1.4.11, 3:1 against the ground of its card).
+  for (const skin of SKINS) {
+    for (const mode of skin.modes) {
+      chooseSkin(skin.id);
+      chooseTheme(mode);
+      for (const checked of [false, true]) {
+        const screen = await render(
+          <I18nProvider languages={["fr"]}>
+            <SkinCard skin={crete} name="Crête" sample="Aa" checked={checked} onChoose={() => {}} />
+          </I18nProvider>,
+        );
+        const card = screen.container.querySelector("label");
+        const ground = hexOf(getComputedStyle(card ?? document.body).backgroundColor);
+        const swatches = [...screen.container.querySelectorAll("[data-swatch]")];
+        expect(swatches).toHaveLength(2);
+        for (const swatch of swatches) {
+          const edge = shadowLayers(getComputedStyle(swatch).boxShadow).find((layer) =>
+            layer.endsWith(" inset"),
+          );
+          const what = `${skin.id}, ${mode}, ${checked ? "chosen" : "not chosen"}: the edge of a swatch`;
+          expect(edge, `${what}: a ring inside it`).toBeDefined();
+          const colour = hexOf(/^rgba?\([^)]*\)/.exec(edge ?? "")?.[0] ?? "");
+          expect(
+            contrast(colour, ground),
+            `${what} (${colour} on ${ground})`,
+          ).toBeGreaterThanOrEqual(3);
+        }
+        await screen.unmount();
+      }
+    }
+  }
 });
 
 test("Thème — une police déclarée mais pas encore chargée : l'échantillon attend, puis la prend dès qu'elle l'est", async () => {

@@ -88,7 +88,43 @@ What a palette sets:
   `--shade-edge-lift`, the thin line under a card, a card that lifts, the tab bar;
   `--shade-dialog`, a window, `components/Dialog`; `--shade-welcome`, the card of
   the sign-in pages, `routes/__root`);
-  `--map-frame`, `--map-veil`, `--sheet-glow`.
+  `--map-frame`, `--map-veil`, `--sheet-glow`. Every skin sets `--shade-dialog`
+  and `--shade-welcome` in its own colours: Crête's are a violet glow.
+- The card of the sign-in pages (`routes/__root`), Crête's frosted glass (`glass`:
+  82 % of `--color-card` over the sky):
+
+  | Property         | Crête                                                    | What paints with it                                                                                                                                                          |
+  | ---------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `--welcome-card` | `transparent`                                            | the ground laid over the glass (`welcome-card`): a `#rrggbb` card for a skin whose sky is dark (white glass on it is a flat grey); ink, labels, hints and errors 4.5:1 on it |
+  | `--welcome-rim`  | `color-mix(in oklab, var(--color-rim) 70%, transparent)` | its border                                                                                                                                                                   |
+
+- The shades and veils of the pieces, on the sky of a hero and elsewhere (a
+  palette sets them where Crête's plum would be off-hue):
+
+  | Property          | Crête                     | What paints with it                                                                          |
+  | ----------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
+  | `--shade-toast`   | `rgb(36 27 53 / 0.7)`     | the shadow of a message (`components/Toast`)                                                 |
+  | `--shade-notes`   | `rgb(36 27 53 / 0.6)`     | the shadow of the notes of an event on its hero                                              |
+  | `--shade-photo`   | `rgb(36 27 53 / 0.6)`     | the shadow of the photo of a runner on its hero                                              |
+  | `--photo-ring`    | `rgb(255 255 255 / 0.85)` | the ring that cuts that photo out of the sky                                                 |
+  | `--shade-on-dawn` | `rgb(36 27 53 / 0.5)`     | the shadow of a white pill on a hero (`ON_DAWN`, « S'inscrire »)                             |
+  | `--hero-veil`     | `rgb(36 27 53 / 0.2)`     | the veil under the end of the registrations on a hero; at 90 %, in the ring of the days left |
+
+  Fainter shades are still written out, for mix and full: the secondary button
+  (`buttons.ts`), the tabs of the admin (`AdminLayout`), a field (`Field`), the
+  close button of a window (`Dialog`), the glint of the day of an event (`Dawn`).
+
+- The style of the display face in the titles (`.page-title`, `.block-title`,
+  `.card-title`, and `display-title`: the title of the hero of an event or of a
+  runner, of the card of an event, of a window):
+
+  | Property              | Crête      | What it does                                                                                        |
+  | --------------------- | ---------- | --------------------------------------------------------------------------------------------------- |
+  | `--display-style`     | `normal`   | `font-style` (`italic`: the face must have its italic, at 700 and 800; `fonts.test.ts` checks it)   |
+  | `--display-transform` | `none`     | `text-transform` (`uppercase`)                                                                      |
+  | `--display-stretch`   | `normal`   | `font-stretch` (`110%`: the face must cover that width, a variable `wdth` axis; `fonts.test.ts`)    |
+  | `--display-tracking`  | `-0.025em` | the letter-spacing of the title of a page, a hero, a window; a block's and a card's are 0.01em more |
+
 - The map of a track (`features/route/TrackMap`, which stays light at night):
 
   | Property                         | What paints with it                                                                              |
@@ -117,21 +153,22 @@ What a palette sets:
 
 - The paints of the dawn, which Crête writes out and the night leaves alone:
 
-  | Property                           | What paints with it                                                                                                    |
-  | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-  | `--dawn-deep`                      | `.bg-dawn-deep`: what carries white text (main button, current tab, «+», day of an event): every stop 4.5:1 with white |
-  | `--dawn-soft`                      | `.bg-dawn`: the soft sunrise, dark text only                                                                           |
-  | `--dawn-sky-color`, `--dawn-sky`   | `.bg-dawn-sky`: the header and the sign-in pages (white text)                                                          |
-  | `--dawn-hero-color`, `--dawn-hero` | `.bg-dawn-hero`: the heroes (white text, the notes, « S'inscrire »)                                                    |
-  | `--dawn-text`                      | `.text-dawn`: big figures                                                                                              |
-  | `--dawn-line`                      | the line under `.page-title`, Crête's section marker                                                                   |
-  | `--dawn-marker-shadow`             | the shadow of Crête's section marker                                                                                   |
-  | `--dawn-horizon`                   | the line after `.month-title`                                                                                          |
-  | `--dawn-ring-from`, `-via`, `-to`  | the ring of the days left (CountdownRing)                                                                              |
-  | `--dawn-chip-glow`                 | the glow under the day of an event (DateChip)                                                                          |
-  | `--dawn-glow-warm`, `-cool`        | the halo of what `--dawn-deep` paints (`shadow-glow`: main buttons, current tab, «+»)                                  |
-  | `--focus-glow`                     | the halo of a field with the focus                                                                                     |
-  | `--sky-focus`                      | the ring of the focus on the sky                                                                                       |
+  | Property                           | What paints with it                                                                                                            |
+  | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+  | `--dawn-deep`                      | `.bg-dawn-deep`: what carries a text (main button, current tab, «+», day of an event): every stop 4.5:1 with `--dawn-deep-ink` |
+  | `--dawn-deep-ink`                  | the text, the icons and the marks on it (`text-dawn-deep-ink`…): `#ffffff` in Crête, a `#rrggbb` (a dark ink on a light dawn)  |
+  | `--dawn-soft`                      | `.bg-dawn`: the soft sunrise, dark text only                                                                                   |
+  | `--dawn-sky-color`, `--dawn-sky`   | `.bg-dawn-sky`: the header and the sign-in pages (white text)                                                                  |
+  | `--dawn-hero-color`, `--dawn-hero` | `.bg-dawn-hero`: the heroes (white text, the notes, « S'inscrire »)                                                            |
+  | `--dawn-text`                      | `.text-dawn`: big figures                                                                                                      |
+  | `--dawn-line`                      | the line under `.page-title`, Crête's section marker                                                                           |
+  | `--dawn-marker-shadow`             | the shadow of Crête's section marker                                                                                           |
+  | `--dawn-horizon`                   | the line after `.month-title`                                                                                                  |
+  | `--dawn-ring-from`, `-via`, `-to`  | the ring of the days left (CountdownRing)                                                                                      |
+  | `--dawn-chip-glow`                 | the glow under the day of an event (DateChip)                                                                                  |
+  | `--dawn-glow-warm`, `-cool`        | the halo of what `--dawn-deep` paints (`shadow-glow`: main buttons, current tab, «+»)                                          |
+  | `--focus-glow`                     | the halo of a field with the focus                                                                                             |
+  | `--sky-focus`                      | the ring of the focus on the sky                                                                                               |
 
 A skin without a halo sets both glows to `transparent` (`--dawn-glow-warm:
 transparent; --dawn-glow-cool: transparent;`): `shadow-glow` is then drawn in
@@ -268,6 +305,24 @@ A motif is decoration: `aria-hidden="true"`, `focusable="false"` on an SVG,
 nothing that the words around them do not say. Crête's long paths are in the page
 once (`MotifDefs`, in `crete/Alpenglow.tsx`); a skin draws its own.
 
+`BrandMark` writes the name of the app (`t.common.appName`) as one text node, in
+one element: the smoke battery finds it on the sign-in pages by its text
+(`getByText(appName)`). A mark that splits it (« Prends ton » and « dossard » in
+two faces) keeps the whole name in one element, its parts drawn by CSS or
+hidden from that search.
+
+### What skins share
+
+A skin may use the files of another, but the other then holds it:
+
+- `alpage/` imports `../sentier/motifs` (the blaze, the patch, the ridges, the sun);
+- `sentier/` and `alpage/` import `Contours` from `../crete/Alpenglow`, and
+  `sentier/motifs.tsx` (so Alpage too) a path of `../crete/motifPaths`;
+- `Contours` draws with the paths of Crête's `MotifDefs`, which `routes/__root.tsx`
+  renders once for every page, whatever the skin. It must stay there: under
+  Crête's `HeaderArt`, it would be missing from the pages of the other skins, and
+  Sentier's and Alpage's contours would vanish without an error.
+
 ## Semantic classes (mix and full)
 
 The signature pieces carry a class of their own beside their Tailwind classes,
@@ -392,13 +447,22 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
 - `tokens.test.tsx`: in each skin, Crête's motifs and the map of a track take
   every colour from a `--motif-*` or `--map-*` property: none written out, in an
   attribute, a style or the arbitrary value of a class (`shadow-[…]`,
-  `drop-shadow-[…]`; a mask's is only an alpha); a window, `--shade-dialog`.
+  `drop-shadow-[…]`; a mask's is only an alpha); a window, `--shade-dialog`; a
+  toast, the white pill and the ring of the days left on a hero, their shades
+  and veil; the titles, the style of `--display-*`. These pieces are checked at
+  every depth: a rule of `mix.css` or `full.css` on the window of a dialog, the
+  labels or the zoom of the map, or the titles, reads the property (a colour or
+  a style written out there would fail them).
 - `smoke.test.tsx`: every skin × mode, at 320 px: home, an event with its map,
-  profile and a dialog, the form, a public page (its card in `--shade-welcome`),
-  the settings, forced colours; 44 px targets, the marks of the titles, the
-  current tab, the «+» and the main button in the skin's paint and halo (the halo
-  of `shadow-glow` in the skin, transparent too; at palette only, since mix and
-  full may restyle them); the skins' sheets in the page.
+  profile and a dialog, a runner, the form, a public page (its card in
+  `--shade-welcome`, `--welcome-card` and `--welcome-rim`), the settings, forced
+  colours; 44 px targets, the marks of the titles, the current tab, the «+» and
+  the main button in the skin's paint, ink and halo (the halo of `shadow-glow` in
+  the skin, transparent too), the shades of the hero's pieces and the style of
+  its title (at palette only, since mix and full may restyle them); the skins'
+  sheets in the page, and what the skin's own sheet sets (`ownDeclaration` of
+  `../test/computed.ts`: Crête declares every property, so the page alone would
+  not say whether the skin set one).
 - `../test/skinSheets.test.ts`: the forms a palette, a mix and a full sheet may
   and may not use (`sheetProblems`), and the stops a gradient may have.
 - `../dark.test.ts`, `../contrast.test.ts`, `../dashed.test.ts`,
@@ -406,5 +470,7 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
   `../test/theme.ts`), the sky included, and the guards of the stylesheets
   (`dark.test.ts`: the three levels, and the `fonts.css` of every folder).
 - `../fonts.test.ts`: the faces of every `fonts.css` (the package's files, its own
-  declaration of each, each once), and the families and weights each skin needs.
-- `../features/profile/ThemePicker.test.tsx`: the picker, its font samples.
+  declaration of each, each once), the families and weights each skin needs, and
+  the faces of an italic or wider title (`--display-style`, `--display-stretch`).
+- `../features/profile/ThemePicker.test.tsx`: the picker, its font samples, the
+  edge of a swatch (3:1 on its card, in every skin and mode).

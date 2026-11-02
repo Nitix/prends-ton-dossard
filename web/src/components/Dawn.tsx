@@ -42,7 +42,7 @@ export function DateChip({
       <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
-        className={`date-chip relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_var(--dawn-chip-glow)] ${
+        className={`date-chip relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-dawn-deep-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_var(--dawn-chip-glow)] ${
           big ? "w-[4.75rem] py-2.5" : "w-[3.75rem] py-2"
         }`}
       >
@@ -120,7 +120,11 @@ export function CountdownRing({
           cx="28"
           cy="28"
           r={RING_RADIUS}
-          fill={light ? "rgb(36 27 53 / 0.18)" : "none"}
+          fill={light ? undefined : "none"}
+          // On the sky, the veil of a hero (`--hero-veil`), a little lighter.
+          style={
+            light ? { fill: "color-mix(in srgb, var(--hero-veil) 90%, transparent)" } : undefined
+          }
           // The track: faint white on the sky, the soft violet of the theme on a card.
           stroke={light ? "rgb(255 255 255 / 0.28)" : undefined}
           className={light ? undefined : "stroke-iris-100"}

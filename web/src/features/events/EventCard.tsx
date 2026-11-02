@@ -37,7 +37,7 @@ export function EventCard({ view }: { view: EventView }) {
           label={severalDays ? t.event.dateRange(f.date(start), f.date(end)) : f.date(start)}
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="font-display text-[1.0625rem] leading-snug font-bold tracking-tight">
+          <h3 className="font-display text-[1.0625rem] leading-snug font-bold display-title">
             <Link
               to="/evenements/$id"
               params={{ id: event.id }}
