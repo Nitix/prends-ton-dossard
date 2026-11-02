@@ -96,9 +96,13 @@ function MonthSection({ month, views }: { month: Temporal.PlainYearMonth; views:
       <h2 id={headingId} className="month-title">
         {f.monthTitle(month)}
       </h2>
-      <ul className="event-list flex flex-col gap-3.5">
+      {/* From `md`, two columns: the cards of a row stretch to the height of the taller one
+          (`*:h-full` fills the item, which the grid has stretched). On a phone, a column. It is
+          a grid all the way, with no `flex`: the sheet of a skin chosen a moment ago comes after
+          styles.css and has `.flex` (its motifs use it), which would win over `md:grid`. */}
+      <ul className="event-list grid grid-cols-1 gap-3.5 md:grid-cols-2">
         {views.map((view) => (
-          <li key={view.event.id}>
+          <li key={view.event.id} className="*:h-full">
             <EventCard view={view} />
           </li>
         ))}
