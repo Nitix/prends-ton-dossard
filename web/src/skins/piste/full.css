@@ -225,6 +225,17 @@
   font-size: 1.125rem;
 }
 
+/* An empty list: framed in the dashes of a lane line, as the variant frames it (its
+   checker flag, the skin's art, above its words, which go to the left). */
+:root[data-skin="piste"] .empty-state {
+  align-items: flex-start;
+  padding: 1.5rem;
+  border: 2px dashed var(--color-neutral-300);
+  background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
+  box-shadow: none;
+  text-align: start;
+}
+
 /* The lists of cards go by two from md, as the variant has them (a card as tall as
    the one beside it). */
 @media (min-width: 48rem) {

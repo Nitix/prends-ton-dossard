@@ -17,6 +17,7 @@ import { aliceRunner } from "../../features/events/testFixture";
 import { UpcomingSection } from "../../features/home/MyUpcoming";
 import { TrackFigures } from "../../features/route/TrackFigures";
 import { fr } from "../../i18n/fr";
+import { daysBetween } from "../../lib/dates";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { contrast } from "../../test/colour";
@@ -64,6 +65,7 @@ function tokens() {
     redBright: colourOf("--color-iris-400"),
     redPale: colourOf("--color-iris-50"),
     pale: colourOf("--color-neutral-100"),
+    lane: colourOf("--color-neutral-300"),
     redDeep: colourOf("--color-iris-700"),
     ink: colourOf("--color-neutral-900"),
     cream: colourOf("--color-neutral-50"),
@@ -75,16 +77,35 @@ function tokens() {
   };
 }
 
-/** What `look` makes of a piece in Piste, in the app, with the tokens of its palette (`tokens`). */
+/**
+ * Brings every transition and animation under `root` to its end (an endless one
+ * is left), so that a colour or a shadow is read where it ends and not in the
+ * middle of a fade: a piece just drawn may still be fading in from the page it
+ * was drawn on.
+ */
+function settle(root: Element) {
+  for (const animation of root.getAnimations({ subtree: true })) {
+    if (animation.effect?.getComputedTiming().endTime !== Infinity) animation.finish();
+  }
+}
+
+/** What `look` makes of a piece in Piste, in the app, with the tokens of its palette (`tokens`), read once it has settled. */
 function inPiste<T extends object>(
   element: ReactNode,
   look: (drawn: HTMLElement) => T,
   options: { today?: string } = {},
 ) {
-  return inApp(element, (drawn) => ({ ...look(drawn), tokens: tokens() }), {
-    skin: "piste",
-    ...options,
-  });
+  return inApp(
+    element,
+    (drawn) => {
+      settle(drawn);
+      return { ...look(drawn), tokens: tokens() };
+    },
+    {
+      skin: "piste",
+      ...options,
+    },
+  );
 }
 
 /** The computed style of what a piece drew, found by its selector (and its pseudo-element). */
@@ -473,7 +494,10 @@ test.skipIf(SKIN_DEPTH !== "full")(
           const dates = drawn.querySelector(".event-hero-dates");
           const chip = drawn.querySelector(".date-chip");
           const deadline = drawn.querySelector(".event-hero-deadline");
+          const days = drawn.querySelector(".event-hero .days-left");
           return {
+            days: plain(days?.textContent),
+            daysTag: days === null ? "" : getComputedStyle(days).backgroundColor,
             outer: drawn.firstElementChild === hero,
             ground: hero === null ? "" : getComputedStyle(hero).backgroundColor,
             title: [title?.id, title?.dataset.focus, title?.tabIndex],
@@ -506,6 +530,11 @@ test.skipIf(SKIN_DEPTH !== "full")(
       const state = registrationState(view.event, Temporal.PlainDate.from(today ?? "2026-06-01"));
       const sentence = state === null ? "" : deadlineText(state, f, fr);
       expect(seen.deadline, `the deadline, ${what}`).toBe(sentence);
+      // The days left before the event, in words, as a bib (Crête shows them in a ring, which this band has not),
+      // and nothing once the event is under way.
+      const ahead = daysBetween(Temporal.PlainDate.from(today ?? "2026-06-01"), view.start);
+      expect(seen.days, `the days left, ${what}`).toBe(ahead > 0 ? plain(f.inDays(ahead)) : "");
+      expect(seen.daysTag, `as a bib, ${what}`).toBe(ahead > 0 ? seen.tokens.redPale : "");
       // On a phone the date is written large in the band: no number of a lane there.
       expect(seen.chipShown, `no number of a lane on a phone, ${what}`).toBe(false);
     }
@@ -525,5 +554,52 @@ test.skipIf(SKIN_DEPTH !== "full")(
     });
     expect(wide.shown, "the number of a lane from sm").toBe(true);
     expect(wide.beside, "beside the title").toBe(true);
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "piste — une liste vide est cadrée en tirets, comme dans la variante, ses mots à gauche sous le damier",
+  async () => {
+    const seen = await inPiste(
+      <div className="empty-state card flex flex-col items-center text-center">
+        <span aria-hidden="true">damier</span>
+        <p className="card-title">Rien ici</p>
+      </div>,
+      (drawn) => ({
+        frame: [
+          styleOf(drawn, ".empty-state").borderTopStyle,
+          styleOf(drawn, ".empty-state").borderTopWidth,
+        ],
+        edge: styleOf(drawn, ".empty-state").borderTopColor,
+        align: [
+          styleOf(drawn, ".empty-state").alignItems,
+          styleOf(drawn, ".empty-state").textAlign,
+        ],
+        shadow: styleOf(drawn, ".empty-state").boxShadow,
+      }),
+    );
+    expect(seen.frame).toEqual(["dashed", "2px"]);
+    expect(seen.edge, "the lane lines' colour").toBe(seen.tokens.lane);
+    expect(seen.align, "to the left").toEqual(["flex-start", "start"]);
+    expect(seen.shadow, "a frame, not a card").toBe("none");
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "piste — ce que le test lit est le bout d'une transition, pas son milieu (le test de l'agenda a lu une couleur en plein fondu)",
+  () => {
+    const probe = document.createElement("p");
+    probe.style.cssText = "transition: color 10s linear; color: rgb(255, 0, 0)";
+    document.body.append(probe);
+    try {
+      expect(getComputedStyle(probe).color).toBe("rgb(255, 0, 0)");
+      probe.style.color = "rgb(0, 0, 255)";
+      // Read at once, the colour is still where the fade began.
+      expect(getComputedStyle(probe).color, "mid-fade").not.toBe("rgb(0, 0, 255)");
+      settle(probe);
+      expect(getComputedStyle(probe).color, "settled").toBe("rgb(0, 0, 255)");
+    } finally {
+      probe.remove();
+    }
   },
 );

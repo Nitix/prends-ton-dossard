@@ -165,6 +165,8 @@ const DECORATION: readonly { piece: string; why: string; skins?: readonly string
   },
   // Dossard (Task 5): the frame of an empty list, a tear-off line round it.
   { piece: ".empty-state", why: "the dashed frame of an empty list (Dossard)", skins: ["dossard"] },
+  // Piste (Task 5, fix round 1): its variant frames an empty list in dashes too.
+  { piece: ".empty-state", why: "the dashed frame of an empty list (Piste)", skins: ["piste"] },
 ];
 
 /** Whether `selector` draws on one of the pieces of `DECORATION` (in `skin`). */

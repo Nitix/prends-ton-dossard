@@ -7,6 +7,7 @@ import { FormatParts } from "../../features/events/FormatLine";
 import { RegisterLink } from "../../features/events/RegisterLink";
 import { deadlineText, registrationState } from "../../features/events/registration";
 import { useI18n } from "../../i18n/I18nProvider";
+import { daysBetween } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import type { EventHeroProps, FormatTitleProps, TrackFiguresProps, Variants } from "../types";
@@ -40,11 +41,15 @@ function LaneBand({ view, heading }: EventHeroProps) {
   const severalDays = !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
+  const daysAhead = daysBetween(today, start);
   const dates = severalDays
     ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
     : f.dateLong(start);
 
   return (
+    // `-mx-4 -mt-6` bleeds the band out of the page's `main` to the edges of the screen and up to the
+    // header: they are the `px-4 pt-6` of Crête's `main` (components/AppShell.tsx) up to md, where `md:mx-0 md:mt-0`
+    // gives the band back as a card. A change to that padding is a change to these numbers.
     <header className="event-hero on-dawn relative isolate -mx-4 -mt-6 overflow-hidden bg-dawn-hero text-neutral-50 md:mx-0 md:mt-0 md:rounded-2xl">
       <HeroArt place="event" />
       <div className="event-hero-body relative flex flex-col px-4 pt-6 md:px-8 md:pt-8">
@@ -64,6 +69,10 @@ function LaneBand({ view, heading }: EventHeroProps) {
               {dates}
             </p>
             <p className="event-hero-facts font-medium text-neutral-50/85">{event.location}</p>
+            {/* Crête's hero shows the days left in a ring; this band has none, so it writes them, as a bib (`.days-left`). */}
+            {daysAhead > 0 && (
+              <p className="event-hero-days days-left mt-1 self-start">{f.inDays(daysAhead)}</p>
+            )}
           </div>
         </div>
         {deadline && (
