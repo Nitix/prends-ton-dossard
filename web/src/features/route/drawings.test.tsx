@@ -4,9 +4,10 @@ import { userEvent } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { emulateMedia, resetMedia } from "../../test/media";
 import { ElevationProfile } from "./ElevationProfile";
 import { toTrack, type TrackPoint } from "./gpx";
-import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_ZONES } from "./slope";
+import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_FILLS, SLOPE_ZONES, type SlopeZone } from "./slope";
 
 // The colours are classes of Tailwind, which the styles load.
 import "../../styles.css";
@@ -40,6 +41,16 @@ function flatThenWall(): TrackPoint[] {
   }));
 }
 
+/** 5 km, a kilometer in each zone of the slope: 2, 7, 12, 20 then 30 %, a point every 100 m. */
+function everyZone(): TrackPoint[] {
+  const grades = [2, 7, 12, 20, 30];
+  let ele = 500;
+  return Array.from({ length: 51 }, (_, i) => {
+    if (i > 0) ele += grades[Math.floor((i - 1) / 10)] ?? 0;
+    return { lat: 45 + i / 1000, lon: 6, km: i / 10, ele };
+  });
+}
+
 const COUNT = (texts: string[], unit: RegExp) => texts.filter((text) => unit.test(text)).length;
 
 // Intl separates a number from its unit with a no-break space: tests read the
@@ -52,6 +63,29 @@ const rgb = (hex: string) =>
 
 /** The figures over the drawing: the summit's altitude, or the cursor's reading in its place. */
 const pill = (container: HTMLElement) => seen(container.querySelector("p")?.textContent);
+
+/**
+ * Each band of the profile: the zone it is drawn for (its fill is the colour of
+ * that zone in the theme, `var(--color-slope-N)`) and the colour it is painted
+ * with.
+ */
+function paintedBands(container: HTMLElement): { zone: SlopeZone; painted: string }[] {
+  return [...container.querySelectorAll<SVGElement>("g[clip-path] rect")].map((rect) => {
+    const zone = SLOPE_ZONES.find((candidate) => rect.style.fill === SLOPE_FILLS[candidate]);
+    if (zone === undefined) throw new Error(`a band is filled with ${rect.style.fill}`);
+    return { zone, painted: getComputedStyle(rect).fill };
+  });
+}
+
+/** A colour of the system (CanvasText, ButtonText…) as the browser paints it now. */
+function systemColour(name: string): string {
+  const probe = document.createElement("span");
+  probe.style.color = name;
+  document.body.append(probe);
+  const colour = getComputedStyle(probe).color;
+  probe.remove();
+  return colour;
+}
 
 describe("ElevationProfile", () => {
   test("ElevationProfile — graduations et aria-label", async () => {
@@ -204,6 +238,78 @@ describe("ElevationProfile", () => {
       expect(swatches).toEqual(SLOPE_ZONES.map((zone) => rgb(SLOPE_COLORS_DARK[zone])));
     } finally {
       delete document.documentElement.dataset.theme;
+    }
+  });
+
+  test("ElevationProfile — chaque bande est peinte de la couleur de sa zone, dans la palette du jour puis dans celle de la nuit", async () => {
+    // Every zone on the way, one kilometer each, not only the two ends of a wall.
+    try {
+      for (const [theme, palette] of [
+        ["light", SLOPE_COLORS],
+        ["dark", SLOPE_COLORS_DARK],
+      ] as const) {
+        document.documentElement.dataset.theme = theme;
+        const screen = await render(
+          <I18nProvider languages={["fr"]}>
+            <ElevationProfile points={everyZone()} label="Profil" />
+          </I18nProvider>,
+        );
+        await expect.element(screen.getByRole("img", { name: "Profil" })).toBeVisible();
+        const drawn = paintedBands(screen.container);
+        expect(new Set(drawn.map(({ zone }) => zone)), `zones (${theme})`).toEqual(
+          new Set(SLOPE_ZONES),
+        );
+        expect(
+          drawn.map(({ painted }) => painted),
+          `colours (${theme})`,
+        ).toEqual(drawn.map(({ zone }) => rgb(palette[zone])));
+        await screen.unmount();
+      }
+    } finally {
+      delete document.documentElement.dataset.theme;
+    }
+  });
+
+  test("ElevationProfile — en couleurs forcées, la ligne, le sommet et les graduations sont dans la couleur du texte, et la légende garde ses couleurs, quel que soit le thème choisi", async () => {
+    // The system paints a high contrast page in its own colours, but not an
+    // SVG drawing: a line in the colour of the theme (white at night) would
+    // vanish on the white page of a light high contrast theme. The legend
+    // keeps the colours of the bands, which the system would otherwise wipe.
+    await emulateMedia({ forcedColors: "active" });
+    try {
+      for (const [theme, palette] of [
+        ["light", SLOPE_COLORS],
+        ["dark", SLOPE_COLORS_DARK],
+      ] as const) {
+        document.documentElement.dataset.theme = theme;
+        const screen = await render(
+          <I18nProvider languages={["fr"]}>
+            <ElevationProfile points={flatThenWall()} label="Profil" />
+          </I18nProvider>,
+        );
+        await expect.element(screen.getByRole("img", { name: "Profil" })).toBeVisible();
+        const text = systemColour("CanvasText");
+        const line = screen.container.querySelector("path[fill=none]");
+        const summit = screen.container.querySelector("circle");
+        expect.soft(line && getComputedStyle(line).stroke, `the line (${theme})`).toBe(text);
+        expect.soft(summit && getComputedStyle(summit).fill, `the summit (${theme})`).toBe(text);
+        const labels = [...screen.container.querySelectorAll("svg text")];
+        expect(labels.length).toBeGreaterThan(2);
+        for (const label of labels) {
+          expect.soft(getComputedStyle(label).fill, `${label.textContent} (${theme})`).toBe(text);
+        }
+        const legend = screen.getByText(fr.route.slope, { exact: true }).element().parentElement;
+        const swatches = [...(legend?.children ?? [])]
+          .slice(1)
+          .map((entry) => getComputedStyle(entry.firstElementChild ?? entry).backgroundColor);
+        expect
+          .soft(swatches, `the legend (${theme})`)
+          .toEqual(SLOPE_ZONES.map((zone) => rgb(palette[zone])));
+        await screen.unmount();
+      }
+    } finally {
+      delete document.documentElement.dataset.theme;
+      await resetMedia();
     }
   });
 

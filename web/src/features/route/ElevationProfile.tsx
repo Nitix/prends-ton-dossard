@@ -314,7 +314,7 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
               dy="0.35em"
               textAnchor="end"
               fontSize={LABEL_FONT_SIZE}
-              className="fill-neutral-600 tabular-nums"
+              className="fill-neutral-600 tabular-nums forced-colors:fill-[CanvasText]"
             >
               {f.meters(ele)}
             </text>
@@ -337,7 +337,7 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
                   dy="0.8em"
                   textAnchor={anchor}
                   fontSize={LABEL_FONT_SIZE}
-                  className="fill-neutral-600 tabular-nums"
+                  className="fill-neutral-600 tabular-nums forced-colors:fill-[CanvasText]"
                 >
                   {f.km(km)}
                 </text>
@@ -438,8 +438,9 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
             key={zone}
             className="inline-flex items-center gap-1.5 text-[0.75rem] text-neutral-700 tabular-nums"
           >
+            {/* Its colour stays in forced colours, where the system would wipe a background. */}
             <span
-              className="inline-block h-2.5 w-4 rounded-full"
+              className="inline-block h-2.5 w-4 rounded-full forced-color-adjust-none"
               style={{ backgroundColor: SLOPE_FILLS[zone] }}
             />
             {text}

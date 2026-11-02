@@ -13,9 +13,13 @@ export const PRIMARY =
 export const SECONDARY =
   "press min-h-11 rounded-full border border-neutral-200 bg-card px-4 text-[0.9375rem] font-medium shadow-[0_1px_2px_rgb(36_27_53/0.05)] hover:border-iris-200 hover:bg-iris-50 disabled:opacity-60";
 
-/** A white pill on the sky (a hero): the main action there. The sky keeps the colours of the day (see `.on-dawn`). */
+/**
+ * A white pill on the sky (a hero): the main action there. The sky keeps the
+ * colours of the day (see `.on-dawn`). In forced colours its white goes with
+ * the rest: an edge in the colour of a button's text keeps it a button.
+ */
 export const ON_DAWN =
-  "press min-h-11 rounded-full bg-white px-5 text-[0.9375rem] font-semibold text-iris-700 shadow-[0_8px_24px_-10px_rgb(36_27_53/0.5)] hover:bg-iris-50";
+  "press min-h-11 rounded-full bg-white px-5 text-[0.9375rem] font-semibold text-iris-700 shadow-[0_8px_24px_-10px_rgb(36_27_53/0.5)] hover:bg-iris-50 forced-colors:border forced-colors:border-[ButtonText]";
 
 /**
  * The action that deletes something, in a dialog that asks first. Its text has

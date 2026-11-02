@@ -5,14 +5,14 @@ import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 import type { BrowserCommand } from "vitest/node";
 
+import type { Media } from "./src/test/mediaFeatures.ts";
+
 /**
  * A command of the browser tests: the media features of the page, as a phone
  * or a computer would set them (a dark setting, the forced colours of a high
  * contrast mode), through src/test/media.ts, which puts them back after a test.
  */
-const emulateMedia: BrowserCommand<
-  [options: { colorScheme?: "light" | "dark" | null; forcedColors?: "active" | "none" | null }]
-> = async ({ page }, options) => {
+const emulateMedia: BrowserCommand<[options: Media]> = async ({ page }, options) => {
   await page.emulateMedia(options);
 };
 

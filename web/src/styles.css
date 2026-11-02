@@ -737,7 +737,11 @@
    of a delete) would be bare words: a button, the « + », a chosen day, the
    current status of a menu get an edge in the colour of a button's text, and
    the current tab a thicker one in the colour of what is selected, not its
-   bold text alone. Outside the layers, so that it wins over the utilities. */
+   bold text alone. The system leaves an SVG drawing in its own colours: the
+   line and the summit of the elevation profile take the colour of the text
+   (its figures too, see ElevationProfile), or a theme could leave them in the
+   colour of the page, as the white line of the night on a white page. Outside
+   the layers, so that it wins over the utilities. */
 @media (forced-colors: active) {
   .bg-dawn-deep,
   .bg-red-700 {
@@ -748,5 +752,11 @@
   }
   nav a[aria-current="page"] {
     border: 2px solid Highlight;
+  }
+  .stroke-relief {
+    stroke: CanvasText;
+  }
+  .fill-relief {
+    fill: CanvasText;
   }
 }
