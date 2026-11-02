@@ -151,6 +151,10 @@ export const fr = {
     mode: "Clair ou sombre",
     onlyLight: "Ce thème n'a qu'un mode clair.",
     onlyDark: "Ce thème n'a qu'un mode sombre.",
+    // The switch of a theme whose background moves (see lib/ambient.ts), and what it does.
+    animateBackground: "Animer le fond",
+    animateBackgroundHint:
+      "Les dessins du fond de ce thème bougent doucement. Sans effet si ton appareil demande moins d'animations.",
     // A few letters in the font of a theme, on its card.
     fontSample: "Aa",
     // The message when a theme chosen cannot be loaded (offline, and never chosen on this device): the page keeps the theme it had.

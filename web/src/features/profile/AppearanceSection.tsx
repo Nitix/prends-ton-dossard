@@ -7,6 +7,7 @@ import { SKINS, useSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
 import { chooseSkinOnAccount } from "../auth/accountSkin";
 import { useUserId } from "../auth/session";
+import { AmbientSwitch } from "./AmbientSwitch";
 import { Section } from "./Section";
 
 // The faces of the samples of the cards (« Aa » in the font of each skin's
@@ -110,6 +111,8 @@ export function AppearanceSection() {
       ) : (
         <ModeChoices choice={choice} choose={choose} labels={labels} focusLost={focusLost} />
       )}
+      {/* Only for a skin whose background moves: a person can stop it. */}
+      {skin.animatedBackground && <AmbientSwitch />}
     </Section>
   );
 }
