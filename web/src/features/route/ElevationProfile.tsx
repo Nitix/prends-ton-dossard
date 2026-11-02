@@ -24,8 +24,12 @@ const TICK_LENGTH = 4;
 const LABEL_FONT_SIZE = 11;
 /** The width before it is measured: about a phone's. */
 const FIRST_WIDTH = 340;
-/** The width of a band of slope, in pixels: narrow enough to follow the track, wide enough to smooth the GPS. */
-const BAND_PX = 5;
+/**
+ * How many bands of slope the profile is cut into, whatever its width: a phone
+ * and a wide screen read the same slopes (a band is about 5 px wide on a
+ * computer, under 2 on a phone).
+ */
+const RUNS = 150;
 /** How far the box of the cursor goes beyond the plot on each side, in pixels. */
 const CURSOR_BLEED = 4;
 
@@ -34,16 +38,12 @@ type WithAltitude = TrackPoint & { ele: number };
 /** The coordinates of a point of the path, to a tenth of a unit. */
 const coordinates = (x: number, y: number): string => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
-/** How many bands of slope the profile is cut into, by the width of its plot. */
-const runCount = (plotWidth: number) =>
-  Math.max(12, Math.min(240, Math.round(plotWidth / BAND_PX)));
-
 /**
- * Half the length over which a slope is read, in kilometers: a little more than
- * a band (at least 75 m), so that the noise of the GPS does not stripe the profile.
+ * Half the length over which a slope is read, in kilometers: 1 % of the track
+ * (at least 75 m), a band and a half, so that the noise of the GPS does not
+ * stripe the profile. It depends on the track only, never on the screen.
  */
-const slopeHalf = (lastKm: number, plotWidth: number) =>
-  Math.max((lastKm / runCount(plotWidth)) * 1.5, 0.075);
+const slopeHalf = (lastKm: number) => Math.max(lastKm / 100, 0.075);
 
 /**
  * The altitude at a distance, between the two points around it: a mean of the
@@ -74,11 +74,10 @@ function altitudeAt(points: WithAltitude[], km: number): number {
 function slopeRuns(
   points: WithAltitude[],
   lastKm: number,
-  plotWidth: number,
 ): { from: number; to: number; zone: SlopeZone }[] {
-  const count = runCount(plotWidth);
+  const count = RUNS;
   const band = lastKm / count;
-  const half = slopeHalf(lastKm, plotWidth);
+  const half = slopeHalf(lastKm);
   const zones = Array.from({ length: count }, (_, i) => {
     const middle = band * (i + 0.5);
     const from = Math.max(0, middle - half);
@@ -218,7 +217,7 @@ function Profile({
     .join(" ");
   const first = drawn[0];
   const area = `${line} L${coordinates(x(lastKm), bottom)} L${coordinates(x(first?.km ?? 0), bottom)} Z`;
-  const runs = slopeRuns(drawn, lastKm, plotWidth);
+  const runs = slopeRuns(drawn, lastKm);
 
   // The labels of the kilometers stay in the drawing (the first starts at its
   // tick, one that would pass the right edge ends at it), and one that would
@@ -264,7 +263,7 @@ function Profile({
   const reading = (at: number) => {
     const km = Math.min(lastKm, Math.max(0, at));
     const ele = altitudeAt(drawn, km);
-    const half = slopeHalf(lastKm, plotWidth);
+    const half = slopeHalf(lastKm);
     const from = Math.max(0, km - half);
     const to = Math.min(lastKm, km + half);
     const slope = ((altitudeAt(drawn, to) - altitudeAt(drawn, from)) / ((to - from) * 1000)) * 100;

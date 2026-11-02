@@ -69,7 +69,7 @@ const pill = (container: HTMLElement) => seen(container.querySelector("p")?.text
  * that zone in the theme, `var(--color-slope-N)`) and the colour it is painted
  * with.
  */
-function paintedBands(container: HTMLElement): { zone: SlopeZone; painted: string }[] {
+function paintedBands(container: Element): { zone: SlopeZone; painted: string }[] {
   return [...container.querySelectorAll<SVGElement>("g[clip-path] rect")].map((rect) => {
     const zone = SLOPE_ZONES.find((candidate) => rect.style.fill === SLOPE_FILLS[candidate]);
     if (zone === undefined) throw new Error(`a band is filled with ${rect.style.fill}`);
@@ -409,6 +409,41 @@ describe("ElevationProfile", () => {
 
     await userEvent.unhover(cursor);
     expect(pill(screen.container)).toBe("800 m");
+  });
+
+  test("ElevationProfile — un téléphone et un grand écran lisent la même pente : elle ne dépend pas de la largeur du dessin", async () => {
+    // 30 km on the flat, then a last climb of 400 m at 20 %: a point every 100 m.
+    const track: TrackPoint[] = Array.from({ length: 305 }, (_, i) => ({
+      lat: 45 + i / 1000,
+      lon: 6,
+      km: i / 10,
+      ele: i <= 300 ? 500 : 500 + (i - 300) * 20,
+    }));
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <div data-testid="phone" style={{ width: 320 }}>
+          <ElevationProfile points={track} label="Profil" />
+        </div>
+        <div data-testid="wide" style={{ width: 900 }}>
+          <ElevationProfile points={track} label="Profil" />
+        </div>
+      </I18nProvider>,
+    );
+    /** At the finish (End), what the cursor says, and the zone of the last band. */
+    const atFinish = async (id: string) => {
+      const box = screen.getByTestId(id);
+      const cursor = box.getByRole("slider", { name: fr.route.profileCursor });
+      await userEvent.click(cursor);
+      await userEvent.keyboard("{End}");
+      return {
+        reading: seen(cursor.element().getAttribute("aria-valuetext")),
+        lastZone: paintedBands(box.element()).at(-1)?.zone,
+      };
+    };
+    const phone = await atFinish("phone");
+    const wide = await atFinish("wide");
+    expect(phone).toEqual(wide);
+    expect(phone).toEqual({ reading: "30,4 km, altitude 580 m, pente 20 %", lastZone: 4 });
   });
 
   test("ElevationProfile — des points sans altitude parmi d'autres sont passés", async () => {
