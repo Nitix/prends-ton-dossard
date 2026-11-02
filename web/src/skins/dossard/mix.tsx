@@ -7,7 +7,7 @@ import { ParticipantChips } from "../../features/events/ParticipantChips";
 import { starters } from "../../features/events/participants";
 import { RegisterLink } from "../../features/events/RegisterLink";
 import {
-  DAYS_LEFT_SHOWN,
+  deadlineText,
   registrationLabel,
   registrationState,
 } from "../../features/events/registration";
@@ -28,8 +28,6 @@ import { BibHoles, SafetyPin } from "./Bib";
 // Crête's does (`useToday`, `registrationState`, `RegisterLink`, `FormatLine`...),
 // at render, never when this module is evaluated (README, « Markup variants »).
 
-const SEPARATOR = " · ";
-
 /**
  * An event in a list, cut like a race bib: a band with its day or days (the
  * colour of the list says which one it is in, `data-list`, and the words say
@@ -46,7 +44,10 @@ function BibCard({ view, list }: EventCardProps) {
   const { event, formats, start, end } = view;
   const severalDays = !start.equals(end);
   const interested = starters(view.interested);
-  const registration = registrationState(event, useToday());
+  const today = useToday();
+  const registration = registrationState(event, today);
+  // The year of an event that is not in this one, as the day of Crête's card says it.
+  const year = start.year === today.year ? null : start.year;
   const hasRunners = interested.length > 0 || formats.length > 0 || view.supporters.length > 0;
 
   return (
@@ -57,6 +58,7 @@ function BibCard({ view, list }: EventCardProps) {
       <BibHoles top="0.75rem" />
       <p className="bib-band px-8 py-2">
         {severalDays ? t.event.dateRange(f.date(start), f.date(end)) : f.date(start)}
+        {year !== null && <span className="bib-year">{` ${year}`}</span>}
       </p>
       <div className="flex gap-3 px-4 pt-3 pb-3">
         <span
@@ -148,7 +150,7 @@ function BibHero({ view, heading }: EventHeroProps) {
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
   const daysToGo = daysBetween(today, start);
-  const hasDetails = deadline !== null || event.notes !== "" || registration !== null;
+  const hasDetails = deadline !== null || Boolean(event.notes) || registration !== null;
 
   return (
     <header className="event-hero relative mt-3">
@@ -158,48 +160,43 @@ function BibHero({ view, heading }: EventHeroProps) {
         <BibHoles top="1.05rem" />
         <h1
           {...heading}
-          className="col-start-2 row-start-2 self-end pt-5 pr-5 font-display text-[1.625rem] leading-[1.05] font-black display-title break-words min-[24rem]:text-[1.875rem] md:text-[2.5rem]"
+          className="event-hero-title col-start-2 row-start-2 self-end pt-5 pr-5 font-display text-[1.625rem] leading-[1.05] font-black display-title break-words min-[24rem]:text-[1.875rem] md:self-start md:text-[2.5rem]"
         >
           {event.name}
         </h1>
         <span
           aria-hidden="true"
-          className="bib-number col-start-1 row-start-2 pt-5 pr-4 pl-5 text-[3.75rem] min-[24rem]:text-[4.5rem] md:pl-7 md:text-[6rem]"
+          className="bib-number col-start-1 row-span-2 row-start-2 pt-5 pr-4 pl-5 text-[3.75rem] min-[24rem]:text-[4.5rem] md:pl-7 md:text-[6rem]"
         >
           {start.day}
         </span>
-        {daysToGo > 0 && (
-          <span className="col-start-1 row-start-3 pt-2 pb-5 pl-5 md:pl-7">
-            <CountdownRing days={daysToGo} />
-          </span>
-        )}
         <p className="bib-band col-span-2 row-start-1 px-9 py-3 md:text-sm">
           {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
         </p>
-        <p className="col-start-2 row-start-3 flex items-start gap-2 pt-1 pr-5 pb-5 text-neutral-600">
-          <PinIcon className="mt-0.5 size-[1.125rem] shrink-0 text-blush-500" />
-          {event.location}
-        </p>
+        {/* The place, and the days left in their ring beside it: under the number they would read as a second figure of the bib. */}
+        <div className="event-hero-facts col-start-2 row-start-3 flex items-start justify-between gap-3 self-start pt-1 pr-5 pb-5">
+          <p className="flex items-start gap-2 text-neutral-600">
+            <PinIcon className="mt-0.5 size-[1.125rem] shrink-0 text-blush-500" />
+            {event.location}
+          </p>
+          {daysToGo > 0 && <CountdownRing days={daysToGo} />}
+        </div>
         {hasDetails && (
           <div className="bib-tear col-span-2 row-start-4 mx-5 flex flex-col gap-3 pt-4 pb-6">
             {deadline && (
               <p
-                className={`flex items-start gap-2 self-start rounded-2xl px-3 py-2 text-sm font-semibold ring-1 ${
+                data-kind={deadline.kind}
+                className={`event-hero-deadline flex items-start gap-2 self-start rounded-2xl px-3 py-2 text-sm font-semibold ring-1 ${
                   deadline.kind === "open"
                     ? "bg-peach-50 text-peach-700 ring-peach-200"
                     : "bg-neutral-100 text-neutral-700 ring-neutral-200"
                 }`}
               >
                 <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
-                <span>
-                  {registrationLabel(deadline, f, t)}
-                  {deadline.kind === "open" &&
-                    deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-                    `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
-                </span>
+                <span>{deadlineText(deadline, f, t)}</span>
               </p>
             )}
-            {event.notes && <p className="whitespace-pre-line">{event.notes}</p>}
+            {event.notes && <p className="event-hero-notes whitespace-pre-line">{event.notes}</p>}
             {registration && <RegisterLink href={registration} />}
           </div>
         )}

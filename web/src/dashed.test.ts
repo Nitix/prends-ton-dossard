@@ -153,19 +153,14 @@ test("dashed — la pastille d'un participant à confirmer garde 3:1, avec de la
  * read as « not confirmed » (a tear-off line, a perforation). A dashed border
  * that says a state is not here: it is in a colour of the theme, with 3:1 (the
  * test below). `skins` limits an entry to the skins it names. A skin asks for an
- * entry (this file is shared); the entries of Dossard's tab bar and header may
- * go once Task 5 has brought back its variant's flat bar and sand header.
+ * entry (this file is shared).
  */
 const DECORATION: readonly { piece: string; why: string; skins?: readonly string[] }[] = [
   { piece: ".bib-tear", why: "the tear-off line of a bib (Dossard)" },
   { piece: ".perforation", why: "the perforation of a ticket (Rétro)" },
-  { piece: ".app-header", why: "the tear-off line under the garland of the header (Dossard)" },
   { piece: ".runner-hero", why: "the ring cut around the photo on a runner's hero (Dossard)" },
-  {
-    piece: ".tabbar",
-    why: "the ticket of Dossard's tab bar, until Task 5 brings back its variant's flat bar",
-    skins: ["dossard"],
-  },
+  // Dossard (Task 5): the frame of an empty list, a tear-off line round it.
+  { piece: ".empty-state", why: "the dashed frame of an empty list (Dossard)", skins: ["dossard"] },
 ];
 
 /** Whether `selector` draws on one of the pieces of `DECORATION` (in `skin`). */
@@ -252,6 +247,9 @@ test("dashed — sheetDashes lit les bordures et les contours en tirets d'une fe
   // A piece of the list is decoration by its class, not by a name that starts like it.
   expect(decoration(':root[data-skin="x"] .bib-tear', "x")?.piece).toBe(".bib-tear");
   expect(decoration(':root[data-skin="x"] .bib-tear-off', "x")).toBeUndefined();
-  expect(decoration(':root[data-skin="x"] .tabbar ul', "x")).toBeUndefined();
-  expect(decoration(':root[data-skin="dossard"] .tabbar ul', "dossard")?.piece).toBe(".tabbar");
+  // An entry limited to a skin is not one of another skin's.
+  expect(decoration(':root[data-skin="x"] .empty-state', "x")).toBeUndefined();
+  expect(decoration(':root[data-skin="dossard"] .empty-state', "dossard")?.piece).toBe(
+    ".empty-state",
+  );
 });

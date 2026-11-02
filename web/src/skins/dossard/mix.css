@@ -1,35 +1,89 @@
 /* « Dossard », depth mix: its signature pieces, over the palette. The morning of
-   a race: the tear-off line of a bib, white paper on the sand, coral under what
-   one acts on. Only in a build at mix or full (src/skins/depth/). The colours are
-   the palette's (coral is `peach`, the sun `blush`, the sky `iris`); the markup
-   of the bib card and of the big bib of an event is in mix.tsx. */
+   a race: white paper on the sand, the garland of the start village, coral under
+   what one acts on, the tear-off line of a bib. Only in a build at mix or full
+   (src/skins/depth/). The colours are the palette's (coral is `peach`, the sun
+   `blush`, the sky `iris`); the markup of the bib card and of the big bib of an
+   event is in mix.tsx. */
 
-/* The header: a tear-off line above the sheet, between the garland and the page. */
-:root[data-skin="dossard"] .app-header::after {
-  content: "";
-  position: absolute;
-  inset-inline: 1rem;
-  bottom: 2.75rem;
-  border-top: 2px dashed color-mix(in srgb, var(--color-neutral-50) 40%, transparent);
-  pointer-events: none;
+/* The header: the sand of the page under the garland of pennants (the skin's art),
+   the name of the app in ink, a short bar. The page rises no more over a sky: the
+   sheet has the colour of the header. From md the capsule of the tabs is in the bar. */
+:root[data-skin="dossard"] .app-header {
+  background-image: none;
+  background-color: var(--color-neutral-50);
+  color: var(--color-ink);
+}
+:root[data-skin="dossard"] .app-header .brand-name {
+  color: var(--color-ink);
+}
+:root[data-skin="dossard"] .app-header .brand-link:focus-visible {
+  outline-color: var(--color-iris-600);
+}
+:root[data-skin="dossard"] .app-header-bar {
+  padding-bottom: 0.5rem;
+}
+:root[data-skin="dossard"] .sheet {
+  margin-top: 0;
+  border-radius: 0;
+}
+@media (min-width: 48rem) {
+  :root[data-skin="dossard"] .app-header-bar {
+    height: 4rem;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  :root[data-skin="dossard"] .tabbar {
+    top: 0.25rem;
+    margin-top: -3.75rem;
+    margin-bottom: 0.25rem;
+  }
 }
 
-/* The tabs: a ticket cut off along a dashed line. The current tab is the navy
-   pill of the main button, with the coral edge under it that a button has. */
-:root[data-skin="dossard"] .tabbar ul {
-  border: 2px dashed var(--color-neutral-300);
-  border-radius: var(--radius-card);
-}
+/* The tabs: on a phone a flat white bar as wide as the screen, a line over it,
+   each tab an icon over its name; the current one is bold, in ink, with a pill of
+   sun behind its icon. From md the pill is the tab itself, in the white capsule. */
 :root[data-skin="dossard"] .tab {
   border-radius: 1rem;
 }
 :root[data-skin="dossard"] .tab[aria-current="page"] {
-  box-shadow: 0 3px 0 var(--color-peach-500);
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--color-ink);
+}
+@media (max-width: 47.99rem) {
+  :root[data-skin="dossard"] .tabbar {
+    bottom: 0;
+    padding-inline: 0;
+  }
+  :root[data-skin="dossard"] .tabbar-list {
+    gap: 0;
+    padding: 0 0 env(safe-area-inset-bottom);
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background-color: color-mix(in srgb, var(--color-card) 95%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  :root[data-skin="dossard"] .tab {
+    height: 4rem;
+    padding-inline: 0.25rem;
+  }
+  :root[data-skin="dossard"] .tab[aria-current="page"] .tab-icon {
+    box-sizing: content-box;
+    margin: -0.25rem -0.9375rem;
+    padding: 0.25rem 0.9375rem;
+    border-radius: 9999px;
+    background-color: var(--color-blush-200);
+  }
 }
 @media (min-width: 48rem) {
-  :root[data-skin="dossard"] .tabbar ul,
   :root[data-skin="dossard"] .tab {
     border-radius: 9999px;
+  }
+  :root[data-skin="dossard"] .tab[aria-current="page"] {
+    background-color: var(--color-blush-200);
   }
 }
 
@@ -105,6 +159,12 @@
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   font-stretch: 92%;
+}
+
+/* The big bib of an event: the row of the place takes what the number (over two rows)
+   asks for, so that the title stays at the top, beside it. */
+:root[data-skin="dossard"] .bib-hero {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 /* The photo of a runner on their bib: cut out with a dashed line of the sun. */

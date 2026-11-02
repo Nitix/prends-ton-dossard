@@ -10,6 +10,9 @@ const HOLE: CSSProperties = {
   boxShadow: "inset 0 1px 1.5px color-mix(in srgb, var(--color-ink) 35%, transparent)",
 };
 
+/** The steel of a safety pin, a cool grey: the navy of the ink, a quarter of the white of the card in it. */
+const STEEL = "color-mix(in srgb, var(--color-neutral-600) 75%, var(--color-card))";
+
 /**
  * The four punched holes of a bib, in the corners of the box around it, which
  * must be positioned (a hero is). `top` is how far down the top two are when
@@ -42,18 +45,8 @@ export function SafetyPin({ className = "" }: { className?: string }) {
       strokeLinejoin="round"
     >
       {/* The coil, the two legs of wire, and the head that closes them. */}
-      <circle
-        cx="10"
-        cy="12"
-        r="6"
-        style={{ stroke: "var(--color-neutral-300)" }}
-        strokeWidth="3"
-      />
-      <path
-        d="M15 7.5 L 58 6.5 M 15 16.5 L 57 9.5"
-        style={{ stroke: "var(--color-neutral-300)" }}
-        strokeWidth="3"
-      />
+      <circle cx="10" cy="12" r="6" style={{ stroke: STEEL }} strokeWidth="3" />
+      <path d="M15 7.5 L 58 6.5 M 15 16.5 L 57 9.5" style={{ stroke: STEEL }} strokeWidth="3" />
       <path d="M16 7.5 L 56 6.6" stroke="#fff" strokeOpacity="0.75" strokeWidth="1" />
       <rect x="53" y="3" width="16" height="9.5" rx="4.75" style={{ fill: "var(--color-ink)" }} />
       <rect x="56" y="4.8" width="8" height="2" rx="1" fill="#fff" fillOpacity="0.35" />
