@@ -19,7 +19,7 @@ export function Divider({ className = "" }: DividerProps) {
 }
 
 /** A dot of confetti in the colour of a token, at a place of the box. */
-const dot = (at: string, colour: string, size: number) =>
+export const dot = (at: string, colour: string, size: number) =>
   `radial-gradient(circle at ${at}, var(${colour}) 0 ${size}px, transparent ${size + 0.5}px)`;
 
 /** Confetti over the words of an empty list: coral, sun and sky, scattered. Decoration only. */

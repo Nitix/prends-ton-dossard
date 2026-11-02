@@ -2,6 +2,7 @@ import { useId } from "react";
 
 import type { HeaderArtProps, HeroArtProps } from "../types";
 import { BibHoles, SafetyPin } from "./Bib";
+import { dot } from "./Marks";
 
 /**
  * The garland of pennants of a start village, along the top edge of its box:
@@ -35,17 +36,46 @@ function Garland() {
   );
 }
 
+/** The confetti of a start village, scattered over the sky under the card: coral, sun and sky. */
+const CONFETTI = [
+  dot("8% 14%", "--color-peach-500", 5),
+  dot("22% 46%", "--color-blush-200", 6),
+  dot("37% 22%", "--color-iris-300", 4),
+  dot("51% 62%", "--color-peach-500", 3.5),
+  dot("64% 30%", "--color-blush-200", 4.5),
+  dot("79% 56%", "--color-iris-300", 6),
+  dot("92% 18%", "--color-peach-500", 4),
+  dot("14% 78%", "--color-iris-300", 3.5),
+  dot("44% 88%", "--color-blush-200", 4),
+  dot("70% 84%", "--color-peach-500", 5),
+  dot("88% 74%", "--color-blush-200", 3),
+].join(", ");
+
 /**
  * The art of the sky of the app: the garland along the top of the header of a
- * page, and of the pages to sign in, where the sky is the whole page.
+ * page. On the pages to sign in, where the sky is the whole page and the card
+ * covers its middle, the art is around the card: the garland at the top, the
+ * confetti of the start village under the card, and a second garland strung
+ * along the foot of the page.
  */
 export function HeaderArt({ place }: HeaderArtProps) {
+  if (place === "header") {
+    return (
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <Garland />
+      </span>
+    );
+  }
   return (
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none absolute inset-0 ${place === "header" ? "overflow-hidden" : ""}`}
-    >
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
       <Garland />
+      <span
+        className="absolute inset-x-0 bottom-6 h-[18rem] mask-[linear-gradient(to_bottom,transparent,#000_30%)]"
+        style={{ backgroundImage: CONFETTI }}
+      />
+      <span className="absolute inset-x-0 bottom-0 block h-3 -scale-y-100">
+        <Garland />
+      </span>
     </span>
   );
 }

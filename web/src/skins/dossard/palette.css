@@ -76,13 +76,22 @@
   --color-scrim: rgb(20 33 61 / 0.55);
   --color-relief: #0b1428;
 
-  /* The five zones of the slope, flat to steep: sky, grass, sun, terracotta,
-     crimson. 3:1 on the card and with the navy line. */
-  --color-slope-1: #3a8ee0;
-  --color-slope-2: #4ca378;
-  --color-slope-3: #ba8907;
-  --color-slope-4: #b74802;
-  --color-slope-5: #ce0a6d;
+  /* The five zones of the slope, flat to steep, the confetti of the start
+     village in their deep steps: the sky, a teal, the sun in bronze, the coral,
+     a plum. 3:1 on the card and with the navy line, and apart with a colour
+     vision deficiency too (src/features/route/slope.test.ts); none is one of
+     Crête's. */
+  --color-slope-1: #2071dd;
+  --color-slope-2: #22a0a2;
+  --color-slope-3: #856b34;
+  --color-slope-4: #d77167;
+  --color-slope-5: #8b4b8f;
+
+  /* Its titles: Archivo, wider (the variant's are chunky as the number of a
+     bib: its 900 and 800 are drawn here at 800 and 700, on a wider axis of the
+     face) and a little tight. */
+  --display-stretch: 112.5%;
+  --display-tracking: -0.02em;
 
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
@@ -110,30 +119,6 @@
   --map-finish: #14213d;
   --map-link: #0a5c99;
 
-  /* Crête's motifs, which « Dossard » does not draw (the title marker, which
-     takes the sun of the paint of the line): in its three accents and its navy.
-     The header, the heroes, the mark and the empty lists are the skin's own. */
-  --motif-ridge-far-from: #ff9094;
-  --motif-ridge-far-to: #ff5a5f;
-  --motif-ridge-mid-from: #3ba7f5;
-  --motif-ridge-mid-to: #1673c4;
-  --motif-ridge-near-from: #26314d;
-  --motif-ridge-near-to: #14213d;
-  --motif-ridge-light: #ffe7a6;
-  --motif-sun-core: #fff7e0;
-  --motif-sun-mid: #ffe7a6;
-  --motif-sun-rim: #ffc93c;
-  --motif-halo-from: #ffe7a6;
-  --motif-halo-to: #ffc93c;
-  --motif-dawn-1: #ffc93c;
-  --motif-dawn-2: #ff5a5f;
-  --motif-dawn-3: #3ba7f5;
-  --motif-peak-far: #cfe8fd;
-  --motif-peak-near-from: #1673c4;
-  --motif-peak-near-to: #14213d;
-  --motif-hill-near-from: #3ba7f5;
-  --motif-hill-near-to: #14213d;
-
   /* The paints of the dawn, flat as the variant's colours are. What carries
      white text is the navy ink (the variant's main button), the band of the
      header too; the hero is the coral band of the bib, in its deep step (white
@@ -159,4 +144,16 @@
   --focus-glow: rgb(22 115 196 / 0.2);
   /* The ring of the focus on the navy of the sky: the sun. */
   --sky-focus: #ffc93c;
+
+  /* The card of the sign-in pages, on the navy of the sky: the white bib of
+     the variant, in a deep navy shade. A window (the variant's pop), a
+     message and the pieces on the coral hero in the navy ink. */
+  --welcome-card: #ffffff;
+  --shade-welcome: rgb(8 14 30 / 0.55);
+  --shade-dialog: rgb(20 33 61 / 0.38);
+  --shade-toast: rgb(20 33 61 / 0.7);
+  --shade-notes: rgb(20 33 61 / 0.6);
+  --shade-photo: rgb(20 33 61 / 0.6);
+  --shade-on-dawn: rgb(20 33 61 / 0.5);
+  --hero-veil: rgb(20 33 61 / 0.2);
 }
