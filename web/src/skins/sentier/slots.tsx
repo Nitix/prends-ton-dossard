@@ -27,11 +27,18 @@ export function HeaderArt({ place, sun = true }: HeaderArtProps) {
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         <Contours tiled className="opacity-[0.14]" />
         {sun && (
-          <Sun className="right-[21%] bottom-[2.8rem] size-9 animate-rise md:right-auto md:bottom-[3.6rem] md:left-[44%] md:size-12" />
+          <Sun className="header-sun right-[21%] bottom-[2.8rem] size-9 animate-rise md:right-auto md:bottom-[3.6rem] md:left-[44%] md:size-12" />
         )}
-        <Ridges far={FAR} near={PAGE} className="inset-x-0 bottom-7 h-12 w-full md:h-[4.5rem]" />
+        <Ridges
+          far={FAR}
+          near={PAGE}
+          className="header-ridges inset-x-0 bottom-7 h-12 w-full md:h-[4.5rem]"
+        />
         {/* What continues the near ridge under the ridges, behind the round corners of the sheet. */}
-        <span className="absolute inset-x-0 bottom-0 h-7" style={{ backgroundColor: PAGE }} />
+        <span
+          className="header-foot absolute inset-x-0 bottom-0 h-7"
+          style={{ backgroundColor: PAGE }}
+        />
       </span>
     );
   }

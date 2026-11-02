@@ -2,11 +2,7 @@ import { Avatar } from "../../components/Avatar";
 import { CountdownRing } from "../../components/Dawn";
 import { ClockIcon, PinIcon } from "../../components/icons";
 import { RegisterLink } from "../../features/events/RegisterLink";
-import {
-  DAYS_LEFT_SHOWN,
-  registrationLabel,
-  registrationState,
-} from "../../features/events/registration";
+import { deadlineText, registrationState } from "../../features/events/registration";
 import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
@@ -24,8 +20,14 @@ import { Blaze, Ridges, Sun } from "./motifs";
 // modules import from the app they use while they render, never when they are
 // evaluated (the cycle of imports that a variant closes: ../README.md).
 
-/** The pale ridges of a light hero, in the greens of the palette (`iris` is the pine). */
-const FAR = "color-mix(in srgb, var(--color-iris-200) 70%, transparent)";
+/**
+ * The pale ridges of a light hero, in the greens of the palette (`iris` is the
+ * pine). Both are opaque, the far one the pale pine laid over the moss of the
+ * foot of the hero: where a ridge covers the sun it hides it, as in the variant.
+ * A translucent far ridge let the lower half of the sun show through, as a
+ * muddy disc.
+ */
+const FAR = "color-mix(in srgb, var(--color-iris-200) 70%, var(--color-blush-100))";
 const NEAR = "var(--color-iris-100)";
 
 /** The top of the page of an event, on sand and moss. */
@@ -47,21 +49,23 @@ function SentierEventHero({ view, heading }: VariantPropsOf<"EventHero">) {
           <Sun className="right-[17%] bottom-5 size-12 animate-rise md:bottom-7 md:size-16" />
           <Ridges far={FAR} near={NEAR} className="inset-x-0 bottom-0 h-14 w-full md:h-20" />
         </span>
-        <div className="relative flex flex-col gap-3 p-5 pb-[5.25rem] md:p-7 md:pb-24">
+        <div className="event-hero-body relative flex flex-col gap-3 p-5 pb-[5.25rem] md:p-7 md:pb-24">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-2.5">
-              <p className="flex items-center gap-2 self-start rounded-lg bg-card/80 px-2.5 py-1.5 text-sm font-semibold ring-1 ring-neutral-300/60">
+            {/* The title comes first in the markup (it is read first, and the page gives it the
+                focus); the column is reversed, so the date is drawn over it. */}
+            <div className="flex min-w-0 flex-col-reverse gap-2.5">
+              <h1
+                {...heading}
+                className="event-hero-title font-display text-[1.875rem] leading-[1.1] font-bold display-title break-words text-iris-900 md:text-[2.375rem]"
+              >
+                {event.name}
+              </h1>
+              <p className="event-hero-date flex items-center gap-2 self-start rounded-lg bg-card/80 px-2.5 py-1.5 text-sm font-semibold ring-1 ring-neutral-300/60">
                 <Blaze />
                 {severalDays
                   ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
                   : f.dateLong(start)}
               </p>
-              <h1
-                {...heading}
-                className="font-display text-[1.875rem] leading-[1.1] font-bold display-title break-words text-iris-900 md:text-[2.375rem]"
-              >
-                {event.name}
-              </h1>
             </div>
             {daysToGo > 0 && <CountdownRing days={daysToGo} className="mt-1" />}
           </div>
@@ -71,23 +75,19 @@ function SentierEventHero({ view, heading }: VariantPropsOf<"EventHero">) {
           </p>
           {deadline && (
             <p
-              className={`flex items-start gap-2 self-start text-sm font-semibold ${
+              data-kind={deadline.kind}
+              className={`event-hero-deadline flex items-start gap-2 self-start text-sm font-semibold ${
                 deadline.kind === "open" ? "text-peach-800" : "text-neutral-700"
               }`}
             >
               <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
-              <span>
-                {registrationLabel(deadline, f, t)}
-                {deadline.kind === "open" &&
-                  deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-                  ` · ${t.event.daysLeft(deadline.daysLeft)}`}
-              </span>
+              <span>{deadlineText(deadline, f, t)}</span>
             </p>
           )}
         </div>
       </div>
       {event.notes && (
-        <p className="border-l-4 border-iris-200 pl-3 text-[0.9375rem] whitespace-pre-line text-ink">
+        <p className="event-hero-notes border-l-4 border-iris-200 pl-3 text-[0.9375rem] whitespace-pre-line text-ink">
           {event.notes}
         </p>
       )}
