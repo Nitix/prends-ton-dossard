@@ -1,113 +1,107 @@
 # Décisions prises en route (v6)
 
-La v6 laisse chacun choisir son habillage parmi les onze variantes de la v4, sur un seul code, à trois profondeurs. Tu as fixé le but : tous les thèmes, trois modèles (couleurs seules, mix, variante complète), la même base, jamais en production avant ta validation. Le reste a été décidé en route. Dis lesquelles revoir, par leur numéro.
+La v6 laisse chacun choisir son habillage parmi onze : Crête, celui d'aujourd'hui, et les dix autres variantes de la v4. Tu as fixé le but et les grands choix :
+- tous les thèmes, sur la même base ;
+- en production, seulement la profondeur « palette » ;
+- la liste en grille ;
+- Carnet plus proche de l'original, avec son fond qui bouge ;
+- le thème gardé sur le compte ;
+- la main sur les boutons.
 
-Conception : `docs/superpowers/specs/2026-11-02-courses-v6-design.md` ; plan : `docs/superpowers/plans/2026-11-02-courses-v6.md`. Branche `v6/themes`, jamais fusionnée dans `feat/v1`.
+Le reste a été décidé en route. Dis lesquelles revoir, par leur numéro.
+
+Conception : `docs/superpowers/specs/2026-11-02-courses-v6-design.md` ; plan : `docs/superpowers/plans/2026-11-02-courses-v6.md`. Branche `v6/themes`.
 
 ## Le modèle
 
-### 1. Une seule architecture, trois profondeurs de construction
+### 1. Palette seulement
 
-- **Décision :** un habillage est un dossier (`web/src/skins/<id>/`). `VITE_SKIN_DEPTH` fixe, à la construction, jusqu'où il descend :
-  - `palette` : couleurs, polices et motifs, sur la structure de Crête ;
-  - `mix` : en plus, les pièces signature (en-tête, onglets, carte d'événement, haut des fiches, titres) ;
-  - `full` : tout ce que la variante v4 restylait (formulaires, fenêtres, filtres, agenda, profil, admin, messages, carte et D+, stats).
-- **Pourquoi :** les trois modèles partagent le code ; chaque profondeur ne fait qu'ajouter.
-- **Conséquence :** une instance n'a qu'une profondeur. L'image Docker la prend dans le `.env` (`VITE_SKIN_DEPTH`, vide = palette).
+- **Décision :** un habillage change les couleurs, les polices et les motifs (le dessin du ciel, des en-têtes, des états vides), sur la structure de Crête. Les profondeurs « mix » et « full » ont été construites, montrées sur deux démos, puis retirées à ta demande : leur code n'est plus dans la branche (l'historique git le garde).
+- **Conséquence :** une seule construction, plus de réglage de profondeur. Les démos `ptd-v6-mix` et `ptd-v6-complet` sont arrêtées ; leurs données restent sur le serveur.
 
-### 2. Crête ne bouge pas
+### 2. Crête ne bouge pas, sauf ce que tu as demandé
 
-- **Décision :** l'habillage par défaut, Crête, est identique à la v5, à chaque profondeur. Des captures le vérifient au pixel près, en clair et en sombre.
-- **Toutes les fonctions de la v5 restent :** le D+ relié à la carte, les mesures par type, la période du formulaire, la démo, le choix du thème.
+- **Ce qui change pour tout le monde :** la liste en grille (n° 6) et la main sur les boutons (n° 9).
+- **Le reste de Crête :** identique à la v5, vérifié par des captures avant et après chaque étape, en clair et en sombre, sur téléphone et grand écran. Ces captures ne sont pas un test permanent.
+- **Toutes les fonctions de la v5 restent.**
 
-### 3. Un habillage ne touche qu'à ce qu'on lui ouvre
+### 3. Chaque thème ne se charge que si on le choisit
 
-- **Classes sémantiques :** les feuilles mix et full ne visent que des classes faites pour elles (`.event-card`, `.dialog`, `.field`…), jamais une classe Tailwind ni la forme du HTML. Un test refuse un sélecteur qui nomme un élément, et une classe qui serait aussi un utilitaire Tailwind.
-- **Pièces remplaçables :** une variante peut redessiner une pièce entière : carte, haut d'événement, haut de coureur, jour, état vide, titre d'épreuve, chiffres d'une trace, anneau des jours. Elle garde chaque mot, dans l'ordre ; des tests le vérifient pour chaque forme d'événement.
-- **Garde-fous de tous les thèmes :**
-  - contraste 4,5:1 pour le texte, 3:1 pour le reste, dans chaque thème et chaque mode ;
-  - aucune animation sans fin ;
-  - un tiret ne sert qu'à dire « à confirmer », sauf décorations déclarées ;
-  - chaque haut d'événement montre les jours qui restent.
+- **Décision :** un utilisateur de Crête télécharge Crête et la liste des thèmes, rien de plus. Un autre thème (4 à 8 Ko compressés) se charge au moment où on le choisit, puis reste en cache, hors ligne compris.
+- **Pas de flash :** le thème gardé est appliqué avant le premier affichage, y compris sur les pages de connexion et d'invitation.
+- **Garde-fou :** les classes de style d'un thème portent son préfixe, si bien qu'un thème ne peut jamais casser la mise en page commune, quel que soit l'ordre de chargement. Un test le vérifie à 1280 px pour chaque thème.
+- **Un thème qui ne se charge pas** (hors ligne, jamais choisi sur cet appareil) : la page ne se recharge pas, l'ancien thème reste, un message le dit, et un lecteur d'écran entend « Chargement du thème… » pendant l'attente.
 
-## Les habillages
+### 4. Le thème suit le compte
 
-### 4. Couleurs propres aux thèmes, acceptées
+- **Décision :** le thème choisi est gardé sur l'appareil et sur le compte.
+  - À la connexion, celui du compte s'applique ; si le compte n'en a pas, celui de l'appareil y est enregistré.
+  - Déconnecté, l'appareil garde le dernier.
+  - Hors ligne, le choix attend la prochaine connexion.
+- **Confidentialité :** personne ne peut voir ni changer le thème d'un autre, admins compris.
+- **Démo :** le compte partagé de la démo ne garde aucun thème, pour que chaque visiteur garde le sien.
+- **Ce qui reste par appareil :** le mode clair ou sombre, et « Animer le fond » (n° 7).
+- **Petit défaut accepté :** sur un nouvel appareil, le thème de l'appareil peut s'afficher un instant avant celui du compte.
+
+### 5. Le choix du thème montre chaque police
+
+- Chaque carte du choix (Réglages → Apparence) affiche « Aa » dans la police de son thème.
+- **Coût accepté :** ces polices (318 Ko au total) ne se chargent que sur la page Réglages, et une seule fois.
+
+## Ce que tu as demandé en plus
+
+### 6. La liste en grille
+
+- **Décision :** la page Liste montre deux colonnes à partir de la tablette, pour tous les thèmes. Les cartes d'une même rangée ont la même hauteur. Sur téléphone, rien ne change.
+- **Choix :** seulement la page Liste ; les prochaines courses de l'accueil restent sur une colonne. Une ligne suffit pour l'étendre.
+
+### 7. Carnet, plus proche de la v4
+
+- **Le fond qui bouge :**
+  - dans l'en-tête et le haut d'une course : des taches de points qui s'effacent et reviennent lentement, deux anneaux qui tournent en sens contraires, un point qui pulse ;
+  - derrière toute la page : la feuille de points vivante de la v4.
+- **L'accessibilité :**
+  - le fond ne bouge que si le système ne demande pas moins d'animations ;
+  - un interrupteur « Animer le fond », dans Apparence, l'arrête. Il n'est montré que pour un thème dont le fond bouge, il est allumé par défaut et gardé sur l'appareil ;
+  - les mots restent lisibles par-dessus (4,5:1, mesuré).
+- **Conséquence :** les points sont plus pâles qu'en v4 (le contraste des textes l'impose). Dis-le si tu les veux plus marqués : la marge est faible.
+- **Nouveau :** un emplacement « fond de page » que tout thème peut dessiner ; Crête n'y dessine rien.
+
+### 8. Couleurs propres aux thèmes, acceptées
 
 - Rétro met ses liens et l'agenda en sarcelle, Dossard en bleu ciel : c'étaient leurs couleurs.
 - Les pentes du D+ finissent en violet, prune ou framboise, pour qu'un daltonien les distingue.
 - Dossard élargit sa police d'affichage (112,5 %).
 - Piste écrit « Track » dans son logo.
 
-### 5. Le haut d'un événement, clair là où la variante l'était
+### 9. La main sur les boutons
 
-- Marathon, Chrono, Carnet et Rétro dessinent leur haut clair (encre sur papier ou carte), comme en v4, avec leur propre contraste.
-- Là où un thème ne dessine pas d'anneau (Nuit, Piste, Dossard, Sentier, Rétro), le haut écrit « dans N jours ».
-- Marathon affiche « 9 j » en grand à côté du titre.
-
-### 6. Onglets
-
-- Piste, Sentier, Dossard, Marathon et Rétro ont la barre plate de leur variante sur téléphone.
-- Sur grand écran, Dossard garde une capsule blanche sous sa guirlande, là où la v4 avait des onglets plats : la capsule reste lisible quand la page défile.
-- Chrono et Carnet gardent la capsule flottante de Crête, avec leur propre onglet courant.
-
-## Ce qui n'a pas pu être repris de la v4
-
-### 7. Il faudrait des données ou des mots nouveaux
-
-- les points de l'agenda colorés par type de course (Chrono, Carnet) ;
-- le grand cadran de la prochaine course (Chrono) ;
-- les tuiles « Le groupe » (Carnet) ;
-- les barres de places ;
-- les légendes « Date / Lieu / Inscriptions ».
-
-### 8. Il faudrait toucher au code partagé
-
-- les titres de page à deux voix de Carnet (seuls la carte et le haut d'événement les ont) ;
-- les en-têtes clairs de Marathon, Chrono et Carnet (leur en-tête reste le ciel) ;
-- les icônes d'onglets de Sentier et Alpage ;
-- les étiquettes blanches sur encre de la carte de Piste.
-
-### 9. Il faudrait sacrifier la lisibilité
-
-- le bord en tirets d'une liste vide et la ligne de parcours en tirets de Sentier (un tiret doit avoir 3:1) ;
-- le panneau sable autour du profil de Sentier ;
-- les courbes de niveau dessinées de la carte de clé d'Alpage (des anneaux en CSS à la place).
+- **Décision :** tout ce qui se clique (bouton, menu dépliant, liste, case et la carte qui la porte) montre la main, comme un lien. Un bouton désactivé montre qu'il est hors d'atteinte.
 
 ## La taille
 
-### 10. Ce que pèse chaque profondeur
+### 10. Ce que pèse la v6 pour un utilisateur de Crête
 
-Feuille de style principale, compressée :
+Fichiers compressés :
 
-| Profondeur | Taille |
-| ---------- | ------- |
-| v5         | 14,1 Ko |
-| palette    | 24,8 Ko |
-| mix        | 28,6 Ko |
-| full       | 36,8 Ko |
+| | v5 | v6 |
+| --- | --- | --- |
+| Feuille de style | 12,9 Ko | 13,9 Ko |
+| Script principal et ses préchargements | 157,8 Ko | 163,3 Ko |
 
-- Le JavaScript des habillages (motifs et pièces remplaçables), compressé : 31,8 Ko à palette, 50,4 Ko à mix, 55,5 Ko à full.
-- **Décision :** tout est dans un seul fichier pour l'instant ; découper par thème (charger seulement celui choisi) attend que tu choisisses une profondeur pour la production. Seul son poids comptera alors.
+- Chaque autre thème ajoute 4 à 8 Ko, seulement pour qui le choisit.
+- Le script grossit de 5,5 Ko : les motifs de Crête, chargés jusqu'ici avec chaque page, arrivent avec le script, plus la liste des thèmes.
 
 ## Reporté
 
-- **Petits défauts vus aux captures :**
-  - les titres d'épreuve de Chrono et Carnet peuvent passer à la ligne avec un « · » en tête ;
-  - celui de Chrono a deux repères ;
-  - le « dans 9 jours » de Dossard est loin à droite à 1280 px ;
-  - la carte de Carnet met une épreuve courte sur la ligne de sa date ;
-  - la capsule de Sentier, défilée, laisse dépasser la balise du premier onglet.
-- **Classement des types :** Sentier, Chrono et Carnet classent chacun les types de course d'après leur nom, et ne sont pas d'accord partout (« Marathon » est une route pour Sentier, gris pour Chrono).
-- **Tests :** des aides de test sont copiées d'un thème à l'autre.
-- **Crête, en production aussi :** le gris d'aide sur la carte vitrée de connexion est juste à 4,5:1. Une correction possible pour la production, pas faite ici pour garder Crête identique.
+- **Crête, en production aussi :** le gris d'aide sur la carte vitrée de connexion est juste à 4,5:1. Une correction possible, pas faite ici pour garder Crête identique.
+- **Navigateurs :** les tests tournent dans Chromium seulement (Firefox et WebKit ne démarrent pas sur cette machine).
 
 ## À faire de ton côté
 
-- Ouvrir les trois démos, avec le mot de passe des démos de design (`/opt/ptd-design/DEMO_PASSWORD` sur le serveur) :
-  - `https://ptd-v6-palette.ketra.fr`
-  - `https://ptd-v6-mix.ketra.fr`
-  - `https://ptd-v6-complet.ketra.fr`
-- Choisir un thème dans Profil → Réglages → Apparence.
-- Dire quelle profondeur tu veux en production, et si certains thèmes doivent rester ou partir. Rien n'ira en production avant.
-- Vérifier sur iPhone, surtout les onglets et la carte avec le D+.
+- **Sur iPhone (Safari et l'app installée) :**
+  - choisir un thème, se déconnecter : la page de connexion est dans ce thème ;
+  - en mode avion, choisir un thème jamais pris : un message, pas de rechargement ;
+  - se connecter sur un deuxième appareil : le thème suit.
+- **Carnet :** regarder le fond qui bouge et « Animer le fond ».
+- **La démo `ptd-v6-palette.ketra.fr` :** mot de passe des démos de design (`/opt/ptd-design/DEMO_PASSWORD` sur le serveur), comptes `alice@`, `bob@` ou `admin@example.test`.
