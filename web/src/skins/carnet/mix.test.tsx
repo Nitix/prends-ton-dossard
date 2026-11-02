@@ -152,6 +152,18 @@ test.skipIf(SKIN_DEPTH === "palette")(
             `the words « ${plain(one.textContent).slice(0, 30)} » of the hero`,
           ).toBeGreaterThanOrEqual(4.5);
         }
+        // The title comes first, as the title of the page is read; the kinds of the races are
+        // drawn above it (`order-first`).
+        const title = must(hero.querySelector("h1"));
+        const kinds = must(hero.querySelector("p.eyebrow"));
+        expect(
+          title.compareDocumentPosition(kinds) & Node.DOCUMENT_POSITION_FOLLOWING,
+          "the title first in the page",
+        ).not.toBe(0);
+        expect(
+          kinds.getBoundingClientRect().bottom,
+          "the kinds above the title",
+        ).toBeLessThanOrEqual(title.getBoundingClientRect().top + 1);
         // The title in two voices: the same text, its last word in the serif.
         expect(hero.querySelector("h1 .font-serif")?.textContent).toBe("Crêtes");
         // The date, the place and where the registration stands: a grid framed by hairlines.
@@ -199,7 +211,7 @@ test.skipIf(SKIN_DEPTH === "palette")(
   },
 );
 
-test("carnet — la feuille de mix ne lit aucune classe de Tailwind : ni les utilitaires du composant de la clé d'accès, ni `hover:bg-iris-50`", () => {
+test("carnet — la feuille de mix n'a plus de sélecteur sur une classe de couleur de Tailwind (`.bg-iris-50`, `.ring-iris-100`…) ni sur une variante (`.hover\\:bg-iris-50`)", () => {
   const rules = mixCss.replace(/\/\*[\s\S]*?\*\//g, "");
   expect(rules).not.toMatch(/\.(?:bg|ring|text|border)-[a-z]+-\d+|\\:/);
 });

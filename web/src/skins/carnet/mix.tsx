@@ -180,8 +180,15 @@ function SheetHero({ view, heading }: EventHeroProps) {
     <header className="event-hero flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-3">
+          <h1
+            {...heading}
+            className="event-hero-title text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance break-words text-ink md:text-[3rem]"
+          >
+            <Accent text={event.name} />
+          </h1>
+          {/* Above the title, as the logbook has it; read after it. */}
           {kinds.length > 0 && (
-            <p className="eyebrow flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="event-hero-kinds eyebrow order-first flex flex-wrap items-center gap-x-3 gap-y-1">
               {kinds.map((kind) => (
                 <span key={kind} className="inline-flex items-center gap-1.5">
                   <KindMark label={kind} />
@@ -190,12 +197,6 @@ function SheetHero({ view, heading }: EventHeroProps) {
               ))}
             </p>
           )}
-          <h1
-            {...heading}
-            className="event-hero-title text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance break-words text-ink md:text-[3rem]"
-          >
-            <Accent text={event.name} />
-          </h1>
         </div>
         {daysToGo !== null && daysToGo > 0 && (
           <div className="mt-1 flex shrink-0 flex-col items-center gap-1">
