@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
 import { SKIN_DEPTH } from "..";
 import { Avatar } from "../../components/Avatar";
@@ -13,6 +13,7 @@ import { ParticipantChips } from "../../features/events/ParticipantChips";
 import { aliceRunner, bobRunner, ninaRunner, samRunner } from "../../features/events/testFixture";
 import { UpcomingSection } from "../../features/home/MyUpcoming";
 import { TrackFigures } from "../../features/route/TrackFigures";
+import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { contrast } from "../../test/colour";
 import { colourOf } from "../../test/computed";
@@ -43,6 +44,8 @@ afterEach(async () => {
   await page.viewport(414, 896);
 });
 
+const f = createFormatters("fr-FR");
+
 /** A length of the theme (`--radius-2xl`…) as the browser computes it, for a border radius. */
 function radiusOf(property: string): string {
   const probe = document.createElement("span");
@@ -65,6 +68,8 @@ function tokens() {
     sky: colourOf("--color-iris-300"),
     skySoft: colourOf("--color-iris-50"),
     skyInk: colourOf("--color-iris-700"),
+    danger: colourOf("--color-red-700"),
+    edgeHover: colourOf("--color-neutral-700"),
     ink: colourOf("--color-ink"),
     onInk: colourOf("--dawn-deep-ink"),
     sand: colourOf("--color-neutral-50"),
@@ -83,10 +88,10 @@ function tokens() {
 /** What `look` makes of a piece in Dossard, in the app, with the tokens of its palette (`tokens`). */
 function inDossard<T extends object>(
   element: ReactNode,
-  look: (drawn: HTMLElement) => T,
+  look: (drawn: HTMLElement) => T | Promise<T>,
   options: { today?: string } = {},
 ) {
-  return inApp(element, (drawn) => ({ ...look(drawn), tokens: tokens() }), {
+  return inApp(element, async (drawn) => ({ ...(await look(drawn)), tokens: tokens() }), {
     skin: "dossard",
     ...options,
   });
@@ -493,16 +498,18 @@ test.skipIf(SKIN_DEPTH !== "full")(
           styleOf(drawn, ".empty-state").borderTopStyle,
           styleOf(drawn, ".empty-state").borderTopWidth,
         ],
-        band: styleOf(drawn, ".welcome-card", "::before").backgroundColor,
-        bandHeight: styleOf(drawn, ".welcome-card", "::before").height,
-        padding: styleOf(drawn, ".welcome-card").paddingTop,
+        band: [
+          styleOf(drawn, ".welcome-card").borderTopWidth,
+          styleOf(drawn, ".welcome-card").borderTopColor,
+        ],
+        words: styleOf(drawn, ".welcome-card").paddingTop,
       }),
     );
     expect(seen.line).toBe("2px");
     expect(seen.frame).toEqual(["dashed", "2px"]);
-    expect(seen.band).toBe(seen.tokens.coral);
-    // The words start under the band.
-    expect(Number.parseFloat(seen.padding)).toBeGreaterThan(Number.parseFloat(seen.bandHeight));
+    // The band is the top border of the card: it follows the card's corner and leaves its padding alone.
+    expect(seen.band).toEqual(["36px", seen.tokens.coral]);
+    expect(seen.words, "the card's own padding").toBe("0px");
   },
 );
 
@@ -540,9 +547,46 @@ test.skipIf(SKIN_DEPTH !== "full")(
       rings: drawn.querySelectorAll(".countdown-ring, .ring-draw").length,
       number: drawn.querySelector(".bib-number")?.textContent,
       band: drawn.querySelectorAll(".bib-band").length,
+      days: plain(drawn.querySelector(".event-hero-days")?.textContent),
+      daysShown: drawn.querySelector(".event-hero-days")?.checkVisibility(),
+      daysTag: drawn.querySelector(".event-hero-days")
+        ? getComputedStyle(drawn.querySelector(".event-hero-days") ?? drawn).color
+        : "",
     }));
     expect(seen.rings, "no ring in the hero at full depth").toBe(0);
+    // The ring is gone, so the days left are written, in the pill of the races to come.
+    expect(seen.days).toBe(plain(f.inDays(12)));
+    expect(seen.daysShown).toBe(true);
+    expect(seen.daysTag).toBe(seen.tokens.skyInk);
     expect(seen.number).toBe("13");
     expect(seen.band).toBe(1);
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "dossard — un champ refusé garde son bord rouge sous le pointeur, un champ qui va bien prend l'encre",
+  async () => {
+    const seen = await inDossard(
+      <>
+        <input aria-label="Nom" className={INPUT} />
+        <input aria-label="Refusé" aria-invalid="true" className={INPUT} />
+      </>,
+      async (drawn) => {
+        const [calm, refused] = [...drawn.querySelectorAll("input")];
+        if (!calm || !refused) throw new Error("no fields");
+        // The edge fades: read where it ends, not in the middle of the fade.
+        calm.style.transition = "none";
+        refused.style.transition = "none";
+        await userEvent.hover(refused);
+        const refusedUnder = [refused.matches(":hover"), getComputedStyle(refused).borderTopColor];
+        await userEvent.hover(calm);
+        return {
+          refusedUnder,
+          calmUnder: [calm.matches(":hover"), getComputedStyle(calm).borderTopColor],
+        };
+      },
+    );
+    expect(seen.refusedUnder, "refused, under the pointer").toEqual([true, seen.tokens.danger]);
+    expect(seen.calmUnder, "calm, under the pointer").toEqual([true, seen.tokens.edgeHover]);
   },
 );

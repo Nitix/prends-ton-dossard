@@ -278,6 +278,31 @@ test.skipIf(SKIN_DEPTH !== "mix")(
   },
 );
 
+test.skipIf(SKIN_DEPTH !== "mix")(
+  "dossard — au mix, les jours qui restent sont dans l'anneau seul : les mots du plein sont là, cachés, pour ne pas dire deux fois la même chose",
+  async () => {
+    const Bib = variantOf("dossard", "EventHero");
+    if (Bib === undefined) throw new Error("Dossard has no event hero at this depth");
+    const heading = { id: "t", "data-focus": "title", tabIndex: -1 } as const;
+    const seen = await inDossard(
+      createElement(Bib, { key: undefined, view: rich(), heading, Base: EventHeroBase }),
+      (drawn) => {
+        const words = drawn.querySelector(".event-hero-days");
+        return {
+          ring: drawn.querySelector(".countdown-ring")?.checkVisibility(),
+          written: words !== null,
+          shown: words?.checkVisibility(),
+          heard: plain(drawn.querySelector<HTMLElement>(".event-hero")?.innerText),
+        };
+      },
+    );
+    expect(seen.ring, "the ring draws the days left").toBe(true);
+    expect(seen.written, "the words are in the markup, for the depth that has no ring").toBe(true);
+    expect(seen.shown, "and are not shown beside the ring").toBe(false);
+    expect(seen.heard, "nor said").not.toContain(plain(f.inDays(12)));
+  },
+);
+
 test.skipIf(SKIN_DEPTH === "palette")(
   "dossard — les épingles d'un dossard sont en acier, pas en sable",
   async () => {

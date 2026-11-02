@@ -33,6 +33,10 @@
     padding-top: 0;
     padding-bottom: 0;
   }
+  /* Crête's nav pulls itself up over the header (`md:-mt-[9rem]`) and leaves room under it
+     (`md:mb-[5.375rem]`), for a header of 10 rem. The header here is 4 rem and the capsule 3.5 rem
+     (tabs of 2.75 rem in 0.375 rem of padding, components/TabBar.tsx), so the capsule is put 0.25 rem
+     from the top of the bar: pulled up by the 4 rem less that, and the 0.25 rem left under it. */
   :root[data-skin="dossard"] .tabbar {
     top: 0.25rem;
     margin-top: -3.75rem;
@@ -159,6 +163,12 @@
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   font-stretch: 92%;
+}
+
+/* The days left of the big bib, in words: the ring says them at this depth (full.css
+   draws no ring, and shows the words). */
+:root[data-skin="dossard"] .event-hero-days {
+  display: none;
 }
 
 /* The big bib of an event: the row of the place takes what the number (over two rows)

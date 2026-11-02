@@ -40,7 +40,7 @@
 :root[data-skin="dossard"] .field-input {
   border-width: 2px;
 }
-:root[data-skin="dossard"] .field-input:hover:not(:focus) {
+:root[data-skin="dossard"] .field-input:hover:not(:focus):not([aria-invalid="true"]) {
   border-color: var(--color-neutral-700);
 }
 :root[data-skin="dossard"] .field-label {
@@ -129,9 +129,14 @@
   background-color: var(--color-peach-50);
   color: var(--color-peach-700);
 }
-:root[data-skin="dossard"] .upcoming-row .days-left {
+:root[data-skin="dossard"] .upcoming-row .days-left,
+:root[data-skin="dossard"] .event-hero-days {
   background-color: var(--color-iris-50);
   color: var(--color-iris-700);
+}
+/* The big bib has no ring at this depth: its days left are written (mix.css hides the words, for the ring). */
+:root[data-skin="dossard"] .event-hero-days {
+  display: inline-flex;
 }
 
 /* The callouts: the card that offers a key is a block of sky, ringed in sky; the
@@ -251,20 +256,10 @@
   box-shadow: none;
 }
 
-/* The card of the pages to sign in is a bib: a coral band along its top, the words
-   under it. */
+/* The card of the pages to sign in is a bib: a coral band along its top, which is the card's
+   own top border, so that it follows the card's corners and leaves its padding alone. */
 :root[data-skin="dossard"] .welcome-card {
-  padding-top: 3.75rem;
-}
-:root[data-skin="dossard"] .welcome-card::before {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: 2.25rem;
-  border-radius: 1.75rem 1.75rem 0 0;
-  background-color: var(--color-peach-500);
-  pointer-events: none;
+  border-top: 2.25rem solid var(--color-peach-500);
 }
 
 /* The lists of bibs go by two from md, as the variant has them (a bib as tall as

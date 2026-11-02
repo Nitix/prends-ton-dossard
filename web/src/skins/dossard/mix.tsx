@@ -173,13 +173,20 @@ function BibHero({ view, heading }: EventHeroProps) {
         <p className="bib-band col-span-2 row-start-1 px-9 py-3 md:text-sm">
           {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
         </p>
-        {/* The place, and the days left in their ring beside it: under the number they would read as a second figure of the bib. */}
+        {/* The place, and the days left in their ring beside it: under the number they would read as a second figure of the bib.
+            The same days in words (`.event-hero-days`) are in the markup for the depth that has no ring (full.css shows them
+            there; mix.css hides them, so that the ring is not said twice). */}
         <div className="event-hero-facts col-start-2 row-start-3 flex items-start justify-between gap-3 self-start pt-1 pr-5 pb-5">
           <p className="flex items-start gap-2 text-neutral-600">
             <PinIcon className="mt-0.5 size-[1.125rem] shrink-0 text-blush-500" />
             {event.location}
           </p>
-          {daysToGo > 0 && <CountdownRing days={daysToGo} />}
+          {daysToGo > 0 && (
+            <div className="flex items-center gap-2">
+              <p className="event-hero-days days-left">{f.inDays(daysToGo)}</p>
+              <CountdownRing days={daysToGo} />
+            </div>
+          )}
         </div>
         {hasDetails && (
           <div className="bib-tear col-span-2 row-start-4 mx-5 flex flex-col gap-3 pt-4 pb-6">
