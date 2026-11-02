@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import { forceMode } from "../lib/theme";
 import { skin as crete, slots as creteSlots } from "./crete";
 import { LOOKS } from "./looks";
+import { settleSheets } from "./sheets";
 import type { Skin, SlotName, Slots } from "./types";
 
 /**
@@ -98,7 +99,8 @@ const loading = new Map<string, Promise<void>>();
  * the page, and its motifs, which `useSlot` then draws. Crête, or a skin that
  * is not (or no longer) in the app, has nothing to load: Crête. A look is
  * loaded once; one that fails (offline, never loaded before) is asked for again
- * next time. It rejects when the look could not be loaded.
+ * next time. It rejects when the look could not be loaded: its code, or its
+ * stylesheets (sheets.ts): all or nothing, never its motifs on Crête's colours.
  */
 export async function loadSkin(id: string): Promise<Skin> {
   const skin = byId(id) ?? DEFAULT;
@@ -109,6 +111,9 @@ export async function loadSkin(id: string): Promise<Skin> {
     pending = (async () => {
       try {
         const look = await load();
+        if (!(await settleSheets(skin.id))) {
+          throw new Error(`The stylesheets of the look of ${skin.id} are not in the page`);
+        }
         loaded.set(skin.id, look.slots ?? {});
       } finally {
         loading.delete(skin.id);
@@ -119,6 +124,14 @@ export async function loadSkin(id: string): Promise<Skin> {
   await pending;
   return skin;
 }
+
+/**
+ * Whether a look is being loaded. A preload failure (`vite:preloadError`) then
+ * is the look's: it leaves the page as it was and is told to whoever chose the
+ * skin (`Choice`), and the page is not reloaded for it (lib/staleChunks.ts,
+ * which main.tsx gives this).
+ */
+export const isLoadingLook = (): boolean => loading.size > 0;
 
 const listeners = new Set<() => void>();
 

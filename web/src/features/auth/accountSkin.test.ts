@@ -25,6 +25,9 @@ vi.mock("../../lib/pb", () => ({
   },
 }));
 
+/** The stylesheets of a look are those of a page, which a stand-in has none of (skins/sheets.ts). */
+vi.mock("../../skins/sheets", () => ({ settleSheets: () => Promise.resolve(true) }));
+
 /** How the looks load in a test: a skin whose look fails (offline). */
 const looks = vi.hoisted(() => ({ failing: new Set<string>() }));
 

@@ -13,7 +13,7 @@ import { ensureTemporal } from "./lib/temporal";
 import { applyTheme, followThemeElsewhere, readTheme } from "./lib/theme";
 import { TodayProvider } from "./lib/useToday";
 import { routeTree } from "./routeTree.gen";
-import { followSkinElsewhere, showKeptSkin } from "./skins";
+import { followSkinElsewhere, isLoadingLook, showKeptSkin } from "./skins";
 
 import "./styles.css";
 
@@ -43,8 +43,10 @@ followThemeElsewhere();
 const skinShown = showKeptSkin();
 followSkinElsewhere();
 
-// A tab opened before a deploy reloads when the chunks it asks for are gone.
-reloadOnStaleChunks();
+// A tab opened before a deploy reloads when the chunks it asks for are gone: a
+// route's, not the look of a skin (it is loaded when it is chosen, and a failure
+// leaves the page as it was and says so).
+reloadOnStaleChunks({ ignore: isLoadingLook });
 
 // The site can be installed: the service worker is what makes it so, and the
 // browser makes its offer once, early, which the settings page shows later.

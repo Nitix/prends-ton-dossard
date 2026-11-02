@@ -52,6 +52,17 @@ vi.mock("./looks", async (importOriginal) => {
   };
 });
 
+/**
+ * The stylesheets of a look, as the page has them: `settleSheets` (sheets.ts)
+ * looks at the real stylesheets of the document, which a stand-in has none of.
+ * A skin whose sheets did not load (a failed link that Vite does not ask for again).
+ */
+const sheetState = vi.hoisted(() => ({ failing: new Set<string>() }));
+
+vi.mock("./sheets", () => ({
+  settleSheets: (id: string) => Promise.resolve(!sheetState.failing.has(id)),
+}));
+
 type Root = { dataset: Record<string, string | undefined>; style: { colorScheme?: string } };
 
 let root: Root;
@@ -84,6 +95,7 @@ beforeEach(async () => {
   storageListeners = [];
   looks.gates.clear();
   looks.failing.clear();
+  sheetState.failing.clear();
   vi.stubGlobal("document", {
     documentElement: root,
     querySelector: (selector: string) => (selector === 'meta[name="theme-color"]' ? bar : null),
@@ -353,6 +365,66 @@ test("chooseSkin — un look qui ne se charge pas (hors ligne, jamais chargé) :
   expect(root.dataset.skin).toBeUndefined();
   expect(stored.has(SKIN_KEY)).toBe(false);
   expect(current().id).toBe("crete");
+});
+
+test("isLoadingLook — vrai tant qu'un look se charge, réussi ou raté : c'est ce qui sépare son échec de celui d'une route", async () => {
+  const { chooseSkin: choose, isLoadingLook: loading } = await freshPage();
+  const [first, second] = OTHERS;
+  if (first === undefined || second === undefined) throw new Error("two skins besides Crête");
+  expect(loading()).toBe(false);
+
+  const open = hold(first.id);
+  const choosing = choose(first.id);
+  expect(loading()).toBe(true);
+  open();
+  await choosing;
+  expect(loading()).toBe(false);
+
+  looks.failing.add(second.id);
+  const failing = choose(second.id);
+  expect(loading()).toBe(true);
+  await expect(failing).resolves.toBe("failed");
+  expect(loading()).toBe(false);
+});
+
+test("chooseSkin — un look dont les feuilles ne sont pas dans la page est un choix raté, rien de lui n'est gardé, et le choix suivant le charge de nouveau", async () => {
+  const {
+    chooseSkin: choose,
+    currentSkin: current,
+    slotOf: slotIn,
+    creteSlots: crete,
+  } = await freshPage();
+  const [skin] = OTHERS;
+  if (skin === undefined) throw new Error("a skin besides Crête");
+  // Its code loads, its stylesheet does not: Crête's colours under its motifs, which is neither.
+  sheetState.failing.add(skin.id);
+
+  await expect(choose(skin.id)).resolves.toBe("failed");
+  expect(root.dataset.skin).toBeUndefined();
+  expect(stored.has(SKIN_KEY)).toBe(false);
+  expect(current().id).toBe("crete");
+  // Its motifs are not in: Crête's stand in.
+  for (const name of SLOTS) expect(slotIn(skin, name), `${skin.id}: ${name}`).toBe(crete[name]);
+
+  // The network is back: the sheets are in the page, and the skin is chosen.
+  sheetState.failing.clear();
+  await expect(choose(skin.id)).resolves.toBe("chosen");
+  expect(root.dataset.skin).toBe(skin.id);
+  expect(stored.get(SKIN_KEY)).toBe(skin.id);
+});
+
+test("showKeptSkin — un skin gardé dont la feuille ne s'est pas chargée : Crête en entier pour cette page, et le choix reste sur l'appareil", async () => {
+  const page = await freshPage();
+  stored.set(SKIN_KEY, "_example");
+  sheetState.failing.add("_example");
+
+  await expect(page.showKeptSkin()).resolves.toBeUndefined();
+
+  expect(root.dataset.skin).toBeUndefined();
+  expect(bar.content).toBe("#5e4ae3");
+  expect(page.currentSkin().id).toBe("crete");
+  expect(page.slotOf(page.currentSkin(), "SectionMarker")).toBe(page.creteSlots.SectionMarker);
+  expect(stored.get(SKIN_KEY)).toBe("_example");
 });
 
 test("showKeptSkin — au démarrage, le skin gardé tout de suite (son mode, la barre), puis son look avant le premier dessin", async () => {
