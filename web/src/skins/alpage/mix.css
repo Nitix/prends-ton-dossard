@@ -1,0 +1,91 @@
+/* « Alpage », depth mix: its signature pieces. « Alpage » is « Sentier » in
+   « Aurore »'s layout, which is Crête's: its header, its tabs, its cards and
+   its two heroes are Crête's, in the forest greens of its palette. What mix
+   adds is the orange of its sunrise, kept for what must be seen first (the
+   « + » and « S'inscrire »), the trail sign of the day, the blaze of a
+   deadline, and the trail under a title. Colours are the palette's (`iris` is
+   the pine, `peach` the sunrise); the sunrise is a fill that takes granite
+   text, never white (2.4:1). */
+
+/* The « + »: the sunrise, its plus in granite, with a warm glow under it. */
+:root[data-skin="alpage"] .fab {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-peach-300) 0%,
+    var(--color-peach-400) 55%,
+    var(--color-peach-500) 100%
+  );
+  color: var(--color-neutral-950);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--color-card) 80%, transparent),
+    0 10px 26px -10px color-mix(in srgb, var(--color-peach-500) 70%, transparent),
+    0 3px 8px -4px color-mix(in srgb, var(--color-peach-600) 35%, transparent);
+}
+:root[data-skin="alpage"] .fab:hover {
+  filter: brightness(1.05);
+}
+
+/* « S'inscrire » on the forest of a hero: the same pill of sunrise instead of a white one. */
+:root[data-skin="alpage"] .btn-on-dawn {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-peach-300) 0%,
+    var(--color-peach-400) 55%,
+    var(--color-peach-500) 100%
+  );
+  color: var(--color-neutral-950);
+  /* The shade of the pill on a sky is the skin's (`--shade-on-dawn`: tokens.test.tsx reads it
+     here at every depth), with a warm glow added. */
+  box-shadow:
+    0 10px 26px -10px var(--shade-on-dawn),
+    0 4px 12px -6px color-mix(in srgb, var(--color-peach-600) 45%, transparent);
+}
+:root[data-skin="alpage"] .btn-on-dawn:hover {
+  filter: brightness(1.05);
+}
+
+/* The day of an event: a trail sign, the forest with a band of sunrise painted on top. */
+:root[data-skin="alpage"] .date-chip {
+  padding-top: 0.75rem;
+}
+:root[data-skin="alpage"] .date-chip::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.375rem;
+  background-color: var(--color-peach-400);
+}
+
+/* The deadline of a card: a trail-marker badge, the two bands of a blaze in front of it. */
+:root[data-skin="alpage"] .event-card p.rounded-full {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.625rem;
+  padding-left: 0.5rem;
+}
+:root[data-skin="alpage"] .event-card p.rounded-full::before {
+  content: "";
+  flex: none;
+  width: 0.875rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background-image: linear-gradient(var(--color-peach-400) 0 50%, var(--color-iris-600) 50% 100%);
+  transform: rotate(-4deg);
+}
+/* What is over (the registrations are closed): a plain grey band, no sunrise. */
+:root[data-skin="alpage"] .event-card p.rounded-full.bg-neutral-100::before {
+  background-image: none;
+  background-color: var(--color-neutral-500);
+}
+
+/* The title of a page: the trail from the forest to the sunrise under it, a rounded line
+   (`--dawn-line`) rather than Crête's crest. */
+:root[data-skin="alpage"] .page-title::after {
+  width: 2.75rem;
+  height: 0.3rem;
+  margin-top: 0.5rem;
+  border-radius: 999px;
+  -webkit-mask: none;
+  mask: none;
+}
