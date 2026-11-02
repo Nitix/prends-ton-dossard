@@ -459,10 +459,13 @@ the tests. The pieces made skinnable:
 - `heading` is what the `h1` of a hero carries: spread it on the variant's `h1`
   (`<h1 {...heading}>`). It holds its id (the actions name it), the attribute the
   page gives the focus by, `tabIndex={-1}`, and the ref of a runner's title.
-- What a piece shows besides, it reads as Crête's does: the day (`useToday`), the
-  registration (`registrationState`, `registrationLabel`, `webAddress`), the link
+- What a piece shows besides, it reads as Crête's does: the day (`useToday`,
+  `daysBetween`), the registration (`registrationState`, `registrationLabel`,
+  `DAYS_LEFT_SHOWN` in `features/events/registration.ts`, `webAddress`), the link
   to register (`RegisterLink`, `features/events/RegisterLink.tsx`), the formats
-  (`formatMeasures`), the runners (`ParticipantChips`).
+  (`FormatLine`, `features/events/FormatLine.tsx`, or `formatMeasures`), the
+  runners (`ParticipantChips`), the days left before an event (`CountdownRing`,
+  `components/Dawn.tsx`).
 
 The skin exports the variant from `mix.tsx` or `full.tsx` (full wins over mix):
 
@@ -498,8 +501,29 @@ link and every action, the `h1` with `heading`, the date in words (`label`) for
 a picture hidden from screen readers. Only the markup differs. It keeps the
 semantic class of the piece (`.event-card`, `.event-hero`, `.runner-hero` on its
 outer element, `.date-chip` on the picture of the day), which `mix.css` restyles
-and the smoke battery finds. `_example/mix.tsx` replaces `EmptyState`, and frames Crête's `EventCard`
-(a thick line, dashed in the agenda).
+and the smoke battery finds. The variant of `DateChip` sits in the card's row of
+flex items: its outer element must not shrink (`shrink-0 self-start`, as Crête's
+picture has), or the day is squashed on a narrow screen.
+
+`_example/mix.tsx` replaces `EmptyState`, frames Crête's `EventCard` (a thick
+line, dashed in the agenda) and puts a line over Crête's `EventHero`.
+`components.test.tsx` checks, in every skin, that a hero keeps the title its page
+gives it (`heading`).
+
+**A variant closes a cycle of imports.** A `mix.tsx` that imports a module of
+the app (`RegisterLink`, `FormatLine`, `DateChip`…) is reached from
+`skins/index` through the depth module, and reaches it back. It is safe while
+both hold:
+
+- the variant uses what it imports while it renders, never when its module is
+  evaluated (no call or read at the top of the file);
+- nothing imports a `mix.tsx` or `full.tsx` directly, in the app or in a test:
+  a variant is reached through the registry (`variantOf(skinId, name)`, or the
+  app's piece). A module that entered a `mix.tsx` before the registry would find
+  it unfinished: natively, an error (« Cannot access … before initialization »);
+  bundled, that skin's variants silently missing. The one exception,
+  `components.test.tsx`, imports the registry first.
+- A variant never imports the piece it replaces: it gets it as `Base`.
 
 ## Tests
 

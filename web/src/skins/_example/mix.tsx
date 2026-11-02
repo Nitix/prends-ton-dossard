@@ -37,4 +37,20 @@ function ExampleEventCard({ Base, ...props }: VariantPropsOf<"EventCard">) {
   );
 }
 
-export const variants: Variants = { EmptyState: ExampleEmptyState, EventCard: ExampleEventCard };
+/**
+ * The top of the page of an event: Crête's hero (`Base`, its title with
+ * `heading` included), under a thick line in the accent.
+ */
+function ExampleEventHero({ Base, ...props }: VariantPropsOf<"EventHero">) {
+  return (
+    <div data-variant="example" style={{ borderTop: "6px solid var(--color-iris-600)" }}>
+      <Base {...props} />
+    </div>
+  );
+}
+
+export const variants: Variants = {
+  EmptyState: ExampleEmptyState,
+  EventCard: ExampleEventCard,
+  EventHero: ExampleEventHero,
+};

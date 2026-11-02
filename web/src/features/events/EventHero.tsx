@@ -8,12 +8,9 @@ import { useToday } from "../../lib/useToday";
 import { skinnable } from "../../skins/components";
 import type { EventHeroProps } from "../../skins/types";
 import { RegisterLink } from "./RegisterLink";
-import { registrationLabel, registrationState } from "./registration";
+import { DAYS_LEFT_SHOWN, registrationLabel, registrationState } from "./registration";
 
 const SEPARATOR = " · ";
-
-/** The days that are counted next to the deadline: a week or less. */
-const DAYS_LEFT_SHOWN = 7;
 
 /**
  * The top of the page of an event, its hero: its name (the title of the page),

@@ -4,6 +4,12 @@ import type { Formatters } from "../../lib/format";
 import type { EventRecord } from "../../lib/types";
 
 /**
+ * The days left before the deadline that a hero counts beside it: a week or
+ * less (Crête's hero, and a skin's variant of it, say them alike).
+ */
+export const DAYS_LEFT_SHOWN = 7;
+
+/**
  * Where the registration of an event stands: still open until `deadline`, or
  * closed.
  */

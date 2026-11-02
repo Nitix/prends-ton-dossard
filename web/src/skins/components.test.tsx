@@ -29,6 +29,8 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { ensureTemporal } from "../lib/temporal";
 import { TodayProvider } from "../lib/useToday";
 import { withoutIds } from "../test/ids";
+// The one direct import of a `mix.tsx`, after the registry ("." above): see
+// README, « Markup variants », on the cycle a variant closes.
 import { variants as example } from "./_example/mix";
 import { slotted } from "./components";
 import type { EventCardProps, VariantName, VariantProps, VariantPropsOf } from "./types";
@@ -58,9 +60,10 @@ async function html(element: Parameters<typeof render>[0]): Promise<string> {
 
 /**
  * What a piece draws in the app: in its language, on a day, under a router (an
- * event card links to its page), its ids set aside.
+ * event card links to its page), its ids set aside. `look` sees it drawn, before
+ * it goes.
  */
-async function inApp(element: ReactNode): Promise<string> {
+async function inApp(element: ReactNode, look?: (drawn: HTMLElement) => void): Promise<string> {
   const root = createRootRoute({
     component: () => (
       <I18nProvider languages={["fr"]}>
@@ -80,7 +83,9 @@ async function inApp(element: ReactNode): Promise<string> {
   await router.load();
   const screen = await render(<RouterProvider router={router} />);
   await expect.poll(() => screen.container.querySelector("[data-drawn] > *")).not.toBeNull();
-  const drawn = withoutIds(screen.container.querySelector("[data-drawn]")?.innerHTML ?? "");
+  const box = screen.container.querySelector<HTMLElement>("[data-drawn]");
+  if (look && box) look(box);
+  const drawn = withoutIds(box?.innerHTML ?? "");
   await screen.unmount();
   return drawn;
 }
@@ -190,8 +195,42 @@ test("skinnable — chaque pièce dessine sa base sans variante, et la variante 
   // A palette build replaces nothing; a mix or full build does (the example skin replaces the empty state and the card).
   expect(replaced.length > 0, `variants drawn at ${SKIN_DEPTH}`).toBe(SKIN_DEPTH !== "palette");
   expect(replaced.filter((line) => line.startsWith("_example:"))).toEqual(
-    SKIN_DEPTH === "palette" ? [] : ["_example: EmptyState", "_example: EventCard"],
+    SKIN_DEPTH === "palette"
+      ? []
+      : ["_example: EmptyState", "_example: EventCard", "_example: EventHero"],
   );
+});
+
+test("skinnable — le haut d'une fiche, dans chaque skin, garde le titre que la page lui donne", async () => {
+  // The page gives the focus to the title (`data-focus`, `tabIndex`, or the ref
+  // of a runner's), and names it from its actions (`id`): a variant that drew
+  // its own h1 without `heading` would leave the focus on the body.
+  const checked: string[] = [];
+  for (const skin of SKINS) {
+    chooseSkin(skin.id);
+    await inApp(
+      <EventHero
+        view={view()}
+        heading={{ id: "hero-title", "data-focus": "title", tabIndex: -1 }}
+      />,
+      (drawn) => {
+        const title = drawn.querySelector("h1");
+        expect(title?.id, `the event's title in ${skin.id}`).toBe("hero-title");
+        expect(title?.dataset.focus, `its focus mark in ${skin.id}`).toBe("title");
+        expect(title?.tabIndex, `its tabIndex in ${skin.id}`).toBe(-1);
+      },
+    );
+    const heading = createRef<HTMLHeadingElement>();
+    await inApp(
+      <RunnerHero runner={aliceRunner} heading={{ ref: heading, tabIndex: -1 }} />,
+      () => {
+        expect(heading.current?.tagName, `the runner's title in ${skin.id}`).toBe("H1");
+        expect(heading.current?.tabIndex, `its tabIndex in ${skin.id}`).toBe(-1);
+      },
+    );
+    checked.push(skin.id);
+  }
+  expect(checked).toEqual(SKINS.map(({ id }) => id));
 });
 
 test("skinnable — la carte d'« Exemple » encadre la base qu'elle reçoit, avec les props de la carte", async () => {

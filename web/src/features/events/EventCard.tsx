@@ -6,13 +6,10 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
 import { skinnable } from "../../skins/components";
 import type { EventCardProps } from "../../skins/types";
-import type { FormatView } from "./api";
-import { formatMeasures } from "./formatName";
+import { FormatLine } from "./FormatLine";
 import { ParticipantChips } from "./ParticipantChips";
 import { starters } from "./participants";
 import { registrationLabel, registrationState } from "./registration";
-
-const SEPARATOR = " · ";
 
 /**
  * An event in a list: its day or days (a chip of sunrise, said in words to a
@@ -101,20 +98,3 @@ export function EventCardBase({ view }: EventCardProps) {
 
 /** An event in a list, as the skin of the page draws it at the depth of the build (Crête's above, by default). */
 export const EventCard = skinnable("EventCard", EventCardBase);
-
-function FormatLine({ formatView, showDate }: { formatView: FormatView; showDate: boolean }) {
-  const { t, f } = useI18n();
-  const { format, raceType, date } = formatView;
-  const [first, ...rest] = formatMeasures(format, raceType.label, f, t);
-
-  return (
-    <>
-      {/* On an event of several days, the day of each format is worth knowing. */}
-      {showDate && <p className="eyebrow">{f.date(date)}</p>}
-      <p className="text-sm text-neutral-700">
-        <span className="font-semibold text-ink">{first}</span>
-        {rest.length > 0 && `${SEPARATOR}${rest.join(SEPARATOR)}`}
-      </p>
-    </>
-  );
-}
