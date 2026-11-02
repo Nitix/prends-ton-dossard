@@ -41,10 +41,21 @@
   transform: skewX(-12deg);
 }
 
-/* The fields and the buttons: the corner of the theme, not a pill. A secondary
-   button turns to the ink under the pointer. */
+/* The fields and the buttons: the corner of the theme, not a pill. A field under the
+   pointer takes the grey of the ink, never the red of the track (which Crête's
+   hover would give it, and a refused field is red too: it keeps its own edge). A
+   secondary button turns to the ink under the pointer. The legends of a duration
+   or a time are set as the other labels are, not in the condensed face of titles
+   that the base gives every `legend`. */
 :root[data-skin="piste"] .field-input {
   border-radius: var(--radius-lg);
+}
+:root[data-skin="piste"] .field-input:hover:not(:focus):not([aria-invalid="true"]) {
+  border-color: var(--color-neutral-700);
+}
+:root[data-skin="piste"] .field-label {
+  font-family: var(--font-sans);
+  letter-spacing: normal;
 }
 :root[data-skin="piste"] .btn-primary,
 :root[data-skin="piste"] .btn-secondary,

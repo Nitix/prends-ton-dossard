@@ -119,7 +119,7 @@ function NumeralFigures({ figures, altitude }: TrackFiguresProps) {
       <p className="route-figures font-display text-[1.625rem] leading-none font-bold text-ink tabular-nums">
         {figures.map((figure, i) => (
           <Fragment key={figure}>
-            {i > 0 && <span className="text-neutral-400">{SEPARATOR}</span>}
+            {i > 0 && <span className="text-neutral-600">{SEPARATOR}</span>}
             <Figure>{figure}</Figure>
           </Fragment>
         ))}

@@ -1,12 +1,14 @@
 import { createElement, useEffect, useRef, type ReactNode } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
 import { SKIN_DEPTH, variantOf } from "..";
 import { Avatar } from "../../components/Avatar";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
+import { DurationInput } from "../../components/DurationInput";
 import { INPUT } from "../../components/Field";
+import { TextField } from "../../components/TextField";
 import { ToastProvider, useToast } from "../../components/Toast";
 import { EventCard } from "../../features/events/EventCard";
 import { EventHero } from "../../features/events/EventHero";
@@ -66,9 +68,12 @@ function tokens() {
     redPale: colourOf("--color-iris-50"),
     pale: colourOf("--color-neutral-100"),
     lane: colourOf("--color-neutral-300"),
+    danger: colourOf("--color-red-700"),
+    edgeHover: colourOf("--color-neutral-700"),
     redDeep: colourOf("--color-iris-700"),
     ink: colourOf("--color-neutral-900"),
     cream: colourOf("--color-neutral-50"),
+    card: colourOf("--color-card"),
     info: colourOf("--map-start"),
     onInk: colourOf("--dawn-deep-ink"),
     radiusLg: radiusOf("--radius-lg"),
@@ -92,14 +97,14 @@ function settle(root: Element) {
 /** What `look` makes of a piece in Piste, in the app, with the tokens of its palette (`tokens`), read once it has settled. */
 function inPiste<T extends object>(
   element: ReactNode,
-  look: (drawn: HTMLElement) => T,
+  look: (drawn: HTMLElement) => T | Promise<T>,
   options: { today?: string } = {},
 ) {
   return inApp(
     element,
-    (drawn) => {
+    async (drawn) => {
       settle(drawn);
-      return { ...look(drawn), tokens: tokens() };
+      return { ...(await look(drawn)), tokens: tokens() };
     },
     {
       skin: "piste",
@@ -319,6 +324,9 @@ test.skipIf(SKIN_DEPTH !== "full")(
         lines: drawn.querySelectorAll(".route-figures").length,
         tiles: drawn.querySelectorAll(".stat-tile").length,
         spoken: plain(drawn.querySelector(".route-figures")?.textContent),
+        dots: [...drawn.querySelectorAll(".route-figures span")]
+          .filter((dot) => plain(dot.textContent) === "·")
+          .map((dot) => getComputedStyle(dot).color),
         size: styleOf(drawn, ".route-figures").fontSize,
         altitude: plain(drawn.querySelector(".route-altitude")?.textContent),
       }),
@@ -326,6 +334,16 @@ test.skipIf(SKIN_DEPTH !== "full")(
     expect(figures.tiles, "no tiles").toBe(0);
     expect(figures.lines, "one line").toBe(1);
     expect(figures.spoken).toBe("12,6 km · 724 m D+ · 728 m D−");
+    // The « · » between the figures are text, not decoration: 4.5:1 on the card and on the page.
+    expect(figures.dots.length, "a separator between two figures, twice").toBe(2);
+    for (const ink of figures.dots) {
+      expect(contrast(hex(ink), hex(figures.tokens.card)), "on the card").toBeGreaterThanOrEqual(
+        4.5,
+      );
+      expect(contrast(hex(ink), hex(figures.tokens.cream)), "on the page").toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
     expect(Number.parseFloat(figures.size), "big").toBeGreaterThanOrEqual(24);
     expect(figures.altitude).toBe("altitude 450 m à 1 157 m");
 
@@ -601,5 +619,59 @@ test.skipIf(SKIN_DEPTH !== "full")(
     } finally {
       probe.remove();
     }
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "piste — les légendes de la durée ont la police, le corps et l'espacement des autres étiquettes, pas la condensée des titres",
+  async () => {
+    const seen = await inPiste(
+      <>
+        <TextField label="Nom" name="nom" autoComplete="off" defaultValue="" error={null} />
+        <DurationInput name="duree" label="Durée (course au temps)" onChange={() => {}} />
+      </>,
+      (drawn) => {
+        const faceOf = (selector: string) => {
+          const style = styleOf(drawn, selector);
+          // The weight is the markup's own (a legend is `font-medium`, a label `font-semibold`), in Crête too.
+          return [style.fontFamily, style.fontSize, style.letterSpacing];
+        };
+        return { label: faceOf("label.field-label"), legend: faceOf("legend.field-label") };
+      },
+    );
+    expect(seen.legend, "the legend reads as the labels do").toEqual(seen.label);
+    expect(seen.legend[0], "not the condensed face of the titles").not.toContain(
+      "Barlow Condensed",
+    );
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "piste — un champ sous le pointeur prend l'encre grise, jamais le rouge de la piste ; un champ refusé reste rouge sous le pointeur",
+  async () => {
+    const seen = await inPiste(
+      <>
+        <input aria-label="Nom" className={INPUT} />
+        <input aria-label="Refusé" aria-invalid="true" className={INPUT} />
+      </>,
+      async (drawn) => {
+        const [calm, refused] = [...drawn.querySelectorAll("input")];
+        if (!calm || !refused) throw new Error("no fields");
+        // The edge fades: read where it ends, not in the middle of the fade.
+        calm.style.transition = "none";
+        refused.style.transition = "none";
+        await userEvent.hover(calm);
+        const calmUnder = [calm.matches(":hover"), getComputedStyle(calm).borderTopColor];
+        const calmEdge = getComputedStyle(calm).borderTopColor;
+        await userEvent.hover(refused);
+        const refusedUnder = [refused.matches(":hover"), getComputedStyle(refused).borderTopColor];
+        return { calmUnder, calmEdge, refusedUnder };
+      },
+    );
+    expect(seen.calmUnder, "calm, under the pointer").toEqual([true, seen.tokens.edgeHover]);
+    expect(seen.calmEdge, "not the red of the track").not.toBe(seen.tokens.red);
+    expect(seen.refusedUnder, "refused, under the pointer").toEqual([true, seen.tokens.danger]);
+    // The hover edge is a field's edge: 3:1 on the white of the field.
+    expect(contrast(hex(seen.calmEdge), hex(seen.tokens.card))).toBeGreaterThanOrEqual(3);
   },
 );
