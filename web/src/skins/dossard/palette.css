@@ -1,0 +1,162 @@
+/* « Dossard », depth palette: the morning of a race. A sand page, navy ink,
+   white cards, and three bright accents from the start village, each with a
+   job: coral for the registrations (and the bib bands), sky for the agenda, sun
+   for the results; the day only (see ../README.md).
+
+   The scales of Crête's three colours are re-read in the three accents of the
+   variant: iris (the accent: links, the focus ring, what is chosen, the soft
+   chips of the agenda) is the sky, peach (the reminder to register, the chip of
+   a deadline) is the coral, blush (the pin of a place, what is to confirm, the
+   selection) is the sun. Every step that carries a text is a deep one (the
+   variant's `-ink`), yellow never carrying white. */
+:root[data-skin="dossard"] {
+  /* The warm sand of the page (50) to the navy of the ink (900). */
+  --color-neutral-50: #fff8ee;
+  --color-neutral-100: #fbefdd;
+  --color-neutral-200: #f0e2cc;
+  --color-neutral-300: #ddcbaf;
+  --color-neutral-400: #9a8d77;
+  --color-neutral-500: #7a7466;
+  --color-neutral-600: #545c74;
+  --color-neutral-700: #3b4560;
+  --color-neutral-800: #26314d;
+  --color-neutral-900: #14213d;
+  --color-neutral-950: #0b1428;
+  --color-ink: #14213d;
+
+  /* The sky: 50 is the variant's `sky-soft`, 100 the tint of an avatar, 300 the
+     sky of the pennants, 600 the ring of the focus, 700 its `sky-ink`. */
+  --color-iris-50: #e1f1fe;
+  --color-iris-100: #cfe8fd;
+  --color-iris-200: #a9d6fb;
+  --color-iris-300: #3ba7f5;
+  --color-iris-400: #2b8ad8;
+  --color-iris-500: #1e7fd0;
+  --color-iris-600: #1673c4;
+  --color-iris-700: #0a5c99;
+  --color-iris-800: #084a7b;
+  --color-iris-900: #063a60;
+
+  /* The coral: 50 is its `coral-soft`, 100 the tint of an avatar, 500 the
+     coral, 700 its `coral-ink`. */
+  --color-peach-50: #ffe3e1;
+  --color-peach-100: #ffd3d0;
+  --color-peach-200: #ffb3b0;
+  --color-peach-300: #ff9094;
+  --color-peach-400: #ff7479;
+  --color-peach-500: #ff5a5f;
+  --color-peach-600: #e5444a;
+  --color-peach-700: #b8262c;
+  --color-peach-800: #8f1c22;
+
+  /* The sun: 50 and 100 the soft tints, 200 the sun itself (what is selected),
+     500 and darker the deep steps that read on white. */
+  --color-blush-50: #fff7e0;
+  --color-blush-100: #ffe7a6;
+  --color-blush-200: #ffc93c;
+  --color-blush-300: #ffc93c;
+  --color-blush-400: #f2b320;
+  --color-blush-500: #c98700;
+  --color-blush-600: #9a6a00;
+  --color-blush-700: #7a4b00;
+  --color-blush-800: #5c3800;
+
+  /* Danger: a deep coral red. */
+  --color-red-50: #fff1f0;
+  --color-red-200: #ffc4c1;
+  --color-red-700: #c42b31;
+  --color-red-800: #a11f25;
+
+  /* White bibs on the sand, in a mat of white; a navy pill for a message. */
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #ffffff;
+  --color-toast: #14213d;
+  --color-scrim: rgb(20 33 61 / 0.55);
+  --color-relief: #0b1428;
+
+  /* The five zones of the slope, flat to steep: sky, grass, sun, terracotta,
+     crimson. 3:1 on the card and with the navy line. */
+  --color-slope-1: #3a8ee0;
+  --color-slope-2: #4ca378;
+  --color-slope-3: #ba8907;
+  --color-slope-4: #b74802;
+  --color-slope-5: #ce0a6d;
+
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-card: 1.25rem;
+
+  /* The shadows of a bib: navy, light and close. */
+  --shade-card: rgb(20 33 61 / 0.28);
+  --shade-lift: rgb(20 33 61 / 0.38);
+  --shade-bar: rgb(20 33 61 / 0.28);
+  --shade-edge: rgb(20 33 61 / 0.05);
+  --shade-edge-lift: rgb(20 33 61 / 0.05);
+  /* The map: a white mat (the border), a ring of sky, the shadow of a bib. */
+  --map-frame: 0 0 0 2px #3ba7f5, 0 8px 20px -12px rgb(20 33 61 / 0.28);
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The track in coral (on its white halo), its start in the blue of the
+     focus, its finish in navy, the links of its attribution. */
+  --map-line-from: #ff7a7e;
+  --map-line-via: #ff5a5f;
+  --map-line-to: #e0383e;
+  --map-line: #ff5a5f;
+  --map-start: #1673c4;
+  --map-finish: #14213d;
+  --map-link: #0a5c99;
+
+  /* Crête's motifs, which « Dossard » does not draw (the title marker, which
+     takes the sun of the paint of the line): in its three accents and its navy.
+     The header, the heroes, the mark and the empty lists are the skin's own. */
+  --motif-ridge-far-from: #ff9094;
+  --motif-ridge-far-to: #ff5a5f;
+  --motif-ridge-mid-from: #3ba7f5;
+  --motif-ridge-mid-to: #1673c4;
+  --motif-ridge-near-from: #26314d;
+  --motif-ridge-near-to: #14213d;
+  --motif-ridge-light: #ffe7a6;
+  --motif-sun-core: #fff7e0;
+  --motif-sun-mid: #ffe7a6;
+  --motif-sun-rim: #ffc93c;
+  --motif-halo-from: #ffe7a6;
+  --motif-halo-to: #ffc93c;
+  --motif-dawn-1: #ffc93c;
+  --motif-dawn-2: #ff5a5f;
+  --motif-dawn-3: #3ba7f5;
+  --motif-peak-far: #cfe8fd;
+  --motif-peak-near-from: #1673c4;
+  --motif-peak-near-to: #14213d;
+  --motif-hill-near-from: #3ba7f5;
+  --motif-hill-near-to: #14213d;
+
+  /* The paints of the dawn, flat as the variant's colours are. What carries
+     white text is the navy ink (the variant's main button), the band of the
+     header too; the hero is the coral band of the bib, in its deep step (white
+     on it is 6:1). The variant has no halo: the glows are nothing. */
+  --dawn-soft: linear-gradient(110deg, #ffc93c, #ffc93c);
+  --dawn-deep: linear-gradient(110deg, #14213d, #14213d);
+  --dawn-sky-color: #14213d;
+  --dawn-sky: linear-gradient(160deg, #14213d, #14213d);
+  --dawn-hero-color: #b8262c;
+  --dawn-hero: linear-gradient(150deg, #b8262c, #b8262c);
+  --dawn-text: linear-gradient(100deg, #14213d, #14213d);
+  /* The marker stroke of the sun under the title of a page, and the sun before a block's. */
+  --dawn-line: linear-gradient(90deg, #ffc93c, #ffc93c);
+  --dawn-marker-shadow: none;
+  /* The start line after the month over a list: a dashed tear-off line. */
+  --dawn-horizon: repeating-linear-gradient(90deg, #ddcbaf 0 8px, transparent 8px 14px);
+  --dawn-ring-from: #ff8a8e;
+  --dawn-ring-via: #ff5a5f;
+  --dawn-ring-to: #b8262c;
+  --dawn-chip-glow: rgb(20 33 61 / 0.3);
+  --dawn-glow-warm: transparent;
+  --dawn-glow-cool: transparent;
+  --focus-glow: rgb(22 115 196 / 0.2);
+  /* The ring of the focus on the navy of the sky: the sun. */
+  --sky-focus: #ffc93c;
+}
