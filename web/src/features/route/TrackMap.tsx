@@ -17,7 +17,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
-import { SLOPE_FILLS, type SlopeZone } from "./slope";
+import { SLOPE_COLORS, SLOPE_FILLS, type SlopeZone } from "./slope";
 import { TILE_HOST } from "./tileHost";
 import { nearestKm, pointAtKm, trackIndex, type TrackIndex } from "./trackIndex";
 
@@ -81,6 +81,14 @@ const HOVER_PX = 12;
 const TAP_PX = 22;
 
 /**
+ * How far apart two passes of the track (an out-and-back on one path, a loop
+ * that ends at its start) are taken for one: 5 m, or 3 pixels when the map is
+ * zoomed out and they are closer than that on the screen.
+ */
+const TIE_M = 5;
+const TIE_PX = 3;
+
+/**
  * The words beside a mark. They go toward the centre of the map, so they are
  * not cut by its edge; the start's goes up and the finish's down, so that two
  * marks on the same spot (a loop) have two words that can be read.
@@ -135,7 +143,7 @@ function place(layers: Layers | null, index: TrackIndex, { km, zone }: Wanted) {
  * It is linked to the elevation profile (see RouteSection): `markerKm` puts a
  * mark on the track at that kilometer, in the colour of the slope `markerZone`
  * (the cursor of the profile, with the colour of its dot), and `onTrackKm` is
- * told the kilometer of the track under a mouse or a pen (within `HOVER_PX`),
+ * told the kilometer of the track under a mouse or a pen with no button down (within `HOVER_PX`),
  * or under a tap (within `TAP_PX`), and `null` when the pointer leaves the
  * track or the map, or a tap is away from the track. The mark takes no pointer
  * and no focus, and says nothing to a screen reader: the cursor of the profile
@@ -243,24 +251,33 @@ export default function TrackMap({
     });
 
     // The mark of the cursor of the profile: one dot, made once and moved (see
-    // `place`), over the track. A ring of the card around it, as the dot of the
-    // profile has (TrackMap.css), detaches it from the map and from the line.
-    const dot = circleMarker([first.lat, first.lon], {
-      className: "track-marker",
-      color: "#ffffff",
-      weight: 2,
-      fillOpacity: 1,
-      radius: MARKER_RADIUS,
-      interactive: false,
-    });
+    // `place`, which paints it), over the track. A ring of the card around it,
+    // as the dot of the profile has (TrackMap.css), detaches it from the map and
+    // from the line.
+    const dot = circleMarker(
+      [first.lat, first.lon],
+      mark("track-marker", SLOPE_COLORS[1], MARKER_RADIUS),
+    );
     layers.current = { map, dot };
     place(layers.current, index, wanted.current);
 
     // The kilometer of the track nearest to a point of the map, if the track is
-    // within `tolerance` pixels of it there.
+    // within `tolerance` pixels of it there. Where the track passes twice so
+    // close that the two cannot be told apart (TIE_M, or TIE_PX on the screen),
+    // the pass nearest the cursor is kept: it does not jump from one to the other.
     const kmNear = (point: Point, tolerance: number): number | null => {
-      const { lat, lng } = map.containerPointToLatLng(point);
-      const km = nearestKm(index, lat, lng);
+      const here = map.containerPointToLatLng(point);
+      const { lat, lng } = here;
+      const cursor = wanted.current.km;
+      const pixelM = map.distance(here, map.containerPointToLatLng(point.add([1, 0])));
+      const km = nearestKm(
+        index,
+        lat,
+        lng,
+        cursor === null
+          ? undefined
+          : { km: cursor, withinKm: Math.max(TIE_M, TIE_PX * pixelM) / 1000 },
+      );
       const near = km === undefined ? undefined : pointAtKm(index, km);
       if (km === undefined || near === undefined) return null;
       return map.latLngToContainerPoint([near.lat, near.lon]).distanceTo(point) <= tolerance
@@ -276,7 +293,9 @@ export default function TrackMap({
       tell.current?.(km);
     };
     // A mouse or a pen over the map: the track under it, once an image at most.
-    // A finger is left to the map, to move it: it says where with a tap.
+    // A pointer with a button down is moving the map, not pointing (the track
+    // passing under it would make the cursor flicker): a finger on the screen
+    // always is, and says where with a tap.
     let frame = 0;
     let pointer: Point | null = null;
     let pointerType = "mouse";
@@ -284,8 +303,7 @@ export default function TrackMap({
       pointerType = event.pointerType;
     };
     const onPointerMove = (event: PointerEvent) => {
-      pointerType = event.pointerType;
-      if (event.pointerType === "touch") return;
+      if (event.buttons !== 0) return;
       pointer = map.mouseEventToContainerPoint(event);
       if (frame !== 0) return;
       frame = requestAnimationFrame(() => {

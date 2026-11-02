@@ -418,6 +418,37 @@ function onScreen(screen: Screen, fraction: number): { x: number; y: number } {
   };
 }
 
+/** How far the mark is drawn from a point of the screen, in pixels (the further axis); no mark is infinitely far. */
+function markOffset(screen: Screen, at: { x: number; y: number }): number {
+  const dot = mark(screen);
+  if (!dot) return Infinity;
+  const drawn = centre(dot);
+  return Math.max(Math.abs(drawn.x - at.x), Math.abs(drawn.y - at.y));
+}
+
+/** Waits for n images of the browser: what is done at the next image (the map reads the pointer then) is done. */
+function frames(n: number): Promise<void> {
+  return new Promise((resolve) => {
+    let left = n;
+    const step = () => {
+      left -= 1;
+      if (left <= 0) resolve();
+      else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/**
+ * The track is where it was on the screen: the map has not moved. Its numbers
+ * are compared (a DOMRect has no keys of its own: `toEqual` would pass whatever
+ * they are).
+ */
+function expectStill(now: DOMRect, before: DOMRect, what: string) {
+  expect(now.left - before.left, `${what}: across`).toBeCloseTo(0, 1);
+  expect(now.top - before.top, `${what}: up and down`).toBeCloseTo(0, 1);
+}
+
 /** Where the mark was last put, as Leaflet was told. */
 function placedAt(placed: MockInstance<CircleMarker["setLatLng"]>): LatLng | undefined {
   const call = placed.mock.lastCall;
@@ -518,10 +549,7 @@ test("RouteSection — survoler le tracé place le curseur du profil", async () 
   expect(Number(altitude)).toBeGreaterThanOrEqual(585);
   expect(Number(altitude)).toBeLessThanOrEqual(593);
   expect(valueText(cursor)).toBe(`1,1 km, altitude ${altitude} m, pente 8 %`);
-  const dot = mark(screen);
-  if (!dot) throw new Error("no mark on the map");
-  expect(Math.abs(centre(dot).x - at.x)).toBeLessThan(1.5);
-  expect(Math.abs(centre(dot).y - at.y)).toBeLessThan(1.5);
+  await expect.poll(() => markOffset(screen, at)).toBeLessThan(1.5);
 
   // Beside the line (8 px off), it is still the track: the point across from the pointer.
   const elsewhere = onScreen(screen, 0.7 / STEADY_KM);
@@ -532,15 +560,31 @@ test("RouteSection — survoler le tracé place le curseur du profil", async () 
   // Away from it (40 px), there is no cursor and no mark.
   await hoverMap(screen, { x: elsewhere.x + 40, y: elsewhere.y });
   await expect.poll(() => pill(screen)).toBe("678 m");
-  expect(mark(screen)).toBeNull();
+  await expect.poll(() => mark(screen)).toBeNull();
   expect(valueText(cursor)).toBe("0 km, altitude 500 m, pente 8 %");
+
+  // A mouse that moves with its button down is moving the map: the track that
+  // passes under it puts no cursor.
+  const under = document.elementFromPoint(at.x, at.y);
+  under?.dispatchEvent(
+    new PointerEvent("pointermove", {
+      clientX: at.x,
+      clientY: at.y,
+      pointerType: "mouse",
+      buttons: 1,
+      bubbles: true,
+    }),
+  );
+  await frames(4);
+  expect(pill(screen)).toBe("678 m");
+  expect(mark(screen)).toBeNull();
 
   // Back on the track, then off the map: the cursor goes with the pointer.
   await hoverMap(screen, at);
   await expect.poll(() => pill(screen)).toMatch(/^1,1 km/);
   await userEvent.unhover(trackMap(screen));
   await expect.poll(() => pill(screen)).toBe("678 m");
-  expect(mark(screen)).toBeNull();
+  await expect.poll(() => mark(screen)).toBeNull();
 });
 
 /** The elements of the map that the Tab key stops on. */
@@ -585,6 +629,20 @@ test("RouteSection — au clavier, le repère suit", async () => {
   expect(dot?.classList.contains("leaflet-interactive")).toBe(false);
   expect(dot && getComputedStyle(dot).pointerEvents).toBe("none");
   expect(tabStops(region)).toEqual(stopsBefore);
+
+  // A mouse that passes over the map while the keys use the cursor: on the
+  // track, the cursor goes there; off the track, then off the map, it stays
+  // (the keys still have it), with its mark, and the focus stays on the profile.
+  const at = onScreen(screen, 1.1 / STEADY_KM);
+  await hoverMap(screen, at);
+  await expect.poll(() => valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+  await hoverMap(screen, { x: at.x + 40, y: at.y });
+  await userEvent.unhover(trackMap(screen));
+  await frames(4);
+  expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+  expect(pill(screen)).toMatch(/^1,1 km/);
+  expect(mark(screen)).not.toBeNull();
+  expect(document.activeElement).toBe(cursor.element());
 
   // Escape puts the cursor away, and its mark; the focus stays.
   await userEvent.keyboard("{Escape}");
@@ -653,21 +711,24 @@ test("RouteSection — le repère a la couleur de la pente sous le curseur, de j
 
 let fingers = 100;
 
+type ScreenPoint = { x: number; y: number };
+
 /**
  * A finger on the screen, as a browser tells it: each step is a pointer event
  * and a touch event (a phone sends both; Leaflet listens to the touch events
- * where the browser has them, as the Chromium of the tests does).
+ * where the browser has them, as the Chromium of the tests does). A finger on
+ * the screen is a pointer with its button down.
  */
-function finger(at: { x: number; y: number }) {
+function finger(at: ScreenPoint) {
   const target = document.elementFromPoint(at.x, at.y);
   if (!target) throw new Error("nothing there");
   fingers += 1;
   const identifier = fingers;
-  const send = (pointer: string, touch: string, x: number, down: boolean) => {
+  const send = (pointer: string, touch: string, { x, y }: ScreenPoint, down: boolean) => {
     target.dispatchEvent(
       new PointerEvent(pointer, {
         clientX: x,
-        clientY: at.y,
+        clientY: y,
         pointerId: identifier,
         pointerType: "touch",
         isPrimary: true,
@@ -677,7 +738,7 @@ function finger(at: { x: number; y: number }) {
         composed: true,
       }),
     );
-    const contact = new Touch({ identifier, target, clientX: x, clientY: at.y });
+    const contact = new Touch({ identifier, target, clientX: x, clientY: y });
     target.dispatchEvent(
       new TouchEvent(touch, {
         touches: down ? [contact] : [],
@@ -690,33 +751,62 @@ function finger(at: { x: number; y: number }) {
     );
   };
   return {
-    down: () => send("pointerdown", "touchstart", at.x, true),
-    move: (x: number) => send("pointermove", "touchmove", x, true),
-    up: (x: number) => send("pointerup", "touchend", x, false),
+    down: () => send("pointerdown", "touchstart", at, true),
+    move: (to: ScreenPoint) => send("pointermove", "touchmove", to, true),
+    up: (to: ScreenPoint) => send("pointerup", "touchend", to, false),
+    /** At the end of a touch, the browser says that the pointer has left the element, and the map. */
+    gone: (region: Element, to: ScreenPoint) => {
+      const pointer = { clientX: to.x, clientY: to.y, pointerId: identifier, pointerType: "touch" };
+      target.dispatchEvent(new PointerEvent("pointerout", { ...pointer, bubbles: true }));
+      region.dispatchEvent(new PointerEvent("pointerleave", pointer));
+    },
     target,
   };
 }
 
 /** A tap at a point of the screen: the finger down and up, gone from the map, then the click. */
-function tap(region: Element, at: { x: number; y: number }) {
+function tap(region: Element, at: ScreenPoint) {
   const touch = finger(at);
   touch.down();
-  touch.up(at.x);
-  // At the end of a touch, the browser says that the pointer has left.
-  const gone = { clientX: at.x, clientY: at.y, pointerId: fingers, pointerType: "touch" };
-  touch.target.dispatchEvent(new PointerEvent("pointerout", { ...gone, bubbles: true }));
-  region.dispatchEvent(new PointerEvent("pointerleave", gone));
+  touch.up(at);
+  touch.gone(region, at);
   touch.target.dispatchEvent(
     new MouseEvent("click", { clientX: at.x, clientY: at.y, bubbles: true, cancelable: true }),
   );
 }
 
-/** A finger that goes down at a point, slides `dx` pixels to the right, and goes up: no click. */
-function slide(at: { x: number; y: number }, dx: number) {
-  const touch = finger(at);
+/**
+ * A finger that goes down at a point, slides to another over a few images (as
+ * a finger does: Leaflet works out the speed of the map from their times), and
+ * goes up: no click (a browser sends none after a slide).
+ */
+async function slide(region: Element, from: ScreenPoint, to: ScreenPoint) {
+  const touch = finger(from);
   touch.down();
-  for (let step = 1; step <= 6; step++) touch.move(at.x + (dx * step) / 6);
-  touch.up(at.x + dx);
+  for (let step = 1; step <= 6; step++) {
+    await frames(1);
+    touch.move({
+      x: from.x + ((to.x - from.x) * step) / 6,
+      y: from.y + ((to.y - from.y) * step) / 6,
+    });
+  }
+  await frames(1);
+  touch.up(to);
+  touch.gone(region, to);
+}
+
+/** The place of an element on the screen once it has stopped moving (a map that glides at the end of a slide). */
+async function settled(read: () => DOMRect): Promise<DOMRect> {
+  let previous = read();
+  for (let i = 0; i < 100; i++) {
+    await frames(3);
+    const now = read();
+    if (Math.abs(now.left - previous.left) < 0.01 && Math.abs(now.top - previous.top) < 0.01) {
+      return now;
+    }
+    previous = now;
+  }
+  throw new Error("it does not stop moving");
 }
 
 test("RouteSection — sur un téléphone, toucher le tracé place le curseur du profil, sans déplacer la carte", async () => {
@@ -738,21 +828,39 @@ test("RouteSection — sur un téléphone, toucher le tracé place le curseur du
     tap(region, { x: at.x + 14, y: at.y });
     await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
     expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
-    const dot = mark(screen);
-    expect(dot && Math.abs(centre(dot).x - at.x)).toBeLessThan(1.5);
-    // The map has not moved: the track is where it was.
-    expect(line()).toEqual(before);
+    await expect.poll(() => markOffset(screen, at)).toBeLessThan(1.5);
+    // The map has not moved, not even a little later: the track is where it was.
+    await frames(10);
+    expectStill(line(), before, "after a tap on the track");
 
-    // A touch far from the track puts the cursor away.
-    tap(region, { x: at.x + 80, y: at.y });
+    // A finger that slides along the track, from 0.5 km toward the finish,
+    // ending on the line: it moves the map, as before, and leaves the cursor at
+    // 1.1 km. Nor does the end of the touch, which the browser tells as the
+    // pointer leaving the map, take the cursor away.
+    const from = onScreen(screen, 0.5 / STEADY_KM);
+    const toward = onScreen(screen, 1);
+    const length = Math.hypot(toward.x - from.x, toward.y - from.y);
+    const to = {
+      x: from.x + ((toward.x - from.x) * 40) / length,
+      y: from.y + ((toward.y - from.y) * 40) / length,
+    };
+    await slide(region, from, to);
+    await frames(4);
+    expect(pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
+    expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+    expect(mark(screen)).not.toBeNull();
+    const afterSlide = await settled(line);
+    expect(Math.hypot(afterSlide.left - before.left, afterSlide.top - before.top)).toBeGreaterThan(
+      25,
+    );
+
+    // A touch far from the track (where it is now) puts the cursor away; the map stays.
+    const now = onScreen(screen, 1.1 / STEADY_KM);
+    tap(region, { x: now.x + 80, y: now.y });
     await expect.poll(() => pill(screen)).toBe("678 m");
-    expect(mark(screen)).toBeNull();
-    expect(line()).toEqual(before);
-
-    // A finger that starts on the track and slides moves the map, as before; it puts no cursor.
-    slide(at, 60);
-    await expect.poll(() => line().left - before.left).toBeGreaterThan(40);
-    expect(pill(screen)).toBe("678 m");
+    await expect.poll(() => mark(screen)).toBeNull();
+    await frames(10);
+    expectStill(line(), afterSlide, "after a tap away from the track");
   } finally {
     await page.viewport(414, 896);
   }

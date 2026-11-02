@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useMemo, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
 import { Figure } from "../../components/Figure";
@@ -71,6 +71,14 @@ function Track({ points }: { points: TrackPoint[] }) {
   // there as the profile reads it (`null` until the profile has drawn its cursor).
   const [cursorKm, setCursorKm] = useState<number | null>(null);
   const [cursorZone, setCursorZone] = useState<SlopeZone | null>(null);
+  // The track under a pointer of the map puts the cursor there. A pointer that
+  // leaves the track, or the map, takes it away, but not from a profile that has
+  // the focus: the keys are using it, and it goes with the focus (or Escape).
+  const profile = useRef<HTMLDivElement>(null);
+  const onTrackKm = (km: number | null) => {
+    if (km === null && profile.current?.contains(document.activeElement)) return;
+    setCursorKm(km);
+  };
   // Over every point: once per track, not at every move of the cursor.
   const stats = useMemo(() => gpxStats(points), [points]);
   const { min, max } = stats;
@@ -115,17 +123,20 @@ function Track({ points }: { points: TrackPoint[] }) {
             points={points}
             markerKm={cursorZone === null ? null : cursorKm}
             markerZone={cursorZone}
-            onTrackKm={setCursorKm}
+            onTrackKm={onTrackKm}
           />
         </Suspense>
       </MapBoundary>
-      <ElevationProfile
-        points={points}
-        label={altitude === null ? t.route.profileLabel : `${t.route.profileLabel}, ${altitude}`}
-        cursorKm={cursorKm}
-        onCursorKm={setCursorKm}
-        onCursorZone={setCursorZone}
-      />
+      {/* Laid out as if it were not there: it only says where the profile is. */}
+      <div ref={profile} className="contents">
+        <ElevationProfile
+          points={points}
+          label={altitude === null ? t.route.profileLabel : `${t.route.profileLabel}, ${altitude}`}
+          cursorKm={cursorKm}
+          onCursorKm={setCursorKm}
+          onCursorZone={setCursorZone}
+        />
+      </div>
     </>
   );
 }

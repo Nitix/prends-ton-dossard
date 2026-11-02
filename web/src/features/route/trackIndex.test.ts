@@ -45,8 +45,13 @@ function winding(n: number, km = 40): TrackPoint[] {
  * latitude in the middle of the track.
  */
 function bruteNearestKm(points: TrackPoint[], lat: number, lon: number): number {
-  const latitudes = points.map((point) => point.lat);
-  const middle = (Math.min(...latitudes) + Math.max(...latitudes)) / 2;
+  let south = Infinity;
+  let north = -Infinity;
+  for (const point of points) {
+    south = Math.min(south, point.lat);
+    north = Math.max(north, point.lat);
+  }
+  const middle = (south + north) / 2;
   const cos = Math.cos((middle * Math.PI) / 180);
   let best = Infinity;
   let bestKm = points[0]?.km ?? 0;
@@ -156,6 +161,78 @@ describe("nearestKm", () => {
 
     expect(nearestKm(index, 45.01, 6.0004)).toBeLessThan(turn);
     expect(nearestKm(index, 45.01, 6.0016)).toBeGreaterThan(turn);
+  });
+
+  test("nearestKm — un aller-retour sur le même chemin : le passage le plus proche du curseur", () => {
+    // North on lon 6, then back south 1.6 m to the east (the same path, twice):
+    // a place between the two is on either. The cursor says which.
+    const outAndBack = toTrack([
+      ...Array.from({ length: 21 }, (_, i) => ({ lat: 45 + i / 1000, lon: 6 })),
+      ...Array.from({ length: 21 }, (_, i) => ({ lat: 45.02 - i / 1000, lon: 6.00002 })),
+    ]);
+    const index = trackIndex(outAndBack);
+    const kmOf = (i: number) => outAndBack[i]?.km ?? Number.NaN;
+    const within = 0.005; // 5 m
+    // Between the two passes at 45.01°: the 11th point on the way out, the 32nd on the way back.
+    const [out, back] = [kmOf(10), kmOf(31)];
+
+    for (const cursor of [0, 0.9, 1.3, 2]) {
+      const found = nearestKm(index, 45.01, 6.00001, { km: cursor, withinKm: within });
+      expect(found, `cursor at ${cursor} km`).toBeCloseTo(out, 6);
+    }
+    for (const cursor of [2.5, 3.3, 4.4]) {
+      const found = nearestKm(index, 45.01, 6.00001, { km: cursor, withinKm: within });
+      expect(found, `cursor at ${cursor} km`).toBeCloseTo(back, 6);
+    }
+    // A little further along the way back (at 45.009°): the cursor goes on along
+    // it, to the very point across, not held back by the way out.
+    expect(nearestKm(index, 45.009, 6.00001, { km: back, withinKm: within })).toBeCloseTo(
+      kmOf(32),
+      6,
+    );
+  });
+
+  test("nearestKm — le curseur ne retient rien : un passage nettement plus près, ou un seul passage, comme sans lui", () => {
+    // Two passes 50 m apart: the one under the place wins, wherever the cursor is.
+    const apart = toTrack([
+      ...Array.from({ length: 21 }, (_, i) => ({ lat: 45 + i / 1000, lon: 6 })),
+      ...Array.from({ length: 21 }, (_, i) => ({ lat: 45.02 - i / 1000, lon: 6.00064 })),
+    ]);
+    const twice = trackIndex(apart);
+    const underPlace = nearestKm(twice, 45.01, 6.00064);
+    expect(underPlace).toBeGreaterThan(3);
+    expect(nearestKm(twice, 45.01, 6.00064, { km: 1, withinKm: 0.005 })).toBe(underPlace);
+
+    // One pass, a point every 11 m: a cursor far behind (or ahead) does not pull
+    // the place toward it, though the ends of the segments around the place are
+    // within the 5 m too.
+    const once = trackIndex(
+      toTrack(Array.from({ length: 201 }, (_, i) => ({ lat: 45 + i / 10_000, lon: 6 }))),
+    );
+    for (const [lat, cursor] of [
+      [45.01055, 0.1],
+      [45.01055, 2.2],
+      [45.01003, 0],
+      [45.01537, 2],
+    ] as const) {
+      expect(nearestKm(once, lat, 6.00003, { km: cursor, withinKm: 0.005 })).toBe(
+        nearestKm(once, lat, 6.00003),
+      );
+    }
+  });
+
+  test("nearestKm — une boucle qui finit à son départ : le départ ou l'arrivée, selon le curseur", () => {
+    const loop = toTrack([
+      { lat: 45, lon: 6 },
+      { lat: 45.01, lon: 6 },
+      { lat: 45.01, lon: 6.01 },
+      { lat: 45, lon: 6.01 },
+      { lat: 45, lon: 6 },
+    ]);
+    const index = trackIndex(loop);
+    const total = loop.at(-1)?.km ?? 0;
+    expect(nearestKm(index, 45, 6, { km: 0.2, withinKm: 0.005 })).toBeCloseTo(0, 6);
+    expect(nearestKm(index, 45, 6, { km: total - 0.2, withinKm: 0.005 })).toBeCloseTo(total, 6);
   });
 
   test("nearestKm — un point seul, et aucun point", () => {

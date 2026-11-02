@@ -112,13 +112,31 @@ export function pointAtKm(index: TrackIndex, at: number): { lat: number; lon: nu
 }
 
 /**
+ * Where the cursor is, for `nearestKm`: its kilometer, and how far apart two
+ * passes of the track may be (in kilometers) and still be taken for one.
+ */
+export type NearCursor = { km: number; withinKm: number };
+
+/**
  * The kilometer of the track nearest to a place: the nearest point of its
  * segments, on the flat map of the index, between two points if need be. The
  * part whose box is nearest is looked at first; then only the parts whose box
  * is nearer than what was found (the nearest part of a segment cannot be closer
  * than the box around it). Nothing for a track with no point.
+ *
+ * Where the track passes twice within `near.withinKm` of the nearest point (an
+ * out-and-back on one path, a loop that ends at its start), the place is on
+ * either pass: the pass whose nearest point is the closest in kilometers to
+ * `near.km`, where the cursor is, is taken, so that the cursor does not jump
+ * from one pass to the other. Each pass gives its own nearest point: the cursor
+ * is never held back along the pass that it is on.
  */
-export function nearestKm(index: TrackIndex, lat: number, lon: number): number | undefined {
+export function nearestKm(
+  index: TrackIndex,
+  lat: number,
+  lon: number,
+  near?: NearCursor,
+): number | undefined {
   const { km, x, y, boxes } = index;
   if (km.length === 0) return undefined;
   if (km.length === 1) return km[0];
@@ -137,33 +155,69 @@ export function nearestKm(index: TrackIndex, lat: number, lon: number): number |
     if (bound < (bounds[first] ?? Infinity)) first = p;
   }
 
+  // The nearest point of segment i: how far it is, squared (`distance`), and its kilometer (`along`).
+  let distance = 0;
+  let along = 0;
+  const project = (i: number) => {
+    const ax = x[i] ?? 0;
+    const ay = y[i] ?? 0;
+    const dx = (x[i + 1] ?? 0) - ax;
+    const dy = (y[i + 1] ?? 0) - ay;
+    const length = dx * dx + dy * dy;
+    // Where the place falls on the segment, from 0 (its start) to 1 (its end).
+    const t = length > 0 ? Math.min(1, Math.max(0, ((qx - ax) * dx + (qy - ay) * dy) / length)) : 0;
+    const ex = ax + t * dx - qx;
+    const ey = ay + t * dy - qy;
+    distance = ex * ex + ey * ey;
+    const fromKm = km[i] ?? 0;
+    along = fromKm + t * ((km[i + 1] ?? 0) - fromKm);
+  };
+  /** The segment after the last one of part p. */
+  const end = (p: number) => Math.min((p + 1) * PART, km.length - 1);
+
   let best = Infinity;
   let bestKm = km[0] ?? 0;
   const look = (p: number) => {
-    const to = Math.min((p + 1) * PART, km.length - 1);
-    for (let i = p * PART; i < to; i++) {
-      const ax = x[i] ?? 0;
-      const ay = y[i] ?? 0;
-      const dx = (x[i + 1] ?? 0) - ax;
-      const dy = (y[i + 1] ?? 0) - ay;
-      const length = dx * dx + dy * dy;
-      // Where the place falls on the segment, from 0 (its start) to 1 (its end).
-      const t =
-        length > 0 ? Math.min(1, Math.max(0, ((qx - ax) * dx + (qy - ay) * dy) / length)) : 0;
-      const ex = ax + t * dx - qx;
-      const ey = ay + t * dy - qy;
-      const distance = ex * ex + ey * ey;
+    for (let i = p * PART; i < end(p); i++) {
+      project(i);
       if (distance < best) {
         best = distance;
-        const fromKm = km[i] ?? 0;
-        bestKm = fromKm + t * ((km[i + 1] ?? 0) - fromKm);
+        bestKm = along;
       }
     }
   };
-
   look(first);
   for (let p = 0; p < parts; p++) {
     if (p !== first && (bounds[p] ?? 0) < best) look(p);
   }
-  return bestKm;
+  if (near === undefined || !(near.withinKm > 0)) return bestKm;
+
+  // The passes of the track within reach of the place: runs of segments one
+  // after the other, each with its own nearest point. The one nearest the
+  // cursor, in kilometers, is taken.
+  const reach = (Math.sqrt(best) + near.withinKm) ** 2;
+  let chosen = bestKm;
+  let passKm = Number.NaN;
+  let passDistance = Infinity;
+  let previous = -2;
+  const endPass = () => {
+    if (Math.abs(passKm - near.km) < Math.abs(chosen - near.km)) chosen = passKm;
+    passKm = Number.NaN;
+    passDistance = Infinity;
+  };
+  for (let p = 0; p < parts; p++) {
+    if ((bounds[p] ?? 0) > reach) continue;
+    for (let i = p * PART; i < end(p); i++) {
+      project(i);
+      if (distance > reach) continue;
+      if (i !== previous + 1) endPass();
+      previous = i;
+      if (distance < passDistance) {
+        passDistance = distance;
+        passKm = along;
+      }
+    }
+  }
+  endPass();
+  return chosen;
 }
