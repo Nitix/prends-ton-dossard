@@ -76,10 +76,15 @@ export function DotRing({
   days,
   size = 44,
   light = false,
+  silent = false,
+  className = "",
 }: {
   days: number;
   size?: number;
   light?: boolean;
+  /** A picture that says nothing: the words beside it say the days (a screen reader has none of the ring). */
+  silent?: boolean;
+  className?: string;
 }) {
   const { f } = useI18n();
   const left = Math.max(0, days);
@@ -90,7 +95,8 @@ export function DotRing({
 
   return (
     <span
-      className="relative inline-flex shrink-0 items-center justify-center"
+      aria-hidden={silent ? "true" : undefined}
+      className={`relative inline-flex shrink-0 items-center justify-center ${className}`}
       style={{ width: size, height: size }}
     >
       <svg
@@ -128,7 +134,7 @@ export function DotRing({
       >
         {left}
       </span>
-      <span className="sr-only">{f.inDays(left)}</span>
+      {!silent && <span className="sr-only">{f.inDays(left)}</span>}
     </span>
   );
 }

@@ -3,19 +3,17 @@ import type { ReactNode } from "react";
 
 import { DateChip } from "../../components/Dawn";
 import { CalendarIcon, ClockIcon, PinIcon } from "../../components/icons";
-import { HeroArt } from "../../components/Slots";
-import type { FormatView } from "../../features/events/api";
-import { formatMeasures } from "../../features/events/formatName";
+import { FormatLine, type FormatMarks } from "../../features/events/FormatLine";
 import { ParticipantChips } from "../../features/events/ParticipantChips";
 import { starters } from "../../features/events/participants";
 import { RegisterLink } from "../../features/events/RegisterLink";
 import {
-  DAYS_LEFT_SHOWN,
+  deadlineText,
   registrationLabel,
   registrationState,
 } from "../../features/events/registration";
 import { useI18n } from "../../i18n/I18nProvider";
-import { daysBetween } from "../../lib/dates";
+import { daysToGo as daysToGoOf } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import type { EventCardProps, EventHeroProps, Variants } from "../types";
@@ -25,13 +23,12 @@ import { Accent, DotRing, KindMark } from "./marks";
 // event is a white sheet with its name in two voices (the bold sans, its last
 // word in an italic serif), the ring of dots of the days left in its corner,
 // and its formats on hairlines, each with the square of its kind of race; the
-// top of the page of an event is a navy sheet with the same two voices and the
-// same ring, and its facts on hairlines. Each keeps what Crête's piece shows,
+// top of the page of an event is paper, as the variant has it: the kinds of its
+// races, the same two voices and the same ring, and its date, its place and
+// where its registration stands in a grid framed by hairlines. Each keeps what Crête's piece shows,
 // with the same words. The day of an event is Crête's own `DateChip`, dressed
 // by mix.css. What these import is only used while they render (see
 // ../README.md).
-
-const SEPARATOR = " · ";
 
 /** A line of the card, on its hairline: what it is, and its runners at the end. */
 function Line({ children }: { children: ReactNode }) {
@@ -42,28 +39,10 @@ function Line({ children }: { children: ReactNode }) {
   );
 }
 
-/** A format of the card: the square of its kind, its first measure in ink, the others quieter. */
-function MarkedFormat({ formatView, showDate }: { formatView: FormatView; showDate: boolean }) {
-  const { t, f } = useI18n();
-  const { format, raceType, date } = formatView;
-  const [first, ...rest] = formatMeasures(format, raceType.label, f, t);
-
-  return (
-    <div className="flex min-w-0 flex-col">
-      {/* On an event of several days, the day of each format is worth knowing. */}
-      {showDate && <p className="eyebrow">{f.date(date)}</p>}
-      <p className="flex items-baseline gap-2 text-sm">
-        <KindMark label={raceType.label} />
-        <span>
-          <span className="font-medium text-ink">{first}</span>
-          {rest.length > 0 && (
-            <span className="text-neutral-600">{`${SEPARATOR}${rest.join(SEPARATOR)}`}</span>
-          )}
-        </span>
-      </p>
-    </div>
-  );
-}
+/** The name of a format in ink; the square of its kind goes before it. */
+const NAME_IN_INK: FormatMarks = {
+  name: (name) => <span className="format-name font-medium text-ink">{name}</span>,
+};
 
 /**
  * An event in a list, a sheet of the logbook: its day, its name (the link to
@@ -80,8 +59,7 @@ function Sheet({ view }: EventCardProps) {
   const interested = starters(view.interested);
   const registration = registrationState(event, today);
   // Under way, it is on today; over, it has no ring.
-  const daysToGo =
-    Temporal.PlainDate.compare(end, today) < 0 ? null : Math.max(0, daysBetween(today, start));
+  const daysToGo = daysToGoOf(start, end, today);
   const hasPeople = interested.length > 0 || formats.length > 0 || view.supporters.length > 0;
 
   return (
@@ -126,7 +104,7 @@ function Sheet({ view }: EventCardProps) {
         {daysToGo !== null && <DotRing days={daysToGo} />}
       </div>
       {hasPeople && (
-        <ul className="mt-3.5 divide-y divide-neutral-200 border-t border-neutral-200">
+        <ul className="event-card-formats mt-3.5 divide-y divide-neutral-200 border-t border-neutral-200">
           {/* Before the formats, since there is something left to choose. The words say it, not the place. */}
           {interested.length > 0 && (
             <Line>
@@ -136,7 +114,12 @@ function Sheet({ view }: EventCardProps) {
           )}
           {formats.map((formatView) => (
             <Line key={formatView.format.id}>
-              <MarkedFormat formatView={formatView} showDate={severalDays} />
+              <FormatLine
+                formatView={formatView}
+                showDate={severalDays}
+                marks={{ ...NAME_IN_INK, before: <KindMark label={formatView.raceType.label} /> }}
+                className="flex items-baseline gap-2 text-sm text-neutral-600"
+              />
               <ParticipantChips participations={starters(formatView.participations)} />
             </Line>
           ))}
@@ -153,68 +136,101 @@ function Sheet({ view }: EventCardProps) {
   );
 }
 
+/** A fact of the event, in the grid framed by hairlines: its picture, then its words. */
+function Fact({
+  icon,
+  className = "",
+  children,
+  ...props
+}: {
+  icon: ReactNode;
+  className?: string;
+  children: ReactNode;
+  "data-kind"?: string;
+}) {
+  return (
+    <li {...props} className={`flex items-start gap-2 bg-card px-3.5 py-3 ${className}`}>
+      <span aria-hidden="true" className="mt-0.5 shrink-0 text-neutral-500">
+        {icon}
+      </span>
+      <span className="text-[0.9375rem] leading-snug text-ink">{children}</span>
+    </li>
+  );
+}
+
 /**
- * The top of the page of an event, a navy sheet of the logbook: the name in two
- * voices (the title of the page) with the ring of dots of the days left, then
- * the date, the place and where the registration stands on hairlines, the notes
- * and the link to register. The dots of the sheet are the skin's `HeroArt`.
+ * The top of the page of an event, paper as the variant has it: the kinds of its
+ * races over the name in two voices (the title of the page), the ring of dots of
+ * the days left beside it with the words under it, then the date, the place and
+ * where the registration stands in a grid framed by hairlines, the notes and the
+ * link to register.
  */
 function SheetHero({ view, heading }: EventHeroProps) {
   const { t, f } = useI18n();
   const today = useToday();
-  const { event, start, end } = view;
+  const { event, formats, start, end } = view;
   const severalDays = !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
-  const daysToGo = daysBetween(today, start);
+  const daysToGo = daysToGoOf(start, end, today);
+  // The kinds of its races, once each, over the title.
+  const kinds = [...new Map(formats.map(({ raceType }) => [raceType.id, raceType.label])).values()];
 
   return (
-    <header className="event-hero on-dawn relative overflow-hidden bg-dawn-hero text-white">
-      <HeroArt place="event" />
-      <div className="relative flex flex-col gap-3 p-5 pb-8 md:p-7 md:pb-10">
-        <div className="flex items-start justify-between gap-4">
+    <header className="event-hero flex flex-col gap-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-3">
+          {kinds.length > 0 && (
+            <p className="eyebrow flex flex-wrap items-center gap-x-3 gap-y-1">
+              {kinds.map((kind) => (
+                <span key={kind} className="inline-flex items-center gap-1.5">
+                  <KindMark label={kind} />
+                  {kind}
+                </span>
+              ))}
+            </p>
+          )}
           <h1
             {...heading}
-            className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-semibold display-title break-words md:text-[2.375rem]"
+            className="event-hero-title text-[2.25rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance break-words text-ink md:text-[3rem]"
           >
             <Accent text={event.name} />
           </h1>
-          {daysToGo > 0 && (
-            <span className="mt-1">
-              <DotRing days={daysToGo} size={56} light />
-            </span>
-          )}
         </div>
-        <div className="flex flex-col divide-y divide-white/20 border-y border-white/20 text-[0.9375rem] font-medium">
-          <p className="flex items-center gap-2 py-2.5">
-            <CalendarIcon className="size-[1.125rem] shrink-0 opacity-90" />
-            {severalDays
-              ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
-              : f.dateLong(start)}
-          </p>
-          <p className="flex items-center gap-2 py-2.5">
-            <PinIcon className="size-[1.125rem] shrink-0 opacity-90" />
-            {event.location}
-          </p>
-          {deadline && (
-            <p className="flex items-start gap-2 py-2.5">
-              <ClockIcon className="mt-px size-[1.125rem] shrink-0 opacity-90" />
-              <span>
-                {registrationLabel(deadline, f, t)}
-                {deadline.kind === "open" &&
-                  deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-                  `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
-              </span>
+        {daysToGo !== null && daysToGo > 0 && (
+          <div className="mt-1 flex shrink-0 flex-col items-center gap-1">
+            <DotRing days={daysToGo} size={64} silent />
+            <p className="days-left text-[0.6875rem] whitespace-nowrap text-neutral-600">
+              {f.inDays(daysToGo)}
             </p>
-          )}
-        </div>
-        {event.notes && (
-          <p className="self-start rounded-xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink">
-            {event.notes}
-          </p>
+          </div>
         )}
-        {registration && <RegisterLink href={registration} tone="onDawn" className="mt-1" />}
       </div>
+      <ul
+        className={`event-hero-facts grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-neutral-200 bg-neutral-200 ${
+          deadline ? "md:grid-cols-[1.15fr_0.85fr_1.6fr]" : ""
+        }`}
+      >
+        <Fact icon={<CalendarIcon className="size-4" />}>
+          {severalDays ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
+        </Fact>
+        <Fact icon={<PinIcon className="size-4" />}>{event.location}</Fact>
+        {deadline && (
+          <Fact
+            icon={<ClockIcon className="size-4" />}
+            data-kind={deadline.kind}
+            className="event-hero-deadline col-span-2 md:col-span-1"
+          >
+            {deadlineText(deadline, f, t)}
+          </Fact>
+        )}
+      </ul>
+      {event.notes && (
+        <p className="event-hero-notes max-w-prose text-[0.9375rem] whitespace-pre-line text-neutral-700">
+          {event.notes}
+        </p>
+      )}
+      {registration && <RegisterLink href={registration} />}
     </header>
   );
 }

@@ -131,8 +131,17 @@ function dotsOfFrance(): { x: number; y: number }[] {
   return dots;
 }
 
-/** France in dots: the picture of a list with nothing in it. */
-export function DotFrance({ className = "w-28" }: { className?: string }) {
+/**
+ * France in dots: the picture of a list with nothing in it, and, given a point
+ * (`at`, the first point of a track), the mark of coral of where it starts.
+ */
+export function DotFrance({
+  className = "w-28",
+  at,
+}: {
+  className?: string;
+  at?: { lat: number; lon: number };
+}) {
   const width = (EAST - WEST) * SQUEEZE;
   const height = NORTH - SOUTH;
   return (
@@ -151,6 +160,25 @@ export function DotFrance({ className = "w-28" }: { className?: string }) {
           className="fill-neutral-400"
         />
       ))}
+      {at && (
+        <>
+          <circle
+            cx={(at.lon - WEST) * SQUEEZE}
+            cy={NORTH - at.lat}
+            r={STEP * 1.5}
+            fill="none"
+            strokeWidth={STEP * 0.3}
+            className="stroke-iris-600"
+          />
+          <circle
+            data-start=""
+            cx={(at.lon - WEST) * SQUEEZE}
+            cy={NORTH - at.lat}
+            r={STEP * 0.75}
+            className="fill-iris-600"
+          />
+        </>
+      )}
     </svg>
   );
 }
