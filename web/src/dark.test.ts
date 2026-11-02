@@ -206,6 +206,29 @@ test("dark — le ciel de chaque skin, dans chaque mode : le texte blanc, la pas
   }
 });
 
+/** A colour of the theme as `#rrggbb`: `#fff` is `#ffffff`. */
+const sixDigits = (hex: string) =>
+  /^#[0-9a-f]{3}$/i.test(hex) ? hex.replace(/[0-9a-f]/gi, (digit) => digit + digit) : hex;
+
+test("dark — l'anneau du focus sur le ciel (--sky-focus) a 3:1 sur chaque couleur du ciel de l'entête et des bandeaux, dans chaque skin et chaque mode", () => {
+  // The focus of what sits on a sky (the header, a hero, the sign-in pages:
+  // `.on-dawn`) is drawn in `--sky-focus` (styles.css), a mark that says
+  // something: 3:1 on every colour of the linear gradients behind it.
+  for (const { skin, mode, label } of SKIN_CASES) {
+    const ring = sixDigits(skyValue("--sky-focus", mode, skin));
+    expect(ring, `${label}: --sky-focus`).toMatch(/^#[0-9a-f]{6}$/i);
+    for (const paint of ["--dawn-sky", "--dawn-hero"]) {
+      const colour = themeValue(`${paint}-color`, mode, skin);
+      for (const stop of [colour, ...linearStops(themeValue(paint, mode, skin))]) {
+        expect(
+          contrast(ring, stop),
+          `${label}: --sky-focus (${ring}) on ${paint} (${stop})`,
+        ).toBeGreaterThanOrEqual(3);
+      }
+    }
+  }
+});
+
 test("dark — la carte d'une trace, claire dans tous les modes : les liens de l'attribution et les mots du départ, de l'arrivée et du zoom à 4,5:1, le départ et l'arrivée à 3:1", () => {
   for (const { skin, mode, label } of SKIN_CASES) {
     const link = themeValue("--map-link", mode, skin);
