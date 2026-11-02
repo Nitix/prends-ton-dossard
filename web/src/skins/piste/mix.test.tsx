@@ -1,35 +1,23 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from "@tanstack/react-router";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
-import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
 
 import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
-import { AppShell } from "../../components/AppShell";
 import { toEventView } from "../../features/events/api";
 import { EventCardBase } from "../../features/events/EventCard";
 import { EventHero } from "../../features/events/EventHero";
 import {
-  event2Record,
   eventRecord,
   pNinaSupporter,
   pNinaUndecided,
   withParticipations,
 } from "../../features/events/testFixture";
-import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
-import { TodayProvider } from "../../lib/useToday";
 import { contrast } from "../../test/colour";
-import { colourOf } from "../../test/computed";
+import { colourOf, textContrast, toldApart } from "../../test/computed";
 import { resetMedia } from "../../test/media";
+import { pbSession } from "../../test/pbMock";
+import { EVENT_SHAPES, hex, inApp, keepsEverything, plain } from "../../test/variant";
 import type { EventCardList } from "../types";
 
 import "../../styles.css";
@@ -37,194 +25,111 @@ import "../../skins/styles";
 
 // « Piste », depth mix: the card of an event with the measures of its formats
 // as chips keeps what Crête's card shows (every text, every link, every list
-// of runners), and the pieces restyled in mix.css (the lanes of the tabs, the
-// red « + », the number of a lane, the stroke under a title) take the tokens
-// of the palette and fit the narrowest phone. At palette the sheet and the
-// variant are not in the build.
+// of runners, in every shape an event takes), and the pieces restyled in
+// mix.css (the lanes of the tabs, the red « + », the number of a lane, the
+// stroke under a title) take the tokens of the palette and fit the narrowest
+// phone. At palette the sheet and the variant are not in the build.
 
-const session = vi.hoisted(() => ({ role: "member" }));
-
-vi.mock("../../lib/pb", () => ({
-  pb: {
-    authStore: {
-      get record() {
-        return { id: "u1", collectionName: "users", role: session.role };
-      },
-      onChange: () => () => {},
-    },
-    filter: (raw: string) => raw,
-    collection: () => ({
-      getFirstListItem: () => Promise.resolve({ id: "r1", name: "Alice", user: "u1" }),
-    }),
-  },
-}));
+vi.mock("../../lib/pb", async () => (await import("../../test/pbMock")).pbModule);
 
 beforeAll(async () => {
   await ensureTemporal();
 });
 
 afterEach(async () => {
-  session.role = "member";
+  pbSession.role = "member";
   chooseSkin("crete");
   await resetMedia();
   await page.viewport(414, 896);
 });
 
-/** What `look` makes of the piece, or of the frame of the page (`AppShell`), in Piste, in the app (French, a day, a router). */
-async function inApp<T>(
+/** The tokens of the palette a test compares with, read while Piste is on the page. */
+const tokens = () => ({
+  red: colourOf("--color-iris-500"),
+  redDeep: colourOf("--color-iris-600"),
+  ink: colourOf("--color-neutral-900"),
+});
+
+/** What `look` makes of a piece, or of the frame of the page (`AppShell`), in Piste, with the palette's tokens. */
+function inPiste<T extends object>(
   element: ReactNode,
-  look: (drawn: HTMLElement) => T,
-  { framed = false }: { framed?: boolean } = {},
-): Promise<T> {
-  chooseSkin("piste");
-  const root = createRootRoute({
-    component: () => (
-      <QueryClientProvider client={new QueryClient()}>
-        <I18nProvider languages={["fr"]}>
-          <TodayProvider value={Temporal.PlainDate.from("2026-06-01")}>
-            {framed ? (
-              <AppShell>
-                <Outlet />
-              </AppShell>
-            ) : (
-              <Outlet />
-            )}
-          </TodayProvider>
-        </I18nProvider>
-      </QueryClientProvider>
-    ),
+  look: (drawn: HTMLElement, page: HTMLElement) => T,
+  options: { framed?: boolean } = {},
+) {
+  return inApp(element, (drawn, whole) => ({ ...look(drawn, whole), tokens: tokens() }), {
+    skin: "piste",
+    ...options,
   });
-  const index = createRoute({
-    getParentRoute: () => root,
-    path: "/",
-    component: () => <div data-drawn="">{element}</div>,
-  });
-  const router = createRouter({
-    routeTree: root.addChildren([index]),
-    history: createMemoryHistory({ initialEntries: ["/"] }),
-  });
-  await router.load();
-  const screen = await render(<RouterProvider router={router} />);
-  await expect.poll(() => screen.container.querySelector("[data-drawn] > *")).not.toBeNull();
-  try {
-    return look(screen.container);
-  } finally {
-    await screen.unmount();
-  }
 }
-
-/** The words a screen reader has in an element (what is hidden from it set aside), the separators « · » left out. */
-function words(element: Element): string[] {
-  const copy = element.cloneNode(true);
-  if (!(copy instanceof Element)) return [];
-  for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
-  return (copy.textContent ?? "").split(/\s+/).filter((word) => word !== "" && word !== "·");
-}
-
-/** The words of a list as a count of each, to ask whether a card has all those of another. */
-function counted(list: string[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const word of list) counts.set(word, (counts.get(word) ?? 0) + 1);
-  return counts;
-}
-
-/** The format lines of a card, as they read: the name and its measures, whitespace gathered. */
-function formatLines(drawn: HTMLElement): string[] {
-  return [...drawn.querySelectorAll("li > p:not(.eyebrow)")].map((line) =>
-    (line.textContent ?? "").replace(/\s+/g, " ").trim(),
-  );
-}
-
-/** What a card has that a person can follow or count. */
-function features(drawn: HTMLElement) {
-  return {
-    words: words(drawn),
-    lines: formatLines(drawn),
-    links: [...drawn.querySelectorAll("a")]
-      .map((a) => `${a.getAttribute("href")} ${a.textContent}`)
-      .toSorted(),
-    lists: [...drawn.querySelectorAll("ul[aria-label]")].map(
-      (ul) =>
-        `${ul.getAttribute("aria-label")}: ${[...ul.children].map((li) => li.textContent).join("|")}`,
-    ),
-    headings: [...drawn.querySelectorAll("h1, h2, h3")].map((h) => h.tagName),
-    chip: drawn.querySelector(".date-chip") !== null,
-  };
-}
-
-/** Rich: two days, a deadline, runners on each format, interested and supporters. */
-const rich = () =>
-  toEventView({
-    ...withParticipations(eventRecord, [pNinaUndecided, pNinaSupporter]),
-    registration_deadline: "2026-06-05",
-  });
-
-const VIEWS: Record<string, () => ReturnType<typeof toEventView>> = {
-  "a rich event": rich,
-  "a single day, no runner, no deadline": () => toEventView(event2Record),
-  "registrations closed": () =>
-    toEventView({ ...eventRecord, registration_deadline: "2026-05-20" }),
-  "no format": () => toEventView({ ...event2Record, expand: { formats_via_event: [] } }),
-};
 
 const LISTS: EventCardList[] = ["home", "upcoming", "past", "agenda"];
 
+/** The format lines of a card, as they read: the name and its measures, whitespace gathered. */
+const formatLines = (drawn: HTMLElement) =>
+  [...drawn.querySelectorAll(".format-line")].map((line) => plain(line.textContent));
+
 test.skipIf(SKIN_DEPTH === "palette")(
-  "piste — la carte d'un événement garde tout ce que montre celle de Crête",
+  "piste — la carte d'un événement garde tout ce que montre celle de Crête, dans chaque forme d'événement et chaque liste",
   async () => {
     const Lane = variantOf("piste", "EventCard");
     if (Lane === undefined) throw new Error("Piste has no event card at this depth");
-    for (const [what, view] of Object.entries(VIEWS)) {
-      const shown = view();
+    for (const { what, view, today } of EVENT_SHAPES()) {
       const base = await inApp(
-        createElement(EventCardBase, { view: shown, list: "upcoming" }),
-        features,
+        createElement(EventCardBase, { view, list: "upcoming" }),
+        formatLines,
+        {
+          today,
+        },
       );
       for (const list of LISTS) {
-        const own = await inApp(
-          createElement(Lane, { view: shown, list, Base: EventCardBase }),
-          (drawn) => ({
-            ...features(drawn),
-            outer: drawn.querySelector("[data-drawn] > *")?.matches("article.event-card"),
-            cards: drawn.querySelectorAll(".event-card").length,
-          }),
-        );
         const where = `${what}, in the ${list} list`;
+        const given = { key: undefined, view, list, Base: EventCardBase };
+        // Every text, link, name and button of Crête's card (the shared feature test holds the variant to it too).
+        await keepsEverything(
+          createElement(Lane, given),
+          createElement(EventCardBase, { view, list }),
+          {
+            what: where,
+            today,
+            skin: "piste",
+          },
+        );
+        const own = await inApp(
+          createElement(Lane, given),
+          (drawn) => ({
+            lines: formatLines(drawn),
+            outer: drawn.firstElementChild?.matches("article.event-card"),
+            cards: drawn.querySelectorAll(".event-card").length,
+            chip: drawn.querySelector(".date-chip") !== null,
+            chips: drawn.querySelectorAll(".format-measure").length,
+          }),
+          { today, skin: "piste" },
+        );
         expect(own.outer, `the lane is the card, ${where}`).toBe(true);
         expect(own.cards, `one card, ${where}`).toBe(1);
-        // Every word of Crête's card, as many times, and its day (the number of a lane).
-        const mine = counted(own.words);
-        for (const [word, count] of counted(base.words)) {
-          expect(mine.get(word) ?? 0, `« ${word} », ${where}`).toBeGreaterThanOrEqual(count);
-        }
-        expect(own.lines, `the formats read as Crête's, ${where}`).toEqual(base.lines);
-        expect(own.links, `the links, ${where}`).toEqual(base.links);
-        expect(own.lists, `the runners, ${where}`).toEqual(base.lists);
-        expect(own.headings, `the title, ${where}`).toEqual(base.headings);
-        expect(own.chip, `the day of the event, ${where}`).toBe(base.chip);
+        expect(own.chip, `the day of the event, ${where}`).toBe(true);
+        expect(own.lines, `the formats read as Crête's, ${where}`).toEqual(base);
+        // A chip for every measure after the name of a format.
+        const measures = base.flatMap((line) => line.split(" · ").slice(1));
+        expect(own.chips, `a chip for each measure, ${where}`).toBe(measures.length);
       }
     }
   },
 );
 
-/** A computed `rgb(r, g, b)` as `#rrggbb`, for the contrast of a colour the browser has computed. */
-function hex(rgb: string): string {
-  const [r, g, b] = (rgb.match(/\d+(?:\.\d+)?/g) ?? []).map((part) => Math.round(Number(part)));
-  return `#${[r, g, b].map((part) => (part ?? 0).toString(16).padStart(2, "0")).join("")}`;
-}
-
 test.skipIf(SKIN_DEPTH === "palette")(
-  "piste — sur le téléphone le plus étroit, les cinq onglets en capitales tiennent dans leur barre, 44 px de haut, sans icône",
+  "piste — sur le téléphone le plus étroit, les cinq onglets en capitales tiennent dans une barre à plat de toute la largeur, 44 px de haut, sans icône",
   async () => {
     await page.viewport(320, 700);
-    session.role = "admin";
-    const seen = await inApp(
+    pbSession.role = "admin";
+    const seen = await inPiste(
       <p>Contenu</p>,
-      (drawn) => {
-        const bar = drawn.querySelector(".tabbar ul");
-        const tabs = [...drawn.querySelectorAll<HTMLElement>(".tab")];
+      (_, whole) => {
+        const bar = whole.querySelector(".tabbar-list");
+        const tabs = [...whole.querySelectorAll<HTMLElement>(".tab")];
         return {
           bar: bar?.getBoundingClientRect(),
+          flat: bar === null ? "" : getComputedStyle(bar).borderTopLeftRadius,
           barScroll: bar ? [bar.scrollWidth, bar.clientWidth] : [],
           tabs: tabs.map((tab) => ({
             name: tab.textContent,
@@ -233,6 +138,7 @@ test.skipIf(SKIN_DEPTH === "palette")(
             right: tab.getBoundingClientRect().right,
             capitals: getComputedStyle(tab).textTransform,
             icon: [...tab.children].map((child) => getComputedStyle(child).display),
+            line: getComputedStyle(tab).boxShadow,
           })),
         };
       },
@@ -245,6 +151,9 @@ test.skipIf(SKIN_DEPTH === "palette")(
       "Profil",
       "Admin",
     ]);
+    expect(seen.bar?.left, "as wide as the screen").toBe(0);
+    expect(seen.bar?.right).toBe(320);
+    expect(seen.flat, "a flat bar, not a capsule").toBe("0px");
     expect(seen.barScroll[0], "nothing past the bar").toBeLessThanOrEqual(seen.barScroll[1] ?? 0);
     for (const tab of seen.tabs) {
       expect(tab.scroll[0], `« ${tab.name} » fits its tab`).toBeLessThanOrEqual(tab.scroll[1] ?? 0);
@@ -252,22 +161,29 @@ test.skipIf(SKIN_DEPTH === "palette")(
       expect(tab.right, `« ${tab.name} » inside the phone`).toBeLessThanOrEqual(320);
       expect(tab.capitals).toBe("uppercase");
       expect(tab.icon, "the icon is gone").toEqual(["none"]);
+      expect(tab.line, `a line between the lanes, « ${tab.name} »`).not.toBe("none");
     }
   },
 );
 
 test.skipIf(SKIN_DEPTH === "palette")(
-  "piste — l'onglet courant a le trait rouge de la piste, le + est rouge, son signe s'y lit (4,5:1)",
+  "piste — l'onglet courant est en gras sous le trait penché rouge de la piste, sans pastille, ses mots s'y lisent (4,5:1) ; le + est rouge, son signe s'y lit (4,5:1)",
   async () => {
-    const seen = await inApp(
+    const seen = await inPiste(
       <p>Contenu</p>,
-      (drawn) => {
-        const tab = drawn.querySelector('.tab[aria-current="page"]');
-        const plus = drawn.querySelector(".fab");
-        const stroke = getComputedStyle(tab ?? drawn, "::before");
-        const style = getComputedStyle(plus ?? drawn);
+      (_, whole) => {
+        const tab = whole.querySelector('.tab[aria-current="page"]');
+        const other = [...whole.querySelectorAll(".tab")].find((one) => one !== tab);
+        const plus = whole.querySelector(".fab");
+        if (!tab || !other || !plus) throw new Error("the tabs were not drawn");
+        const stroke = getComputedStyle(tab, "::before");
+        const style = getComputedStyle(plus);
         return {
           stroke: [stroke.content, stroke.backgroundColor, stroke.transform],
+          pill: [getComputedStyle(tab).backgroundImage, getComputedStyle(tab).backgroundColor],
+          otherStroke: getComputedStyle(other, "::before").content,
+          apart: toldApart(tab, other),
+          words: textContrast(tab),
           ground: style.backgroundColor,
           image: style.backgroundImage,
           ink: style.color,
@@ -276,19 +192,52 @@ test.skipIf(SKIN_DEPTH === "palette")(
       { framed: true },
     );
     expect(seen.stroke[0]).not.toBe("none");
-    expect(seen.stroke[1], "the red of the track").toBe(colourOf("--color-iris-500"));
+    expect(seen.stroke[1], "the red of the track").toBe(seen.tokens.red);
     expect(seen.stroke[2], "skewed").not.toBe("none");
-    expect(seen.ground).toBe(colourOf("--color-iris-500"));
+    expect(seen.pill, "no pill under the words").toEqual(["none", "rgba(0, 0, 0, 0)"]);
+    expect(seen.otherStroke, "no stroke on the others").toBe("none");
+    expect(seen.apart).toEqual(expect.arrayContaining(["fontWeight", "before"]));
+    expect(seen.words, "the words of the current tab").toBeGreaterThanOrEqual(4.5);
+    expect(seen.ground).toBe(seen.tokens.red);
     expect(seen.image).toBe("none");
     expect(contrast(hex(seen.ink), hex(seen.ground))).toBeGreaterThanOrEqual(4.5);
   },
 );
 
 test.skipIf(SKIN_DEPTH === "palette")(
+  "piste — dès md, les onglets sont une capsule d'encre dans la bande, leurs noms en crème, le trait sous l'onglet courant",
+  async () => {
+    await page.viewport(1024, 800);
+    const seen = await inPiste(
+      <p>Contenu</p>,
+      (_, whole) => {
+        const bar = whole.querySelector(".tabbar-list");
+        const tab = whole.querySelector('.tab[aria-current="page"]');
+        if (!bar || !tab) throw new Error("the tabs were not drawn");
+        const stroke = getComputedStyle(tab, "::before");
+        return {
+          ground: getComputedStyle(bar).backgroundColor,
+          words: textContrast(tab),
+          strokeTop: stroke.top,
+          strokeBottom: stroke.bottom,
+        };
+      },
+      { framed: true },
+    );
+    expect(seen.ground, "ink").toBe(seen.tokens.ink);
+    expect(seen.words, "cream on the ink").toBeGreaterThanOrEqual(4.5);
+    expect(seen.strokeTop, "under the tab, not over it").not.toBe("0px");
+    expect(seen.strokeBottom).toBe("4px");
+  },
+);
+
+test.skipIf(SKIN_DEPTH === "palette")(
   "piste — le jour d'un événement est le numéro d'un couloir peint en rouge, son texte s'y lit (4,5:1) sur les deux bouts du dégradé",
   async () => {
-    const seen = await inApp(
-      createElement(EventCardBase, { view: rich(), list: "upcoming" }),
+    const [rich] = EVENT_SHAPES();
+    if (rich === undefined) throw new Error("no event");
+    const seen = await inPiste(
+      createElement(EventCardBase, { view: rich.view, list: "upcoming" }),
       (drawn) => {
         const chip = drawn.querySelector(".date-chip");
         const style = getComputedStyle(chip ?? drawn);
@@ -296,18 +245,16 @@ test.skipIf(SKIN_DEPTH === "palette")(
           image: style.backgroundImage,
           ink: style.color,
           line: getComputedStyle(chip ?? drawn, "::before").content,
-          day: getComputedStyle(chip?.children[1] ?? drawn).fontStyle,
+          day: getComputedStyle(drawn.querySelector(".date-chip-day") ?? drawn).fontStyle,
+          ends: [colourOf("--color-iris-500"), colourOf("--color-iris-600")],
         };
       },
     );
     expect(seen.image).toContain("linear-gradient");
     expect(seen.line, "a lane line on each side").not.toBe("none");
     expect(seen.day, "the day in italic").toBe("italic");
-    for (const token of ["--color-iris-500", "--color-iris-600"]) {
-      expect(
-        contrast(hex(seen.ink), hex(colourOf(token))),
-        `its text on ${token}`,
-      ).toBeGreaterThanOrEqual(4.5);
+    for (const end of seen.ends) {
+      expect(contrast(hex(seen.ink), hex(end)), `its text on ${end}`).toBeGreaterThanOrEqual(4.5);
     }
   },
 );
@@ -317,20 +264,20 @@ test.skipIf(SKIN_DEPTH === "palette")(
   async () => {
     const heading = { id: "t", "data-focus": "title", tabIndex: -1 } as const;
     const view = toEventView({
-      ...eventRecord,
+      ...withParticipations(eventRecord, [pNinaUndecided, pNinaSupporter]),
       registration_url: "https://example.org/inscription",
     });
-    const seen = await inApp(<EventHero view={view} heading={heading} />, (drawn) => {
+    const seen = await inPiste(<EventHero view={view} heading={heading} />, (drawn) => {
       const link = drawn.querySelector(".event-hero .btn-on-dawn");
       const style = getComputedStyle(link ?? drawn);
-      const inner = drawn.querySelector(".event-hero > div");
+      const inner = drawn.querySelector(".event-hero-body");
       return {
         ground: style.backgroundColor,
         ink: style.color,
         below: getComputedStyle(inner ?? drawn).paddingBottom,
       };
     });
-    expect(seen.ground).toBe(colourOf("--color-iris-500"));
+    expect(seen.ground).toBe(seen.tokens.red);
     expect(contrast(hex(seen.ink), hex(seen.ground))).toBeGreaterThanOrEqual(4.5);
     expect(seen.below).toBe("24px");
   },
@@ -339,7 +286,7 @@ test.skipIf(SKIN_DEPTH === "palette")(
 test.skipIf(SKIN_DEPTH === "palette")(
   "piste — les titres ont leur trait penché et leurs trois lignes de couloir",
   async () => {
-    const seen = await inApp(
+    const seen = await inPiste(
       <>
         <h1 className="page-title">Accueil</h1>
         <h2 className="block-title section-title">Un bloc</h2>
@@ -395,10 +342,10 @@ test.skipIf(SKIN_DEPTH === "palette")(
     expect(moving.length, "the strokes that land").toBeGreaterThan(0);
     expect(moving.filter(({ calm }) => !calm).map(({ selector }) => selector)).toEqual([]);
     // With nothing asked against it, the stroke under a title lands once.
-    const seen = await inApp(<h1 className="page-title">Accueil</h1>, (drawn) => {
+    const seen = await inPiste(<h1 className="page-title">Accueil</h1>, (drawn) => {
       const style = getComputedStyle(drawn.querySelector(".page-title") ?? drawn, "::after");
-      return [style.animationName, style.animationIterationCount];
+      return { name: style.animationName, count: style.animationIterationCount };
     });
-    expect(seen).toEqual(["piste-lane-in", "1"]);
+    expect([seen.name, seen.count]).toEqual(["piste-lane-in", "1"]);
   },
 );

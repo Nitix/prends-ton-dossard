@@ -17,29 +17,55 @@
   pointer-events: none;
 }
 
-/* The tabs: lanes side by side, their names in capitals of the display face,
-   no icon. The current one is the ink of the main button, with the skewed
-   stroke of the track red over it. */
-:root[data-skin="piste"] .tabbar ul {
-  gap: 0.125rem;
-  padding: 0.25rem;
-  border-radius: var(--radius-lg);
+/* The tabs: lanes side by side, their names in capitals of the display face, no
+   icon. On a phone, a flat white bar as wide as the screen, a line between
+   the lanes; from md, a capsule of ink in the band, its names in cream. The
+   current one is told by its weight and by the skewed stroke of the track red
+   over it (under it from md), not by a pill. */
+@media (max-width: 47.99rem) {
+  :root[data-skin="piste"] .tabbar {
+    bottom: 0;
+    padding-inline: 0;
+  }
+  :root[data-skin="piste"] .tabbar-list {
+    gap: 0;
+    padding: 0 0 env(safe-area-inset-bottom);
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background-color: color-mix(in srgb, var(--color-card) 95%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  :root[data-skin="piste"] .tab {
+    border-radius: 0;
+    box-shadow: inset -1px 0 0 var(--color-neutral-200);
+  }
+  :root[data-skin="piste"] .tab:hover {
+    background-color: var(--color-neutral-50);
+  }
 }
 :root[data-skin="piste"] .tab {
   position: relative;
   padding-inline: 0.125rem;
-  border-radius: 0.375rem;
   font-family: var(--font-display);
   font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-:root[data-skin="piste"] .tab > span {
+:root[data-skin="piste"] .tab-icon {
   display: none;
 }
 :root[data-skin="piste"] .tab[aria-current="page"] {
+  background-image: none;
+  background-color: transparent;
+  color: var(--color-ink);
   font-weight: 800;
+}
+@media (max-width: 47.99rem) {
+  :root[data-skin="piste"] .tab[aria-current="page"] {
+    box-shadow: inset -1px 0 0 var(--color-neutral-200);
+  }
 }
 :root[data-skin="piste"] .tab[aria-current="page"]::before {
   content: "";
@@ -53,9 +79,26 @@
   transform: skewX(-24deg);
 }
 @media (min-width: 48rem) {
+  :root[data-skin="piste"] .tabbar-list {
+    gap: 0.125rem;
+    padding: 0.25rem;
+    border: 0;
+    border-radius: var(--radius-lg);
+    background-color: var(--color-neutral-900);
+  }
   :root[data-skin="piste"] .tab {
     padding-inline: 1rem;
+    border-radius: 0.375rem;
+    box-shadow: none;
+    color: color-mix(in srgb, var(--color-neutral-50) 70%, transparent);
     font-size: 1rem;
+  }
+  :root[data-skin="piste"] .tab:hover {
+    background-color: color-mix(in srgb, var(--color-neutral-50) 8%, transparent);
+    color: var(--color-neutral-50);
+  }
+  :root[data-skin="piste"] .tab[aria-current="page"] {
+    color: var(--color-neutral-50);
   }
   :root[data-skin="piste"] .tab[aria-current="page"]::before {
     top: auto;
@@ -93,13 +136,13 @@
 :root[data-skin="piste"] .date-chip::after {
   right: 0.25rem;
 }
-:root[data-skin="piste"] .date-chip > span:nth-child(2) {
+:root[data-skin="piste"] .date-chip-day {
   font-style: italic;
 }
 
 /* The top of a page of an event or of a runner: the band is shorter under its
    text (the bend is in its corner), and « S'inscrire » is the track red. */
-:root[data-skin="piste"] .event-hero > div {
+:root[data-skin="piste"] .event-hero-body {
   padding-bottom: 1.5rem;
 }
 :root[data-skin="piste"] .runner-hero {
