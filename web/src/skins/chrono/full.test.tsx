@@ -24,8 +24,11 @@ import { TotalsTable } from "../../features/stats/TotalsTable";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { colourOf } from "../../test/computed";
 import { hex, inApp, plain, said } from "../../test/variant";
 
+import fullCss from "./full.css?raw";
+import mixCss from "./mix.css?raw";
 import "../../styles.css";
 import "../../skins/styles";
 
@@ -146,8 +149,11 @@ test.skipIf(!FULL)(
         const band = drawn.querySelector(".dialog-band");
         expect(style(band).height, "a strip").toBe("3px");
         const image = style(band).backgroundImage;
-        for (const zone of [1, 2, 3, 4, 5]) expect(image, `zone ${zone}`).toContain("rgb(");
         expect(image).toContain("linear-gradient");
+        // Each of the five zones is in the strip, in its own colour (`--color-slope-1…5`).
+        for (const zone of [1, 2, 3, 4, 5]) {
+          expect(image, `zone ${zone}`).toContain(colourOf(`--color-slope-${zone}`));
+        }
         expect(Number.parseFloat(style(band).borderTopLeftRadius)).toBe(0);
       },
       { skin: ID },
@@ -296,3 +302,31 @@ test.skipIf(!FULL)(
     );
   },
 );
+
+/** The names of the elements of a page: a selector of a sheet may not name one (README, « Semantic classes »). */
+const ELEMENTS =
+  /(^|[\s>+~(,])(?:a|abbr|article|aside|b|button|dd|details|div|dl|dt|em|fieldset|figure|footer|form|h[1-6]|header|i|img|input|label|legend|li|main|nav|ol|option|output|p|section|select|small|span|strong|summary|svg|table|tbody|td|textarea|tfoot|th|thead|time|tr|ul)(?![\w-])/;
+
+test("chrono — les feuilles ne nomment aucun type d'élément : seulement les classes et les attributs des pièces", () => {
+  const named: string[] = [];
+  for (const [level, css] of [
+    ["mix.css", mixCss],
+    ["full.css", fullCss],
+  ] as const) {
+    for (const [, prelude] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}@]+)\{/g)) {
+      if (prelude === undefined || /^\s*(?:[\d.]+%|from|to)\s*$/.test(prelude)) continue;
+      for (const selector of prelude.split(/,(?![^(]*\))/)) {
+        // What is left once the classes, the attributes and the pseudo-classes are set aside: elements, if any.
+        const bare = selector
+          .replace(/"[^"]*"/g, '""')
+          .replace(/\[[^\]]*\]/g, "")
+          .replace(/::[a-z-]+/g, "")
+          .replace(/:(?:root|is|not|hover|focus|where|has|active|disabled)\b/g, " ")
+          .replace(/\.[\w-]+/g, ".");
+        if (ELEMENTS.test(bare.trim()))
+          named.push(`${level}: ${selector.trim().replace(/\s+/g, " ")}`);
+      }
+    }
+  }
+  expect(named, "selectors that name an element type").toEqual([]);
+});

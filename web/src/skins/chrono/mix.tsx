@@ -50,36 +50,42 @@ function WatchCard({ view }: EventCardProps) {
 
   return (
     <article className="event-card card card-lift flex h-full flex-col">
-      <div className="flex items-start gap-3 px-4 pt-3.5 pb-3">
-        <DateChip
-          start={start}
-          end={end}
-          label={severalDays ? t.event.dateRange(f.date(start), f.date(end)) : f.date(start)}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="font-display text-[1.0625rem] leading-snug font-bold display-title">
-            <Link
-              to="/evenements/$id"
-              params={{ id: event.id }}
-              className="-my-1 flex min-h-11 items-center underline-offset-4 hover:underline"
-            >
-              {event.name}
-            </Link>
-          </h3>
-          <p className="flex items-center gap-1.5 text-sm text-neutral-600">
-            <PinIcon className="size-4 shrink-0 text-blush-600" />
-            {event.location}
-          </p>
-          {registration && (
-            <p className="mt-0.5 flex items-center gap-2 text-sm text-neutral-700">
-              <ZoneBar
-                zone={registration.kind === "open" ? countdownZone(registration.daysLeft) : null}
-              />
-              {registrationLabel(registration, f, t)}
+      <div className="event-card-head flex flex-col gap-2 px-4 pt-3.5 pb-3">
+        <div className="flex items-start gap-3">
+          <DateChip
+            start={start}
+            end={end}
+            label={severalDays ? t.event.dateRange(f.date(start), f.date(end)) : f.date(start)}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h3 className="font-display text-[1.0625rem] leading-snug font-bold display-title">
+              <Link
+                to="/evenements/$id"
+                params={{ id: event.id }}
+                className="-my-1 flex min-h-11 items-center underline-offset-4 hover:underline"
+              >
+                {event.name}
+              </Link>
+            </h3>
+            <p className="flex items-center gap-1.5 text-sm text-neutral-600">
+              <PinIcon className="size-4 shrink-0 text-blush-600" />
+              {event.location}
             </p>
-          )}
+          </div>
+          {daysToGo !== null && <WatchRing days={daysToGo} />}
         </div>
-        {daysToGo !== null && <WatchRing days={daysToGo} />}
+        {/* On a line of its own, under the head: beside the day and the ring it would wrap in two on a narrow phone. */}
+        {registration && (
+          <p
+            data-kind={registration.kind}
+            className="event-card-deadline flex items-center gap-2 text-sm text-neutral-700"
+          >
+            <ZoneBar
+              zone={registration.kind === "open" ? countdownZone(registration.daysLeft) : null}
+            />
+            {registrationLabel(registration, f, t)}
+          </p>
+        )}
       </div>
       {hasPeople && (
         <div className="flex flex-col gap-3 border-t border-neutral-100 px-4 pt-3 pb-4">

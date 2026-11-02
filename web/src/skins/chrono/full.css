@@ -299,7 +299,7 @@
   border-radius: var(--radius-xl);
 }
 :root[data-skin="chrono"] .stat-tile-title,
-:root[data-skin="chrono"] .totals-header th {
+:root[data-skin="chrono"] .totals-header .eyebrow {
   font-family: var(--font-mono);
   letter-spacing: 0.08em;
 }

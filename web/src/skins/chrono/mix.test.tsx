@@ -94,6 +94,31 @@ test("chrono — la carte d'un événement garde tout ce que celle de Crête dit
 });
 
 test.skipIf(SKIN_DEPTH === "palette")(
+  "chrono — sur le plus petit téléphone, la fin des inscriptions de la carte tient sur une ligne : l'anneau des jours ne lui prend plus sa place",
+  async () => {
+    // 320 px less the gutters of the page: the width of a card on the narrowest phone.
+    await inApp(
+      <div style={{ width: 288 }}>
+        <EventCard view={view()} list="upcoming" />
+      </div>,
+      (drawn) => {
+        const deadline = [...drawn.querySelectorAll("article p")].find((one) =>
+          one.textContent?.includes("Inscriptions"),
+        );
+        if (deadline === undefined) throw new Error("the end of the registrations is missing");
+        const lines =
+          deadline.getBoundingClientRect().height /
+          Number.parseFloat(getComputedStyle(deadline).lineHeight);
+        expect(lines, "lines of the end of the registrations").toBeLessThan(1.5);
+        // The ring is still on the card, beside its head.
+        expect(drawn.querySelector("article svg"), "the ring of the days left").not.toBeNull();
+      },
+      { skin: ID },
+    );
+  },
+);
+
+test.skipIf(SKIN_DEPTH === "palette")(
   "chrono — chaque épreuve de la carte a la barre de sa zone avant sa ligne, qui est celle de Crête (le nom, les mesures)",
   async () => {
     const [own] = await keepsEverything(
