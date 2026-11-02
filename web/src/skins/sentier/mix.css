@@ -95,7 +95,7 @@
 
 /* The card of an event: its title underlined in sunrise, and its deadline in
    a trail-marker badge, the two bands of a blaze in front of it. */
-:root[data-skin="sentier"] .event-card-title a {
+:root[data-skin="sentier"] .event-card-title :any-link {
   text-decoration-color: var(--color-peach-400);
   text-decoration-thickness: 2px;
 }

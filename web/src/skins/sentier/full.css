@@ -147,7 +147,7 @@
 
 /* ---- Titles and the links in them: underlined in sunrise ---- */
 
-:root[data-skin="sentier"] :is(.card-title, .participant-name) a {
+:root[data-skin="sentier"] :is(.card-title, .participant-name) :any-link {
   text-decoration-color: var(--color-peach-400);
   text-decoration-thickness: 2px;
 }

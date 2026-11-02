@@ -29,8 +29,6 @@ import { contrast } from "../../test/colour";
 import { colourOf } from "../../test/computed";
 import { hex, inApp, plain, said } from "../../test/variant";
 
-import fullCss from "./full.css?raw";
-import mixCss from "./mix.css?raw";
 import "../../styles.css";
 import "../../skins/styles";
 
@@ -304,34 +302,6 @@ test.skipIf(!FULL)(
     );
   },
 );
-
-/** The names of the elements of a page: a selector of a sheet may not name one (README, « Semantic classes »). */
-const ELEMENTS =
-  /(^|[\s>+~(,])(?:a|abbr|article|aside|b|button|dd|details|div|dl|dt|em|fieldset|figure|footer|form|h[1-6]|header|i|img|input|label|legend|li|main|nav|ol|option|output|p|section|select|small|span|strong|summary|svg|table|tbody|td|textarea|tfoot|th|thead|time|tr|ul)(?![\w-])/;
-
-test("chrono — les feuilles ne nomment aucun type d'élément : seulement les classes et les attributs des pièces", () => {
-  const named: string[] = [];
-  for (const [level, css] of [
-    ["mix.css", mixCss],
-    ["full.css", fullCss],
-  ] as const) {
-    for (const [, prelude] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}@]+)\{/g)) {
-      if (prelude === undefined || /^\s*(?:[\d.]+%|from|to)\s*$/.test(prelude)) continue;
-      for (const selector of prelude.split(/,(?![^(]*\))/)) {
-        // What is left once the classes, the attributes and the pseudo-classes are set aside: elements, if any.
-        const bare = selector
-          .replace(/"[^"]*"/g, '""')
-          .replace(/\[[^\]]*\]/g, "")
-          .replace(/::[a-z-]+/g, "")
-          .replace(/:(?:root|is|not|hover|focus|where|has|active|disabled)\b/g, " ")
-          .replace(/\.[\w-]+/g, ".");
-        if (ELEMENTS.test(bare.trim()))
-          named.push(`${level}: ${selector.trim().replace(/\s+/g, " ")}`);
-      }
-    }
-  }
-  expect(named, "selectors that name an element type").toEqual([]);
-});
 
 test.skipIf(!FULL)(
   "chrono — une action qui supprime reste rouge, lisible à 4,5:1 sur la carte : le bouton secondaire ne la repeint pas en encre",

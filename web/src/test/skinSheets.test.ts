@@ -58,7 +58,7 @@ test("skinSheets — mix et full : les pièces sous le skin, pour un mode, dans 
     :root[data-skin="x"][data-theme="dark"] .event-card { border-color: black; }
     :root[data-skin="x"][data-theme="light"] .tab { color: black; }
     :root[data-skin="x"]:not([data-theme="light"]) .tab { color: white; }
-    :root[data-skin="x"] .a:is(.b, .c), :root[data-skin="x"] > body .d { color: black; }
+    :root[data-skin="x"] .a:is(.b, .c), :root[data-skin="x"] > .shell .d { color: black; }
     :root[data-skin="x"] .chip::before { content: ""; }
     @media (min-width: 48rem) { :root[data-skin="x"] .tabbar { top: 0; } }
     @supports (backdrop-filter: blur(1px)) {
@@ -103,6 +103,27 @@ test("skinSheets — mix et full : rien hors du skin, aucune propriété personn
     "x, mix.css: the at-rule @layer pieces",
     "x, mix.css: the selector .b",
     'x, mix.css: a rule nested in :root[data-skin="x"] .a',
+  ]);
+});
+
+test("skinSheets — mix et full : un sélecteur nomme les pièces par leurs classes et leurs attributs, jamais par le type d'un élément", () => {
+  expect(
+    problems(
+      `
+      :root[data-skin="x"] .totals-header th { color: black; }
+      :root[data-skin="x"] img.avatar, :root[data-skin="x"] .chip > span { color: black; }
+      :root[data-skin="x"] .profile-section:has(> ul) { color: black; }
+      :root[data-skin="x"] .tab[aria-current="page"]::before { color: black; }
+      :root[data-skin="x"]:not([data-theme="light"]) .format-line .format-parts:is(:hover, :focus-visible) { color: black; }
+      :root[data-skin="x"] [data-block="history"] .block-title { content: "a div"; }
+      `,
+      "full",
+    ),
+  ).toEqual([
+    'x, full.css: the selector :root[data-skin="x"] .totals-header th names an element',
+    'x, full.css: the selector :root[data-skin="x"] img.avatar names an element',
+    'x, full.css: the selector :root[data-skin="x"] .chip > span names an element',
+    'x, full.css: the selector :root[data-skin="x"] .profile-section:has(> ul) names an element',
   ]);
 });
 

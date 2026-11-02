@@ -326,6 +326,29 @@ export const NOT_IN_PALETTE = /^--(shadow|inset-shadow|drop-shadow|text-shadow|f
 /** The at-rules that a sheet of mix or full may wrap its rules in. */
 const WRAPPERS = /^@(media|supports|container)\b/;
 
+/**
+ * The names of the elements of a page, and of the drawings in it: a selector of
+ * a mix or full sheet may not name one (README, « Semantic classes »), with
+ * what precedes or follows it in the selector.
+ */
+const ELEMENTS =
+  /(^|[\s>+~(,])(?:a|abbr|article|aside|b|blockquote|body|button|canvas|caption|circle|code|dd|details|dialog|div|dl|dt|em|fieldset|figure|footer|form|g|h[1-6]|header|hr|html|i|img|input|label|legend|li|line|main|mark|nav|ol|option|output|p|path|picture|polyline|pre|progress|rect|section|select|small|span|strong|summary|svg|table|tbody|td|text|textarea|tfoot|th|thead|time|tr|ul|use)(?![\w-])/;
+
+/**
+ * Whether a selector names the type of an element: what is left once its
+ * strings, attributes, pseudo-elements, pseudo-classes and classes are set
+ * aside (what `:is()`, `:not()` or `:has()` hold stays, and is read too).
+ */
+function namesAnElement(selector: string): boolean {
+  const bare = selector
+    .replace(/"[^"]*"|'[^']*'/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/::[a-z-]+/g, "")
+    .replace(/:[a-z-]+/g, " ")
+    .replace(/\.[\w-]+/g, ".");
+  return ELEMENTS.test(bare.trim());
+}
+
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** The names of the properties that a block declares, in order. */
@@ -352,7 +375,8 @@ function propertiesOf(body: string): string[] {
  *   if the rule is for a mode, then a combinator and the piece; a list is
  *   split at its own commas (not those of `:is(a, b)`); rules may be wrapped in
  *   `@media`, `@supports` or `@container`, as deep as needed; `@keyframes`
- *   whose name starts with `<id>-`; no custom property, no other at-rule.
+ *   whose name starts with `<id>-`; no custom property, no other at-rule; no
+ *   selector that names the type of an element (`th`, `img.avatar`, `> span`).
  */
 export function sheetProblems(
   css: string,
@@ -416,6 +440,9 @@ export function sheetProblems(
       } else {
         for (const selector of selectors.filter((one) => !piece.test(one))) {
           say(`the selector ${selector}`);
+        }
+        for (const selector of selectors.filter((one) => piece.test(one) && namesAnElement(one))) {
+          say(`the selector ${selector} names an element`);
         }
         for (const property of properties.filter((one) => one.startsWith("--"))) {
           say(`a custom property ${property}`);
