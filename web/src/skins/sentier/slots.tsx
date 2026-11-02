@@ -1,11 +1,11 @@
 import { useI18n } from "../../i18n/I18nProvider";
 import { Contours } from "../crete/Alpenglow";
+import { Ridges, Sun, SummitIcon, TrailPatch } from "../shared/trail";
 import type { BrandMarkProps, HeaderArtProps, HeroArtProps } from "../types";
-import { Ridges, Sun, SummitIcon, TrailPatch } from "./motifs";
 
 // The motifs of « Sentier » in the places of the app (see ../README.md): the
 // sky of the header and of the sign-in pages, the mark of the app, the heroes
-// and the empty lists. The blaze before a title (`Blaze`) is in ./motifs.tsx.
+// and the empty lists. The blaze before a title (`Blaze`) is in ../shared/trail.tsx.
 // Crête's stand in for the divider.
 
 /** The far ridge, and the near one, which is the colour of the page (the sheet rises out of it). */

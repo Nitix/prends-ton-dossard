@@ -1,11 +1,12 @@
 import { useId } from "react";
 
 import { RIDGE_DIVIDER_PATH as RIDGE_FAR_PATH } from "../crete/motifPaths";
-import { RIDGE_NEAR_PATH } from "./ridge";
+import { RIDGE_NEAR_PATH } from "./trailRidge";
 
-// The pieces of « Sentier »'s art: two ridges, the sun that rises behind them,
-// the patch of a trail race, a summit, and the blaze before a title. « Alpage » draws with them too. The
-// contour lines are Crête's (`Contours`, which draws the same map: it is in the
+// The pieces of the art of a trail, which « Sentier » and « Alpage » share (each
+// look imports them from here, not from the other skin): two ridges, the sun
+// that rises behind them, the patch of a trail race, a summit, and the blaze
+// before a title. The contour lines are Crête's (`Contours`, which draws the same map: it is in the
 // page once). They are decoration: hidden from screen readers, they never say
 // what the words around them do not. Their colours are properties of the theme
 // (`--motif-*`, `--color-*`), which the palette of the skin sets.

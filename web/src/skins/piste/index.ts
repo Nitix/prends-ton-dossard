@@ -1,7 +1,4 @@
 import type { Skin } from "../types";
-import { BrandMark } from "./Brand";
-import { HeaderArt, HeroArt } from "./LaneArt";
-import { Divider, EmptyArt } from "./Marks";
 
 // « Piste »: the athletics track at golden hour, from the design variant of v4
 // (design/v4-piste). A track red, a deep ink, a warm cream. Its motifs: the bend
@@ -13,7 +10,6 @@ export const skin: Skin = {
   id: "piste",
   label: { fr: "Piste", en: "Track" },
   modes: ["light"],
-  slots: { HeaderArt, BrandMark, HeroArt, Divider, EmptyArt },
   // The ink of its band and the red of its track.
   swatches: ["#1b1f2a", "#d2452b"],
   fontSample:

@@ -1,5 +1,5 @@
-/* « Chrono »: the look of a GPS watch. The text is Inter Tight (declared by
-   « Marathon », which uses it too), the labels JetBrains Mono (500–700), and
+/* « Chrono »: the look of a GPS watch. The text is Inter Tight (its faces are
+   in ../shared/fonts.css: « Marathon » uses them too), the labels JetBrains Mono (500–700), and
    every number, in a title, a card or a sentence, has the figures of the watch:
    « Chrono Digits » is the latin file of JetBrains Mono, kept for the digits
    only (U+0030–0039) and put first in the text stack, so that the letters stay

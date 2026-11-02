@@ -59,8 +59,6 @@ export type Skin = {
    * « Sombre » or « Auto » is kept for the skins that have both.
    */
   modes: readonly Mode[];
-  /** The motifs it draws itself. */
-  slots?: Partial<Slots>;
   /** Two colours that say it in the picker (`#rrggbb`). */
   swatches: readonly [string, string];
   /**
@@ -74,3 +72,11 @@ export type Skin = {
    */
   themeColor: string;
 };
+
+/**
+ * The look of a skin: what its `look.ts` exports, loaded when the skin is
+ * chosen. Importing it brings the skin's stylesheets (its `fonts.css` and its
+ * `palette.css`, which it imports) and its motifs, the slots it draws itself;
+ * Crête's stand in for the others (see `useSlot`).
+ */
+export type Look = { slots?: Partial<Slots> };

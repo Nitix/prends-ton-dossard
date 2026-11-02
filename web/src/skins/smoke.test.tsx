@@ -29,7 +29,6 @@ import { emulateMedia, resetMedia } from "../test/media";
 import type { Mode, Skin } from "./types";
 
 import "../styles.css";
-import "../skins/styles";
 
 // The main pages of the app, drawn in each skin and in each of its modes, on
 // the narrowest phone (320 px): the home page, the page of an event with the
@@ -120,16 +119,25 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await resetMedia();
-  chooseSkin("crete");
+  await chooseSkin("crete");
   chooseTheme("auto");
   window.scrollTo(0, 0);
   await page.viewport(414, 896);
 });
 
-/** Puts a skin, in one of its modes, on the page. */
-function dress(skin: Skin, mode: Mode) {
-  chooseSkin(skin.id);
+/**
+ * Puts a skin, in one of its modes, on the page: its look loaded, its sheets in
+ * the page. Without them, a skin would be drawn in Crête's colours and every
+ * test of its paints would pass for nothing.
+ */
+async function dress(skin: Skin, mode: Mode) {
+  await chooseSkin(skin.id);
   chooseTheme(mode);
+  if (skin.id === "crete") return;
+  expect(
+    selectorsOfPage().some((selector) => selector.startsWith(`:root[data-skin="${skin.id}"]`)),
+    `the palette of ${skin.id} in the page`,
+  ).toBe(true);
 }
 
 async function openApp(path: string) {
@@ -298,24 +306,12 @@ function selectorsOfPage(): string[] {
   return [...document.styleSheets].flatMap((sheet) => of(sheet.cssRules));
 }
 
-test("smoke — les feuilles de chaque skin sont dans la page (skins/styles, comme main.tsx)", () => {
-  // Without them, a skin would be drawn in Crête's colours and every test of
-  // its paints would pass for nothing.
-  const selectors = selectorsOfPage();
-  for (const skin of SKINS.filter((one) => one.id !== "crete")) {
-    expect(
-      selectors.some((selector) => selector.startsWith(`:root[data-skin="${skin.id}"]`)),
-      `the palette of ${skin.id}`,
-    ).toBe(true);
-  }
-});
-
 for (const { skin, mode } of CASES) {
   const name = `${skin.id}, ${mode}`;
 
   test(`smoke — ${name} : l'accueil, la marque des titres de ses blocs, l'onglet courant aux couleurs du skin`, async () => {
+    await dress(skin, mode);
     const marker = await markerHtml(skin);
-    dress(skin, mode);
     const screen = await openApp("/");
     await expect
       .element(screen.getByRole("heading", { level: 1, name: fr.nav.home }))
@@ -367,7 +363,7 @@ for (const { skin, mode } of CASES) {
   });
 
   test(`smoke — ${name} : la page d'un événement, sa carte, le profil de sa trace et une fenêtre`, async () => {
-    dress(skin, mode);
+    await dress(skin, mode);
     const screen = await openApp(`/evenements/${event.id}`);
     await expect
       .element(screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" }))
@@ -445,7 +441,7 @@ for (const { skin, mode } of CASES) {
   });
 
   test(`smoke — ${name} : la page d'un coureur, sa photo sur le ciel`, async () => {
-    dress(skin, mode);
+    await dress(skin, mode);
     const screen = await openApp(`/coureurs/${aliceRunner.id}`);
     const title = screen.getByRole("heading", { level: 1, name: aliceRunner.name });
     await expect.element(title).toBeVisible();
@@ -468,7 +464,7 @@ for (const { skin, mode } of CASES) {
   });
 
   test(`smoke — ${name} : le formulaire d'un nouvel événement`, async () => {
-    dress(skin, mode);
+    await dress(skin, mode);
     const screen = await openApp("/evenements/nouveau");
     await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
     await expect
@@ -483,7 +479,7 @@ for (const { skin, mode } of CASES) {
   });
 
   test(`smoke — ${name} : une page publique, sa carte sur le ciel`, async () => {
-    dress(skin, mode);
+    await dress(skin, mode);
     // An invitation without its token: the page says so, on the sky of the sign-in pages.
     const screen = await openApp("/invitation");
     await expect.element(screen.getByText(fr.errors.invitation_invalid)).toBeVisible();
@@ -512,7 +508,7 @@ for (const { skin, mode } of CASES) {
   });
 
   test(`smoke — ${name} : les réglages, avec le choix du thème`, async () => {
-    dress(skin, mode);
+    await dress(skin, mode);
     const screen = await openApp("/profil/reglages");
     await expect
       .element(screen.getByRole("heading", { level: 1, name: fr.profile.settings }))
@@ -525,7 +521,7 @@ for (const { skin, mode } of CASES) {
   });
 
   test(`smoke — ${name} : en couleurs forcées, l'onglet courant et le bouton + gardent un bord`, async () => {
-    dress(skin, mode);
+    await dress(skin, mode);
     await emulateMedia({ forcedColors: "active" });
     const screen = await openApp("/");
     await expect

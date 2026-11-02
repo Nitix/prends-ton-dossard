@@ -1,5 +1,4 @@
 import type { Skin } from "../types";
-import { BrandMark, Divider, EmptyArt, HeaderArt, HeroArt, SectionMarker } from "./motifs";
 
 // « Marathon »: the poster of a big-city marathon: off-white paper, near-black
 // ink, and the cobalt of « la ligne bleue » painted on the road, which is the
@@ -9,7 +8,6 @@ export const skin: Skin = {
   id: "marathon",
   label: { fr: "Marathon", en: "Marathon" },
   modes: ["light"],
-  slots: { HeaderArt, BrandMark, HeroArt, Divider, SectionMarker, EmptyArt },
   // The ink of its masthead and the cobalt of its line.
   swatches: ["#0b0b0c", "#2b59ff"],
   fontSample: '"Inter Tight Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif',

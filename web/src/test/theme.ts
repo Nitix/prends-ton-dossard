@@ -8,7 +8,21 @@ import { SKINS } from "../skins";
 // dark blocks change over it, the rest being the same. A colour may be given
 // as the `var()` of another one.
 
-const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+/** Where styles.css takes theme.css (its `@theme` and its `@utility`), as Tailwind inlines it. */
+const THEME_IMPORT = '@import "./theme.css";';
+
+/**
+ * The stylesheet of the app as Tailwind reads it: styles.css, with theme.css in
+ * the place of its `@import` (a skin's utilities.css imports theme.css too).
+ */
+export function appStylesheet(): string {
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  if (!styles.includes(THEME_IMPORT)) throw new Error(`styles.css has no ${THEME_IMPORT}`);
+  const theme = readFileSync(new URL("../theme.css", import.meta.url), "utf8");
+  return styles.replace(THEME_IMPORT, () => theme);
+}
+
+const styles = appStylesheet();
 
 export type Theme = "light" | "dark";
 

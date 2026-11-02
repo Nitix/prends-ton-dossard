@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import { expect, test } from "vitest";
 
 import { contrast } from "./test/colour";
@@ -7,6 +5,7 @@ import {
   DARK_CHOSEN,
   DARK_FOLLOWED,
   DEFAULT_SKIN,
+  appStylesheet,
   SKIN_CASES,
   block,
   darkBlocks,
@@ -35,7 +34,7 @@ import {
 // the colours of the dawn as it was. Every skin of the app (src/skins/) is held
 // to the same numbers, in each mode it has: Crête by day and at night first.
 
-const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const styles = appStylesheet();
 
 /** The grounds that text sits on: the sheet, a card, a window or a menu, a field, a soft panel, a hover. */
 const GROUNDS = ["neutral-50", "card", "raised", "field", "neutral-100"] as const;

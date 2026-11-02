@@ -15,7 +15,7 @@
   "ignorePatterns": ["src/routeTree.gen.ts"],
   "rules": {
     "react/react-in-jsx-scope": "off",
-    "import/no-unassigned-import": ["error", { "allow": ["**/*.css", "**/skins/styles"] }],
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",

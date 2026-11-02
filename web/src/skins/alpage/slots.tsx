@@ -2,14 +2,14 @@ import { useId } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { Contours } from "../crete/Alpenglow";
-import { Ridges, Sun, TrailPatch } from "../sentier/motifs";
+import { Ridges, Sun, TrailPatch } from "../shared/trail";
 import type { BrandMarkProps, HeaderArtProps, HeroArtProps } from "../types";
 
 // The motifs of « Alpage » in the places of the app (see ../README.md): the sky
 // of the forest at sunrise, the name of the app after the patch of a trail
 // race, the heroes, and the sun between two ridges of an empty list. They are
 // « Sentier »'s pieces (its ridges, its sun, its patch, its blaze before a
-// title: ../sentier/motifs.tsx) in the dark greens of the forest. Crête's stand
+// title: ../shared/trail.tsx) in the dark greens of the forest. Crête's stand
 // in for the divider (the same skyline).
 
 /** The far ridge of the header, the deeper one of a hero, and the near one, which is the deepest. */

@@ -1,5 +1,4 @@
 import type { Skin } from "../types";
-import { BrandMark, Divider, EmptyArt, HeaderArt, HeroArt, SectionMarker } from "./motifs";
 
 // « Carnet »: a training logbook drawn like a technical sheet: a warm paper,
 // ink, a coral for what is done and an indigo, gold and teal for what is
@@ -11,7 +10,6 @@ export const skin: Skin = {
   id: "carnet",
   label: { fr: "Carnet", en: "Logbook" },
   modes: ["light"],
-  slots: { HeaderArt, BrandMark, HeroArt, Divider, SectionMarker, EmptyArt },
   // The navy of its dark card and the coral of its main action.
   swatches: ["#161b2e", "#c24a3a"],
   fontSample:

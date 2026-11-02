@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 import { SKINS } from "./skins";
-import { block } from "./test/theme";
+import { appStylesheet, block } from "./test/theme";
 
 // « Crête » is set in Inter and Plus Jakarta Sans. They are served by the site
 // itself (the @fontsource-variable packages, built into /assets/ and kept by
@@ -13,7 +13,7 @@ import { block } from "./test/theme";
 // The same goes for the fonts of the other skins (src/skins/<id>/fonts.css).
 
 const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const styles = appStylesheet();
 
 /** The stylesheet of fonts of every folder of src/skins/ that has one, by the id of the folder. */
 const skinFonts: Record<string, string> = Object.fromEntries(
@@ -120,9 +120,11 @@ test("fonts — every face names a file that the package has", () => {
 //
 // Each skin has a src/skins/<id>/fonts.css: the faces of its fonts, written by
 // hand like Crête's (the latin and latin-ext files of a package), and its
-// `--font-*` under `:root[data-skin="<id>"]`. Every one is in the build, at
-// every depth, and the browser fetches a face only when a page draws text in
-// its family: a person who stays on « Crête » downloads none of them.
+// `--font-*` under `:root[data-skin="<id>"]`; the faces that two skins share are
+// in src/skins/shared/fonts.css. Each is in the part of the build of its skin's
+// look, loaded when the skin is chosen, and the browser fetches a face only when
+// a page draws text in its family: a person who stays on « Crête » downloads
+// none of them.
 
 type Span = [number, number];
 type Subset = "latin-ext" | "latin";
@@ -555,4 +557,42 @@ test("fonts — Crête names only its own families: a skin's are named by its ow
     fontsOf(match[1] ?? ""),
   );
   expect(new Set(named)).toEqual(new Set(own));
+});
+
+/**
+ * The stylesheets that the look of a skin imports (`import "…css";` in its
+ * look.ts, from its folder or a shared one), as `skins/<folder>/<file>.css`.
+ */
+function sheetsOfLook(id: string): string[] {
+  const url = new URL(`./skins/${id}/look.ts`, import.meta.url);
+  if (!existsSync(url)) return [];
+  const source = readFileSync(url, "utf8");
+  return [...source.matchAll(/^import "(\.\.?\/[^"]+\.css)";$/gm)].map(([, path = ""]) =>
+    new URL(path, url).pathname.replace(/^.*\/src\//, ""),
+  );
+}
+
+test("fonts — the look of each skin brings a face for every family its stacks name: its part of the build is all it needs", () => {
+  // A skin is loaded on its own, when it is chosen: a family that only the
+  // sheet of another skin declared would be missing (Inter Tight is Marathon's
+  // and Chrono's, Outfit Sentier's and Alpage's: they are in skins/shared/).
+  const crete = new Set(facesOf(styles, "styles.css").map((face) => face.family));
+  expect(sheetsOfLook("chrono")).toContain("skins/shared/fonts.css");
+  const missing = SKINS.filter((skin) => skin.id !== "crete").flatMap((skin) => {
+    const brought = new Set(
+      sheetsOfLook(skin.id).flatMap((sheet) =>
+        facesOf(readFileSync(new URL(`./${sheet}`, import.meta.url), "utf8"), sheet).map(
+          (face) => face.family,
+        ),
+      ),
+    );
+    return KINDS.flatMap((kind) =>
+      fontsOf(stackOf(skin.id, kind) ?? "")
+        .filter((family) => !crete.has(family) && !brought.has(family))
+        .map(
+          (family) => `${skin.id}: --font-${kind} names "${family}", which its look does not bring`,
+        ),
+    );
+  });
+  expect(missing).toEqual([]);
 });

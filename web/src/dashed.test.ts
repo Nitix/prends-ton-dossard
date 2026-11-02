@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 import { contrast } from "./test/colour";
-import { SKIN_CASES, block, themeColour, type Theme } from "./test/theme";
+import { SKIN_CASES, appStylesheet, block, themeColour, type Theme } from "./test/theme";
 
 // A dashed border says « not confirmed » or « to confirm » next to the words,
 // so that the state is never told by colour alone: but a dash that is pale on
@@ -99,7 +99,7 @@ const rgb = (hex: string) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at,
  * way between two (a gradient is mixed in sRGB).
  */
 function pastels(theme: Theme, skin?: string): string[] {
-  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const styles = appStylesheet();
   const gradient = /background-image:\s*linear-gradient\(([^;]*)\);/.exec(
     block(styles, ".avatar-soft") ?? "",
   )?.[1];

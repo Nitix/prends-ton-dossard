@@ -13,11 +13,9 @@ import { ensureTemporal } from "./lib/temporal";
 import { applyTheme, followThemeElsewhere, readTheme } from "./lib/theme";
 import { TodayProvider } from "./lib/useToday";
 import { routeTree } from "./routeTree.gen";
-import { applySkin, followSkinElsewhere, readSkin } from "./skins";
+import { followSkinElsewhere, showKeptSkin } from "./skins";
 
 import "./styles.css";
-// The stylesheets of the skins, after Crête's: in the same stylesheet of the page.
-import "./skins/styles";
 
 const queryClient = new QueryClient();
 // Moving between pages is a view transition (a cross-fade) where the browser
@@ -39,8 +37,10 @@ if (!rootElement) {
 // and the one that another tab of the app chooses later, whatever page this one shows.
 applyTheme(readTheme());
 followThemeElsewhere();
-// The same for the skin, after the theme: a skin that has one mode only is drawn in it.
-applySkin(readSkin());
+// The same for the skin, after the theme: a skin that has one mode only is drawn
+// in it. Its look (its motifs) loads while the app gets ready, and is there
+// before the app is first drawn.
+const skinShown = showKeptSkin();
 followSkinElsewhere();
 
 // A tab opened before a deploy reloads when the chunks it asks for are gone.
@@ -56,6 +56,8 @@ await ensureTemporal();
 
 // The router checks the session when it loads the first page.
 await restoreSession();
+
+await skinShown;
 
 // From now on, the end of the session (sign-out, a token that the server
 // refused or that expired) forgets what the last user saw and sends the app to

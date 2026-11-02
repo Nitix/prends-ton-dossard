@@ -1,6 +1,4 @@
-import { Blaze } from "../sentier/motifs";
 import type { Skin } from "../types";
-import { BrandMark, EmptyArt, HeaderArt, HeroArt } from "./slots";
 
 // « Alpage »: « Sentier » in « Aurore »'s layout, in the gradients of the
 // forest: deep pine brightening into emerald and fresh moss, the sun coming up
@@ -12,7 +10,6 @@ export const skin: Skin = {
   id: "alpage",
   label: { fr: "Alpage", en: "Alpine meadow" },
   modes: ["light"],
-  slots: { HeaderArt, BrandMark, HeroArt, SectionMarker: Blaze, EmptyArt },
   // The deep forest of its main buttons and the orange of its sunrise.
   swatches: ["#174f3e", "#f28c38"],
   fontSample:

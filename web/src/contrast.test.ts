@@ -6,13 +6,20 @@ import { describe, expect, test } from "vitest";
 
 import { INPUT, READ_ONLY_INPUT } from "./components/Field";
 import { contrast } from "./test/colour";
-import { SKIN_CASES, linearStops, themeColour, themeValue, type Theme } from "./test/theme";
+import {
+  SKIN_CASES,
+  appStylesheet,
+  linearStops,
+  themeColour,
+  themeValue,
+  type Theme,
+} from "./test/theme";
 
 // Contrasts that the classes of the app decide, measured on the values of the
 // theme (styles.css) with the formula of WCAG 2, by day and at night, and on
 // those of every other skin (src/skins/) in each mode it has.
 
-const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const styles = appStylesheet();
 const root = fileURLToPath(new URL(".", import.meta.url));
 
 /** The source files of the app, not its tests. */

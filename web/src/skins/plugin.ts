@@ -9,7 +9,8 @@ import type { Mode } from "./types.ts";
 // The skins at build time: what vite.config.ts runs, in Node, never in the page.
 // It leaves the skins of development out of a build, and writes into
 // index.html the table of the skins that its script needs before the page is
-// first drawn. See README.md.
+// first drawn: the modes of each, the colour of the bar, and in a build the
+// stylesheets of its look, which the script links. See README.md.
 
 /** The skin of the app when none is chosen: it is drawn by styles.css itself, with no `data-skin`. */
 export const DEFAULT_SKIN = "crete";
@@ -33,8 +34,12 @@ export function isDevSkinFile(id: string, skinsDir: string): boolean {
   return path.startsWith(dir) && /^_[^/]+\/./.test(path.slice(dir.length));
 }
 
-/** What the page needs of a skin before it is drawn: its modes, and the colour of the browser's bar. */
-export type TableEntry = { modes: readonly Mode[]; themeColor: string };
+/**
+ * What the page needs of a skin before it is drawn: its modes, the colour of
+ * the browser's bar, and the stylesheets of its look (`/assets/…`): none in
+ * the dev server, where its look brings them.
+ */
+export type TableEntry = { modes: readonly Mode[]; themeColor: string; sheets: readonly string[] };
 
 /** The skins that the page applies before it is drawn, by id. */
 export type SkinTable = Record<string, TableEntry>;
@@ -42,11 +47,15 @@ export type SkinTable = Record<string, TableEntry>;
 /**
  * The table of the skins, from their folders: each one that has an `index.ts`,
  * with the modes and the theme colour it declares (`modes: ["light", "dark"]`,
- * `themeColor: "#rrggbb"`), but Crête, which is what the page is without a
- * skin. A folder whose name starts with `_` is a skin of development, left out
- * of a build. plugin.test.ts checks that the table says what the registry finds.
+ * `themeColor: "#rrggbb"`) and its stylesheets in `sheets` (see `lookSheets`),
+ * but Crête, which is what the page is without a skin. A folder whose name
+ * starts with `_` is a skin of development, left out of a build. plugin.test.ts
+ * checks that the table says what the registry finds.
  */
-export function skinTable(skinsDir: string, { dev }: { dev: boolean }): SkinTable {
+export function skinTable(
+  skinsDir: string,
+  { dev, sheets = {} }: { dev: boolean; sheets?: Readonly<Record<string, readonly string[]>> },
+): SkinTable {
   const table: SkinTable = {};
   for (const entry of readdirSync(skinsDir, { withFileTypes: true })) {
     const index = join(skinsDir, entry.name, "index.ts");
@@ -61,7 +70,7 @@ export function skinTable(skinsDir: string, { dev }: { dev: boolean }): SkinTabl
     if (themeColor === undefined) {
       throw new Error(`${index} declares no theme colour (themeColor: "#rrggbb")`);
     }
-    table[entry.name] = { modes, themeColor };
+    table[entry.name] = { modes, themeColor, sheets: sheets[entry.name] ?? [] };
   }
   return table;
 }
@@ -77,6 +86,61 @@ export function declaredModes(source: string): Mode[] {
 /** The theme colour that the source of a skin's `index.ts` declares (`themeColor: "#rrggbb"`). */
 export function declaredThemeColor(source: string): string | undefined {
   return /\bthemeColor:\s*["'](#[0-9a-fA-F]{6})["']/.exec(source)?.[1];
+}
+
+/** What the plugin reads of a file of a build. */
+export type BuiltFile =
+  | {
+      type: "chunk";
+      fileName: string;
+      isEntry: boolean;
+      facadeModuleId: string | null;
+      /** The chunks it imports, statically: the browser loads them with it. */
+      imports: readonly string[];
+      /** The stylesheets of its modules, as Vite emits them (`assets/…css`). */
+      viteMetadata?: { importedCss: ReadonlySet<string> };
+    }
+  | { type: "asset"; fileName: string };
+
+/**
+ * The stylesheets of the look of each skin in a build, by its id: those of the
+ * part of its `look.ts` and of the parts it imports (a face that two skins
+ * share is in a sheet of its own), but those of the entry, which the page links
+ * already. The script of index.html links them for the skin kept on the
+ * device; the look links them when it is chosen, and leaves those the page
+ * has. A skin of the table with no part for its look is a mistake of the build.
+ */
+export function lookSheets(
+  bundle: Readonly<Record<string, BuiltFile>>,
+  skinsDir: string,
+  base: string,
+): Record<string, string[]> {
+  const dir = `${slashed(skinsDir).replace(/\/$/, "")}/`;
+  const cssOf = (fileName: string, seen: Set<string>): string[] => {
+    const file = bundle[fileName];
+    if (seen.has(fileName) || file?.type !== "chunk") return [];
+    seen.add(fileName);
+    return [
+      ...(file.viteMetadata?.importedCss ?? []),
+      ...file.imports.flatMap((imported) => cssOf(imported, seen)),
+    ];
+  };
+  const chunks = Object.values(bundle).filter((file) => file.type === "chunk");
+  const linked = new Set(
+    chunks.filter((chunk) => chunk.isEntry).flatMap((chunk) => cssOf(chunk.fileName, new Set())),
+  );
+  const sheets: Record<string, string[]> = {};
+  for (const chunk of chunks) {
+    const path = slashed(chunk.facadeModuleId ?? "");
+    const id = path.startsWith(dir)
+      ? /^([^/]+)\/look\.ts$/.exec(path.slice(dir.length))?.[1]
+      : undefined;
+    if (id === undefined) continue;
+    sheets[id] = [...new Set(cssOf(chunk.fileName, new Set()))]
+      .filter((sheet) => !linked.has(sheet))
+      .map((sheet) => `${base}${sheet}`);
+  }
+  return sheets;
 }
 
 /** Where index.html has the table of the skins, in its inline script. */
@@ -103,6 +167,7 @@ export function pageWithSkins(html: string, path: string, table: () => SkinTable
 export function skins(): Plugin {
   let skinsDir = fileURLToPath(new URL(".", import.meta.url));
   let dev = false;
+  let base = "/";
 
   return {
     name: "ptd-skins",
@@ -111,6 +176,7 @@ export function skins(): Plugin {
     configResolved(config) {
       skinsDir = join(config.root, "src", "skins");
       dev = config.command === "serve";
+      base = config.base;
     },
     async resolveId(source, importer, options) {
       // A build has no skin of development: each of its files (an index, a
@@ -124,8 +190,20 @@ export function skins(): Plugin {
     load(id) {
       return id === NOTHING ? NOTHING_CODE : null;
     },
-    transformIndexHtml(html, { path }) {
-      return pageWithSkins(html, path, () => skinTable(skinsDir, { dev }));
+    // In a build, after the bundle: the stylesheets of each look are its files.
+    transformIndexHtml(html, { path, bundle }) {
+      return pageWithSkins(html, path, () => {
+        if (bundle === undefined) return skinTable(skinsDir, { dev });
+        const sheets = lookSheets(bundle, skinsDir, base);
+        const table = skinTable(skinsDir, { dev, sheets });
+        const missing = Object.keys(table).filter((id) => sheets[id] === undefined);
+        if (missing.length > 0) {
+          throw new Error(
+            `The build has no part for the look of ${missing.join(", ")} (skins/<id>/look.ts)`,
+          );
+        }
+        return table;
+      });
     },
   };
 }

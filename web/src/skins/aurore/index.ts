@@ -1,5 +1,4 @@
 import type { Skin } from "../types";
-import { BrandMark, EmptyArt, HeaderArt, HeroArt } from "./slots";
 
 // « Aurore »: a run at dawn. A violet sky that warms into coral pink and peach
 // at the horizon, the sun rising on it with its arcs of light, white cards on a
@@ -11,7 +10,6 @@ export const skin: Skin = {
   id: "aurore",
   label: { fr: "Aurore", en: "Dawn" },
   modes: ["light"],
-  slots: { HeaderArt, BrandMark, HeroArt, EmptyArt },
   // The violet of its sky and the peach of its horizon.
   swatches: ["#5e4ae3", "#ffb38a"],
   fontSample:

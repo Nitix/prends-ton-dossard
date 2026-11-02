@@ -1,6 +1,4 @@
 import type { Skin } from "../types";
-import { Blaze } from "./motifs";
-import { BrandMark, EmptyArt, HeaderArt, HeroArt } from "./slots";
 
 // « Sentier »: an early-morning trail run in the mountains. Deep pine, sunrise
 // orange on sand, Outfit for the titles; contour lines, ridges and a rising sun
@@ -12,7 +10,6 @@ export const skin: Skin = {
   id: "sentier",
   label: { fr: "Sentier", en: "Sentier" },
   modes: ["light"],
-  slots: { HeaderArt, BrandMark, HeroArt, SectionMarker: Blaze, EmptyArt },
   // The pine of its header and the orange of its sunrise.
   swatches: ["#1f5f4a", "#f28c38"],
   fontSample:

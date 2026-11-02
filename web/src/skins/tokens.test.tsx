@@ -21,7 +21,6 @@ import { HeroArt } from "./crete/HeroArt";
 import { RidgeDivider } from "./crete/RidgeDivider";
 
 import "../styles.css";
-import "../skins/styles";
 
 // What a palette skin changes without drawing anything: the colours that the
 // pieces of the app read from the custom properties of the theme. Crête's
@@ -34,8 +33,8 @@ import "../skins/styles";
 // (« S'inscrire », `--shade-on-dawn`).
 // Nothing here names a skin.
 
-afterEach(() => {
-  chooseSkin("crete");
+afterEach(async () => {
+  await chooseSkin("crete");
 });
 
 /** The custom property that an inline style of an element reads for `property`, if any. */
@@ -82,7 +81,7 @@ function arbitraryValues(element: Element): string[] {
 
 test("tokens — les motifs de Crête prennent leurs couleurs des propriétés --motif-*, dans chaque skin", async () => {
   for (const skin of SKINS) {
-    chooseSkin(skin.id);
+    await chooseSkin(skin.id);
     // The boxes are sized inline: a class named only in a test is not in the CSS.
     const screen = await render(
       <I18nProvider languages={["fr"]}>
@@ -170,7 +169,7 @@ test("tokens — les motifs de Crête prennent leurs couleurs des propriétés -
 
 test("tokens — la fenêtre d'un dialogue a l'ombre --shade-dialog, dans chaque skin", async () => {
   for (const skin of SKINS) {
-    chooseSkin(skin.id);
+    await chooseSkin(skin.id);
     const screen = await render(
       <I18nProvider languages={["fr"]}>
         <Dialog open title="Une fenêtre" onClose={() => {}}>
@@ -232,7 +231,7 @@ function expectPillShade(pill: Element, skin: string) {
 
 test("tokens — les ombres et les voiles des pièces sur le ciel et des messages prennent leurs couleurs des propriétés du thème, dans chaque skin", async () => {
   for (const skin of SKINS) {
-    chooseSkin(skin.id);
+    await chooseSkin(skin.id);
     const screen = await render(
       <I18nProvider languages={["fr"]}>
         <ToastProvider>
@@ -343,12 +342,12 @@ test("tokens — les titres prennent le style de la police des titres (--display
     expect(ownDeclaration("crete", property), `${property} is one of Crête's`).not.toBe("");
   }
   for (const skin of SKINS) {
-    chooseSkin(skin.id);
+    await chooseSkin(skin.id);
     await expectDisplayStyle(skin.id);
   }
   // Values that a skin may give (italic capitals, a wider face, more space):
   // the titles follow them, not only the values that are Crête's.
-  chooseSkin("crete");
+  await chooseSkin("crete");
   const root = document.documentElement.style;
   const given = {
     "--display-style": "italic",
@@ -388,7 +387,7 @@ const TRACK = toTrack([
 
 test("tokens — la carte d'une trace prend ses couleurs des propriétés --map-*, dans chaque skin", async () => {
   for (const skin of SKINS) {
-    chooseSkin(skin.id);
+    await chooseSkin(skin.id);
     const screen = await render(
       <I18nProvider languages={["fr"]}>
         <TrackMap points={TRACK} tileUrl={BLANK_TILE} />

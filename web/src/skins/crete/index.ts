@@ -25,7 +25,6 @@ export const skin: Skin = {
   id: "crete",
   label: { fr: "Crête", en: "Crête" },
   modes: ["light", "dark"],
-  slots,
   // The violet of the sky and the pink of the sunrise.
   swatches: ["#5e4ae3", "#ff7eb3"],
   fontSample:

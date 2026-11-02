@@ -1,5 +1,5 @@
-/* « Alpage »: Outfit for the titles, over Inter. The faces are « Sentier »'s,
-   which uses the same font (declared there once, for both). */
+/* « Alpage »: Outfit for the titles, over Inter. Its faces are in
+   ../shared/fonts.css: « Sentier » uses them too. */
 :root[data-skin="alpage"] {
   --font-sans:
     "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

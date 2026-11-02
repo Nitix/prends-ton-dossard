@@ -7,7 +7,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { THEME_KEY, chooseTheme } from "../../lib/theme";
-import { SKIN_KEY, SKINS, applySkin, chooseSkin, readSkin } from "../../skins";
+import { SKIN_KEY, SKINS, chooseSkin, showKeptSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
 import { contrast } from "../../test/colour";
 import { shadowLayers } from "../../test/computed";
@@ -16,7 +16,6 @@ import { emulateMedia, resetMedia } from "../../test/media";
 import { AppearanceSection, SkinCard } from "./AppearanceSection";
 
 import "../../styles.css";
-import "../../skins/styles";
 
 // « Thème » in « Apparence », on the settings page: the skins of the app as
 // cards (a name, two colours, a sample of its font), then « Clair ou sombre »
@@ -26,7 +25,7 @@ import "../../skins/styles";
 
 afterEach(async () => {
   // The skin and the theme belong to the page and to the device: a test leaves neither to the next.
-  chooseSkin("crete");
+  await chooseSkin("crete");
   chooseTheme("auto");
   localStorage.removeItem(SKIN_KEY);
   localStorage.removeItem(THEME_KEY);
@@ -172,7 +171,7 @@ test("Thème — chaque pastille a un bord qui se voit sur sa carte, cochée ou 
   // is, whatever its colour (WCAG 1.4.11, 3:1 against the ground of its card).
   for (const skin of SKINS) {
     for (const mode of skin.modes) {
-      chooseSkin(skin.id);
+      await chooseSkin(skin.id);
       chooseTheme(mode);
       for (const checked of [false, true]) {
         const screen = await render(
@@ -259,6 +258,9 @@ test("Thème — choisir un skin l'applique à la page tout de suite et le garde
 
     // Back to Crête: nothing on the page, nothing kept, its violet on the bar.
     await skins(screen).getByRole("radio", { name: crete.label.fr, exact: true }).click();
+    await expect
+      .element(skins(screen).getByRole("radio", { name: crete.label.fr, exact: true }))
+      .toBeChecked();
     expect(root.dataset.skin).toBeUndefined();
     expect(localStorage.getItem(SKIN_KEY)).toBeNull();
     expect(sheet()).toBe(day);
@@ -306,7 +308,7 @@ test("Thème — « Clair ou sombre » seulement pour un skin qui a les deux mod
 test("Thème — le skin gardé sur l'appareil est coché en arrivant, et les noms sont dans la langue de la page", async () => {
   localStorage.setItem(SKIN_KEY, singleMode?.id ?? "");
   // What main.tsx does at start.
-  applySkin(readSkin());
+  await showKeptSkin();
   const screen = await renderAppearance(["en"]);
   const group = screen.getByRole("radiogroup", { name: en.settings.skin });
   await expect

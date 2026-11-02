@@ -49,7 +49,7 @@ export function AppearanceSection() {
               sample={t.settings.fontSample}
               checked={one.id === skin.id}
               onChoose={() => {
-                chooseSkin(one.id);
+                void chooseSkin(one.id);
               }}
             />
           ))}
