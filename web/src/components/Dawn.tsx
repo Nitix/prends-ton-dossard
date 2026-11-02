@@ -37,21 +37,21 @@ export function DateChipBase({ start, end, label, size = "md" }: DateChipProps) 
           big ? "w-[4.75rem] py-2.5" : "w-[3.75rem] py-2"
         }`}
       >
-        <span className="relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
+        <span className="date-chip-top relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
           {twoMonths ? month(start) : f.weekday(start, "short").replace(".", "")}
         </span>
         <span
-          className={`relative font-display leading-[1.05] font-extrabold tracking-tight tabular-nums ${
+          className={`date-chip-day relative font-display leading-[1.05] font-extrabold tracking-tight tabular-nums ${
             big ? "text-[2rem]" : several ? "text-[1.125rem]" : "text-[1.625rem]"
           }`}
         >
           {several ? `${start.day}–${end.day}` : start.day}
         </span>
-        <span className="relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
+        <span className="date-chip-bottom relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
           {month(several ? end : start)}
         </span>
         {start.year !== thisYear && (
-          <span className="relative font-display text-[0.5625rem] leading-none font-semibold tracking-[0.1em] opacity-90">
+          <span className="date-chip-year relative font-display text-[0.5625rem] leading-none font-semibold tracking-[0.1em] opacity-90">
             {start.year}
           </span>
         )}
