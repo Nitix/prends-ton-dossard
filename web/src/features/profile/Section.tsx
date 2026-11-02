@@ -26,7 +26,7 @@ export function Section({
   return (
     <section
       aria-labelledby={headingId}
-      className={`flex flex-col gap-3 ${boxed ? "card p-4 md:p-5" : ""}`}
+      className={`profile-section flex flex-col gap-3 ${boxed ? "card p-4 md:p-5" : ""}`}
     >
       <BlockTitle
         id={headingId}

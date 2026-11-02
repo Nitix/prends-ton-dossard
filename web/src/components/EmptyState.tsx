@@ -10,7 +10,7 @@ import { EmptyArt } from "./Slots";
  */
 export function EmptyStateBase({ title, hint }: EmptyStateProps) {
   return (
-    <div className="card relative isolate flex flex-col items-center gap-1 overflow-hidden px-6 pt-5 pb-6 text-center">
+    <div className="empty-state card relative isolate flex flex-col items-center gap-1 overflow-hidden px-6 pt-5 pb-6 text-center">
       <EmptyArt />
       <p className="card-title">{title}</p>
       <p className="text-sm text-neutral-600">{hint}</p>

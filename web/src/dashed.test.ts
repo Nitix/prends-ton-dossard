@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 import { contrast } from "./test/colour";
-import { SKIN_CASES, block, themeColour, type Theme } from "./test/theme";
+import {
+  SKIN_CASES,
+  block,
+  sheetDashes,
+  skinStylesheet,
+  themeColour,
+  type Theme,
+} from "./test/theme";
 
 // A dashed border says « not confirmed » or « to confirm » next to the words,
 // so that the state is never told by colour alone: but a dash that is pale on
@@ -138,4 +145,117 @@ test("dashed — la pastille d'un participant à confirmer garde 3:1, avec de la
       }
     }
   }
+});
+
+/**
+ * The dashes of the deeper sheets of the skins (`mix.css`, `full.css`) that
+ * say nothing, by the class of the piece they are drawn on: decoration, never
+ * read as « not confirmed » (a tear-off line, a perforation). A dashed border
+ * that says a state is not here: it is in a colour of the theme, with 3:1 (the
+ * test below). `skins` limits an entry to the skins it names.
+ */
+const DECORATION: readonly { piece: string; why: string; skins?: readonly string[] }[] = [
+  { piece: ".bib-tear", why: "the tear-off line of a bib (Dossard)" },
+  { piece: ".perforation", why: "the perforation of a ticket (Rétro)" },
+  { piece: ".app-header", why: "the tear-off line under the garland of the header (Dossard)" },
+  { piece: ".avatar-soft", why: "the ring cut around the photo of a runner (Dossard)" },
+  {
+    piece: ".tabbar",
+    why: "the ticket of Dossard's tab bar, until Task 5 brings back its variant's flat bar",
+    skins: ["dossard"],
+  },
+];
+
+/** Whether `selector` draws on one of the pieces of `DECORATION` (in `skin`). */
+function decoration(selector: string, skin: string) {
+  return DECORATION.find(
+    ({ piece, skins }) =>
+      (skins === undefined || skins.includes(skin)) &&
+      new RegExp(`${piece.replace(".", "\\.")}(?![\\w-])`).test(selector),
+  );
+}
+
+/** The dashed borders of every skin's mix.css and full.css, with the skin and the sheet. */
+const SHEET_DASHES = [...new Set(SKIN_CASES.map(({ skin }) => skin))].flatMap((skin) =>
+  (["mix", "full"] as const).flatMap((level) =>
+    sheetDashes(skinStylesheet(skin, level)).map((dash) => ({ ...dash, skin, level })),
+  ),
+);
+
+test("dashed — les tirets d'une feuille mix ou full : un état, à 3:1 sur la carte et sur la feuille dans chaque mode du skin, ou une décoration de la liste, par sa classe", () => {
+  // Not an empty search: Dossard's tear-off lines and Rétro's perforation are dashed.
+  expect(
+    SHEET_DASHES.length,
+    "no dashed border in the sheets: the search is broken",
+  ).toBeGreaterThan(2);
+  const problems: string[] = [];
+  for (const { skin, level, selector, property, value, colour } of SHEET_DASHES) {
+    if (decoration(selector, skin) !== undefined) continue;
+    const where = `${skin}, ${level}.css: ${selector} { ${property}: ${value} }`;
+    if (colour === undefined) {
+      problems.push(
+        `${where}: a dash of a state is in a colour of the theme (--color-…), or a decoration of the list`,
+      );
+      continue;
+    }
+    for (const { ground, background, mode } of GROUNDS.filter((one) => one.skin === skin)) {
+      const hex = themeColour(colour, mode, skin);
+      const ratio = contrast(hex, background);
+      if (ratio < 3)
+        problems.push(`${where}: ${colour} (${hex}) on ${ground}, ${ratio.toFixed(2)}:1`);
+    }
+  }
+  expect(problems).toEqual([]);
+  // Each entry of the list is used: a decoration that is gone leaves the list.
+  for (const entry of DECORATION) {
+    expect(
+      SHEET_DASHES.some(({ selector, skin }) => decoration(selector, skin) === entry),
+      `${entry.piece} (${entry.why}) is still drawn dashed`,
+    ).toBe(true);
+  }
+});
+
+test("dashed — sheetDashes lit les bordures et les contours en tirets d'une feuille, dans ses @media, avec leur couleur", () => {
+  const css = `
+    /* A comment: border: 1px dashed var(--color-red-700) */
+    :root[data-skin="x"] .chip,
+    :root[data-skin="x"] .tab { border: 2px dashed var(--color-neutral-500); }
+    :root[data-skin="x"] .card { border-top: 1px solid var(--color-ink); }
+    @media (width >= 48rem) {
+      :root[data-skin="x"] .bib-tear { border-top: 2px dashed color-mix(in srgb, var(--color-card) 40%, transparent); }
+    }
+    :root[data-skin="x"] .avatar-soft { outline: 2px dashed var(--color-blush-200); }
+    @keyframes x-in { from { opacity: 0; } }
+  `;
+  expect(sheetDashes(css)).toEqual([
+    {
+      selector: ':root[data-skin="x"] .chip',
+      property: "border",
+      value: "2px dashed var(--color-neutral-500)",
+      colour: "neutral-500",
+    },
+    {
+      selector: ':root[data-skin="x"] .tab',
+      property: "border",
+      value: "2px dashed var(--color-neutral-500)",
+      colour: "neutral-500",
+    },
+    {
+      selector: ':root[data-skin="x"] .bib-tear',
+      property: "border-top",
+      value: "2px dashed color-mix(in srgb, var(--color-card) 40%, transparent)",
+      colour: undefined,
+    },
+    {
+      selector: ':root[data-skin="x"] .avatar-soft',
+      property: "outline",
+      value: "2px dashed var(--color-blush-200)",
+      colour: "blush-200",
+    },
+  ]);
+  // A piece of the list is decoration by its class, not by a name that starts like it.
+  expect(decoration(':root[data-skin="x"] .bib-tear', "x")?.piece).toBe(".bib-tear");
+  expect(decoration(':root[data-skin="x"] .bib-tear-off', "x")).toBeUndefined();
+  expect(decoration(':root[data-skin="x"] .tabbar ul', "x")).toBeUndefined();
+  expect(decoration(':root[data-skin="dossard"] .tabbar ul', "dossard")?.piece).toBe(".tabbar");
 });

@@ -27,7 +27,7 @@ const CELL =
   "stat-tile flex flex-col-reverse rounded-xl bg-neutral-50 px-1.5 py-2 text-left tabular-nums min-[22.5rem]:px-2.5 sm:table-cell sm:rounded-none sm:bg-transparent sm:px-2 sm:py-2.5 sm:text-right";
 const VALUE =
   "font-display text-base font-extrabold text-ink sm:font-sans sm:text-sm sm:font-medium";
-const TILE_TITLE = "eyebrow text-[0.625rem] sm:hidden";
+const TILE_TITLE = "stat-tile-title eyebrow text-[0.625rem] sm:hidden";
 
 /**
  * The totals of races (finished, abandoned, kilometers, elevation gain and
@@ -53,10 +53,10 @@ export function TotalsTable({
   const titles = [t.stats.finished, t.stats.dnf, t.stats.km, t.stats.elevation, t.stats.time];
 
   return (
-    <div className="sm:overflow-hidden sm:rounded-[1.25rem] sm:border sm:border-neutral-200/80 sm:bg-card sm:p-1.5 sm:shadow-card">
+    <div className="totals sm:overflow-hidden sm:rounded-[1.25rem] sm:border sm:border-neutral-200/80 sm:bg-card sm:p-1.5 sm:shadow-card">
       <table role="table" className="block w-full border-collapse text-left text-sm sm:table">
         <caption className="sr-only">{caption}</caption>
-        <thead role="rowgroup" className="max-sm:sr-only">
+        <thead role="rowgroup" className="totals-header max-sm:sr-only">
           <tr role="row">
             <th role="columnheader" scope="col" className="eyebrow px-3 py-2.5 text-left">
               {firstColumn}
@@ -86,12 +86,12 @@ export function TotalsTable({
               <tr
                 key={key}
                 role="row"
-                className="card grid grid-cols-3 gap-1.5 p-3 sm:table-row sm:rounded-none sm:border-0 sm:border-t sm:border-neutral-100 sm:bg-transparent sm:p-0 sm:shadow-none sm:first:border-t-0 sm:hover:bg-neutral-50"
+                className="totals-row card grid grid-cols-3 gap-1.5 p-3 sm:table-row sm:rounded-none sm:border-0 sm:border-t sm:border-neutral-100 sm:bg-transparent sm:p-0 sm:shadow-none sm:first:border-t-0 sm:hover:bg-neutral-50"
               >
                 <th
                   scope="row"
                   role="rowheader"
-                  className="col-span-3 px-1 pb-1 text-left font-display text-[1.0625rem] font-bold sm:px-3 sm:py-0.5 sm:font-sans sm:text-sm sm:font-semibold"
+                  className="totals-head col-span-3 px-1 pb-1 text-left font-display text-[1.0625rem] font-bold sm:px-3 sm:py-0.5 sm:font-sans sm:text-sm sm:font-semibold"
                 >
                   {head}
                 </th>

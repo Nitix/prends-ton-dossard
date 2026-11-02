@@ -360,6 +360,41 @@ Crête's look and which a sheet may restyle there too:
 | `.avatar-soft`              | the photo of a runner on their hero (the pastel of their initials)              |
 | `display-title` (a utility) | the title of a hero, of an event card, of a window, the month of the agenda     |
 
+Every other piece that a variant restyles has a class of its own too (Task 5),
+for `full.css`. The parts of a piece are named after it (`.dialog-title` is in
+`.dialog`):
+
+| Area                   | Classes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The frame              | `.app-header-bar` (its row: the name of the app), `.brand-link` (the name, a link home), `.tabbar-list` (the `ul` of the tabs), `.tab-icon` (the drawing over the word of a tab), `.offline-banner`, `.toasts` (where the messages rise), `.toast` (a message), `.toast-dot` (its dot)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| A window               | `.dialog` (the panel, the `<dialog>`), `.dialog-content` (its padding), `.dialog-glow` and `.dialog-band` (the glow and the line of dawn at its top: decoration), `.dialog-head` (the row of the title and the close button), `.dialog-title`, `.dialog-close`, `.dialog-body` (what it holds)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| A form                 | `.field` (a label, its control, its hint and its error; a `fieldset` for a duration or a time), `.field-label` (the `label` or the `legend`), `.field-input` (every input, select and text area: `INPUT`), `.field-readonly` (a text to copy), `.field-hint`, `.field-error`; `.event-form`, `.form-card` (its white cards), `.format-fieldset` and `.format-legend` (a format of the form, its « Épreuve 1 »), `.period-line` (the line under the dates), `.duplicate-hint`, `.form-actions`; `.login-form`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Lists and filters      | `.filters` (the box of the filters), `.filter` (one of them), `.filter-label`; `.month-section` (a month of the list), `.event-list` (the cards of a list: the list, the group's next events, a day of the agenda); `.empty-state`; `.load-failure`; `.provisional` (the page before the app)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| An event card          | `.event-card-head` (the day and what is beside it), `.event-card-title`, `.event-card-place`, `.event-card-deadline` (`data-kind`), `.event-card-body` (what is under the head), `.event-card-people` (`data-kind`: `interested`, `supporters`), `.event-card-formats`, `.event-card-format`, `.format-line` (the line of a format: `FormatLine`), `.format-name`, `.format-parts`, `.format-date`; `.chips` (the runners of a card), `.chip` (`data-confirmed`), `.avatar` (`data-tint` on the initials)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| The page of an event   | `.event-hero-body` (the words of Crête's hero, its padding), `.event-hero-title`, `.event-hero-facts` (the date and the place), `.event-hero-deadline` (`data-kind`), `.event-hero-notes`, `.register-link`; `.event-page`, `.register-reminder` (the box that says to register), `.event-actions`, `.event-action` (`data-action`), `.event-sections`, `.event-section` (a white card of the page: `SECTION`, `data-section` on the interested and the supporters), `.format-section`, `.format-title` and `.format-measures` (Crête's title of a format: `FormatTitle`), `.format-date`, `.format-empty`, `.participant-list`, `.participant-row` (`data-confirmed`), `.participant-name`, `.participant-detail`, `.participant-unconfirmed`, `.non-starters`, `.non-starters-summary`, `.menu-button`, `.menu-popover`, `.menu-item` (`aria-current`), `.menu-check`; `.comments`, `.comment`, `.comment-form`; `.offers` (`data-kind`: `ride`, `lodging`), `.offer`, `.offer-passengers` |
+| A track                | `.route-section` (the course of a format, under it), `.route-title`, `.route-figures` (Crête's tiles of the figures: `TrackFigures`), `.route-altitude`, `.route-links`, `.map-box` (the frame of the map, and of what stands in for it), `.map-loading`, `.map-unavailable`, `.track-map` and Leaflet's own classes (`TrackMap.css`); `.elevation-profile`, `.profile-chart`, `.profile-grid`, `.profile-baseline`, `.profile-line`, `.profile-label`, `.profile-tick`, `.profile-summit`, `.profile-reading` (the figures over the summit or the cursor), `.profile-cursor`, `.profile-legend`                                                                                                                                                                                                                                                                                                                                                                                             |
+| The home page          | `.home-page`, `.passkey-card` (the card that offers a key to sign in), `.passkey-card-glow`, `.passkey-card-title`, `.passkey-card-text`, `.passkey-card-actions`; `.page-block` (a block of a page, `data-block`: `pending`, `results`, `registrations`, `upcoming`, `group`, `comments`, and on a runner's page `years`, `history`), `.race-list` (the rows of a block), `.pending-row` (to confirm: its dashes say it), `.result-row`, `.todo-row`, `.todo-countdown`, `.upcoming-row` (`data-confirmed`), `.days-left` (the days left in words, beside a ring), `.countdown-ring` (Crête's ring: `CountdownRing`), `.latest-comment`, `.latest-comment-mark`                                                                                                                                                                                                                                                                                                                             |
+| The agenda             | `.agenda-month` (the month and its grid), `.month-nav`, `.month-nav-title`, `.nav-arrow` (the arrows of a month, of the stats), `.month-grid`, `.month-grid-weekday`, `.agenda-cell` (`data-in-month`), `.agenda-day` (a day on a phone: `aria-pressed` when chosen, `aria-current="date"` today), `.agenda-day-number` (also the `time` of a day from `md`, `aria-current="date"`), `.agenda-dots`, `.agenda-dot`, `.agenda-cell-body` (a day from `md`), `.agenda-events`, `.agenda-event`, `.day-list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Profile, runner, stats | `.profile-section` (a part of the profile or of the settings: a `.card` too when it is boxed), `.avatar-picker`, `.passkey-row` (a key, in the settings and in the admin), `.runner-hero-title`, `.history-row`, `.result-tag`; `.totals` (a table of totals), `.totals-header` (its titles, from `sm`), `.totals-row`, `.totals-head`, `.stat-tile-title` (the title of a tile on a phone)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| The admin              | `.admin-nav`, `.admin-tabs` (its list), `.admin-tab` (`aria-current`), `.member-row`, `.type-row`, `.event-picker`, `.admin-choice` (`data-checked`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| The sign-in pages      | `.welcome` (the whole page, on the sky), `.welcome-head` (the name of the app over the card), `.welcome-card` (the card: a utility of `styles.css`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+A state is an attribute, never a utility: `data-kind` (`open`, `closed`) on a
+deadline, `data-confirmed` (`true`, `false`) on a chip or a row, `aria-current`
+on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
+`data-action` (`join`, `add`, `calendar`, `edit`, `delete`). A rule hooks on
+these classes and attributes, and on nothing else of the markup: never on a
+utility class (`p.rounded-full`, `.bg-neutral-100`, `.hover\:bg-iris-50`), never
+on the place of an element in Crête's markup (`.event-hero > div`,
+`.event-card > div + div`, `> span:nth-child(2)`). A piece that has no class
+is asked for in `README.md` and in the shared code, not hooked another way.
+
+A dashed border or outline in `mix.css` or `full.css` is either a state, in a
+colour of the theme with 3:1 on a card and on the sheet in each mode of the
+skin, or a decoration of the list in `../dashed.test.ts` (`DECORATION`, by the
+class of its piece: `.bib-tear`, `.perforation`…), which is never read as « not
+confirmed ».
+
 `mix.css` and `full.css` set no custom property (the colours stay in the palette,
 where the contrast tests read them), and every rule is the skin's. The forms they
 may use, and only these (`sheetProblems` in `../test/theme.ts`, tested on sheets of
@@ -444,28 +479,52 @@ export const EventCard = skinnable("EventCard", EventCardBase);
 The app draws the skinnable one (`EventCard`); `…Base` is Crête's, exported for
 the tests. The pieces made skinnable:
 
-| Name         | Where                             | Props (`types.ts`)                             | What it is                                                                   |
-| ------------ | --------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| `EmptyState` | `components/EmptyState.tsx`       | `title`, `hint`                                | a list with nothing in it                                                    |
-| `EventCard`  | `features/events/EventCard.tsx`   | `view`, `list`                                 | an event in a list (`.event-card`): home, upcoming, past, agenda             |
-| `EventHero`  | `features/events/EventHero.tsx`   | `view`, `heading`                              | the top of the page of an event (`.event-hero`), its `h1`                    |
-| `DateChip`   | `components/Dawn.tsx`             | `start`, `end?`, `label`, `size?` (`md`, `lg`) | the day or days of an event (`.date-chip`), a picture; `label` says it       |
-| `RunnerHero` | `features/runners/RunnerHero.tsx` | `runner` (undefined while loading), `heading`  | the top of the page of a runner (`.runner-hero`), their photo and their `h1` |
+| Name            | Where                             | Props (`types.ts`)                               | What it is                                                                                                   |
+| --------------- | --------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `EmptyState`    | `components/EmptyState.tsx`       | `title`, `hint`                                  | a list with nothing in it                                                                                    |
+| `EventCard`     | `features/events/EventCard.tsx`   | `view`, `list`                                   | an event in a list (`.event-card`): home, upcoming, past, agenda                                             |
+| `EventHero`     | `features/events/EventHero.tsx`   | `view`, `heading`                                | the top of the page of an event (`.event-hero`), its `h1`                                                    |
+| `DateChip`      | `components/Dawn.tsx`             | `start`, `end?`, `label`, `size?` (`md`, `lg`)   | the day or days of an event (`.date-chip`), a picture; `label` says it                                       |
+| `RunnerHero`    | `features/runners/RunnerHero.tsx` | `runner` (undefined while loading), `heading`    | the top of the page of a runner (`.runner-hero`), their photo and their `h1`                                 |
+| `FormatTitle`   | `features/events/FormatTitle.tsx` | `formatView`, `parts`                            | the words of the title of a format on the page of an event: its name, then its measures (`.format-title`)    |
+| `TrackFigures`  | `features/route/TrackFigures.tsx` | `figures`, `altitude`, `start?`                  | the figures of a track over its map: length, gain, loss, then the altitudes (`.route-figures`, `.stat-tile`) |
+| `CountdownRing` | `components/Dawn.tsx`             | `days`, `tone?` (`color`, `light`), `className?` | the days left before a race or a deadline, a picture (`.countdown-ring`); the words beside it say them       |
 
 - `view` is the event as the app has it (`EventView`): the event, its formats with
   who starts them, the interested and the supporters, its days.
 - `list` tells the lists apart, for a variant that marks them (Crête does not):
   `home` (the group's next events), `upcoming` and `past` (the list), `agenda`.
+- `parts` are the words of a format as `formatMeasures` gives them (its name,
+  then its measures); `figures` the figures of a track in words (« 12,6 km »,
+  « 724 m D+ », « 728 m D− »), `altitude` its lowest and highest points in
+  words or null, `start` its first point (for a picture of where it starts). A
+  variant keeps every word, in its order (a measure in a tag keeps its
+  separator « · » in the text, `sr-only`).
+- A `CountdownRing` is decoration: a variant stays hidden from screen readers
+  (`aria-hidden`), or draws nothing (the words beside it say the days: a skin
+  that marks them otherwise styles `.days-left`).
 - `heading` is what the `h1` of a hero carries: spread it on the variant's `h1`
   (`<h1 {...heading}>`). It holds its id (the actions name it), the attribute the
   page gives the focus by, `tabIndex={-1}`, and the ref of a runner's title.
-- What a piece shows besides, it reads as Crête's does: the day (`useToday`,
-  `daysBetween`), the registration (`registrationState`, `registrationLabel`,
-  `DAYS_LEFT_SHOWN` in `features/events/registration.ts`, `webAddress`), the link
-  to register (`RegisterLink`, `features/events/RegisterLink.tsx`), the formats
-  (`FormatLine`, `features/events/FormatLine.tsx`, or `formatMeasures`), the
-  runners (`ParticipantChips`), the days left before an event (`CountdownRing`,
-  `components/Dawn.tsx`).
+- What a piece shows besides, it reads as Crête's does, with the shared
+  helpers rather than a copy of their code:
+  - the day: `useToday`, `daysBetween`, and `daysToGo(start, end, today)`
+    (`lib/dates.ts`), the days left before an event for a countdown: 0 on its
+    first day and while it is under way, null once it is over;
+  - the registration: `registrationState`, `registrationLabel` (« Inscriptions
+    jusqu'au … », « Inscriptions closes »), and `deadlineText(state, f, t)`
+    (`features/events/registration.ts`), the sentence of a hero: the label, and
+    in the last week the days left after « · » (`DAYS_LEFT_SHOWN`); `webAddress`,
+    and the link to register, `RegisterLink`;
+  - the formats: `FormatLine` (`features/events/FormatLine.tsx`), the line of a
+    format on a card, which a variant marks its own way with `marks` (`before`:
+    a picture before the parts; `name`: how the name is drawn; `measure`: how
+    each measure is drawn, a tag or a chip, its separator kept in the text and
+    hidden from the eye) and the classes of its line (`className`); `FormatParts`,
+    the same parts with their marks, for a title of a variant's own
+    (`FormatTitle`); `formatMeasures` for the words alone;
+  - the runners: `ParticipantChips`; the days left: `CountdownRing`
+    (`components/Dawn.tsx`).
 
 The skin exports the variant from `mix.tsx` or `full.tsx` (full wins over mix):
 
@@ -538,21 +597,39 @@ both hold:
   the run: each piece of `VariantProps` draws its base, or the skin's variant
   given the base (which then differs from it); the example's card frames the
   base it gets.
+- `variants.test.tsx`: the feature test of every variant, whoever writes it: in
+  each skin, each piece it replaces at the depth of the run says everything its
+  base says (every text a screen reader has, every link, every named list, every
+  button), over the shapes an event takes (`EVENT_SHAPES`: rich, closed, no
+  format, a single day, under way, a one-word name, next year); a ring says
+  nothing, as its base. A skin's own tests use the same harness,
+  `../test/variant.tsx`: `inApp` (a piece in the app: French, a day, a router,
+  a skin, the frame of a page), `said` (what a screen reader has, never what is
+  `aria-hidden`), `keepsEverything`, `EVENT_SHAPES`, `hex`; with the module of
+  PocketBase made for it, `../test/pbMock.ts` (its first lines say how to mock
+  `lib/pb` with it).
 - `tokens.test.tsx`: in each skin, Crête's motifs and the map of a track take
   every colour from a `--motif-*` or `--map-*` property: none written out, in an
   attribute, a style or the arbitrary value of a class (`shadow-[…]`,
   `drop-shadow-[…]`; a mask's is only an alpha); a window, `--shade-dialog`; a
   toast, the white pill and the ring of the days left on a hero, their shades
   and veil; the titles, the style of `--display-*`. These pieces are checked at
-  every depth: a rule of `mix.css` or `full.css` on the window of a dialog, the
-  labels or the zoom of the map, or the titles, reads the property (a colour or
-  a style written out there would fail them).
+  every depth: a rule of `mix.css` or `full.css` on the window of a dialog
+  (`.dialog`), a message (`.toast`), the labels or the zoom of the map, or the
+  titles, reads the property (a colour or a style written out there would fail
+  them). The white pill is checked at palette only (`--shade-on-dawn`): at mix
+  and full a skin may draw « S'inscrire » its own way.
 - `smoke.test.tsx`: every skin × mode, at 320 px: home, an event with its map,
   profile and a dialog, a runner, the form, a public page (its card in
   `--shade-welcome`, `--welcome-card` and `--welcome-rim`), the settings, forced
   colours; 44 px targets, the marks of the titles, the current tab, the «+» and
   the main button in the skin's paint, ink and halo (the halo of `shadow-glow` in
-  the skin, transparent too), what the heroes say whoever draws them (the end
+  the skin, transparent too; at palette only, since mix and full may draw them
+  their own way); at every depth, the current tab told apart from the others by
+  more than the colour of its words (`toldApart`: its weight, a fill, a shadow,
+  a border, a mark before or after it), and its words 4.5:1 on what is behind
+  them (`textContrast` of `../test/computed.ts`: a fill that covers the tab, else
+  what is under it; a bar cut out of the paint is not behind the words); what the heroes say whoever draws them (the end
   of the registrations, the notes, the link to register, the photo), the shades
   of the hero's pieces and the style of its title (at palette only, since mix
   and full may restyle them); the skins' sheets in the page, and what the
@@ -564,7 +641,9 @@ both hold:
 - `../dark.test.ts`, `../contrast.test.ts`, `../dashed.test.ts`,
   `../features/route/slope.test.ts`: every skin × mode (`SKIN_CASES` of
   `../test/theme.ts`), the sky included, and the guards of the stylesheets
-  (`dark.test.ts`: the three levels, and the `fonts.css` of every folder).
+  (`dark.test.ts`: the three levels, and the `fonts.css` of every folder;
+  `dashed.test.ts`: every dashed border or outline of a `mix.css` or `full.css`,
+  `sheetDashes`, a state at 3:1 or a decoration of its list).
 - `../fonts.test.ts`: the faces of every `fonts.css` (the package's files, its own
   declaration of each, each once), the families and weights each skin needs, and
   the faces of an italic or wider title (`--display-style`, `--display-stretch`).

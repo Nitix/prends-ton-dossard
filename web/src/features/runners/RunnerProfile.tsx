@@ -84,7 +84,11 @@ function Years({ rows }: { rows: ResultRow[] }) {
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section
+      aria-labelledby={headingId}
+      data-block="years"
+      className="page-block flex flex-col gap-3"
+    >
       <BlockTitle id={headingId}>{t.runner.years}</BlockTitle>
       <TotalsTable
         caption={t.runner.years}
@@ -105,12 +109,16 @@ function History({ rows }: { rows: ResultRow[] }) {
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section
+      aria-labelledby={headingId}
+      data-block="history"
+      className="page-block flex flex-col gap-3"
+    >
       <BlockTitle id={headingId}>{t.runner.history}</BlockTitle>
       {rows.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.runner.noHistory}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="race-list flex flex-col gap-2">
           {rows.map((row) => (
             <HistoryRow key={row.participation.id} row={row} />
           ))}
@@ -130,7 +138,7 @@ function HistoryRow({ row }: { row: ResultRow }) {
   const result = resultParts(participation, f, t);
 
   return (
-    <li className="card flex flex-col p-4">
+    <li className="history-row card flex flex-col p-4">
       <h3 className="card-title">
         <Link
           to="/evenements/$id"
@@ -147,7 +155,7 @@ function HistoryRow({ row }: { row: ResultRow }) {
       </p>
       <p className="text-sm text-neutral-600">{f.dateLong(date)}</p>
       {result.length > 0 && (
-        <p className="mt-1 self-start rounded-full bg-iris-50 px-2.5 py-1 text-sm font-semibold text-iris-800 ring-1 ring-iris-100">
+        <p className="result-tag mt-1 self-start rounded-full bg-iris-50 px-2.5 py-1 text-sm font-semibold text-iris-800 ring-1 ring-iris-100">
           {result.join(SEPARATOR)}
         </p>
       )}

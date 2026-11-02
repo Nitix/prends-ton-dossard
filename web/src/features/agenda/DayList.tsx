@@ -24,12 +24,12 @@ export function DayList({
     return <p className="text-sm text-neutral-600 md:hidden">{t.agenda.selectDay}</p>;
   }
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 md:hidden">
+    <section aria-labelledby={headingId} className="day-list flex flex-col gap-3 md:hidden">
       <BlockTitle id={headingId}>{f.dateLong(day)}</BlockTitle>
       {views.length === 0 ? (
         <p>{t.agenda.dayEmpty}</p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="event-list flex flex-col gap-3">
           {views.map((view) => (
             <li key={view.event.id}>
               <EventCard view={view} list="agenda" />

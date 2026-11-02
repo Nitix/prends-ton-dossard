@@ -17,13 +17,15 @@ import { afterEach, beforeAll, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
 import { SKIN_DEPTH, SKINS, chooseSkin, slotOf, variantOf } from ".";
-import { DateChip, DateChipBase } from "../components/Dawn";
+import { CountdownRing, CountdownRingBase, DateChip, DateChipBase } from "../components/Dawn";
 import { EmptyState, EmptyStateBase } from "../components/EmptyState";
 import { SectionMarker } from "../components/Slots";
 import { toEventView } from "../features/events/api";
 import { EventCard, EventCardBase } from "../features/events/EventCard";
 import { EventHero, EventHeroBase } from "../features/events/EventHero";
+import { FormatTitle, FormatTitleBase } from "../features/events/FormatTitle";
 import { aliceRunner, eventRecord } from "../features/events/testFixture";
+import { TrackFigures, TrackFiguresBase } from "../features/route/TrackFigures";
 import { RunnerHero, RunnerHeroBase } from "../features/runners/RunnerHero";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { ensureTemporal } from "../lib/temporal";
@@ -137,6 +139,9 @@ const NAMES: Record<VariantName, true> = {
   EventHero: true,
   DateChip: true,
   RunnerHero: true,
+  FormatTitle: true,
+  TrackFigures: true,
+  CountdownRing: true,
 };
 
 const pieces = (): Piece[] => [
@@ -158,6 +163,17 @@ const pieces = (): Piece[] => [
     runner: aliceRunner,
     heading: { ref: createRef<HTMLHeadingElement>(), tabIndex: -1 },
   })),
+  piece("FormatTitle", FormatTitle, FormatTitleBase, () => {
+    const formatView = view().formats[0];
+    if (formatView === undefined) throw new Error("the fixture has no format");
+    return { formatView, parts: ["Trail 42 km", "2 400 m D+", "max 10 h"] };
+  }),
+  piece("TrackFigures", TrackFigures, TrackFiguresBase, () => ({
+    figures: ["12,6 km", "724 m D+", "728 m D−"],
+    altitude: "altitude 450 m à 1 157 m",
+    start: { lat: 45.9, lon: 6.13 },
+  })),
+  piece("CountdownRing", CountdownRing, CountdownRingBase, () => ({ days: 9 })),
 ];
 
 test("slotted — chaque skin dessine son motif dans l'emplacement, ou celui de Crête", async () => {

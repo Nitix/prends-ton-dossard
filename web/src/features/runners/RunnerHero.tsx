@@ -29,7 +29,7 @@ export function RunnerHeroBase({ runner, heading }: RunnerHeroProps) {
       )}
       <h1
         {...heading}
-        className="relative min-w-0 font-display text-[clamp(1.5rem,8vw,1.875rem)] leading-[1.1] font-extrabold display-title break-words md:text-[2.25rem]"
+        className="runner-hero-title relative min-w-0 font-display text-[clamp(1.5rem,8vw,1.875rem)] leading-[1.1] font-extrabold display-title break-words md:text-[2.25rem]"
       >
         {runner ? runner.name : t.runner.title}
       </h1>

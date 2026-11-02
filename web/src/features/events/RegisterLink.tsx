@@ -24,7 +24,7 @@ export function RegisterLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`${tone === "onDawn" ? ON_DAWN : PRIMARY} inline-flex items-center gap-2 self-start ${className ?? ""}`}
+      className={`register-link ${tone === "onDawn" ? ON_DAWN : PRIMARY} inline-flex items-center gap-2 self-start ${className ?? ""}`}
     >
       {t.event.register}
       <ExternalIcon className="size-4 shrink-0" />

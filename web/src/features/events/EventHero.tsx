@@ -32,17 +32,17 @@ export function EventHeroBase({ view, heading }: EventHeroProps) {
   return (
     <header className="event-hero on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
       <HeroArt place="event" />
-      <div className="relative flex flex-col gap-3 p-5 pb-[5.25rem] md:p-7 md:pb-24">
+      <div className="event-hero-body relative flex flex-col gap-3 p-5 pb-[5.25rem] md:p-7 md:pb-24">
         <div className="flex items-start justify-between gap-4">
           <h1
             {...heading}
-            className="min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold display-title break-words md:text-[2.375rem]"
+            className="event-hero-title min-w-0 font-display text-[1.875rem] leading-[1.1] font-extrabold display-title break-words md:text-[2.375rem]"
           >
             {event.name}
           </h1>
           {daysToGo > 0 && <CountdownRing days={daysToGo} tone="light" className="mt-1" />}
         </div>
-        <div className="flex flex-col gap-1.5 text-[0.9375rem] font-medium">
+        <div className="event-hero-facts flex flex-col gap-1.5 text-[0.9375rem] font-medium">
           <p className="flex items-center gap-2">
             <CalendarIcon className="size-[1.125rem] shrink-0 opacity-90" />
             {severalDays
@@ -55,8 +55,12 @@ export function EventHeroBase({ view, heading }: EventHeroProps) {
           </p>
         </div>
         {deadline && (
-          <p className="flex items-start gap-2 self-start rounded-2xl bg-(--hero-veil) px-3 py-2 text-sm font-semibold ring-1 ring-white/25">
+          <p
+            data-kind={deadline.kind}
+            className="event-hero-deadline flex items-start gap-2 self-start rounded-2xl bg-(--hero-veil) px-3 py-2 text-sm font-semibold ring-1 ring-white/25"
+          >
             <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
+            {/* The deadline and its days left, two texts: `deadlineText` is the same sentence in one, for a variant. */}
             <span>
               {registrationLabel(deadline, f, t)}
               {deadline.kind === "open" &&
@@ -66,7 +70,7 @@ export function EventHeroBase({ view, heading }: EventHeroProps) {
           </p>
         )}
         {event.notes && (
-          <p className="self-start rounded-2xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink shadow-[0_8px_24px_-14px_var(--shade-notes)]">
+          <p className="event-hero-notes self-start rounded-2xl glass px-3.5 py-3 text-[0.9375rem] whitespace-pre-line text-ink shadow-[0_8px_24px_-14px_var(--shade-notes)]">
             {event.notes}
           </p>
         )}

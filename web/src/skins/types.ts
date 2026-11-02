@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode, RefObject } from "react";
 
-import type { EventView } from "../features/events/api.ts";
+import type { EventView, FormatView } from "../features/events/api.ts";
 import type { RunnerRecord } from "../lib/types.ts";
 
 // What a skin is: a way to dress the app, chosen on the device (see index.ts
@@ -145,6 +145,47 @@ export type RunnerHeroProps = {
 };
 
 /**
+ * The props of features/events/FormatTitle.tsx: the words of the title of the
+ * section of a format, on the page of an event (its name, then its measures).
+ */
+export type FormatTitleProps = {
+  /** The format, its kind of race (`raceType`), its day and its runners. */
+  formatView: FormatView;
+  /** Its parts in words, as `formatMeasures` gives them: its name, then its measures. */
+  parts: readonly string[];
+};
+
+/**
+ * The props of features/route/TrackFigures.tsx: the figures of the track of a
+ * format, over its map and its profile.
+ */
+export type TrackFiguresProps = {
+  /**
+   * Its figures in words, in order: its length, then its gain and its loss
+   * when it has altitudes (« 12,6 km », « 724 m D+ », « 728 m D− »).
+   */
+  figures: readonly string[];
+  /** Its lowest and highest points in words (« altitude 450 m à 1 157 m »), or null without altitudes. */
+  altitude: string | null;
+  /** Where it starts, for a variant that places it (decoration): its first point. */
+  start?: { lat: number; lon: number };
+};
+
+/**
+ * The props of `CountdownRing` (components/Dawn.tsx): the days left before a
+ * race or a deadline as a picture, hidden from screen readers (the words
+ * beside it say them).
+ */
+export type CountdownRingProps = {
+  /** The days left: 0 on the day. */
+  days: number;
+  /** `color` on a card, `light` (white) on the sky of a hero. */
+  tone?: "color" | "light";
+  /** Its place in what holds it (a margin). */
+  className?: string;
+};
+
+/**
  * The components that a skin may replace at a depth beyond palette, by name,
  * with their props: a component made skinnable (`skinnable` in components.tsx)
  * adds its line here. A name that is not here does not typecheck, in a skin's
@@ -156,6 +197,9 @@ export type VariantProps = {
   EventHero: EventHeroProps;
   DateChip: DateChipProps;
   RunnerHero: RunnerHeroProps;
+  FormatTitle: FormatTitleProps;
+  TrackFigures: TrackFiguresProps;
+  CountdownRing: CountdownRingProps;
 };
 
 export type VariantName = keyof VariantProps;

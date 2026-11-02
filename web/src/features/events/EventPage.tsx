@@ -42,6 +42,7 @@ import { useEvent, type EventView, type FormatView, type ParticipationView } fro
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { EventHero } from "./EventHero";
 import { formatDisplayName, formatMeasures } from "./formatName";
+import { FormatTitle } from "./FormatTitle";
 import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
 import { RegisterLink } from "./RegisterLink";
 import { registrationState } from "./registration";
@@ -215,12 +216,13 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const canJoin = !!options && (options.formats.length > 0 || options.undecided);
   const notStarting = nonStarters(view);
 
-  const ACTION = `${SECONDARY.replace("px-4", "px-3.5")} inline-flex items-center justify-center gap-2 text-center text-[0.875rem] leading-tight`;
+  const ACTION = `event-action ${SECONDARY.replace("px-4", "px-3.5")} inline-flex items-center justify-center gap-2 text-center text-[0.875rem] leading-tight`;
   const secondary = [
     me && formats.length > 0 && (
       <button
         key="add"
         type="button"
+        data-action="add"
         aria-describedby={titleId}
         onClick={() => {
           setOpened("add");
@@ -234,6 +236,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
     <button
       key="calendar"
       type="button"
+      data-action="calendar"
       onClick={() => {
         downloadEventIcs(view, t.event.calendarFileName, lang);
       }}
@@ -242,7 +245,13 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       <CalendarPlusIcon className="size-[1.125rem] shrink-0 text-iris-600" />
       {t.event.addToCalendar}
     </button>,
-    <Link key="edit" to="/evenements/$id/modifier" params={{ id: event.id }} className={ACTION}>
+    <Link
+      key="edit"
+      to="/evenements/$id/modifier"
+      params={{ id: event.id }}
+      data-action="edit"
+      className={ACTION}
+    >
       <PencilIcon className="size-[1.125rem] shrink-0 text-iris-600" />
       {t.common.edit}
     </Link>,
@@ -250,6 +259,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       <button
         key="delete"
         type="button"
+        data-action="delete"
         onClick={() => {
           setOpened("delete");
         }}
@@ -267,10 +277,11 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       <button
         key="join"
         type="button"
+        data-action="join"
         onClick={() => {
           setOpened("join");
         }}
-        className={`${PRIMARY} col-span-2 inline-flex items-center justify-center gap-2 sm:px-6`}
+        className={`event-action ${PRIMARY} col-span-2 inline-flex items-center justify-center gap-2 sm:px-6`}
       >
         <RunIcon className="size-5 shrink-0" />
         {t.participation.join}
@@ -288,14 +299,14 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   ];
 
   return (
-    <article ref={root} className="flex flex-col gap-6">
+    <article ref={root} className="event-page flex flex-col gap-6">
       {/* The hero: the name of the event, its days, its place, its registration (see EventHero). */}
       <EventHero view={view} heading={{ id: titleId, "data-focus": PAGE_TITLE, tabIndex: -1 }} />
 
       {reminded && (
         <aside
           aria-label={t.event.reminderTitle}
-          className="flex flex-col gap-3 rounded-[1.25rem] bg-peach-50 p-4 ring-1 ring-peach-200"
+          className="register-reminder flex flex-col gap-3 rounded-[1.25rem] bg-peach-50 p-4 ring-1 ring-peach-200"
         >
           <p className="flex items-start gap-2.5 text-neutral-900">
             <ClockIcon className="mt-0.5 size-5 shrink-0 text-peach-700" />
@@ -306,9 +317,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       )}
 
       {/* The actions: the main one across, the others two by two on a phone, each a visible button. */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions}</div>
+      <div className="event-actions grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions}</div>
 
-      <div className="flex flex-col gap-3">
+      <div className="event-sections flex flex-col gap-3">
         {view.interested.length > 0 && (
           <InterestedSection view={view} me={me} onDeparture={departed} />
         )}
@@ -425,11 +436,15 @@ function EventSection({
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
+    <section
+      aria-labelledby={headingId}
+      data-section={focus}
+      className={`flex flex-col gap-3 ${SECTION}`}
+    >
       <BlockTitle id={headingId} data-focus={focus} tabIndex={-1}>
         {title}
       </BlockTitle>
-      <ul aria-label={t.event.participants} className="flex flex-col gap-2">
+      <ul aria-label={t.event.participants} className="participant-list flex flex-col gap-2">
         {list.map((participationView) => (
           <ParticipantRow
             key={participationView.participation.id}
@@ -479,28 +494,26 @@ function FormatSection({
   const today = useToday();
   const headingId = useId();
   const { format, raceType, date, participations } = formatView;
-  const [first, ...rest] = formatMeasures(format, raceType.label, f, t);
+  const parts = formatMeasures(format, raceType.label, f, t);
   // Those who do not start are in the list at the bottom of the page.
   const onTheStart = starters(participations);
   // Nobody has finished a race that has not started: the menus of the rows know it.
   const started = raceStarted(format, event, today);
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
+    <section
+      aria-labelledby={headingId}
+      className={`format-section flex flex-col gap-3 ${SECTION}`}
+    >
       <BlockTitle id={headingId} data-focus={formatTitle(format.id)} tabIndex={-1}>
-        {/* The name in ink, the measures after it in grey: one text, read as one line. */}
-        <span className="min-w-0">
-          {first}
-          {rest.length > 0 && (
-            <span className="font-semibold text-neutral-600">{`${SEPARATOR}${rest.join(SEPARATOR)}`}</span>
-          )}
-        </span>
+        {/* Its words as the skin draws them: Crête's name in ink, the measures in grey, one line. */}
+        <FormatTitle formatView={formatView} parts={parts} />
       </BlockTitle>
-      {showDate && <p className="eyebrow -mt-1">{f.date(date)}</p>}
+      {showDate && <p className="format-date eyebrow -mt-1">{f.date(date)}</p>}
       {onTheStart.length === 0 ? (
-        <p className="text-sm text-neutral-600">{t.event.nobody}</p>
+        <p className="format-empty text-sm text-neutral-600">{t.event.nobody}</p>
       ) : (
-        <ul aria-label={t.event.participants} className="flex flex-col gap-2">
+        <ul aria-label={t.event.participants} className="participant-list flex flex-col gap-2">
           {onTheStart.map((participationView) => (
             <ParticipantRow
               key={participationView.participation.id}
@@ -541,14 +554,14 @@ function NonStartersSection({
   const today = useToday();
 
   return (
-    <details className={SECTION}>
+    <details className={`non-starters ${SECTION}`}>
       <summary
         data-focus={NON_STARTERS}
-        className="min-h-11 cursor-pointer py-2 text-lg font-bold tracking-tight marker:text-iris-500"
+        className="non-starters-summary min-h-11 cursor-pointer py-2 text-lg font-bold tracking-tight marker:text-iris-500"
       >
         {t.event.nonStarters(list.length)}
       </summary>
-      <ul aria-label={t.event.participants} className="mt-2 flex flex-col gap-2">
+      <ul aria-label={t.event.participants} className="participant-list mt-2 flex flex-col gap-2">
         {list.map(({ formatView, participationView }) => {
           const name = formatDisplayName(formatView.format, formatView.raceType.label, f, t);
           return (
@@ -611,7 +624,8 @@ function ParticipantRow({
   return (
     <li
       ref={row}
-      className={`flex items-center justify-between gap-2 py-1 pr-1 pl-2 ${
+      data-confirmed={confirmed}
+      className={`participant-row flex items-center justify-between gap-2 py-1 pr-1 pl-2 ${
         confirmed ? "rounded-2xl border-2 border-transparent bg-neutral-50" : UNCONFIRMED_ROW
       }`}
     >
@@ -623,7 +637,7 @@ function ParticipantRow({
         />
         <div className="min-w-0">
           {/* The name leads to the page of the runner, with their results. */}
-          <p className="font-medium break-words">
+          <p className="participant-name font-medium break-words">
             <Link
               to="/coureurs/$id"
               params={{ id: runner.id }}
@@ -632,9 +646,11 @@ function ParticipantRow({
               {runner.name}
             </Link>
           </p>
-          {detail !== undefined && <p className="text-sm break-words text-neutral-600">{detail}</p>}
+          {detail !== undefined && (
+            <p className="participant-detail text-sm break-words text-neutral-600">{detail}</p>
+          )}
           {!confirmed && (
-            <p className="text-sm text-neutral-600">
+            <p className="participant-unconfirmed text-sm text-neutral-600">
               {addedBy ? t.event.addedByUnconfirmed(addedBy.name) : t.event.unconfirmed}
             </p>
           )}

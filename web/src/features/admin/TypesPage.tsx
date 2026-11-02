@@ -64,7 +64,7 @@ export function TypesPage() {
             {raceTypes.data.map((raceType) => (
               <li
                 key={raceType.id}
-                className="card flex flex-wrap items-center justify-between gap-3 p-4"
+                className="type-row card flex flex-wrap items-center justify-between gap-3 p-4"
               >
                 <h2 className="card-title min-w-0 break-words">{raceType.label}</h2>
                 <div className="flex flex-wrap gap-2">

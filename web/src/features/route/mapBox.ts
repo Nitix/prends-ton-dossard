@@ -6,4 +6,4 @@
  * need not load the map (and Leaflet) to know it.
  */
 export const MAP_BOX =
-  "h-72 w-full overflow-hidden rounded-[1.25rem] border-2 border-rim shadow-[var(--map-frame)]";
+  "map-box h-72 w-full overflow-hidden rounded-[1.25rem] border-2 border-rim shadow-[var(--map-frame)]";

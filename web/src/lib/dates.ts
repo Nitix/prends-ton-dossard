@@ -151,6 +151,21 @@ export function monthGrid(
   return weeks;
 }
 
+/**
+ * The days left before an event, for a countdown (a ring, a figure): the days
+ * from `asOf` (today) to its first day, 0 on that day and while it is under
+ * way, and null once its last day is over (it has none). The words of a card
+ * or a hero say them beside the picture.
+ */
+export function daysToGo(
+  start: Temporal.PlainDate,
+  end: Temporal.PlainDate,
+  asOf: Temporal.PlainDate,
+): number | null {
+  if (Temporal.PlainDate.compare(end, asOf) < 0) return null;
+  return Math.max(0, daysBetween(asOf, start));
+}
+
 /** Whole days from `from` to `to`: negative when `to` comes first. */
 export function daysBetween(from: Temporal.PlainDate, to: Temporal.PlainDate): number {
   return from.until(to, { largestUnit: "day" }).days;

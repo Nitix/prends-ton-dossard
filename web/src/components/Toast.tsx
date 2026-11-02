@@ -39,13 +39,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext value={{ show }}>
       {children}
       {/* Above the tab bar on a phone, above the corner on a larger screen. */}
-      <output className="pointer-events-none fixed inset-x-4 bottom-36 z-40 flex flex-col items-center gap-2 md:bottom-6">
+      <output className="toasts pointer-events-none fixed inset-x-4 bottom-36 z-40 flex flex-col items-center gap-2 md:bottom-6">
         {toasts.map((toast) => (
           <p
             key={toast.id}
-            className="flex animate-rise items-center gap-2.5 rounded-full bg-toast py-3 pr-5 pl-3.5 text-sm font-medium text-white shadow-[0_14px_36px_-12px_var(--shade-toast)] ring-1 ring-white/10"
+            className="toast flex animate-rise items-center gap-2.5 rounded-full bg-toast py-3 pr-5 pl-3.5 text-sm font-medium text-white shadow-[0_14px_36px_-12px_var(--shade-toast)] ring-1 ring-white/10"
           >
-            <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-dawn" />
+            <span aria-hidden="true" className="toast-dot size-2.5 shrink-0 rounded-full bg-dawn" />
             {toast.message}
           </p>
         ))}

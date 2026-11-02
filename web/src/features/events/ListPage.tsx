@@ -107,11 +107,11 @@ function MonthSection({
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section aria-labelledby={headingId} className="month-section flex flex-col gap-3">
       <h2 id={headingId} className="month-title">
         {f.monthTitle(month)}
       </h2>
-      <ul className="flex flex-col gap-3.5">
+      <ul className="event-list flex flex-col gap-3.5">
         {views.map((view) => (
           <li key={view.event.id}>
             <EventCard view={view} list={list} />

@@ -95,8 +95,8 @@ export function TimeInput({
   };
 
   return (
-    <fieldset className="flex flex-col gap-1">
-      <legend className="text-sm font-medium">{label}</legend>
+    <fieldset className="field flex flex-col gap-1">
+      <legend className="field-label text-sm font-medium">{label}</legend>
       {/* A field with its unit stay together when the line is too short for the three. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {PARTS.map((part) => (

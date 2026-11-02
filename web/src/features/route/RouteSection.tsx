@@ -1,7 +1,6 @@
 import { Component, lazy, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
-import { Figure } from "../../components/Figure";
 import { DownloadIcon, ExternalIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
@@ -11,6 +10,7 @@ import { ElevationProfile } from "./ElevationProfile";
 import { gpxStats, type TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
 import type { SlopeZone } from "./slope";
+import { TrackFigures } from "./TrackFigures";
 
 // The map brings Leaflet along: it is loaded when a track is shown, not with the page.
 const TrackMap = lazy(() => import("./TrackMap"));
@@ -40,7 +40,7 @@ class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }
 /** What stands in the place of a map that failed: one line, which is not an alert, since the page is all there. */
 function MapUnavailable() {
   const { t } = useI18n();
-  return <p className="text-sm text-neutral-600">{t.route.mapUnavailable}</p>;
+  return <p className="map-unavailable text-sm text-neutral-600">{t.route.mapUnavailable}</p>;
 }
 
 /** What stands in the place of the map while it loads: a box of its size, so that the page does not jump. */
@@ -48,7 +48,7 @@ function MapLoading() {
   const { t } = useI18n();
   return (
     <output
-      className={`${MAP_BOX} flex items-center justify-center bg-neutral-100 text-sm text-neutral-600`}
+      className={`map-loading ${MAP_BOX} flex items-center justify-center bg-neutral-100 text-sm text-neutral-600`}
     >
       {t.common.loading}
     </output>
@@ -90,33 +90,15 @@ function Track({ points }: { points: TrackPoint[] }) {
   const altitude =
     min === undefined || max === undefined ? null : t.route.altitude(f.meters(min), f.meters(max));
 
-  // The numbers as tiles; the separators stay in the text, for a screen reader,
-  // and so does the space before "D+" (at the start of its line in the tile, the
-  // space does not show).
-  const parts = summary.split(SEPARATOR);
+  const first = points[0];
 
   return (
     <>
-      <p className="flex gap-2">
-        {parts.map((part, i) => {
-          const [, value, suffix] = /^(.*?)( D[+−-])?$/u.exec(part) ?? [part, part, undefined];
-          return (
-            <span
-              key={part}
-              className="stat-tile flex min-w-0 flex-1 flex-col items-center justify-center rounded-2xl bg-neutral-50 px-2 py-2.5 text-center ring-1 ring-neutral-100"
-            >
-              {i > 0 && <span className="sr-only">{SEPARATOR}</span>}
-              <Figure className="font-display text-[1.0625rem] leading-tight font-extrabold tracking-tight text-ink">
-                {value ?? part}
-              </Figure>
-              {suffix !== undefined && (
-                <span className="text-xs font-bold text-iris-700">{suffix}</span>
-              )}
-            </span>
-          );
-        })}
-      </p>
-      {altitude !== null && <p className="text-sm text-neutral-600">{altitude}</p>}
+      <TrackFigures
+        figures={summary.split(SEPARATOR)}
+        altitude={altitude}
+        start={first && { lat: first.lat, lon: first.lon }}
+      />
       <MapBoundary>
         <Suspense fallback={<MapLoading />}>
           <TrackMap
@@ -156,14 +138,14 @@ export function RouteSection({ format }: { format: FormatRecord }) {
   if (file === undefined && course === null) return null;
 
   return (
-    <div className="mt-1 flex flex-col gap-3 border-t border-neutral-100 pt-4">
-      <h3 className="card-title">{t.route.title}</h3>
+    <div className="route-section mt-1 flex flex-col gap-3 border-t border-neutral-100 pt-4">
+      <h3 className="route-title card-title">{t.route.title}</h3>
       {file !== undefined && track.isPending && <output>{t.common.loading}</output>}
       {file !== undefined && track.isError && (
         <output className="text-sm text-neutral-700">{t.route.unreadable}</output>
       )}
       {track.data && <Track points={track.data} />}
-      <div className="flex flex-wrap gap-2">
+      <div className="route-links flex flex-wrap gap-2">
         {file !== undefined && (
           <a href={file} download className={`${SECONDARY} inline-flex items-center gap-2`}>
             <DownloadIcon className="size-[1.125rem] shrink-0 text-iris-600" />

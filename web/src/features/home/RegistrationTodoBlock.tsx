@@ -56,11 +56,15 @@ export function RegistrationTodoBlock({
   if (rows.length === 0) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section
+      aria-labelledby={headingId}
+      data-block="registrations"
+      className="page-block flex flex-col gap-3"
+    >
       <BlockTitle ref={heading} id={headingId} tabIndex={-1}>
         {t.home.todoTitle}
       </BlockTitle>
-      <ul className="flex flex-col gap-3">
+      <ul className="race-list flex flex-col gap-3">
         {rows.map((row) => (
           <TodoItem key={row.participation.id} row={row} onDealtWith={setDealt} />
         ))}
@@ -132,7 +136,7 @@ function TodoItem({
   }
 
   return (
-    <li className="card flex flex-col gap-3 p-4">
+    <li className="todo-row card flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
           <h3 id={titleId} className="card-title">
@@ -148,9 +152,9 @@ function TodoItem({
           <p className="text-sm text-neutral-600">{t.home.todoBefore(f.date(deadline))}</p>
         </div>
         {/* The words are the countdown: nothing here is told by a colour. The ring only shows it. */}
-        <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
+        <div className="todo-countdown flex shrink-0 flex-col items-center gap-1 pt-1">
           <CountdownRing days={daysLeft} />
-          <p className="text-xs font-semibold text-neutral-700">{f.inDays(daysLeft)}</p>
+          <p className="days-left text-xs font-semibold text-neutral-700">{f.inDays(daysLeft)}</p>
         </div>
       </div>
       {(site || formatView) && (

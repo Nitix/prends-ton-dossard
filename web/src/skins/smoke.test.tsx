@@ -22,7 +22,7 @@ import { ensureTemporal } from "../lib/temporal";
 import { chooseTheme } from "../lib/theme";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
-import { colourOf, ownDeclaration, shadowLayers } from "../test/computed";
+import { colourOf, ownDeclaration, shadowLayers, textContrast, toldApart } from "../test/computed";
 import { fontsReady } from "../test/fontsReady";
 import { withoutIds } from "../test/ids";
 import { emulateMedia, resetMedia } from "../test/media";
@@ -269,6 +269,18 @@ function expectOfSkin(actual: string, expected: string, what: string) {
 }
 
 /**
+ * A piece is painted with the deep dawn of the skin (`--dawn-deep`, a
+ * gradient): the current tab. At mix and full a skin may draw it its own way (a
+ * bar, a line, a pill of its own): there, nothing is checked here.
+ */
+function expectPaintOfSkin(element: Element, what: string) {
+  if (SKIN_DEPTH !== "palette") return;
+  const own = painted("--dawn-deep");
+  expect(own, "the deep dawn of the skin").toMatch(/gradient/);
+  expect(getComputedStyle(element).backgroundImage, `the paint of ${what}`).toBe(own);
+}
+
+/**
  * A title is drawn in the style of the display face that the skin gives
  * (`--display-*`: italic, capitals, a width, a spacing), as `page-title` is
  * (tokens.test.tsx). At mix and full a skin may restyle it.
@@ -336,14 +348,17 @@ for (const { skin, mode } of CASES) {
       ).toBe(marker);
     }
     // The current tab, variants of utilities (`aria-[current=page]:bg-dawn-deep`,
-    // `aria-[current=page]:shadow-glow`), takes the paint and the halo of the skin.
-    const current = screen
-      .getByRole("navigation", { name: fr.nav.main })
-      .getByRole("link", { name: fr.nav.home, exact: true })
-      .element();
-    const own = painted("--dawn-deep");
-    expect(own).toMatch(/gradient/);
-    expect(getComputedStyle(current).backgroundImage).toBe(own);
+    // `aria-[current=page]:shadow-glow`), takes the paint and the halo of the skin
+    // at palette. At mix and full a skin may draw it its own way (a bar, a line,
+    // a pill of its own colour): at every depth, it is told apart from the other
+    // tabs by more than the colour of its words, and its words read on what is
+    // behind them (4.5:1).
+    const tabs = screen.getByRole("navigation", { name: fr.nav.main });
+    const current = tabs.getByRole("link", { name: fr.nav.home, exact: true }).element();
+    const other = tabs.getByRole("link", { name: fr.nav.list, exact: true }).element();
+    expect(toldApart(current, other), "what tells the current tab apart").not.toEqual([]);
+    expect(textContrast(current), "the words of the current tab").toBeGreaterThanOrEqual(4.5);
+    expectPaintOfSkin(current, "the current tab");
     const plus = screen.getByRole("link", { name: fr.nav.createEvent }).element();
     expectGlowOfSkin(skin, current, "the current tab");
     expectGlowOfSkin(skin, plus, "the «+»");

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   PARIS,
   daysBetween,
+  daysToGo,
   effectiveDate,
   elapsed,
   eventDays,
@@ -478,5 +479,23 @@ describe("elapsed", () => {
 
   test("elapsed — une date dans le futur (horloge en retard) compte pour maintenant", () => {
     expect(elapsed(now.add({ minutes: 3 }), now)).toEqual({ value: 0, unit: "second" });
+  });
+});
+
+describe("daysToGo", () => {
+  test("daysToGo — à venir : les jours jusqu'au premier jour de l'événement", () => {
+    expect(daysToGo(date("2026-06-13"), date("2026-06-14"), date("2026-06-01"))).toBe(12);
+    expect(daysToGo(date("2026-06-22"), date("2026-06-22"), date("2026-06-21"))).toBe(1);
+  });
+
+  test("daysToGo — le jour même, et en cours sur plusieurs jours : 0", () => {
+    expect(daysToGo(date("2026-06-22"), date("2026-06-22"), date("2026-06-22"))).toBe(0);
+    expect(daysToGo(date("2026-06-13"), date("2026-06-14"), date("2026-06-13"))).toBe(0);
+    expect(daysToGo(date("2026-06-13"), date("2026-06-14"), date("2026-06-14"))).toBe(0);
+  });
+
+  test("daysToGo — passé : null (il n'a plus de compte à rebours)", () => {
+    expect(daysToGo(date("2026-06-13"), date("2026-06-14"), date("2026-06-15"))).toBeNull();
+    expect(daysToGo(date("2026-06-22"), date("2026-06-22"), date("2026-06-23"))).toBeNull();
   });
 });

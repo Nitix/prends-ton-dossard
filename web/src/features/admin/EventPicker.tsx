@@ -59,7 +59,7 @@ export function EventPicker({
   const [changing, setChanging] = useState(false);
 
   return (
-    <section aria-labelledby={titleId} className="card flex flex-col gap-3 p-4">
+    <section aria-labelledby={titleId} className="event-picker card flex flex-col gap-3 p-4">
       <h2 id={titleId} className="text-sm font-semibold">
         {title}
       </h2>

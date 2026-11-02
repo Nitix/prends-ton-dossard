@@ -34,7 +34,7 @@ export function HomePage() {
   const title = useRef<HTMLHeadingElement>(null);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="home-page flex flex-col gap-6">
       <h1 ref={title} tabIndex={-1} className="page-title">
         {t.nav.home}
       </h1>

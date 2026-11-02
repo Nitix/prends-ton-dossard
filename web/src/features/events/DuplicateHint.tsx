@@ -81,7 +81,7 @@ export function DuplicateHint({
   return (
     <div aria-live="polite">
       {events.length > 0 && (
-        <div className="flex flex-col gap-1 rounded-2xl bg-peach-50 p-4 ring-1 ring-peach-200">
+        <div className="duplicate-hint flex flex-col gap-1 rounded-2xl bg-peach-50 p-4 ring-1 ring-peach-200">
           <p className="text-sm font-medium">{t.form.duplicateQuestion}</p>
           <ul className="flex flex-col">
             {events.map((event) => (

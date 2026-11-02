@@ -83,11 +83,15 @@ export function ResultsToEnter({ pageHeading }: { pageHeading: RefObject<HTMLEle
   if (rows.length === 0) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section
+      aria-labelledby={headingId}
+      data-block="results"
+      className="page-block flex flex-col gap-3"
+    >
       <BlockTitle ref={heading} id={headingId} tabIndex={-1}>
         {t.results.toEnterTitle}
       </BlockTitle>
-      <ul className="flex flex-col gap-3">
+      <ul className="race-list flex flex-col gap-3">
         {rows.map((row) => (
           <ResultRow key={row.participation.id} row={row} onDealtWith={setDealt} />
         ))}
@@ -172,7 +176,7 @@ function ResultRow({
   const busyClass = busy ? "opacity-60" : "";
 
   return (
-    <li className="card flex flex-col gap-3 p-4">
+    <li className="result-row card flex flex-col gap-3 p-4">
       <div className="flex flex-col">
         <h3 id={titleId} className="card-title">
           <Link

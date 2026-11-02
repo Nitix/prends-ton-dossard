@@ -213,7 +213,7 @@ function Period({
   const settled = dates.every(isSettled);
   if (settled && said !== text) setSaid(text);
   return (
-    <output id={id} className="text-sm text-neutral-700 empty:sr-only">
+    <output id={id} className="period-line text-sm text-neutral-700 empty:sr-only">
       {settled ? text : said}
     </output>
   );
@@ -394,13 +394,13 @@ function EventFields({
           submit();
         });
       }}
-      className="flex flex-col gap-6"
+      className="event-form flex flex-col gap-6"
     >
       <h1 tabIndex={-1} className="page-title">
         {initial ? t.form.editTitle : t.form.createTitle}
       </h1>
 
-      <div className="card flex flex-col gap-4 p-4 md:p-5">
+      <div className="form-card card flex flex-col gap-4 p-4 md:p-5">
         <Field label={t.form.name} error={eventError("name")}>
           {(control) => (
             <input
@@ -538,7 +538,7 @@ function EventFields({
       </section>
 
       {joinOffered && (
-        <section className="card flex flex-col gap-3 p-4">
+        <section className="form-card card flex flex-col gap-3 p-4">
           <label className="flex min-h-11 items-center gap-3">
             <input
               type="checkbox"
@@ -588,7 +588,7 @@ function EventFields({
           {t.form.periodShortens(f.date(parseDate(former.start)), f.date(parseDate(former.end)))}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="form-actions flex flex-wrap gap-2">
         <button
           type="submit"
           disabled={pending}

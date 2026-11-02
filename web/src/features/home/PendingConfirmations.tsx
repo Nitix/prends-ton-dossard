@@ -67,11 +67,15 @@ export function PendingConfirmations({
   if (rows.length === 0) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section
+      aria-labelledby={headingId}
+      data-block="pending"
+      className="page-block flex flex-col gap-3"
+    >
       <BlockTitle ref={heading} id={headingId} tabIndex={-1}>
         {t.home.pendingTitle}
       </BlockTitle>
-      <ul className="flex flex-col gap-3">
+      <ul className="race-list flex flex-col gap-3">
         {rows.map((view) => (
           <PendingRow
             key={view.participation.id}
@@ -179,7 +183,7 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-[1.25rem] border-2 border-dashed border-blush-600 bg-card p-4 shadow-card">
+    <li className="pending-row flex flex-col gap-3 rounded-[1.25rem] border-2 border-dashed border-blush-600 bg-card p-4 shadow-card">
       <div className="flex flex-col">
         <h3 className="card-title">
           <Link

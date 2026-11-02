@@ -201,9 +201,9 @@ export function LoginPage({ redirect }: { redirect?: string }) {
           )}
         </div>
       )}
-      <form action={submit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {t.auth.email}
+      <form action={submit} className="login-form flex flex-col gap-4">
+        <label className="field flex flex-col gap-1 text-sm font-medium">
+          <span className="field-label">{t.auth.email}</span>
           <input
             name="email"
             type="email"
@@ -219,8 +219,8 @@ export function LoginPage({ redirect }: { redirect?: string }) {
             className={field}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {t.auth.password}
+        <label className="field flex flex-col gap-1 text-sm font-medium">
+          <span className="field-label">{t.auth.password}</span>
           <input
             name="password"
             type="password"

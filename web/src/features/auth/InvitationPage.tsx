@@ -277,8 +277,8 @@ function TextField({
     .join(" ");
 
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+    <div className="field flex flex-col gap-1">
+      <label htmlFor={id} className="field-label text-sm font-medium">
         {label}
       </label>
       <input
@@ -294,12 +294,12 @@ function TextField({
         className={`${INPUT} font-normal`}
       />
       {hint !== undefined && (
-        <p id={hintId} className="text-sm text-neutral-600">
+        <p id={hintId} className="field-hint text-sm text-neutral-600">
           {hint}
         </p>
       )}
       {error !== null && (
-        <p id={errorId} role="alert" className="text-sm font-medium text-red-700">
+        <p id={errorId} role="alert" className="field-error text-sm font-medium text-red-700">
           {error}
         </p>
       )}

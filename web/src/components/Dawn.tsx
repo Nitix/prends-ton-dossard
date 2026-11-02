@@ -3,7 +3,7 @@ import { useId } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { useToday } from "../lib/useToday";
 import { skinnable } from "../skins/components";
-import type { DateChipProps } from "../skins/types";
+import type { CountdownRingProps, DateChipProps } from "../skins/types";
 
 /**
  * The pictures of the dawn: the day of an event as a chip of sunrise, and the
@@ -71,18 +71,10 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 /**
  * The days left before a race or a deadline, as a ring of sunrise that fills
  * as the day comes, with the number in it. It only shows: the days are said in
- * words beside it.
+ * words beside it. `tone` is "color" on white, "light" (white) on the sky of a
+ * hero.
  */
-export function CountdownRing({
-  days,
-  tone = "color",
-  className = "",
-}: {
-  days: number;
-  /** "color" on white, "light" (white) on the sky of a hero. */
-  tone?: "color" | "light";
-  className?: string;
-}) {
+export function CountdownRingBase({ days, tone = "color", className = "" }: CountdownRingProps) {
   const light = tone === "light";
   const { formatLocale } = useI18n();
   const id = useId();
@@ -101,7 +93,10 @@ export function CountdownRing({
   const unit = parts.find((p) => p.type === "unit")?.value ?? "";
 
   return (
-    <span aria-hidden="true" className={`relative inline-flex size-14 shrink-0 ${className}`}>
+    <span
+      aria-hidden="true"
+      className={`countdown-ring relative inline-flex size-14 shrink-0 ${className}`}
+    >
       <svg viewBox="0 0 56 56" className="size-full -rotate-90">
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
@@ -153,3 +148,6 @@ export function CountdownRing({
     </span>
   );
 }
+
+/** The days left, as the skin of the page draws them at the depth of the build (Crête's ring above, by default). */
+export const CountdownRing = skinnable("CountdownRing", CountdownRingBase);

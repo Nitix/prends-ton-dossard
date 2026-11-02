@@ -38,10 +38,10 @@ function Page() {
   // floats over the ridges, where the sun is rising (the skin's `HeaderArt`).
   if (isPublicPath(pathname)) {
     return (
-      <div className="relative flex min-h-dvh flex-col overflow-hidden bg-dawn-sky">
+      <div className="welcome relative flex min-h-dvh flex-col overflow-hidden bg-dawn-sky">
         <HeaderArt place="welcome" />
         <OfflineBanner />
-        <div className="on-dawn relative pt-[max(3rem,env(safe-area-inset-top))] pb-8 text-white md:pt-20 md:pb-10">
+        <div className="welcome-head on-dawn relative pt-[max(3rem,env(safe-area-inset-top))] pb-8 text-white md:pt-20 md:pb-10">
           <div className="relative mx-auto flex max-w-md justify-center px-4">
             <BrandMark size="lg" />
           </div>

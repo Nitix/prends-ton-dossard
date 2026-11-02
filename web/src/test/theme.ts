@@ -439,3 +439,100 @@ export function skinCases(skins: readonly { id: string; modes: readonly Theme[] 
 
 /** Every skin of the app in every mode it has, as the tests of the colours go through them. */
 export const SKIN_CASES: readonly SkinCase[] = skinCases(SKINS);
+
+/**
+ * Every declaration of a block of a sheet, in order, as `[property, value]`:
+ * split at its semicolons outside quotes and parentheses (a `url("data:…;…")`
+ * stays whole), whitespace gathered.
+ */
+function allDeclarations(body: string): [string, string][] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let at = 0; at < body.length; at++) {
+    const char = body[at];
+    if (quote !== null) {
+      if (char === quote) quote = null;
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "(") depth++;
+    else if (char === ")") depth--;
+    else if (char === ";" && depth === 0) {
+      parts.push(body.slice(start, at));
+      start = at + 1;
+    }
+  }
+  parts.push(body.slice(start));
+  return parts
+    .map((part) => part.trim())
+    .filter((part) => part.includes(":"))
+    .map((part) => {
+      const colon = part.indexOf(":");
+      return [
+        part.slice(0, colon).trim(),
+        part
+          .slice(colon + 1)
+          .replace(/\s+/g, " ")
+          .trim(),
+      ];
+    });
+}
+
+/** The words of a value, split at its spaces outside parentheses: `2px dashed color-mix(in srgb, …)` is three. */
+function words(value: string): string[] {
+  const found: string[] = [];
+  let depth = 0;
+  let word = "";
+  for (const char of value) {
+    if (char === "(") depth++;
+    if (char === ")") depth--;
+    if (/\s/.test(char) && depth === 0) {
+      if (word !== "") found.push(word);
+      word = "";
+    } else word += char;
+  }
+  if (word !== "") found.push(word);
+  return found;
+}
+
+/** A dashed border or outline of a sheet: its selector (one of a list), its declaration, and the colour of the theme it is in. */
+export type SheetDash = {
+  selector: string;
+  property: string;
+  value: string;
+  /** The name of the colour of the theme it reads (`var(--color-<name>)`), if it reads one plainly. */
+  colour: string | undefined;
+};
+
+/**
+ * Every dashed border or outline that a sheet of a skin draws (`border`,
+ * `border-*`, `outline`, `outline-style`…: a declaration whose value is
+ * `dashed`), in its at-rules too (`@media`, `@supports`, `@container`; never a
+ * keyframe), once for each selector of its list. The colour is the one of the
+ * theme it reads plainly, in the same declaration; a mix (`color-mix(…)`), a
+ * written colour or a colour set by another declaration has none.
+ */
+export function sheetDashes(css: string): SheetDash[] {
+  const found: SheetDash[] = [];
+  const visit = (text: string) => {
+    for (const { prelude, body } of rules(text)) {
+      const head = tidy(prelude);
+      if (head.startsWith("@")) {
+        if (WRAPPERS.test(head)) visit(body);
+        continue;
+      }
+      for (const [property, value] of allDeclarations(body)) {
+        if (!/^(border|outline)/.test(property) || !/\bdashed\b/.test(value)) continue;
+        // A colour of the theme read plainly, as a word of the value (not inside a mix).
+        const colour = words(value)
+          .map((word) => /^var\(--color-([a-z]+(?:-\d+)?)\)$/.exec(word)?.[1])
+          .find((name) => name !== undefined);
+        for (const selector of splitTopLevel(head).map(tidy)) {
+          found.push({ selector, property, value, colour });
+        }
+      }
+    }
+  };
+  visit(css.replace(/\/\*[\s\S]*?\*\//g, ""));
+  return found;
+}

@@ -48,7 +48,7 @@ export function LoadFailure({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="load-failure flex flex-col gap-3">
       <p role="alert" className="text-sm font-medium text-red-700">
         {t.errors.generic}
       </p>

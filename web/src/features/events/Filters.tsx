@@ -55,7 +55,7 @@ export function Filters({
   };
 
   return (
-    <fieldset className="card flex flex-wrap gap-3 p-3.5">
+    <fieldset className="filters card flex flex-wrap gap-3 p-3.5">
       <legend className="sr-only">{t.filters.title}</legend>
       <Select
         label={t.filters.person}
@@ -116,8 +116,8 @@ function Select({
 }) {
   const id = useId();
   return (
-    <div className="flex min-w-40 flex-1 flex-col gap-1">
-      <label htmlFor={id} className="eyebrow">
+    <div className="flex min-w-40 flex-1 flex-col gap-1 filter">
+      <label htmlFor={id} className="filter-label eyebrow">
         {label}
       </label>
       <select

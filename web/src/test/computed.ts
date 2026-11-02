@@ -1,3 +1,5 @@
+import { contrast } from "./colour";
+
 // What the browser computes of the theme, here and now, for the browser tests
 // of the skins (skins/tokens.test.tsx, skins/smoke.test.tsx): a colour of a
 // property, the layers of a shadow, and what a skin's own stylesheet declares.
@@ -62,4 +64,142 @@ function nestedDeclarations(rules: CSSRuleList): CSSStyleDeclaration[] {
     ...(rule instanceof CSSNestedDeclarations ? [rule.style] : []),
     ...(rule instanceof CSSGroupingRule ? nestedDeclarations(rule.cssRules) : []),
   ]);
+}
+
+/** A colour as the browser computes it (`rgb()`, `rgba()`, `color(srgb …)`, `oklab()`…), as `[r, g, b, alpha]`, the channels 0–255. */
+export function rgbaOf(colour: string): [number, number, number, number] {
+  // `rgb()` and `rgba()` as they are: a canvas would round a translucent one (it keeps its colours premultiplied).
+  const legacy = /^rgba?\(([^()]*)\)$/.exec(colour.trim());
+  if (legacy) {
+    const [r = 0, g = 0, b = 0, a = 1] = (legacy[1] ?? "").split(/[\s,/]+/).map(Number);
+    return [r, g, b, a];
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (context === null) throw new Error("no 2d canvas");
+  context.clearRect(0, 0, 1, 1);
+  context.fillStyle = colour;
+  context.fillRect(0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0, a = 0] = context.getImageData(0, 0, 1, 1).data;
+  return [r, g, b, Math.round((a / 255) * 100) / 100];
+}
+
+const toHex = ([r, g, b]: readonly number[]) =>
+  `#${[r, g, b]
+    .map((channel) =>
+      Math.round(channel ?? 0)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+
+/** `top` laid over `under` (an opaque colour, `#rrggbb`). */
+function over(top: readonly [number, number, number, number], under: string): string {
+  const base = [1, 3, 5].map((at) => Number.parseInt(under.slice(at, at + 2), 16));
+  const alpha = top[3];
+  return toHex(base.map((channel, i) => (top[i] ?? 0) * alpha + channel * (1 - alpha)));
+}
+
+/** The colours of a computed `background-image` (the stops of its gradients), in order. */
+function stopsOf(image: string): string[] {
+  return [...image.matchAll(/(?:rgba?|color|oklab|oklch|lab|lch|hsla?|hwb)\([^()]*\)/g)].map(
+    (match) => match[0],
+  );
+}
+
+/** Whether the background image of an element fills its box (a pill), rather than a bar or a mark in it. */
+function fills(style: CSSStyleDeclaration): boolean {
+  return style.backgroundSize
+    .split(",")
+    .every((size) => ["auto", "auto auto", "100% 100%", "cover"].includes(size.trim()));
+}
+
+/**
+ * The colours behind the words of an element, as `#rrggbb`: its own
+ * background where it fills its box (each stop of a gradient), else the first
+ * one under it, with the translucent ones laid over what is under them, down to
+ * an opaque one (the page's `--color-neutral-50` if none is). A gradient cut to
+ * a bar or a mark (`background-size` of a line) is not behind the words.
+ */
+export function groundsBehind(element: Element): string[] {
+  const layers: string[][] = [];
+  for (let at: Element | null = element; at !== null; at = at.parentElement) {
+    const style = getComputedStyle(at);
+    const stops =
+      style.backgroundImage === "none" || !fills(style) ? [] : stopsOf(style.backgroundImage);
+    if (stops.length > 0) {
+      layers.push(stops);
+      if (stops.every((stop) => rgbaOf(stop)[3] === 1)) break;
+      continue;
+    }
+    const colour = rgbaOf(style.backgroundColor);
+    if (colour[3] === 0) continue;
+    layers.push([style.backgroundColor]);
+    if (colour[3] === 1) break;
+  }
+  // From the bottom up: each layer over every colour under it.
+  let grounds = [colourOf("--color-neutral-50")].map((colour) => toHex(rgbaOf(colour)));
+  for (const layer of layers.toReversed()) {
+    grounds = [
+      ...new Set(layer.flatMap((top) => grounds.map((under) => over(rgbaOf(top), under)))),
+    ];
+  }
+  return grounds;
+}
+
+/** The weakest contrast of the words of an element on the colours behind them (WCAG 2, 1 to 21). */
+export function textContrast(element: Element): number {
+  const grounds = groundsBehind(element);
+  const ink = rgbaOf(getComputedStyle(element).color);
+  return Math.min(...grounds.map((ground) => contrast(over(ink, ground), ground)));
+}
+
+/** A mark drawn before or after an element (`::before`, `::after`): what it draws, or "none". */
+function pseudoMark(element: Element, which: "::before" | "::after"): string {
+  const drawn = getComputedStyle(element, which);
+  return drawn.content === "none" || drawn.content === "normal"
+    ? "none"
+    : [drawn.content, drawn.backgroundImage, drawn.backgroundColor, drawn.width, drawn.height].join(
+        " ",
+      );
+}
+
+/** What can tell a tab apart, by the name of the computed property (or the mark), as the browser computes it. */
+function marksOf(element: Element): [string, string][] {
+  const style = getComputedStyle(element);
+  return [
+    ["fontWeight", style.fontWeight],
+    ["backgroundImage", style.backgroundImage],
+    ["backgroundColor", style.backgroundColor],
+    ["boxShadow", style.boxShadow],
+    [
+      "border",
+      [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth,
+        style.borderTopStyle,
+      ].join(" "),
+    ],
+    ["textDecorationLine", style.textDecorationLine],
+    ["outlineStyle", style.outlineStyle],
+    ["before", pseudoMark(element, "::before")],
+    ["after", pseudoMark(element, "::after")],
+  ];
+}
+
+/**
+ * What tells `one` apart from `other` besides the colour of its words: its
+ * weight, a fill (a background, a gradient), a shadow or a line, a border, an
+ * underline, an outline, or a mark drawn before or after it. The names of the
+ * computed properties that differ; none when only the colour of the words does.
+ */
+export function toldApart(one: Element, other: Element): string[] {
+  const theirs = new Map(marksOf(other));
+  return marksOf(one)
+    .filter(([name, value]) => theirs.get(name) !== value)
+    .map(([name]) => name);
 }

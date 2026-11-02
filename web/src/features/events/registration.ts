@@ -48,3 +48,19 @@ export function registrationLabel(state: RegistrationState, f: Formatters, t: Me
     ? t.event.registrationUntil(f.date(state.deadline))
     : t.event.registrationClosed;
 }
+
+/** What separates the deadline from the days left in `deadlineText`. */
+const SEPARATOR = " · ";
+
+/**
+ * The deadline as a hero says it: `registrationLabel`, and in its last week
+ * (`DAYS_LEFT_SHOWN` days or less) the days left after it: "Inscriptions
+ * jusqu'au mer. 10 juin · plus que 3 jours". Crête's hero and a skin's
+ * variant of a piece say it alike.
+ */
+export function deadlineText(state: RegistrationState, f: Formatters, t: Messages): string {
+  const label = registrationLabel(state, f, t);
+  return state.kind === "open" && state.daysLeft <= DAYS_LEFT_SHOWN
+    ? `${label}${SEPARATOR}${t.event.daysLeft(state.daysLeft)}`
+    : label;
+}

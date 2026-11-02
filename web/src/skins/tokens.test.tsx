@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
-import { SKINS, chooseSkin } from ".";
+import { SKIN_DEPTH, SKINS, chooseSkin } from ".";
 import { ON_DAWN } from "../components/buttons";
-import { CountdownRing } from "../components/Dawn";
+import { CountdownRingBase } from "../components/Dawn";
 import { Dialog } from "../components/Dialog";
 import { ToastProvider, useToast } from "../components/Toast";
 import { toTrack } from "../features/route/gpx";
@@ -31,7 +31,9 @@ import "../skins/styles";
 // is the one the skin gives the property. So are the shade of a window
 // (`--shade-dialog`), of a message and of the pieces on the sky of a hero, and
 // the style of the titles (`--display-*`). These pieces are measured at every
-// depth: a rule of mix or full on them reads the property (README.md).
+// depth: a rule of mix or full on them reads the property (README.md); but the
+// white pill on a hero (« S'inscrire », `--shade-on-dawn`), at palette only,
+// since a skin may draw that pill its own way at mix and full.
 // Nothing here names a skin.
 
 afterEach(() => {
@@ -218,6 +220,23 @@ function fillOf(value: string): string {
   return fill;
 }
 
+/**
+ * The white pill on a hero (« S'inscrire ») is shaded with `--shade-on-dawn`,
+ * at palette. At mix and full a skin may draw its pill its own way (README.md):
+ * only the property is checked there.
+ */
+function expectPillShade(pill: Element, skin: string) {
+  expect(ownDeclaration("crete", "--shade-on-dawn"), "--shade-on-dawn is one of Crête's").not.toBe(
+    "",
+  );
+  if (SKIN_DEPTH !== "palette") return;
+  expectShadowOf(
+    getComputedStyle(pill).boxShadow,
+    "--shade-on-dawn",
+    `${skin}: the white pill on the sky`,
+  );
+}
+
 test("tokens — les ombres et les voiles des pièces sur le ciel et des messages prennent leurs couleurs des propriétés du thème, dans chaque skin", async () => {
   for (const skin of SKINS) {
     chooseSkin(skin.id);
@@ -230,7 +249,7 @@ test("tokens — les ombres et les voiles des pièces sur le ciel et des message
           <a href="#inscription" className={ON_DAWN}>
             S'inscrire
           </a>
-          <CountdownRing days={9} tone="light" />
+          <CountdownRingBase days={9} tone="light" />
         </div>
       </I18nProvider>,
     );
@@ -243,11 +262,7 @@ test("tokens — les ombres et les voiles des pièces sur le ciel et des message
       `${skin.id}: a toast`,
     );
     // The white pill on a hero (« S'inscrire »).
-    expectShadowOf(
-      getComputedStyle(screen.getByRole("link", { name: "S'inscrire" }).element()).boxShadow,
-      "--shade-on-dawn",
-      `${skin.id}: the white pill on the sky`,
-    );
+    expectPillShade(screen.getByRole("link", { name: "S'inscrire" }).element(), skin.id);
     // The veil inside the ring of the days left on a hero: the veil of a hero, a little lighter.
     const track = screen.container.querySelector(".on-dawn svg circle");
     expect(track, `${skin.id}: the ring of the days left`).not.toBeNull();
