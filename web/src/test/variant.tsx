@@ -23,6 +23,7 @@ import {
 import { I18nProvider } from "../i18n/I18nProvider";
 import { TodayProvider } from "../lib/useToday";
 import { chooseSkin } from "../skins";
+import { fontsReady } from "./fontsReady";
 import { withoutIds } from "./ids";
 
 // What the tests of a skin's pieces share (skins/<id>/*.test.tsx,
@@ -48,9 +49,9 @@ export type DrawOptions = {
 /**
  * What `look` makes of a piece drawn in the app: in French, on a day, under a
  * router (its links have their addresses), with a client of queries, in the
- * frame of the app when asked. `look` gets the box of the piece (`[data-drawn]`,
- * the piece is its content) and the whole page drawn (for the frame), before
- * they go.
+ * frame of the app when asked, once the fonts of the page have loaded (a width
+ * is measured in them). `look` gets the box of the piece (`[data-drawn]`, the
+ * piece is its content) and the whole page drawn (for the frame), before they go.
  */
 export async function inApp<T>(
   element: ReactNode,
@@ -88,6 +89,8 @@ export async function inApp<T>(
   const screen = await render(<RouterProvider router={router} />);
   // The box is there once the page is: a piece may draw nothing in it.
   await expect.poll(() => screen.container.querySelector("[data-drawn]")).not.toBeNull();
+  // A width or a wrap is measured in the fonts of the skin, not in those that stand in while they load.
+  await fontsReady();
   const box = screen.container.querySelector<HTMLElement>("[data-drawn]");
   try {
     if (box === null) throw new Error("the piece was not drawn");
