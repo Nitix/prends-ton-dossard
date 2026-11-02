@@ -165,4 +165,17 @@
   --dawn-glow-cool: rgb(15 48 39 / 0.35);
   --focus-glow: rgb(79 146 118 / 0.2);
   --sky-focus: #ffffff;
+
+  /* The shades of a window and of the card of the sign-in pages (the
+     variant's, a deep pine), of a message and of the pieces on the sky of a
+     hero, and of the patch and the name of the mark (./slots.tsx). */
+  --shade-dialog: rgb(10 33 27 / 0.55);
+  --shade-welcome: rgb(10 33 27 / 0.6);
+  --shade-toast: rgb(10 33 27 / 0.7);
+  --shade-notes: rgb(10 33 27 / 0.6);
+  --shade-photo: rgb(10 33 27 / 0.6);
+  --shade-on-dawn: rgb(10 33 27 / 0.5);
+  --hero-veil: rgb(10 33 27 / 0.2);
+  --motif-mark-shade: rgb(10 33 27 / 0.45);
+  --motif-name-shade: rgb(10 33 27 / 0.45);
 }

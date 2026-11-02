@@ -54,7 +54,9 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 
   return (
     <span className="flex items-center gap-3">
-      <TrailPatch className={`shrink-0 ${big ? "size-12 drop-shadow" : "size-9 drop-shadow-sm"}`} />
+      <TrailPatch
+        className={`shrink-0 drop-shadow-[0_1px_2px_var(--motif-mark-shade)] ${big ? "size-12" : "size-9"}`}
+      />
       <span
         className={`font-display leading-none font-bold tracking-tight text-white ${
           big ? "text-[1.75rem]" : "text-[1.3125rem]"
