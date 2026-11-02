@@ -1,0 +1,106 @@
+/* « Marathon », depth mix: the signature pieces of the poster and the
+   programme of a big-city race, over the palette: square edges, thin black
+   rules, heavy tight titles, and the cobalt of the blue line for what marks
+   where you are. The colours are the palette's (no custom property here). */
+
+/* The sheet of the page, over the ink of the masthead: square. */
+:root[data-skin="marathon"] .sheet {
+  border-radius: 0;
+}
+
+/* The tabs, as the pages of a programme: a flat box with a thin ink rule, each
+   tab numbered (the number is drawn here, and hidden from a screen reader by
+   the empty alternative after the slash), the drawing over its word gone. The
+   current tab has the blue bar (its paint, `--dawn-deep`, cut to a bar) and
+   an ink word in bold, so that colour is not the only thing that says it. */
+:root[data-skin="marathon"] .tabbar ul {
+  counter-reset: tab;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--color-ink);
+  border-radius: 0;
+  background-color: var(--color-raised);
+  box-shadow: none;
+}
+:root[data-skin="marathon"] .tab {
+  position: relative;
+  gap: 0.125rem;
+  border-radius: 0;
+  color: var(--color-neutral-600);
+}
+:root[data-skin="marathon"] .tab > span {
+  display: none;
+}
+:root[data-skin="marathon"] .tab::before {
+  counter-increment: tab;
+  content: counter(tab, decimal-leading-zero);
+  content: counter(tab, decimal-leading-zero) / "";
+  font-family: var(--font-display);
+  font-size: 0.625rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-neutral-600);
+}
+:root[data-skin="marathon"] .tab[aria-current="page"] {
+  background-repeat: no-repeat;
+  background-position: top;
+  background-size: 100% 0.25rem;
+  box-shadow: none;
+  color: var(--color-ink);
+  font-weight: 800;
+}
+:root[data-skin="marathon"] .tab[aria-current="page"]::before {
+  color: var(--color-iris-700);
+}
+@media (min-width: 48rem) {
+  :root[data-skin="marathon"] .tab {
+    gap: 0.375rem;
+  }
+  :root[data-skin="marathon"] .tab[aria-current="page"] {
+    background-position: bottom;
+  }
+}
+
+/* The card of an event, a line of the programme: a black rule on top, square. */
+:root[data-skin="marathon"] .event-card {
+  border-radius: 0;
+  border-top: 2px solid var(--color-ink);
+}
+
+/* The poster of an event and of a runner: square, with no halo. */
+:root[data-skin="marathon"] .event-hero,
+:root[data-skin="marathon"] .runner-hero {
+  border-radius: 0;
+  box-shadow: none;
+}
+:root[data-skin="marathon"] .runner-hero {
+  border-bottom: 3px solid var(--color-iris-600);
+}
+
+/* The title of a page: heavy and tight, with the blue line under it, a bar and
+   not the crest. */
+:root[data-skin="marathon"] .page-title {
+  font-size: clamp(2.25rem, 10vw, 3.5rem);
+  font-weight: 900;
+  line-height: 0.95;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+:root[data-skin="marathon"] .page-title::after {
+  width: 3.5rem;
+  height: 0.3125rem;
+  margin-top: 0.75rem;
+  mask: none;
+  -webkit-mask: none;
+}
+
+/* The title of a block, on a black rule like a section of a programme. */
+:root[data-skin="marathon"] .section-title {
+  padding-top: 0.625rem;
+  border-top: 2px solid var(--color-ink);
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
