@@ -4,16 +4,22 @@ import {
   map as createMap,
   polyline,
   tileLayer,
+  type CircleMarker,
   type LatLngTuple,
+  type LeafletMouseEvent,
+  type Map as LeafletMap,
+  type Point,
   type PointTuple,
   type TooltipOptions,
 } from "leaflet";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
+import { SLOPE_FILLS, type SlopeZone } from "./slope";
 import { TILE_HOST } from "./tileHost";
+import { nearestKm, pointAtKm, trackIndex, type TrackIndex } from "./trackIndex";
 
 // Leaflet and its styles are only imported here, and this module only by
 // `React.lazy` (see RouteSection): they make a chunk of their own, loaded on the
@@ -63,6 +69,17 @@ const FINISH_COLOR = "#241b35";
 const START_RADIUS = 6;
 const FINISH_RADIUS = 10;
 
+/** The mark of the cursor of the profile: between the start and the finish in size. */
+const MARKER_RADIUS = 7;
+
+/**
+ * How near the track a mouse (or a pen) has to be, in pixels, for the profile to
+ * read the track there, and a finger: half of a tap target of 44 px, since a
+ * finger is wider and hides what it touches.
+ */
+const HOVER_PX = 12;
+const TAP_PX = 22;
+
 /**
  * The words beside a mark. They go toward the centre of the map, so they are
  * not cut by its edge; the start's goes up and the finish's down, so that two
@@ -70,6 +87,37 @@ const FINISH_RADIUS = 10;
  */
 function labelOptions(radius: number, shift: number): TooltipOptions {
   return { permanent: true, direction: "auto", offset: [radius + 2, shift] };
+}
+
+/** The map, and the mark of the cursor of the profile that is moved on it. */
+type Layers = { map: LeafletMap; dot: CircleMarker };
+
+/** Where the mark of the cursor goes: a kilometer (or none) and the zone of the slope there. */
+type Wanted = { km: number | null; zone: SlopeZone | null };
+
+/**
+ * Puts the mark at its kilometer, in the colour of its zone, or takes it away.
+ * The colour is the one of the theme (`var(--color-slope-N)`, as the dot of
+ * the profile has), so that it follows the theme without being painted again;
+ * the ink of the profile when the zone is not known.
+ */
+function place(layers: Layers | null, index: TrackIndex, { km, zone }: Wanted) {
+  if (layers === null) return;
+  const { map, dot } = layers;
+  const at = km === null ? undefined : pointAtKm(index, km);
+  if (at === undefined) {
+    dot.remove();
+    return;
+  }
+  dot.setLatLng([at.lat, at.lon]);
+  if (!map.hasLayer(dot)) dot.addTo(map);
+  // Leaflet draws a new path each time the mark is added.
+  const path = dot.getElement();
+  if (path instanceof SVGElement) {
+    // For the eye only: the cursor of the profile says where it is, in words.
+    path.setAttribute("aria-hidden", "true");
+    path.style.fill = zone === null ? "var(--color-relief)" : SLOPE_FILLS[zone];
+  }
 }
 
 /**
@@ -84,6 +132,15 @@ function labelOptions(radius: number, shift: number): TooltipOptions {
  * that the page does not say beside it: the numbers of the track are written
  * outside.
  *
+ * It is linked to the elevation profile (see RouteSection): `markerKm` puts a
+ * mark on the track at that kilometer, in the colour of the slope `markerZone`
+ * (the cursor of the profile, with the colour of its dot), and `onTrackKm` is
+ * told the kilometer of the track under a mouse or a pen (within `HOVER_PX`),
+ * or under a tap (within `TAP_PX`), and `null` when the pointer leaves the
+ * track or the map, or a tap is away from the track. The mark takes no pointer
+ * and no focus, and says nothing to a screen reader: the cursor of the profile
+ * is what tells the place.
+ *
  * Leaflet works on the DOM itself: the map is made in an effect, on the element
  * that React gives, and removed when the effect is cleaned up. The component is
  * the default export because `React.lazy` takes one.
@@ -91,15 +148,31 @@ function labelOptions(radius: number, shift: number): TooltipOptions {
 export default function TrackMap({
   points,
   tileUrl = TILE_URL,
+  markerKm = null,
+  markerZone = null,
+  onTrackKm,
 }: {
   points: TrackPoint[];
   tileUrl?: string;
+  markerKm?: number | null;
+  markerZone?: SlopeZone | null;
+  onTrackKm?: (km: number | null) => void;
 }) {
   const { t } = useI18n();
   const element = useRef<HTMLElement>(null);
   // Each map has its gradient: two tracks on a page have two maps.
   const gradient = useId();
   const { zoomIn, zoomOut, start, finish } = t.route;
+  // Where each kilometer is, and which is nearest to a place: once per track.
+  const index = useMemo(() => trackIndex(points), [points]);
+  const layers = useRef<Layers | null>(null);
+  // Where the mark goes, kept for a map that is made again (another language).
+  const wanted = useRef<Wanted>({ km: null, zone: null });
+  // Who is told of the track under the pointer, without making the map again when it changes.
+  const tell = useRef(onTrackKm);
+  useLayoutEffect(() => {
+    tell.current = onTrackKm;
+  });
 
   useEffect(() => {
     const container = element.current;
@@ -168,7 +241,85 @@ export default function TrackMap({
       paddingTopLeft: PADDING_TOP_LEFT,
       paddingBottomRight: PADDING_BOTTOM_RIGHT,
     });
+
+    // The mark of the cursor of the profile: one dot, made once and moved (see
+    // `place`), over the track. A ring of the card around it, as the dot of the
+    // profile has (TrackMap.css), detaches it from the map and from the line.
+    const dot = circleMarker([first.lat, first.lon], {
+      className: "track-marker",
+      color: "#ffffff",
+      weight: 2,
+      fillOpacity: 1,
+      radius: MARKER_RADIUS,
+      interactive: false,
+    });
+    layers.current = { map, dot };
+    place(layers.current, index, wanted.current);
+
+    // The kilometer of the track nearest to a point of the map, if the track is
+    // within `tolerance` pixels of it there.
+    const kmNear = (point: Point, tolerance: number): number | null => {
+      const { lat, lng } = map.containerPointToLatLng(point);
+      const km = nearestKm(index, lat, lng);
+      const near = km === undefined ? undefined : pointAtKm(index, km);
+      if (km === undefined || near === undefined) return null;
+      return map.latLngToContainerPoint([near.lat, near.lon]).distanceTo(point) <= tolerance
+        ? km
+        : null;
+    };
+    // What the page was last told: a pointer that wanders away from the track
+    // says `null` once, not at every move (and leaves alone a cursor that the
+    // keys have put on the profile).
+    let told: number | null = null;
+    const say = (km: number | null) => {
+      told = km;
+      tell.current?.(km);
+    };
+    // A mouse or a pen over the map: the track under it, once an image at most.
+    // A finger is left to the map, to move it: it says where with a tap.
+    let frame = 0;
+    let pointer: Point | null = null;
+    let pointerType = "mouse";
+    const onPointerDown = (event: PointerEvent) => {
+      pointerType = event.pointerType;
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      pointerType = event.pointerType;
+      if (event.pointerType === "touch") return;
+      pointer = map.mouseEventToContainerPoint(event);
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const km = pointer === null ? null : kmNear(pointer, HOVER_PX);
+        pointer = null;
+        if (km !== null || told !== null) say(km);
+      });
+    };
+    // The pointer leaves the map (a finger "leaves" at the end of every touch: not that).
+    const onPointerLeave = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      cancelAnimationFrame(frame);
+      frame = 0;
+      pointer = null;
+      if (told !== null) say(null);
+    };
+    // A tap (or a click) on the track, or near it; elsewhere, it puts the cursor
+    // away. Leaflet does not count a click at the end of a drag, and nothing
+    // here moves the map: the map stays where it is.
+    const onClick = (event: LeafletMouseEvent) => {
+      say(kmNear(event.containerPoint, pointerType === "touch" ? TAP_PX : HOVER_PX));
+    };
+    container.addEventListener("pointerdown", onPointerDown);
+    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerleave", onPointerLeave);
+    map.on("click", onClick);
+
     return () => {
+      container.removeEventListener("pointerdown", onPointerDown);
+      container.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("pointerleave", onPointerLeave);
+      cancelAnimationFrame(frame);
+      layers.current = null;
       // Leaflet 1.9.4 ends an animated zoom with a timer of 250 ms that
       // `remove()` does not cancel, and that fails on the map once it is gone (the
       // person leaves the page just after a click on a zoom button). The first
@@ -177,7 +328,14 @@ export default function TrackMap({
       Object.assign(map, { _animatingZoom: false });
       map.remove();
     };
-  }, [points, tileUrl, zoomIn, zoomOut, start, finish, gradient]);
+  }, [points, index, tileUrl, zoomIn, zoomOut, start, finish, gradient]);
+
+  // The mark follows the cursor of the profile. This effect comes after the one
+  // above, so a new track has its map before its mark.
+  useEffect(() => {
+    wanted.current = { km: markerKm, zone: markerZone };
+    place(layers.current, index, wanted.current);
+  }, [index, markerKm, markerZone]);
 
   // A <section> with a name is a region. `isolate` keeps the layers of Leaflet
   // (which go up to z-index 1000) under whatever the page puts over the content.

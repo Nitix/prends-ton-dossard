@@ -76,3 +76,12 @@
 .track-map.leaflet-container .leaflet-control-attribution a {
   color: #4b37c4;
 }
+
+/* The mark of the cursor of the profile on the track (see TrackMap): the dot of
+   the profile's cursor, ringed with the card as that dot is, white by day and
+   the dark of the card at night (the map stays light): it stands out of the
+   map and of the line under it. Its fill, the colour of the slope there, is set
+   on the element. */
+.track-map .track-marker {
+  stroke: var(--color-card);
+}

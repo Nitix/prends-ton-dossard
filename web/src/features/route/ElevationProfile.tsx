@@ -1,6 +1,7 @@
 import {
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -150,19 +151,57 @@ function useWidth<E extends HTMLElement>(): [RefObject<E | null>, number] {
  * focus (Home and End go to the start and the finish, Escape puts it away). It
  * adds to the picture: the numbers of the track are written beside it.
  *
+ * The page can drive the cursor (the map of the track moves it, see
+ * RouteSection): with `cursorKm`, the cursor is where it says (`null`: none),
+ * with the same figures and the same words for a screen reader, and
+ * `onCursorKm` is told where the cursor goes on the profile (pointer, finger,
+ * keys; `null` when it goes away). Without `cursorKm`, the profile keeps its
+ * cursor itself. `onCursorZone` is told the zone of the slope under the cursor,
+ * whatever moves it (`null` with no cursor), so that the map paints its mark in
+ * the colour of the dot of the profile.
+ *
  * Pass the whole track: it is reduced to 1 000 points here. `label` is the
  * accessible name of the drawing, which says the numbers.
  */
-export function ElevationProfile({ points, label }: { points: TrackPoint[]; label: string }) {
-  const { t, f, formatLocale } = useI18n();
-  const [box, width] = useWidth<HTMLDivElement>();
-  const [cursor, setCursor] = useState<number | null>(null);
-  const clipId = useId();
-
+export function ElevationProfile({ points, ...profile }: ProfileProps & { points: TrackPoint[] }) {
   // The points that have an altitude, which are then at most 1 000.
-  const drawn = simplify(points.filter((p): p is WithAltitude => p.ele !== undefined));
+  const drawn = useMemo(
+    () => simplify(points.filter((p): p is WithAltitude => p.ele !== undefined)),
+    [points],
+  );
   const lastKm = drawn.at(-1)?.km ?? 0;
   if (drawn.length < 2 || !(lastKm > 0)) return null;
+  return <Profile drawn={drawn} lastKm={lastKm} {...profile} />;
+}
+
+type ProfileProps = {
+  label: string;
+  cursorKm?: number | null;
+  onCursorKm?: (km: number | null) => void;
+  onCursorZone?: (zone: SlopeZone | null) => void;
+};
+
+/** The drawing of `ElevationProfile`, for a track that has one: two points with an altitude at least, and a length. */
+function Profile({
+  drawn,
+  lastKm,
+  label,
+  cursorKm,
+  onCursorKm,
+  onCursorZone,
+}: ProfileProps & { drawn: WithAltitude[]; lastKm: number }) {
+  const { t, f, formatLocale } = useI18n();
+  const [box, width] = useWidth<HTMLDivElement>();
+  const [ownCursor, setOwnCursor] = useState<number | null>(null);
+  const clipId = useId();
+
+  // The cursor is the page's when it drives it, the profile's otherwise; the
+  // page is told whenever the cursor moves on the profile.
+  const cursor = cursorKm === undefined ? ownCursor : cursorKm;
+  const setCursor = (km: number | null) => {
+    setOwnCursor(km);
+    onCursorKm?.(km);
+  };
 
   const plotWidth = Math.max(120, width - MARGIN.left - MARGIN.right);
   const altitudes = drawn.map((p) => p.ele);
@@ -237,6 +276,13 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
   const at = cursor === null ? null : reading(cursor);
   const said = at ?? reading(0);
   const saidKm = f.km(Math.round(said.km * 10) / 10);
+
+  // The zone under the cursor, told before the page is painted: the mark of the
+  // map takes its colour along with the dot of the profile.
+  const cursorZone = at?.zone ?? null;
+  useLayoutEffect(() => {
+    onCursorZone?.(cursorZone);
+  }, [onCursorZone, cursorZone]);
 
   // The cursor's range goes a little beyond both ends of the track, as its box beyond the plot.
   const bleed = (CURSOR_BLEED / plotWidth) * lastKm;
@@ -406,8 +452,8 @@ export function ElevationProfile({ points, label }: { points: TrackPoint[]; labe
           }}
           onKeyDown={press}
           onFocus={() => {
-            // From the keyboard, the cursor shows at the start; a finger or a pointer has already put it.
-            setCursor((current) => current ?? 0);
+            // From the keyboard, the cursor shows at the start; a finger, a pointer or the map has already put it.
+            if (cursor === null) setCursor(0);
           }}
           onBlur={() => {
             setCursor(null);

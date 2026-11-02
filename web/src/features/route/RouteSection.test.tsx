@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { CircleMarker, latLng, type LatLng } from "leaflet";
+import { afterEach, beforeEach, expect, test, vi, type MockInstance } from "vitest";
 import { render } from "vitest-browser-react";
-import { page } from "vitest/browser";
+import { page, userEvent, type Locator } from "vitest/browser";
 
 import { SECTION } from "../../components/section";
 import { fr } from "../../i18n/fr";
@@ -9,7 +10,11 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
 import { fontsReady } from "../../test/fontsReady";
 import { spaceGaps } from "../../test/gaps";
+import { emulateMedia, resetMedia } from "../../test/media";
+import { toTrack, type TrackPoint } from "./gpx";
 import { RouteSection } from "./RouteSection";
+import { SLOPE_COLORS, SLOPE_COLORS_DARK, type SlopeZone } from "./slope";
+import { pointAtKm, trackIndex } from "./trackIndex";
 
 // The colours and the sizes of the drawings are a matter of the styles.
 import "../../styles.css";
@@ -337,4 +342,418 @@ test("RouteSection — en anglais, les textes sont anglais", async () => {
   await expect.element(screen.getByRole("link", { name: "Download the track" })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: "See the course" })).toBeVisible();
   await expect.element(screen.getByText(/^altitude 450 m to 650 m$/)).toBeVisible();
+});
+
+// The map and the profile, linked: the cursor of the profile has its mark on
+// the map, and the track of the map moves the cursor of the profile.
+
+/**
+ * A track due north from 45° (on 6° east), of n points over `degrees` of
+ * latitude, climbing at a steady `grade` percent from 500 m: what the server
+ * gives as a file, and the points that the page reads from it.
+ */
+function steady(n: number, degrees: number, grade: number): { file: string; points: TrackPoint[] } {
+  const flat = toTrack(
+    Array.from({ length: n }, (_, i) => ({ lat: 45 + (degrees * i) / (n - 1), lon: 6 })),
+  );
+  const points = flat.map((point) => ({ ...point, ele: 500 + grade * 10 * point.km }));
+  return { file: gpx(points), points };
+}
+
+/** 2.2 km due north at 8 %, from 500 m to 678 m. */
+const STEADY = steady(21, 0.02, 8);
+const STEADY_KM = STEADY.points.at(-1)?.km ?? 0;
+
+type Screen = Awaited<ReturnType<typeof renderSection>>;
+
+/** The figures over the profile: the summit's altitude, or the cursor's reading in its place. */
+function pill(screen: Screen): string {
+  return plain(
+    profileDrawing(screen).element().parentElement?.querySelector("p")?.textContent ?? "",
+  );
+}
+
+const slider = (screen: Screen) => screen.getByRole("slider", { name: fr.route.profileCursor });
+
+/** What the cursor says to a screen reader. */
+const valueText = (cursor: Locator) => plain(cursor.element().getAttribute("aria-valuetext"));
+
+/** Where the cursor is, in kilometers. */
+function cursorKm(cursor: Locator): number {
+  const input = cursor.element();
+  if (!(input instanceof HTMLInputElement)) throw new Error("the cursor is not a range");
+  return Number(input.value);
+}
+
+/** The one element of the map that matches, or an error. */
+function part(screen: Screen, selector: string): Element {
+  const found = screen.container.querySelectorAll(selector);
+  const [only] = found;
+  if (found.length !== 1 || only === undefined) {
+    throw new Error(`${found.length} elements match ${selector}, not 1`);
+  }
+  return only;
+}
+
+/** The mark of the cursor on the map, if it is there. */
+const mark = (screen: Screen) =>
+  screen.container.querySelector<SVGPathElement>("path.track-marker");
+
+const centre = (element: Element) => {
+  const { left, top, width, height } = element.getBoundingClientRect();
+  return { x: left + width / 2, y: top + height / 2 };
+};
+
+/**
+ * Where a fraction of a track due north is on the screen: between the dots of
+ * the start and of the finish, in proportion (over a few kilometers, the
+ * projection of the map is a straight scale, to well under a pixel).
+ */
+function onScreen(screen: Screen, fraction: number): { x: number; y: number } {
+  const start = centre(part(screen, "path.track-start"));
+  const finish = centre(part(screen, "path.track-finish"));
+  return {
+    x: start.x + (finish.x - start.x) * fraction,
+    y: start.y + (finish.y - start.y) * fraction,
+  };
+}
+
+/** Where the mark was last put, as Leaflet was told. */
+function placedAt(placed: MockInstance<CircleMarker["setLatLng"]>): LatLng | undefined {
+  const call = placed.mock.lastCall;
+  return call ? latLng(call[0]) : undefined;
+}
+
+/**
+ * The mark is on the map at the kilometer of the cursor: Leaflet was given the
+ * place of the track there (`pointAtKm`), and draws it there, on the line
+ * between the start and the finish of a track due north (`degrees` of latitude
+ * from 45°).
+ */
+async function expectMarkAtCursor(
+  screen: Screen,
+  placed: MockInstance<CircleMarker["setLatLng"]>,
+  points: TrackPoint[],
+  degrees: number,
+) {
+  const index = trackIndex(points);
+  const cursor = slider(screen);
+  await expect
+    .poll(() => {
+      const wanted = pointAtKm(index, cursorKm(cursor));
+      const given = placedAt(placed);
+      return (
+        mark(screen) !== null &&
+        wanted !== undefined &&
+        given !== undefined &&
+        Math.abs(given.lat - wanted.lat) < 1e-9 &&
+        Math.abs(given.lng - wanted.lon) < 1e-9
+      );
+    })
+    .toBe(true);
+  const wanted = pointAtKm(index, cursorKm(cursor));
+  const dot = mark(screen);
+  if (!wanted || !dot) throw new Error("no mark");
+  const there = onScreen(screen, (wanted.lat - 45) / degrees);
+  const drawn = centre(dot);
+  expect(Math.abs(drawn.x - there.x), "across the track").toBeLessThan(1.5);
+  expect(Math.abs(drawn.y - there.y), "along the track").toBeLessThan(1.5);
+}
+
+/** Moves the mouse over the map, to a point of the screen. */
+async function hoverMap(screen: Screen, at: { x: number; y: number }) {
+  const map = trackMap(screen);
+  const box = map.element().getBoundingClientRect();
+  const { clientLeft, clientTop } = map.element();
+  // The position is taken from the corner inside the border of the map.
+  await userEvent.hover(map, {
+    position: { x: at.x - box.left - clientLeft, y: at.y - box.top - clientTop },
+  });
+}
+
+test("RouteSection — le repère de la carte suit le curseur du profil", async () => {
+  // A long track: 100 000 points over 50 km, a point every half meter.
+  const long = steady(100_000, 0.45, 8);
+  serve(long.file);
+  const placed = vi.spyOn(CircleMarker.prototype, "setLatLng");
+  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+  // A file of 5 MB to read, and the map to load when no test of the file has loaded it yet.
+  await expect.element(trackMap(screen), { timeout: 10_000 }).toBeVisible();
+  const cursor = slider(screen);
+
+  // No cursor, no mark.
+  expect(mark(screen)).toBeNull();
+  // The pointer along the profile: the mark is on the track, at the cursor's kilometer.
+  for (const fraction of [0.2, 0.5, 0.85]) {
+    const { width } = cursor.element().getBoundingClientRect();
+    await userEvent.hover(cursor, { position: { x: width * fraction, y: 80 } });
+    await expectMarkAtCursor(screen, placed, long.points, 0.45);
+  }
+  // Away from the profile, the cursor and its mark go.
+  await userEvent.unhover(cursor);
+  await expect.poll(() => mark(screen)).toBeNull();
+  expect(pill(screen)).toBe("4 503 m");
+
+  // A click gives the profile the focus, and leaves the cursor where it is (not at the start).
+  const { width } = cursor.element().getBoundingClientRect();
+  await userEvent.click(cursor, { position: { x: width * 0.6, y: 80 } });
+  expect(document.activeElement).toBe(cursor.element());
+  expect(cursorKm(cursor)).toBeGreaterThan(25);
+  await expectMarkAtCursor(screen, placed, long.points, 0.45);
+});
+
+test("RouteSection — survoler le tracé place le curseur du profil", async () => {
+  serve(STEADY.file);
+  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+  await expect.element(trackMap(screen)).toBeVisible();
+  const cursor = slider(screen);
+  expect(pill(screen)).toBe("678 m");
+
+  // The pointer on the track, at 1.1 km: the profile reads there, in figures
+  // and for a screen reader, and the mark of the map is under the pointer.
+  const at = onScreen(screen, 1.1 / STEADY_KM);
+  await hoverMap(screen, at);
+  await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
+  const altitude = /· (\d+) m ·/.exec(pill(screen))?.[1];
+  expect(Number(altitude)).toBeGreaterThanOrEqual(585);
+  expect(Number(altitude)).toBeLessThanOrEqual(593);
+  expect(valueText(cursor)).toBe(`1,1 km, altitude ${altitude} m, pente 8 %`);
+  const dot = mark(screen);
+  if (!dot) throw new Error("no mark on the map");
+  expect(Math.abs(centre(dot).x - at.x)).toBeLessThan(1.5);
+  expect(Math.abs(centre(dot).y - at.y)).toBeLessThan(1.5);
+
+  // Beside the line (8 px off), it is still the track: the point across from the pointer.
+  const elsewhere = onScreen(screen, 0.7 / STEADY_KM);
+  await hoverMap(screen, { x: elsewhere.x + 8, y: elsewhere.y });
+  await expect.poll(() => pill(screen)).toMatch(/^0,7 km · \d+ m · 8 %$/);
+  expect(valueText(cursor)).toMatch(/^0,7 km, altitude \d+ m, pente 8 %$/);
+
+  // Away from it (40 px), there is no cursor and no mark.
+  await hoverMap(screen, { x: elsewhere.x + 40, y: elsewhere.y });
+  await expect.poll(() => pill(screen)).toBe("678 m");
+  expect(mark(screen)).toBeNull();
+  expect(valueText(cursor)).toBe("0 km, altitude 500 m, pente 8 %");
+
+  // Back on the track, then off the map: the cursor goes with the pointer.
+  await hoverMap(screen, at);
+  await expect.poll(() => pill(screen)).toMatch(/^1,1 km/);
+  await userEvent.unhover(trackMap(screen));
+  await expect.poll(() => pill(screen)).toBe("678 m");
+  expect(mark(screen)).toBeNull();
+});
+
+/** The elements of the map that the Tab key stops on. */
+const tabStops = (region: Element) =>
+  [...region.querySelectorAll<HTMLElement>("a[href], button, input, [tabindex]")].filter(
+    (element) => element.tabIndex >= 0,
+  );
+
+test("RouteSection — au clavier, le repère suit", async () => {
+  serve(STEADY.file);
+  const placed = vi.spyOn(CircleMarker.prototype, "setLatLng");
+  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+  await expect.element(trackMap(screen)).toBeVisible();
+  const region = trackMap(screen).element();
+  const stopsBefore = tabStops(region);
+  const cursor = slider(screen);
+
+  // Tab goes through the map and its buttons, then to the cursor of the profile:
+  // it shows at the start, and so does its mark.
+  for (let i = 0; i < 12 && document.activeElement !== cursor.element(); i++) {
+    await userEvent.tab();
+  }
+  expect(document.activeElement).toBe(cursor.element());
+  expect(valueText(cursor)).toBe("0 km, altitude 500 m, pente 8 %");
+  await expectMarkAtCursor(screen, placed, STEADY.points, 0.02);
+
+  // The arrows move it along the track, Page Up further, End to the finish.
+  await userEvent.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}");
+  expect(cursorKm(cursor)).toBeGreaterThan(0.08);
+  await expectMarkAtCursor(screen, placed, STEADY.points, 0.02);
+  await userEvent.keyboard("{PageUp}{PageUp}{PageUp}");
+  expect(cursorKm(cursor)).toBeGreaterThan(0.7);
+  await expectMarkAtCursor(screen, placed, STEADY.points, 0.02);
+  await userEvent.keyboard("{End}");
+  expect(valueText(cursor)).toBe("2,2 km, altitude 678 m, pente 8 %");
+  await expectMarkAtCursor(screen, placed, STEADY.points, 0.02);
+
+  // The mark is for the eye: the cursor says where it is. Nothing for a screen
+  // reader, no tab stop, nothing to click.
+  const dot = mark(screen);
+  expect(dot?.getAttribute("aria-hidden")).toBe("true");
+  expect(dot?.classList.contains("leaflet-interactive")).toBe(false);
+  expect(dot && getComputedStyle(dot).pointerEvents).toBe("none");
+  expect(tabStops(region)).toEqual(stopsBefore);
+
+  // Escape puts the cursor away, and its mark; the focus stays.
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(() => mark(screen)).toBeNull();
+  expect(document.activeElement).toBe(cursor.element());
+});
+
+/** A colour "#rrggbb" as the browser gives it back from a style. */
+const rgb = (hex: string) =>
+  `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(", ")})`;
+
+/** 1 km flat at 500 m, then 1 km at 30 %: a point every 100 m. */
+const FLAT_THEN_WALL = gpx(
+  Array.from({ length: 21 }, (_, i) => ({
+    lat: 45 + (0.009 * i) / 10,
+    ele: i <= 10 ? 500 : 500 + (i - 10) * 30,
+  })),
+);
+
+test("RouteSection — le repère a la couleur de la pente sous le curseur, de jour, de nuit et en couleurs forcées, avec un contour", async () => {
+  try {
+    for (const [what, theme, palette, forced] of [
+      ["day", "light", SLOPE_COLORS, false],
+      ["night", "dark", SLOPE_COLORS_DARK, false],
+      ["forced colours", "light", SLOPE_COLORS, true],
+    ] as const) {
+      document.documentElement.dataset.theme = theme;
+      if (forced) await emulateMedia({ forcedColors: "active" });
+      serve(FLAT_THEN_WALL);
+      const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+      await expect.element(trackMap(screen)).toBeVisible();
+      const cursor = slider(screen);
+      cursor.element().focus();
+
+      const stops: [string, SlopeZone][] = [
+        ["{Home}", 1],
+        ["{End}", 5],
+      ];
+      for (const [key, zone] of stops) {
+        await userEvent.keyboard(key);
+        await expect.poll(() => mark(screen)).not.toBeNull();
+        const dot = mark(screen);
+        if (!dot) throw new Error("no mark");
+        // The colour of the zone in the palette of the theme: the one of the dot of the profile.
+        await expect
+          .poll(() => getComputedStyle(dot).fill, { message: `the mark at ${key} (${what})` })
+          .toBe(rgb(palette[zone]));
+        const dots = profileDrawing(screen).element().querySelectorAll("circle");
+        const profileDot = dots[dots.length - 1];
+        expect(profileDot && getComputedStyle(profileDot).fill).toBe(rgb(palette[zone]));
+        // A ring of the card around it, as the dot of the profile has: it stands
+        // out of the map, and of the line under it.
+        const card = getComputedStyle(document.documentElement).getPropertyValue("--color-card");
+        expect(getComputedStyle(dot).stroke, `the ring (${what})`).toBe(rgb(card.trim()));
+        expect(Number.parseFloat(getComputedStyle(dot).strokeWidth)).toBeGreaterThanOrEqual(2);
+        expect(getComputedStyle(dot).fillOpacity).toBe("1");
+      }
+      await screen.unmount();
+      if (forced) await resetMedia();
+    }
+  } finally {
+    delete document.documentElement.dataset.theme;
+    await resetMedia();
+  }
+});
+
+let fingers = 100;
+
+/**
+ * A finger on the screen, as a browser tells it: each step is a pointer event
+ * and a touch event (a phone sends both; Leaflet listens to the touch events
+ * where the browser has them, as the Chromium of the tests does).
+ */
+function finger(at: { x: number; y: number }) {
+  const target = document.elementFromPoint(at.x, at.y);
+  if (!target) throw new Error("nothing there");
+  fingers += 1;
+  const identifier = fingers;
+  const send = (pointer: string, touch: string, x: number, down: boolean) => {
+    target.dispatchEvent(
+      new PointerEvent(pointer, {
+        clientX: x,
+        clientY: at.y,
+        pointerId: identifier,
+        pointerType: "touch",
+        isPrimary: true,
+        buttons: down ? 1 : 0,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      }),
+    );
+    const contact = new Touch({ identifier, target, clientX: x, clientY: at.y });
+    target.dispatchEvent(
+      new TouchEvent(touch, {
+        touches: down ? [contact] : [],
+        targetTouches: down ? [contact] : [],
+        changedTouches: [contact],
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      }),
+    );
+  };
+  return {
+    down: () => send("pointerdown", "touchstart", at.x, true),
+    move: (x: number) => send("pointermove", "touchmove", x, true),
+    up: (x: number) => send("pointerup", "touchend", x, false),
+    target,
+  };
+}
+
+/** A tap at a point of the screen: the finger down and up, gone from the map, then the click. */
+function tap(region: Element, at: { x: number; y: number }) {
+  const touch = finger(at);
+  touch.down();
+  touch.up(at.x);
+  // At the end of a touch, the browser says that the pointer has left.
+  const gone = { clientX: at.x, clientY: at.y, pointerId: fingers, pointerType: "touch" };
+  touch.target.dispatchEvent(new PointerEvent("pointerout", { ...gone, bubbles: true }));
+  region.dispatchEvent(new PointerEvent("pointerleave", gone));
+  touch.target.dispatchEvent(
+    new MouseEvent("click", { clientX: at.x, clientY: at.y, bubbles: true, cancelable: true }),
+  );
+}
+
+/** A finger that goes down at a point, slides `dx` pixels to the right, and goes up: no click. */
+function slide(at: { x: number; y: number }, dx: number) {
+  const touch = finger(at);
+  touch.down();
+  for (let step = 1; step <= 6; step++) touch.move(at.x + (dx * step) / 6);
+  touch.up(at.x + dx);
+}
+
+test("RouteSection — sur un téléphone, toucher le tracé place le curseur du profil, sans déplacer la carte", async () => {
+  serve(STEADY.file);
+  await page.viewport(375, 812);
+  try {
+    const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }), ["fr"], {
+      inCard: true,
+    });
+    await expect.element(trackMap(screen)).toBeVisible();
+    const region = trackMap(screen).element();
+    const cursor = slider(screen);
+    const line = () => part(screen, "path.track-line").getBoundingClientRect();
+    const before = line();
+
+    // A finger beside the track (a finger is wide: 14 px off), at 1.1 km: the
+    // profile reads there, and the mark is on the track.
+    const at = onScreen(screen, 1.1 / STEADY_KM);
+    tap(region, { x: at.x + 14, y: at.y });
+    await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
+    expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+    const dot = mark(screen);
+    expect(dot && Math.abs(centre(dot).x - at.x)).toBeLessThan(1.5);
+    // The map has not moved: the track is where it was.
+    expect(line()).toEqual(before);
+
+    // A touch far from the track puts the cursor away.
+    tap(region, { x: at.x + 80, y: at.y });
+    await expect.poll(() => pill(screen)).toBe("678 m");
+    expect(mark(screen)).toBeNull();
+    expect(line()).toEqual(before);
+
+    // A finger that starts on the track and slides moves the map, as before; it puts no cursor.
+    slide(at, 60);
+    await expect.poll(() => line().left - before.left).toBeGreaterThan(40);
+    expect(pill(screen)).toBe("678 m");
+  } finally {
+    await page.viewport(414, 896);
+  }
 });

@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, type ReactNode } from "react";
+import { Component, lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 
 import { SECONDARY } from "../../components/buttons";
 import { Figure } from "../../components/Figure";
@@ -10,6 +10,7 @@ import { trackURL, useTrack } from "./api";
 import { ElevationProfile } from "./ElevationProfile";
 import { gpxStats, type TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
+import type { SlopeZone } from "./slope";
 
 // The map brings Leaflet along: it is loaded when a track is shown, not with the page.
 const TrackMap = lazy(() => import("./TrackMap"));
@@ -54,10 +55,24 @@ function MapLoading() {
   );
 }
 
-/** The numbers of a track, then its map and its profile. A track without altitudes has its length, and no profile. */
+/**
+ * The numbers of a track, then its map and its profile. A track without
+ * altitudes has its length, and no profile.
+ *
+ * The map and the profile follow one cursor: where it is on the profile (a
+ * pointer, a finger, the keys), the map has a mark, in the colour of the slope
+ * under it; where the track of the map is pointed at or touched, the profile
+ * reads it. Without a profile (no altitude), the map has no mark; without a
+ * map (it could not be loaded), the profile works alone.
+ */
 function Track({ points }: { points: TrackPoint[] }) {
   const { t, f } = useI18n();
-  const stats = gpxStats(points);
+  // Where the cursor is, in kilometers from the start, and the zone of the slope
+  // there as the profile reads it (`null` until the profile has drawn its cursor).
+  const [cursorKm, setCursorKm] = useState<number | null>(null);
+  const [cursorZone, setCursorZone] = useState<SlopeZone | null>(null);
+  // Over every point: once per track, not at every move of the cursor.
+  const stats = useMemo(() => gpxStats(points), [points]);
   const { min, max } = stats;
   // Without an altitude there is no gain and no loss to tell: not "0 m D+".
   const summary =
@@ -96,12 +111,20 @@ function Track({ points }: { points: TrackPoint[] }) {
       {altitude !== null && <p className="text-sm text-neutral-600">{altitude}</p>}
       <MapBoundary>
         <Suspense fallback={<MapLoading />}>
-          <TrackMap points={points} />
+          <TrackMap
+            points={points}
+            markerKm={cursorZone === null ? null : cursorKm}
+            markerZone={cursorZone}
+            onTrackKm={setCursorKm}
+          />
         </Suspense>
       </MapBoundary>
       <ElevationProfile
         points={points}
         label={altitude === null ? t.route.profileLabel : `${t.route.profileLabel}, ${altitude}`}
+        cursorKm={cursorKm}
+        onCursorKm={setCursorKm}
+        onCursorZone={setCursorZone}
       />
     </>
   );

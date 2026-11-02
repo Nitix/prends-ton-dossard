@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { userEvent } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -73,4 +74,43 @@ test("RouteSection — if the map cannot be loaded, a line says so, and the numb
   await expect.element(screen.getByText(fr.common.loading)).not.toBeInTheDocument();
   await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
   expect(logged).toHaveBeenCalled();
+});
+
+// Intl separates a number from its unit with a no-break space: tests read the text as it looks.
+const plain = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " ");
+
+test("RouteSection — sans carte, le profil marche seul", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(TRACK)));
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider languages={["fr"]}>
+        <RouteSection format={format} />
+      </I18nProvider>
+    </QueryClientProvider>,
+  );
+  await expect.element(screen.getByText(fr.route.mapUnavailable)).toBeVisible();
+  const drawing = screen.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) });
+  const pill = () => plain(drawing.element().parentElement?.querySelector("p")?.textContent);
+  const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
+  expect(pill()).toBe("650 m");
+
+  // The pointer on the profile: its figures, in the middle of the 1.1 km.
+  await userEvent.hover(cursor);
+  await expect.poll(pill).toMatch(/^0,6 km · \d+ m · 18 %$/);
+  await userEvent.unhover(cursor);
+  await expect.poll(pill).toBe("650 m");
+
+  // The keys: what a screen reader hears, and the figures.
+  cursor.element().focus();
+  await userEvent.keyboard("{End}");
+  expect(plain(cursor.element().getAttribute("aria-valuetext"))).toBe(
+    "1,1 km, altitude 650 m, pente 18 %",
+  );
+  expect(pill()).toBe("1,1 km · 650 m · 18 %");
+  await userEvent.keyboard("{Escape}");
+  expect(pill()).toBe("650 m");
+  // No mark of a map that is not there.
+  expect(screen.container.querySelector(".track-marker")).toBeNull();
 });
