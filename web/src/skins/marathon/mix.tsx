@@ -205,11 +205,7 @@ function PosterHero({ view, heading }: EventHeroProps) {
           {several ? `${start.day}–${end.day}` : start.day}
         </span>
         <span className="flex flex-col gap-1.5 pb-2 font-display text-xs leading-none font-extrabold tracking-[0.07em] uppercase md:pb-3">
-          {!several && (
-            <span className="text-iris-700">
-              {start.toLocaleString(formatLocale, { weekday: "long" })}
-            </span>
-          )}
+          {!several && <span className="text-iris-700">{f.weekday(start, "long")}</span>}
           <span className="text-ink">{several ? months : longMonth}</span>
           <span className="text-neutral-600">{start.year}</span>
         </span>
