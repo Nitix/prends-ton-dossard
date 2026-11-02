@@ -137,6 +137,17 @@ test.skipIf(!mixed)(
   },
 );
 
+test.skipIf(SKIN_DEPTH !== "mix")(
+  "« Sentier » mix — le haut d'une fiche montre les jours qui restent par l'anneau seul, sans les redire en mots",
+  async () => {
+    await within(<EventHero view={view()} heading={heading} />, (drawn) => {
+      // At mix the ring (Crête's) draws them: « 12 j »; the words come at full, where the ring is gone.
+      expect(plain(drawn.querySelector(".countdown-ring")?.textContent)).toMatch(/^12/);
+      expect(drawn.querySelector(".event-hero-days")).toBeNull();
+    });
+  },
+);
+
 test("« Sentier » mix — le haut d'une page de coureur garde sa photo, son nom et son titre", async () => {
   const given = { ref: createRef<HTMLHeadingElement>(), tabIndex: -1 } as const;
   const [own, base] = await keepsEverything(

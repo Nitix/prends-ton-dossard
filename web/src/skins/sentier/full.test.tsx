@@ -8,12 +8,14 @@ import { Dialog } from "../../components/Dialog";
 import { EmptyState } from "../../components/EmptyState";
 import { UNCONFIRMED_ROW } from "../../components/section";
 import { toEventView } from "../../features/events/api";
-import { EventCard } from "../../features/events/EventCard";
+import { EventCard, EventCardBase } from "../../features/events/EventCard";
+import { EventHero } from "../../features/events/EventHero";
 import { FormatTitle } from "../../features/events/FormatTitle";
 import { event2Record, eventRecord } from "../../features/events/testFixture";
 import { TrackFigures } from "../../features/route/TrackFigures";
 import { ensureTemporal } from "../../lib/temporal";
 import { colourOf, rgbaOf, textContrast } from "../../test/computed";
+import { withoutIds } from "../../test/ids";
 import { EVENT_SHAPES, inApp, plain, said, type DrawOptions } from "../../test/variant";
 
 import "../../styles.css";
@@ -57,6 +59,25 @@ function need(root: ParentNode, selector: string): HTMLElement {
 
 const [RICH] = EVENT_SHAPES();
 const rich = RICH?.view ?? toEventView(eventRecord);
+
+const heading = { id: "hero-title", "data-focus": "title", tabIndex: -1 } as const;
+
+/**
+ * A card as its markup is, with what a variant may add to the formats taken out:
+ * the kind of each (`data-format-kind`) and the pieces its marks put in its line.
+ * What is left is Crête's own card, whoever drew it; `words` are the texts of the
+ * format lines, which are the same whoever marks them.
+ */
+function skeleton(card: Element | null): { html: string; words: string[] } {
+  const copy = card?.cloneNode(true);
+  if (!(copy instanceof Element)) throw new Error("no card");
+  const words = [...copy.querySelectorAll(".format-line")].map((line) => plain(line.textContent));
+  for (const line of copy.querySelectorAll(".format-line")) line.replaceChildren();
+  for (const format of copy.querySelectorAll("[data-format-kind]")) {
+    format.removeAttribute("data-format-kind");
+  }
+  return { html: withoutIds(copy.outerHTML), words };
+}
 
 // ---- The frame
 
@@ -407,7 +428,7 @@ test.skipIf(SKIN_DEPTH !== "full")(
 // ---- The pieces that Sentier draws itself
 
 test.skipIf(SKIN_DEPTH !== "full")(
-  "« Sentier » full — sa carte donne à chaque épreuve une pastille du terrain de son type, et garde ses classes",
+  "« Sentier » full — sa carte est celle de Crête, dont chaque épreuve est une pastille du terrain de son type, le jour à côté de toute la colonne",
   async () => {
     await within(
       <>
@@ -425,7 +446,9 @@ test.skipIf(SKIN_DEPTH !== "full")(
         );
         // A format is a chip in the tint of its terrain, a mark before its words: the type is in the words.
         const trail = need(cardTrail, ".event-card-format");
-        expect(trail.dataset.terrain).toBe("trail");
+        expect(trail.dataset.formatKind).toBe("trail");
+        // A point of 8 px before the words: the line is flex, so that the mark has a box.
+        expect(need(trail, ".terrain-mark").getBoundingClientRect().width).toBe(8);
         expect(styleOf(need(trail, ".terrain-mark")).backgroundColor).toBe(
           colourOf("--color-slope-2"),
         );
@@ -434,12 +457,19 @@ test.skipIf(SKIN_DEPTH !== "full")(
         expect(chip.borderTopLeftRadius).toBe("12px");
         expect(textContrast(need(trail, ".format-line"))).toBeGreaterThanOrEqual(4.5);
         const road = need(cardRoad, ".event-card-format");
-        expect(road.dataset.terrain).toBe("route");
+        expect(road.dataset.formatKind).toBe("route");
         expect(styleOf(need(road, ".terrain-mark")).backgroundColor).toBe(
           colourOf("--color-slope-1"),
         );
         // The runners are under the chip of their format, as in Crête's card.
         expect(trail.querySelector(".chips")).not.toBeNull();
+        // The day is beside the whole column (the words, then the formats), not over the formats.
+        const day = need(cardTrail, ".date-chip").getBoundingClientRect();
+        const title = need(cardTrail, ".event-card-title").getBoundingClientRect();
+        const body = need(cardTrail, ".event-card-body").getBoundingClientRect();
+        expect(title.left, "the title is beside the day").toBeGreaterThanOrEqual(day.right);
+        expect(body.left, "the formats are beside the day").toBeGreaterThanOrEqual(day.right);
+        expect(body.top, "and under the title").toBeGreaterThanOrEqual(title.bottom);
       },
     );
   },
@@ -534,6 +564,56 @@ test.skipIf(SKIN_DEPTH !== "full")(
           "a veil of pine, not the white",
         ).toBeGreaterThan(0);
       },
+    );
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "« Sentier » full — sa carte n'est pas une copie : ôtés le genre et les marques des épreuves, c'est la carte de Crête, dans chaque forme d'événement",
+  async () => {
+    for (const { what, view, today } of EVENT_SHAPES()) {
+      const props = { view, list: "upcoming" } as const;
+      const base = await inApp(
+        <EventCardBase {...props} />,
+        (drawn) => skeleton(drawn.querySelector(".event-card")),
+        { skin: SKIN, today },
+      );
+      const own = await inApp(
+        <EventCard {...props} />,
+        (drawn) => skeleton(drawn.querySelector(".event-card")),
+        { skin: SKIN, today },
+      );
+      expect(own.html, `the card of Sentier, ${what}`).toBe(base.html);
+      expect(own.words, `its format lines, ${what}`).toEqual(base.words);
+    }
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "« Sentier » full — sans anneau, le haut d'une fiche écrit les jours qui restent, dans le badge du sentier, et rien un jour d'épreuve",
+  async () => {
+    await within(<EventHero view={rich} heading={heading} />, (drawn) => {
+      const days = need(drawn, ".event-hero-days");
+      expect(plain(days.textContent)).toBe("dans 12 jours");
+      expect(days.classList.contains("days-left"), "the badge of the days left").toBe(true);
+      expect(days.getBoundingClientRect().width, "it shows").toBeGreaterThan(20);
+      expect(drawn.querySelector(".countdown-ring"), "no ring beside it").toBeNull();
+      // The title stays first in the markup, the days are with the date, over it.
+      const title = need(drawn, "h1");
+      expect(Boolean(title.compareDocumentPosition(days) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+        true,
+      );
+      expect(days.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        title.getBoundingClientRect().top + 1,
+      );
+    });
+    // On its first day, and while it is under way, there is nothing to count.
+    await within(
+      <EventHero view={rich} heading={heading} />,
+      (drawn) => {
+        expect(drawn.querySelector(".event-hero-days")).toBeNull();
+      },
+      { today: "2026-06-13" },
     );
   },
 );

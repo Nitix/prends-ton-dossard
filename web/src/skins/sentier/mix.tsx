@@ -1,3 +1,4 @@
+import { SKIN_DEPTH } from "..";
 import { Avatar } from "../../components/Avatar";
 import { CountdownRing } from "../../components/Dawn";
 import { ClockIcon, PinIcon } from "../../components/icons";
@@ -39,6 +40,9 @@ function SentierEventHero({ view, heading }: VariantPropsOf<"EventHero">) {
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
   const daysToGo = daysBetween(today, start);
+  // At full the skin's ring draws nothing (full.tsx): the days left are written, in words.
+  // At mix Crête's ring shows them (to the eye: it is hidden from a screen reader, as its base's).
+  const writeDays = SKIN_DEPTH === "full" && daysToGo > 0;
 
   return (
     <header className="event-hero flex flex-col gap-4">
@@ -60,12 +64,15 @@ function SentierEventHero({ view, heading }: VariantPropsOf<"EventHero">) {
               >
                 {event.name}
               </h1>
-              <p className="event-hero-date flex items-center gap-2 self-start rounded-lg bg-card/80 px-2.5 py-1.5 text-sm font-semibold ring-1 ring-neutral-300/60">
-                <Blaze />
-                {severalDays
-                  ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
-                  : f.dateLong(start)}
-              </p>
+              <div className="flex flex-wrap items-center gap-2 self-start">
+                <p className="event-hero-date flex items-center gap-2 rounded-lg bg-card/80 px-2.5 py-1.5 text-sm font-semibold ring-1 ring-neutral-300/60">
+                  <Blaze />
+                  {severalDays
+                    ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
+                    : f.dateLong(start)}
+                </p>
+                {writeDays && <p className="event-hero-days days-left">{f.inDays(daysToGo)}</p>}
+              </div>
             </div>
             {daysToGo > 0 && <CountdownRing days={daysToGo} className="mt-1" />}
           </div>

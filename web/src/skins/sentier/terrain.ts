@@ -4,8 +4,10 @@
 // file) tint the formats of a card, and « Sentier » the band of a format on the
 // page of an event, with it. The types are typed by the admins, so the terrain
 // is read from the words of the label; a type that says none of them gets sand.
-// The tint is decoration: the label of the type is always written beside it, and
-// the colours are the palette's (`full.css` gives each terrain its own).
+// The tint is decoration, the terrain a guess: the words of the format are written
+// beside it (they hold the label of its type when the format has no name of its
+// own, and no more than that), and the colours are the palette's (`full.css` gives
+// each terrain its own).
 
 export type Terrain = "route" | "trail" | "ultra" | "cross" | "backyard" | "hyrox" | "other";
 
