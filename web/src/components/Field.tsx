@@ -25,23 +25,30 @@ export type FieldControl = {
  * as a function, since each kind of control (an input, a select, a text area)
  * is its own element: it spreads what it receives on itself, which links it to
  * the label (`id`), to the hint and to the error (`aria-describedby`). The
- * error is announced when it appears.
+ * error is announced when it appears. `describedBy` is the id of an element that
+ * is not in the field and says something more about it, after the error.
  */
 export function Field({
   label,
   hint,
   error,
+  describedBy: elsewhereId,
   children,
 }: {
   label: string;
   hint?: string;
   error: string | null;
+  describedBy?: string;
   children: (control: FieldControl) => ReactNode;
 }) {
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
-  const describedBy = [hint === undefined ? null : hintId, error === null ? null : errorId]
+  const describedBy = [
+    hint === undefined ? null : hintId,
+    error === null ? null : errorId,
+    elsewhereId ?? null,
+  ]
     .filter((described) => described !== null)
     .join(" ");
 

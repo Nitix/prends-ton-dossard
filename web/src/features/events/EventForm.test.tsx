@@ -13,6 +13,7 @@ import {
   addFormat,
   distance,
   elevation,
+  field,
   fillEvent,
   format,
   formatDate,
@@ -25,6 +26,7 @@ import {
   name,
   price,
   raceType,
+  refused,
   renderEdit,
   renderForm,
   reuse,
@@ -38,7 +40,7 @@ import {
   type Row,
   type Screen,
 } from "./formHarness";
-import { mocks, type Rec } from "./formMocks";
+import { mocks } from "./formMocks";
 import {
   aliceRunner,
   bobRunner,
@@ -53,29 +55,6 @@ import {
 vi.mock("../../lib/pb", async () => (await import("./formMocks")).pbModule);
 
 setUpFormTests();
-
-/** What PocketBase answers when the request number `index` of a batch fails. */
-function refused(index: number, status: number, data: Rec = {}) {
-  return new ClientResponseError({
-    url: "/api/batch",
-    status: 400,
-    response: {
-      status: 400,
-      message: "Batch transaction failed.",
-      data: {
-        requests: {
-          [index]: {
-            code: "batch_request_failed",
-            message: "Batch request failed.",
-            response: { status, message: "Failed.", data },
-          },
-        },
-      },
-    },
-  });
-}
-
-const field = (code: string) => ({ code, message: "server text, never shown" });
 
 const registrationDeadline = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationDeadline);
@@ -952,12 +931,14 @@ test("EventForm — l'erreur d'une épreuve existante est dans son groupe, et la
   await expect.element(name(screen)).toHaveValue("Trail des Crêtes 2026");
 });
 
-test("EventForm — réduire les dates : l'erreur du serveur s'affiche sous la date de début", async () => {
-  // The formats that stay (F15, F42) go first: the event is the third request.
+test("EventForm — les dates de l'événement qui ne tiennent pas avec ses épreuves : l'erreur du serveur s'affiche sous la date de début", async () => {
+  // The formats that stay (F15, F42) go first: the event is the third request. The server knows of a
+  // format dated outside of the days the form gives the event (one that somebody else added since
+  // the form was opened, or a day typed with the API): the form cannot tell, only the server can.
+  // (A start moved past a day of a format of the form is stopped by the browser: see
+  // EventForm.period.test.tsx.)
   mocks.send.mockRejectedValue(refused(2, 400, { start_date: field("format_date_out_of_range") }));
   const { screen } = await renderEdit();
-  // F42 is on the 14th: the event, now from the 15th, no longer has its day.
-  await startDate(screen).fill("2026-06-15");
 
   await save(screen).click();
 

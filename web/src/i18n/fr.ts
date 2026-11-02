@@ -440,6 +440,11 @@ export const fr = {
       `Du ${from} au ${to}, d'après les dates des épreuves`,
     // After the line above, when saving would change the end the event has now: nothing is lost without being said.
     periodWas: (from: string, to: string) => `(avant : du ${from} au ${to})`,
+    // After the line above, when the days are more than two weeks apart: a year typed wrong in the date of a format makes a year-long event.
+    periodLong: "Plus de deux semaines : vérifie les dates des épreuves.",
+    // Just above « Enregistrer » when saving would end the event earlier (the days come written, "sam. 13 juin"): the days are lost, and the way to keep them is said.
+    periodShortens: (from: string, to: string) =>
+      `Enregistrer raccourcit l'événement (avant : du ${from} au ${to}). Pour garder ces jours, donne sa date à l'épreuve du dernier jour.`,
     registrationUrl: "Lien pour s'inscrire",
     registrationUrlHint: "Facultatif : l'adresse de la page d'inscription.",
     registrationDeadline: "Date limite d'inscription",

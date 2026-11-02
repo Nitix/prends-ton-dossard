@@ -8,7 +8,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { MEASURES, shownMeasures } from "../../lib/measures";
 import type { Measure, RaceTypeRecord } from "../../lib/types";
 import { gpxStats, MAX_GPX_BYTES, parseGpx, type GpxStats } from "../route/gpx";
-import { filledMeasures, type FormatRow } from "./formDraft";
+import { filledMeasures, isDay, type FormatRow } from "./formDraft";
 
 /** Puts the focus on an element when it appears: the first field of a row that has just been added. */
 function focusOnMount(element: HTMLElement | null) {
@@ -22,10 +22,12 @@ function focusOnMount(element: HTMLElement | null) {
  * never in that section. `errors`
  * has the code of the server, or of the form, for each field, by the name the
  * server gives it; `row` is a refusal that is about the format as a whole.
+ * The day of the format is not before `startDate`, the start of the event.
  */
 export function FormatFieldset({
   number,
   row,
+  startDate,
   raceTypes,
   errors,
   onChange,
@@ -35,6 +37,8 @@ export function FormatFieldset({
   /** The place of the format in the form, from 1. */
   number: number;
   row: FormatRow;
+  /** The first day of the event, as it is typed: a text that is not a day gives no minimum. */
+  startDate: string;
   raceTypes: RaceTypeRecord[];
   errors: Readonly<Record<string, string>>;
   onChange: (patch: Partial<FormatRow>) => void;
@@ -435,6 +439,7 @@ export function FormatFieldset({
           <input
             {...control}
             type="date"
+            min={isDay(startDate) ? startDate : undefined}
             value={row.date}
             onChange={(event) => {
               onChange({ date: event.target.value });

@@ -4,10 +4,14 @@ import { toEventView } from "./api";
 import {
   eventEndDate,
   filledMeasures,
+  formerPeriod,
   hasMeasure,
   initialDraft,
+  isLongEvent,
+  isSettled,
   joinRowOf,
   joinStarted,
+  shortens,
   toEventDraft,
   type FormatRow,
   type FormDraft,
@@ -97,6 +101,80 @@ describe("eventEndDate", () => {
     expect(eventEndDate("2026-06-13", ["2026-06-1", "2026-06-15"])).toBe("2026-06-15");
     expect(eventEndDate("", ["2026-06-15"])).toBe("");
     expect(eventEndDate("2026-06-1", ["2026-06-15"])).toBe("");
+  });
+});
+
+describe("isLongEvent", () => {
+  test("isLongEvent — plus de quatorze jours entre le début et la fin", () => {
+    expect(isLongEvent("2026-06-13", "2026-06-27")).toBe(false);
+    expect(isLongEvent("2026-06-13", "2026-06-28")).toBe(true);
+    // A year typed wrong.
+    expect(isLongEvent("2026-06-13", "2027-06-15")).toBe(true);
+    expect(isLongEvent("2026-12-25", "2027-01-08")).toBe(false);
+    expect(isLongEvent("2026-12-25", "2027-01-09")).toBe(true);
+  });
+
+  test("isLongEvent — un jour, ou pas de jour, n'est pas long", () => {
+    expect(isLongEvent("2026-06-13", "")).toBe(false);
+    expect(isLongEvent("", "2027-06-15")).toBe(false);
+    expect(isLongEvent("2026-06-1", "2027-06-15")).toBe(false);
+  });
+});
+
+describe("isSettled", () => {
+  test("isSettled — un champ vide, ou un jour dont l'année a quatre chiffres et 1900 ou plus", () => {
+    expect(isSettled("")).toBe(true);
+    expect(isSettled("2026-06-13")).toBe(true);
+    expect(isSettled("1900-01-01")).toBe(true);
+    expect(isSettled("9999-12-31")).toBe(true);
+  });
+
+  test("isSettled — les débuts d'année que Chromium donne pendant la frappe ne le sont pas", () => {
+    expect(isSettled("0002-06-13")).toBe(false);
+    expect(isSettled("0020-06-13")).toBe(false);
+    expect(isSettled("0202-06-13")).toBe(false);
+    expect(isSettled("1899-12-31")).toBe(false);
+    // More than four digits, or not a day.
+    expect(isSettled("20261-06-13")).toBe(false);
+    expect(isSettled("2026-06")).toBe(false);
+    expect(isSettled("demain")).toBe(false);
+  });
+});
+
+describe("formerPeriod", () => {
+  const stored = { start_date: "2026-06-13", end_date: "2026-06-14" };
+
+  test("formerPeriod — la fin stockée, quand l'enregistrement en donnerait une autre", () => {
+    expect(formerPeriod(stored, "")).toEqual({ start: "2026-06-13", end: "2026-06-14" });
+    expect(formerPeriod(stored, "2026-06-16")).toEqual({ start: "2026-06-13", end: "2026-06-14" });
+    expect(formerPeriod(stored, "2026-06-13")).toEqual({ start: "2026-06-13", end: "2026-06-14" });
+  });
+
+  test("formerPeriod — rien à dire sans événement, sans fin stockée, ou avec la même fin", () => {
+    expect(formerPeriod(undefined, "2026-06-16")).toBeUndefined();
+    expect(formerPeriod({ ...stored, end_date: "" }, "2026-06-16")).toBeUndefined();
+    expect(formerPeriod(stored, "2026-06-14")).toBeUndefined();
+  });
+
+  test("formerPeriod — une fin stockée égale au début (v4) est un jour : rien n'est perdu", () => {
+    expect(formerPeriod({ start_date: "2026-06-13", end_date: "2026-06-13" }, "")).toBeUndefined();
+    expect(
+      formerPeriod({ start_date: "2026-06-13", end_date: "2026-06-13" }, "2026-06-15"),
+    ).toBeUndefined();
+  });
+});
+
+describe("shortens", () => {
+  const former = { start: "2026-06-13", end: "2026-06-14" };
+
+  test("shortens — plus de fin, ou une fin plus tôt, raccourcit", () => {
+    expect(shortens(former, "")).toBe(true);
+    expect(shortens({ ...former, end: "2026-06-18" }, "2026-06-15")).toBe(true);
+  });
+
+  test("shortens — une fin plus tard, ou rien d'ancien, ne raccourcit pas", () => {
+    expect(shortens(former, "2026-06-16")).toBe(false);
+    expect(shortens(undefined, "")).toBe(false);
   });
 });
 

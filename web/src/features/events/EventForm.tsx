@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
-import { startTransition, useActionState, useRef, useState } from "react";
+import { startTransition, useActionState, useId, useRef, useState } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Field, INPUT } from "../../components/Field";
@@ -9,7 +9,7 @@ import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { parseDate } from "../../lib/dates";
-import type { EventRecord, RaceTypeRecord } from "../../lib/types";
+import type { RaceTypeRecord } from "../../lib/types";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { allowedStatus } from "../participations/api";
@@ -22,13 +22,18 @@ import { formatDisplayName } from "./formatName";
 import {
   emptyRow,
   eventEndDate,
+  formerPeriod,
   hasMeasure,
   initialDraft,
   isDay,
+  isLongEvent,
+  isSettled,
   joinRowOf,
   joinStarted,
+  shortens,
   toEventDraft,
   type FormatRow,
+  type FormerPeriod,
 } from "./formDraft";
 import { saveEvent, SaveEventError, TraceUploadError } from "./saveEvent";
 
@@ -161,22 +166,35 @@ export function EditEventPage({ id }: { id: string }) {
 /**
  * The days of the event, under its start date: one day, or from the first to the
  * last day of its formats (`end`, see `eventEndDate`). An event that is being
- * edited and whose end would change says what it was (`stored` is the event as
- * it was loaded): saving a long event whose formats have no day of their own
- * makes it a one-day event, and that is not to be a surprise.
+ * edited and whose end would change says what it was (`former`, see
+ * `formerPeriod`): saving a long event whose formats have no day of their own
+ * makes it a one-day event, and that is not to be a surprise. An event of more
+ * than two weeks says to check the days of the formats: that is what a year
+ * typed wrong makes.
  *
- * It is an `<output>`, a polite live region, so that a change is read out. It is
- * always in the page, empty (and out of the flow) while there is no start day:
- * a region that comes with its text is often not read out.
+ * It is an `<output>`, a polite live region, so that a change is read out, and
+ * the start date is described by it (`id`). It is always in the page, empty (and
+ * out of the flow) while there is no start day: a region that comes with its
+ * text is often not read out.
+ *
+ * A date that is being typed is not read out. Chromium gives a complete day for
+ * each key of a year (`0002-06-13`, `0020-06-13`, `0202-06-13`), and each would
+ * rewrite the region: while one of the `dates` is not settled (see
+ * `isSettled`), the region keeps the text it had.
  */
 function Period({
+  id,
   start,
   end,
-  stored,
+  former,
+  dates,
 }: {
+  id: string;
   start: string;
   end: string;
-  stored: Pick<EventRecord, "start_date" | "end_date"> | undefined;
+  former: FormerPeriod | undefined;
+  /** Every date the text goes by: the start, and the day of each format. */
+  dates: readonly string[];
 }) {
   const { t, f } = useI18n();
   let text = "";
@@ -184,12 +202,20 @@ function Period({
     const first = f.date(parseDate(start));
     text =
       end === "" ? t.form.periodOneDay(first) : t.form.periodRange(first, f.date(parseDate(end)));
-    const was = stored?.end_date ?? "";
-    if (stored && was !== "" && was !== end) {
-      text += ` ${t.form.periodWas(f.date(parseDate(stored.start_date)), f.date(parseDate(was)))}`;
+    if (former) {
+      text += ` ${t.form.periodWas(f.date(parseDate(former.start)), f.date(parseDate(former.end)))}`;
     }
+    if (isLongEvent(start, end)) text += `. ${t.form.periodLong}`;
   }
-  return <output className="text-sm text-neutral-700 empty:sr-only">{text}</output>;
+  // What the region said when every date was settled, for the renders in between.
+  const [said, setSaid] = useState(text);
+  const settled = dates.every(isSettled);
+  if (settled && said !== text) setSaid(text);
+  return (
+    <output id={id} className="text-sm text-neutral-700 empty:sr-only">
+      {settled ? text : said}
+    </output>
+  );
 }
 
 function EventFields({
@@ -216,6 +242,8 @@ function EventFields({
   const [draft, setDraft] = useState(() => initialDraft(initial));
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const formatsTitle = useRef<HTMLHeadingElement>(null);
+  const periodId = useId();
+  const shortensId = useId();
 
   // "I'm taking part" is for a new event, and needs the runner of the member.
   const joinOffered = initial === undefined && runner !== null;
@@ -230,6 +258,9 @@ function EventFields({
     draft.startDate,
     draft.rows.map((row) => row.date),
   );
+  // What the form says it would change in the days of the event being edited.
+  const former = formerPeriod(initial?.event, endDate);
+  const losesDays = former !== undefined && shortens(former, endDate);
 
   function change(patch: Partial<typeof draft>) {
     setDraft((current) => ({ ...current, ...patch }));
@@ -403,7 +434,7 @@ function EventFields({
           )}
         </Field>
         <div className="flex flex-col gap-1">
-          <Field label={t.form.startDate} error={eventError("start_date")}>
+          <Field label={t.form.startDate} error={eventError("start_date")} describedBy={periodId}>
             {(control) => (
               <input
                 {...control}
@@ -418,7 +449,13 @@ function EventFields({
               />
             )}
           </Field>
-          <Period start={draft.startDate} end={endDate} stored={initial?.event} />
+          <Period
+            id={periodId}
+            start={draft.startDate}
+            end={endDate}
+            former={former}
+            dates={[draft.startDate, ...draft.rows.map((row) => row.date)]}
+          />
         </div>
         <DuplicateHint
           name={draft.name}
@@ -484,6 +521,7 @@ function EventFields({
             key={row.key}
             number={index + 1}
             row={row}
+            startDate={draft.startDate}
             raceTypes={raceTypes}
             errors={errors.rows[row.key] ?? {}}
             onChange={(patch) => {
@@ -544,8 +582,18 @@ function EventFields({
           {translateError(t, errors.form)}
         </p>
       )}
+      {losesDays && (
+        <p id={shortensId} className="text-sm font-medium text-neutral-800">
+          {t.form.periodShortens(f.date(parseDate(former.start)), f.date(parseDate(former.end)))}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={pending} className={PRIMARY}>
+        <button
+          type="submit"
+          disabled={pending}
+          aria-describedby={losesDays ? shortensId : undefined}
+          className={PRIMARY}
+        >
           {pending ? t.auth.saving : t.common.save}
         </button>
         {initial ? (

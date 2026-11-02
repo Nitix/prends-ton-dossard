@@ -8,6 +8,7 @@ import {
   createRouter,
   useParams,
 } from "@tanstack/react-router";
+import { ClientResponseError } from "pocketbase";
 import { beforeAll, beforeEach, expect, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
@@ -17,7 +18,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { EditEventPage, EventForm } from "./EventForm";
-import { mocks } from "./formMocks";
+import { mocks, type Rec } from "./formMocks";
 import { aliceRunner, bobRunner, eventRecord, roadType, trailType } from "./testFixture";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -74,6 +75,29 @@ export function setUpFormTests() {
     signIn("alice");
   });
 }
+
+/** What PocketBase answers when the request number `index` of a batch fails. */
+export function refused(index: number, status: number, data: Rec = {}) {
+  return new ClientResponseError({
+    url: "/api/batch",
+    status: 400,
+    response: {
+      status: 400,
+      message: "Batch transaction failed.",
+      data: {
+        requests: {
+          [index]: {
+            code: "batch_request_failed",
+            message: "Batch request failed.",
+            response: { status, message: "Failed.", data },
+          },
+        },
+      },
+    },
+  });
+}
+
+export const field = (code: string) => ({ code, message: "server text, never shown" });
 
 /** The page of an event, where saving leads. */
 function Page() {

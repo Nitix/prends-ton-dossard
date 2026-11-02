@@ -328,8 +328,11 @@ export const en = {
     locationHint: "A town or a place.",
     startDate: "Start date",
     periodOneDay: (day: string) => `One day: ${day}`,
-    periodRange: (from: string, to: string) => `From ${from} to ${to}, from the formats' dates`,
+    periodRange: (from: string, to: string) => `From ${from} to ${to}, going by the race dates`,
     periodWas: (from: string, to: string) => `(was: from ${from} to ${to})`,
+    periodLong: "More than two weeks: check the race dates.",
+    periodShortens: (from: string, to: string) =>
+      `Saving shortens the event (was: from ${from} to ${to}). To keep these days, give the race of the last day its date.`,
     registrationUrl: "Registration link",
     registrationUrlHint: "Optional: the address of the registration page.",
     registrationDeadline: "Registration deadline",

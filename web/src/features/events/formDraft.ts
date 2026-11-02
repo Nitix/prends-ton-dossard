@@ -1,6 +1,6 @@
-import { raceStarted } from "../../lib/dates";
+import { daysBetween, parseDate, raceStarted } from "../../lib/dates";
 import { newId } from "../../lib/ids";
-import type { Measure, Status } from "../../lib/types";
+import type { EventRecord, Measure, Status } from "../../lib/types";
 import type { EventView } from "./api";
 import type { EventDraft, GpxChange } from "./saveEvent";
 
@@ -148,6 +148,62 @@ export function eventEndDate(start: string, formatDates: readonly string[]): str
     if (day > end && isDay(day)) end = day;
   }
   return end === start ? "" : end;
+}
+
+/**
+ * More days than this between the first and the last day of an event is more
+ * than two weeks: a year typed wrong in the day of a format makes an event of a
+ * year, and the form says to check the days.
+ */
+export const LONG_EVENT_DAYS = 14;
+
+/**
+ * Whether an event that starts on `start` and ends on `end` (see `eventEndDate`;
+ * none is one day) lasts more than `LONG_EVENT_DAYS` after its first day.
+ */
+export function isLongEvent(start: string, end: string): boolean {
+  if (!isDay(start) || !isDay(end)) return false;
+  return daysBetween(parseDate(start), parseDate(end)) > LONG_EVENT_DAYS;
+}
+
+/** The first year that a day typed in a date field is taken for. */
+const FIRST_YEAR = 1900;
+
+/**
+ * Whether what a date field holds is to be gone by: nothing (it is empty), or a
+ * day whose year has four digits and is `FIRST_YEAR` or later. While a year is
+ * typed, Chromium gives a complete day for each key (`0002-06-13`,
+ * `0020-06-13`, `0202-06-13`): they are not days to say anything about.
+ */
+export function isSettled(text: string): boolean {
+  if (text === "") return true;
+  const year = /^(\d{4})-\d{2}-\d{2}$/.exec(text)?.[1];
+  return year !== undefined && Number(year) >= FIRST_YEAR;
+}
+
+/** The days that an event has in the database, for the form to say what saving would change. */
+export type FormerPeriod = { start: string; end: string };
+
+/**
+ * The days that the event being edited has now (`stored` is the event as it was
+ * loaded), when saving the form as it is gives it another end (`end`, see
+ * `eventEndDate`). None when there is no event yet, when it has no end, or when
+ * its end is the one saving gives. An end that is the start, which v4 allowed, is
+ * one day as no end is: saving as one day changes nothing.
+ */
+export function formerPeriod(
+  stored: Pick<EventRecord, "start_date" | "end_date"> | undefined,
+  end: string,
+): FormerPeriod | undefined {
+  if (!stored) return undefined;
+  const was = stored.end_date ?? "";
+  if (was === "" || was === stored.start_date || was === end) return undefined;
+  return { start: stored.start_date, end: was };
+}
+
+/** Whether saving would end the event earlier than it ends now: it has no end any more, or an earlier one. */
+export function shortens(former: FormerPeriod | undefined, end: string): boolean {
+  return former !== undefined && (end === "" || end < former.end);
 }
 
 /** The number in a field, or undefined when it is empty. */
