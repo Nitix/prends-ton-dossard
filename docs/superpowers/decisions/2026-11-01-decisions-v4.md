@@ -7,7 +7,7 @@ Le design est décrit dans `docs/superpowers/designs/2026-11-01-v4-crete.md` (b�
 ## Ce que fait la v4
 
 - **Le thème « Crête »** : un ciel d'aube violet → corail avec des courbes de niveau et des crêtes, les boutons en dégradé, les anneaux de compte à rebours, la barre d'onglets flottante, la page qui glisse sur le ciel, le séparateur de crêtes d'« Alpage » sur l'accueil, le graphique du D+ de « Chrono ».
-- **Un thème sombre** : l'en-tête violet ne change pas ; tout le reste passe en sombre. Il suit le téléphone, ou « Clair » / « Sombre » dans Réglages → Apparence.
+- **Un thème sombre** : l'en-tête violet ne change pas ; tout le reste passe en sombre. Il suit le réglage du système (téléphone ou ordinateur), ou « Clair » / « Sombre » dans Réglages → Apparence.
 - **Le nom de l'appli dans l'en-tête** mène à l'accueil.
 
 ## Décisions
@@ -20,7 +20,7 @@ Le design est décrit dans `docs/superpowers/designs/2026-11-01-v4-crete.md` (b�
 ### 2. Les polices viennent du site
 
 - **Décision :** Inter et Plus Jakarta Sans sont servies par le site (plus de Google Fonts) : aucune requête vers un tiers, et l'appli installée les garde hors ligne. Environ 76 Ko au premier chargement d'une page en français.
-- **Conséquence :** seuls les alphabets latins sont inclus ; un nom en cyrillique, en grec ou en vietnamien s'affiche dans la police du téléphone.
+- **Conséquence :** seuls les alphabets latins sont inclus ; un nom en cyrillique, en grec ou en vietnamien s'affiche dans la police du système.
 
 ### 3. Le dégradé du D+ : l'arc-en-ciel de « Chrono », assombri
 

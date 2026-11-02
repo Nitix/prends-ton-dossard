@@ -121,7 +121,7 @@ export const en = {
   },
   settings: {
     appearance: "Appearance",
-    themeAuto: "Auto (like the phone)",
+    themeAuto: "Auto (like your system)",
     themeLight: "Light",
     themeDark: "Dark",
   },

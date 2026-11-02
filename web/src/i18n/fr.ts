@@ -142,7 +142,7 @@ export const fr = {
   // The appearance of the app on this device (see lib/theme.ts): the dark theme, chosen or following the phone.
   settings: {
     appearance: "Apparence",
-    themeAuto: "Auto (comme le téléphone)",
+    themeAuto: "Auto (comme le système)",
     themeLight: "Clair",
     themeDark: "Sombre",
   },
