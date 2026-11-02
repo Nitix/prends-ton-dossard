@@ -1,4 +1,7 @@
+import type { CSSProperties } from "react";
+
 import { useI18n } from "../../i18n/I18nProvider";
+import { useAmbient } from "../../lib/ambient";
 import type { BrandMarkProps, DividerProps, HeaderArtProps, HeroArtProps } from "../types";
 import { DotFrance, IsoArch } from "./illustrations";
 
@@ -9,10 +12,14 @@ import { DotFrance, IsoArch } from "./illustrations";
 // and the isometric arch of a start line. They are decoration: hidden from
 // screen readers, with no words in them.
 //
-// Nothing moves. The variant's sheet was alive (its patches faded out and in
-// for ever, its orbits turned): the app has no animation that never ends (see
-// src/motion.test.ts: it keeps a phone at work), so the patches stand still, as
-// they would for whoever asked for less motion.
+// They move, slowly, as the variant's sheet did: its patches fade out and come
+// back in, the orbits of the data turn (one ring the other way) and a dot
+// pulses. The drawings that move are laid out and animated by motion.css, in
+// `carnet-*` classes of the skin's own; it moves them inside a drawing that has
+// `data-moving`, which it has while the person has the background on (« Animer
+// le fond », lib/ambient.ts), and only for whoever has not asked their system for
+// less motion (a media query of motion.css). Off, or with less motion asked for,
+// the same drawings stand still.
 
 /** The grid of dots of the sheet: a square of one pixel every 6, white, over a dark sky. */
 const DOTS = {
@@ -21,28 +28,50 @@ const DOTS = {
   backgroundSize: "6px 6px",
 } as const;
 
-/** Patches of the sky over the dots, where the sheet fades: where, how big (rem), how strongly. */
+/**
+ * Patches of the ground over the dots, where the sheet fades: where, how big
+ * (rem), how strongly they hide the dots at rest, and how they move (see
+ * motion.css): how long a patch takes to go and come back (s), where it is in
+ * that already (s, negative: they do not start together), how far it drifts (rem).
+ */
 const VEILS = [
-  { left: "2%", top: "-20%", size: 11, opacity: 0.9 },
-  { left: "38%", top: "40%", size: 13, opacity: 0.75 },
-  { left: "66%", top: "-30%", size: 12, opacity: 0.9 },
-  { left: "86%", top: "35%", size: 10, opacity: 0.65 },
+  { left: "2%", top: "-20%", size: 11, opacity: 0.9, period: 17, delay: -4, drift: 2 },
+  { left: "38%", top: "40%", size: 13, opacity: 0.75, period: 23, delay: -15, drift: -2.5 },
+  { left: "66%", top: "-30%", size: 12, opacity: 0.9, period: 19, delay: -9, drift: 2.5 },
+  { left: "86%", top: "35%", size: 10, opacity: 0.65, period: 13, delay: -2, drift: -2 },
 ] as const;
 
-/** The sheet of dots, in its box. Over it, with `veils`, patches of the sky where it fades, never all of it. */
-function Dots({ className = "", veils = false }: { className?: string; veils?: boolean }) {
+/** How little of the dots a patch hides when it has gone: the dots are almost all there. */
+const VEIL_LEAST = 0.08;
+
+/**
+ * The sheet of dots, in its box, fading out towards `fade` (see motion.css), with
+ * the patches of the ground over it where it fades out and in (`veils`), never
+ * all of it: they move in a drawing that has `data-moving` (`.carnet-art`).
+ */
+function Dots({ fade, veils = false }: { fade?: "header" | "event" | "runner"; veils?: boolean }) {
   return (
-    <span
-      aria-hidden="true"
-      className={`carnet:pointer-events-none carnet:absolute carnet:inset-0 ${className}`}
-    >
-      <span className="carnet:absolute carnet:inset-0" style={DOTS} />
+    <span aria-hidden="true" data-fade={fade} className="carnet-dots">
+      <span className="carnet-dots-sheet" style={DOTS} />
       {veils &&
-        VEILS.map(({ left, top, size, opacity }) => (
+        VEILS.map(({ left, top, size, opacity, period, delay, drift }) => (
           <span
             key={left}
-            className="carnet:absolute carnet:rounded-full carnet:bg-[radial-gradient(closest-side,var(--dawn-sky-color)_45%,transparent)]"
-            style={{ left, top, width: `${size}rem`, height: `${size}rem`, opacity }}
+            className="carnet-veil"
+            style={
+              {
+                left,
+                top,
+                width: `${size}rem`,
+                height: `${size}rem`,
+                opacity,
+                "--veil-max": opacity,
+                "--veil-min": VEIL_LEAST,
+                "--veil-period": `${period}s`,
+                "--veil-delay": `${delay}s`,
+                "--veil-drift": `${drift}rem`,
+              } as CSSProperties
+            }
           />
         ))}
     </span>
@@ -51,17 +80,29 @@ function Dots({ className = "", veils = false }: { className?: string; veils?: b
 
 /**
  * The sky behind the name. In the header of a page: the sheet of dots, with its
- * patches. On the pages to sign in: the same over the whole page, and under the
+ * patches, and, on a page with no hero of its own, the orbits of the data in the
+ * corner. On the pages to sign in: the sheet over the whole page, and under the
  * card the arch of a start line, in isometric hairlines, on a ground of dots.
  */
-export function HeaderArt({ place }: HeaderArtProps) {
-  if (place === "header") {
-    return <Dots veils className="carnet:mask-[linear-gradient(to_bottom,#000_55%,transparent)]" />;
-  }
+export function HeaderArt({ place, sun }: HeaderArtProps) {
+  const [moving] = useAmbient();
   return (
-    <span aria-hidden="true" className="carnet:pointer-events-none carnet:absolute carnet:inset-0">
-      <Dots veils />
-      <IsoArch className="carnet:absolute carnet:bottom-0 carnet:left-1/2 carnet:w-96 carnet:max-w-none carnet:-translate-x-1/2 carnet:mask-[radial-gradient(ellipse_65%_85%_at_50%_58%,#000_55%,transparent)] carnet:md:w-[34rem]" />
+    <span aria-hidden="true" data-moving={moving ? "" : undefined} className="carnet-art">
+      {place === "header" ? (
+        <>
+          <Dots veils fade="header" />
+          {sun && (
+            <span className="carnet-column">
+              <Orbit className="carnet-header-orbit" />
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <Dots veils />
+          <IsoArch className="carnet:absolute carnet:bottom-0 carnet:left-1/2 carnet:w-96 carnet:max-w-none carnet:-translate-x-1/2 carnet:mask-[radial-gradient(ellipse_65%_85%_at_50%_58%,#000_55%,transparent)] carnet:md:w-[34rem]" />
+        </>
+      )}
     </span>
   );
 }
@@ -146,29 +187,33 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
 }
 
 /**
- * The orbits of a runner: a thin circle, a dotted one with three dots of data on
- * it, round a corner of the hero. In white over the navy,
- * the data in teal, gold and indigo.
+ * The orbits of a runner: a thin circle, a dotted one that turns with a dot of
+ * data on it, and a ring that turns the other way with two more, one of which
+ * pulses; round a corner of the hero or of the header. In white over the navy,
+ * the data in teal, gold and indigo. They turn (160 s a turn) and pulse in a
+ * drawing that moves (`data-moving` on it, see motion.css). A group turns about
+ * the middle of its box, so each has a circle that fills it, drawn in nothing:
+ * the box is then centred on the ring.
  */
-function Orbit({ className = "" }: { className?: string }) {
+function Orbit({ className }: { className: string }) {
   return (
     <svg
       aria-hidden="true"
       focusable="false"
       viewBox="-120 -120 240 240"
-      className={`carnet:pointer-events-none carnet:block ${className}`}
+      className={`carnet-orbits ${className}`}
     >
       <circle r="110" fill="none" stroke="#fff" strokeOpacity="0.1" />
-      <circle r="84" fill="none" stroke="#fff" strokeOpacity="0.16" />
-      <g>
+      {/* The ring that turns back, with its two dots of data: the teal one gives off a pulse. */}
+      <g className="carnet-orbit-back">
+        <circle r="88" fill="none" />
+        <circle r="84" fill="none" stroke="#fff" strokeOpacity="0.16" />
         <circle
-          r="60"
-          fill="none"
-          stroke="#fff"
-          strokeOpacity="0.3"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeDasharray="0.01 5"
+          className="carnet-pulse"
+          cx="84"
+          cy="0"
+          r="4"
+          style={{ fill: "var(--dawn-ring-from)" }}
         />
         <circle
           cx="84"
@@ -179,30 +224,40 @@ function Orbit({ className = "" }: { className?: string }) {
           style={{ fill: "var(--dawn-ring-from)" }}
         />
         <circle cx="-42" cy="-72.7" r="4" className="carnet:fill-peach-400" />
+      </g>
+      <g className="carnet-orbit">
+        <circle r="64" fill="none" />
+        <circle
+          r="60"
+          fill="none"
+          stroke="#fff"
+          strokeOpacity="0.3"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeDasharray="0.01 5"
+        />
         <circle cx="-5" cy="59.8" r="4" className="carnet:fill-blush-400" />
       </g>
     </svg>
   );
 }
 
-/** The poster of an event or of a runner: the sheet of dots fading towards the foot, and the orbits in a corner. */
+/**
+ * The poster of an event or of a runner: the sheet of dots fading towards the
+ * foot (the left, for a runner), with the patches where it fades out and in, and
+ * the orbits in a corner.
+ */
 export function HeroArt({ place }: HeroArtProps) {
+  const [moving] = useAmbient();
   return (
-    <span aria-hidden="true" className="carnet:pointer-events-none carnet:absolute carnet:inset-0">
-      <Dots
-        className={
-          place === "event"
-            ? "carnet:mask-[linear-gradient(to_bottom,rgb(0_0_0/0.3),#000_85%)]"
-            : "carnet:mask-[linear-gradient(to_left,#000,transparent_85%)]"
-        }
-      />
-      <Orbit
-        className={
-          place === "event"
-            ? "carnet:absolute carnet:-top-20 carnet:-right-20 carnet:size-72 carnet:opacity-80"
-            : "carnet:absolute carnet:-top-16 carnet:-right-16 carnet:size-60 carnet:opacity-80"
-        }
-      />
+    <span
+      aria-hidden="true"
+      data-moving={moving ? "" : undefined}
+      data-ground="hero"
+      className="carnet-art"
+    >
+      <Dots veils fade={place} />
+      <Orbit className={`carnet-hero-orbit carnet-hero-orbit-${place}`} />
     </span>
   );
 }

@@ -55,6 +55,7 @@ skins/<id>/
   palette.css    its custom properties: colours, radii, colours of shadows, paints of the dawn,
                  of the map and of Crête's motifs
   utilities.css  the utilities of Tailwind that its motifs use (see Utilities)
+  motion.css     optional: what moves in its motifs (see Motion)
   *.tsx          its motifs, for the slots
 ```
 
@@ -69,6 +70,7 @@ export const skin: Skin = {
   swatches: ["#rrggbb", "#rrggbb"], // two colours on its card
   fontSample: '"Its Font", serif', // the font-family of its titles, for the sample on its card
   themeColor: "#rrggbb", // the browser's bar (<meta name="theme-color">): the top of its header
+  animatedBackground: true, // only for a skin whose motifs move (see Motion): the settings offer « Animer le fond »
 };
 ```
 
@@ -507,6 +509,42 @@ must stay there: under Crête's `HeaderArt`, it would be missing from the pages
 of the other skins, and Sentier's and Alpage's contours would vanish without an
 error. `plugin.test.ts` checks that no folder of a skin imports another's.
 
+### Motion
+
+The app has no animation that never ends: it keeps a phone at work
+(`../motion.test.ts`). What moves, moves once (a dialog that rises, a ring that
+draws itself), and not at all when less motion is asked for. One exception,
+for a skin whose background is alive (« Carnet »: the patches of its sheet of
+dots that fade out and in, its orbits that turn, a dot that pulses): the
+decoration of its motifs, in the `motion.css` of its folder, on these
+conditions (`../motion.test.ts` checks the file, and `animatedBackground`):
+
+- **Only for whoever has not asked for less motion**: every animation that never
+  ends is inside `@media (prefers-reduced-motion: no-preference)`. Under
+  `reduce` the drawings are all there, standing still.
+- **Only while the person has it on.** Motion that lasts more than five seconds
+  must be stoppable (WCAG 2.2.2): Réglages → Apparence → « Animer le fond », a
+  switch shown for a skin that says `animatedBackground: true`, on by default
+  and kept on the device (`localStorage["ptd-ambient"]`, nothing when on,
+  `lib/ambient.ts`; the settings page owns it, `AmbientSwitch`). A motif that moves reads
+  `useAmbient()` and gives its drawing `data-moving` while it is on; the
+  stylesheet moves only what is inside `[data-moving]`. Off, the same
+  drawings stand still, at once, in every tab of the device.
+- **Only decoration, only its own classes**: `motion.css` is the layout of the
+  drawings that move and their motion, in classes that all start with the
+  skin's id (`carnet-*`), never a class of the app, so the file cannot restyle
+  the structure; the motifs that move use these classes and no Tailwind utility
+  (the sheet of a skin must not depend on how it loads next to `styles.css`). It
+  has no colour of its own (a custom property of the palette); its keyframes
+  declare only `transform` and `opacity`, which the compositor does alone, so
+  that the cost is a few small layers and not a repaint of the page.
+- The motifs stay silent (`aria-hidden`, nothing to read: `components.test.tsx`),
+  and nothing in them can be touched.
+
+The look loads it (`import "./motion.css"`). Without `data-moving`, or under
+`reduce`, a patch (`carnet-veil`) is a patch at rest, and the ring of a pulse is
+not drawn.
+
 ## Semantic classes
 
 The pieces of the app carry a class of their own beside their Tailwind
@@ -554,7 +592,7 @@ The parts of a piece are named after it (`.dialog-title` is in `.dialog`):
 | A track                | `.route-section` (the course of a format, under it), `.route-title`, `.route-figures` (Crête's tiles of the figures: `TrackFigures`), `.route-altitude`, `.route-links`, `.map-box` (the frame of the map, and of what stands in for it), `.map-loading`, `.map-unavailable`, `.track-map` and Leaflet's own classes (`TrackMap.css`); `.elevation-profile`, `.profile-chart`, `.profile-grid`, `.profile-baseline`, `.profile-line`, `.profile-label`, `.profile-tick`, `.profile-summit`, `.profile-reading` (the figures over the summit or the cursor), `.profile-cursor`, `.profile-legend`                                                                                                                                                                                                                                                                                                                                                                                             |
 | The home page          | `.home-page`, `.passkey-card` (the card that offers a key to sign in), `.passkey-card-glow`, `.passkey-card-title`, `.passkey-card-text`, `.passkey-card-actions`; `.page-block` (a block of a page, `data-block`: `pending`, `results`, `registrations`, `upcoming`, `group`, `comments`, and on a runner's page `years`, `history`), `.race-list` (the rows of a block), `.pending-row` (to confirm: its dashes say it), `.result-row`, `.todo-row`, `.todo-countdown`, `.upcoming-row` (`data-confirmed`), `.days-left` (the days left in words, beside a ring), `.countdown-ring` (Crête's ring: `CountdownRing`), `.latest-comment`, `.latest-comment-mark`                                                                                                                                                                                                                                                                                                                             |
 | The agenda             | `.agenda-month` (the month and its grid), `.month-nav`, `.month-nav-title`, `.nav-arrow` (the arrows of a month, of the stats), `.month-grid`, `.month-grid-weekday`, `.agenda-cell` (`data-in-month`), `.agenda-day` (a day on a phone: `aria-pressed` when chosen, `aria-current="date"` today), `.agenda-day-number` (also the `time` of a day from `md`, `aria-current="date"`), `.agenda-dots`, `.agenda-dot`, `.agenda-cell-body` (a day from `md`), `.agenda-events`, `.agenda-event`, `.day-list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Profile, runner, stats | `.profile-section` (a part of the profile or of the settings: a `.card` too when it is boxed), `.avatar-picker`, `.skin-choice` and `.mode-choice` (the choices of « Apparence », `:has(:checked)`), `.passkey-row` (a key, in the settings and in the admin), `.runner-hero-title`, `.history-row`, `.result-tag`; `.totals` (a table of totals), `.totals-header` (its titles, from `sm`), `.totals-row`, `.totals-head`, `.stat-tile-title` (the title of a tile on a phone)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Profile, runner, stats | `.profile-section` (a part of the profile or of the settings: a `.card` too when it is boxed), `.avatar-picker`, `.skin-choice`, `.mode-choice` and `.ambient-switch` (the choices of « Apparence », `:has(:checked)`), `.passkey-row` (a key, in the settings and in the admin), `.runner-hero-title`, `.history-row`, `.result-tag`; `.totals` (a table of totals), `.totals-header` (its titles, from `sm`), `.totals-row`, `.totals-head`, `.stat-tile-title` (the title of a tile on a phone)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | The admin              | `.admin-nav`, `.admin-tabs` (its list), `.admin-tab` (`aria-current`), `.member-row`, `.type-row`, `.event-picker`, `.event-picker-option`, `.admin-choice` (`data-checked`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | The sign-in pages      | `.welcome` (the whole page, on the sky), `.welcome-head` (the name of the app over the card), `.welcome-card` (the card: a utility of `styles.css`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
@@ -643,3 +681,13 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   restore and sign-out; an unknown skin; the choice that did not reach the
   account), the picker saving it, and its message when a look cannot be loaded.
   The rules of the field are the server's (`server/migrations/9j_user_skin.go`).
+- `listGrid.test.tsx`: the list page in every skin, at 375, 767, 768, 1024 and
+  1280 px: one column under `md`, two from it, the cards of a row as tall as
+  each other, nothing of a card cut or past its edge.
+- `carnet/motifs.test.tsx`: what moves in « Carnet » (the patches, the orbits, a
+  pulse: their names, periods and directions), that nothing moves under
+  `prefers-reduced-motion: reduce` or with « Animer le fond » off, that the
+  motifs follow the choice while they are drawn.
+- `../motion.test.ts`: no animation that never ends, but the `motion.css` of a
+  skin on the conditions of « Motion »; `../lib/ambient.test.ts`: the
+  background on or off, kept on the device.

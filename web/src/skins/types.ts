@@ -71,6 +71,13 @@ export type Skin = {
    * `#rrggbb`): the colour of the top of its header. index.html and `applySkin` set it.
    */
   themeColor: string;
+  /**
+   * Whether its motifs move, endlessly (an orbit that turns, a patch that fades
+   * out and in; see README.md, « Motion »). A person can stop that, so the
+   * settings offer « Animer le fond » for a skin that says so (lib/ambient.ts).
+   * `motion.css` of its folder is its animation, and a skin with that file says it.
+   */
+  animatedBackground?: true;
 };
 
 /**

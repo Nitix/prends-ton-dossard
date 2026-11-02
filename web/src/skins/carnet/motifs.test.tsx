@@ -1,0 +1,200 @@
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { render } from "vitest-browser-react";
+
+import { SKINS, chooseSkin } from "..";
+import { chooseAmbient } from "../../lib/ambient";
+import { emulateMedia, resetMedia } from "../../test/media";
+import { HeaderArt, HeroArt } from "./motifs";
+
+import "../../styles.css";
+
+// « Carnet »'s background moves, slowly, as the logbook's did in the v4: the
+// patches where its sheet of dots fades out and comes back in, the orbits of
+// the data that turn (one ring the other way), a dot that pulses. It is
+// decoration (the motifs say nothing to a screen reader: components.test.tsx),
+// it only moves for whoever has not asked for less motion, and a person can
+// turn it off (« Animer le fond »: lib/ambient.ts).
+
+beforeEach(async () => {
+  // The look of the skin: its sheets (motion.css among them) are in the page.
+  await chooseSkin("carnet");
+});
+
+afterEach(async () => {
+  chooseAmbient(true);
+  await chooseSkin("crete");
+  await resetMedia();
+});
+
+/** What moves in a drawing: its animations of CSS, by name, with how they run. */
+function moving(root: Element) {
+  return root
+    .getAnimations({ subtree: true })
+    .filter((animation): animation is CSSAnimation => animation instanceof CSSAnimation)
+    .map((animation) => {
+      const timing = animation.effect?.getComputedTiming();
+      return {
+        name: animation.animationName,
+        duration: Number(timing?.duration),
+        iterations: timing?.iterations,
+        direction: timing?.direction,
+        delay: timing?.delay,
+      };
+    });
+}
+
+const names = (root: Element) => moving(root).map(({ name }) => name);
+
+test("Carnet — la feuille de points du ciel s'efface par plaques qui vont et viennent, lentement, chacune à son rythme", async () => {
+  const screen = await render(<HeaderArt place="header" sun={false} />);
+  const patches = [...screen.container.querySelectorAll(".carnet-veil")];
+  expect(patches).toHaveLength(4);
+
+  const fading = moving(screen.container).filter(({ name }) => name === "carnet-veil");
+  expect(fading).toHaveLength(4);
+  for (const { duration, iterations } of fading) {
+    // Slowly (a patch takes more than ten seconds to go and come back), and for ever.
+    expect(duration).toBeGreaterThanOrEqual(12_000);
+    expect(iterations).toBe(Infinity);
+  }
+  // Not in step: each has its own period and its own place in it.
+  expect(new Set(fading.map(({ duration }) => duration)).size).toBe(4);
+  expect(new Set(fading.map(({ delay }) => delay)).size).toBe(4);
+  // Cheap to draw: only what the compositor does alone.
+  const patch = patches[0];
+  if (!patch) throw new Error("no patch");
+  const effect = patch.getAnimations()[0]?.effect;
+  if (!(effect instanceof KeyframeEffect)) throw new Error("no animation on the patch");
+  const keyframes = effect.getKeyframes();
+  const properties = new Set(
+    keyframes.flatMap((frame) =>
+      Object.keys(frame).filter(
+        (key) => !["offset", "easing", "composite", "computedOffset"].includes(key),
+      ),
+    ),
+  );
+  expect([...properties].toSorted()).toEqual(["opacity", "transform"]);
+});
+
+test("Carnet — la page de connexion a la même feuille de points, qui s'efface par plaques", async () => {
+  const screen = await render(<HeaderArt place="welcome" />);
+  expect(screen.container.querySelectorAll(".carnet-veil")).toHaveLength(4);
+  expect(names(screen.container).filter((name) => name === "carnet-veil")).toHaveLength(4);
+});
+
+test("Carnet — l'orbite des données tourne derrière l'entête d'une page sans bandeau, pas d'une page qui a le sien", async () => {
+  const plain = await render(<HeaderArt place="header" sun />);
+  expect(plain.container.querySelectorAll(".carnet-orbit, .carnet-orbit-back")).not.toHaveLength(0);
+  expect(names(plain.container)).toContain("carnet-orbit");
+  await plain.unmount();
+
+  // The page of an event, of a profile, of a runner: its hero draws the orbit.
+  const withHero = await render(<HeaderArt place="header" sun={false} />);
+  expect(withHero.container.querySelectorAll(".carnet-orbit, .carnet-orbit-back")).toHaveLength(0);
+  expect(names(withHero.container)).not.toContain("carnet-orbit");
+});
+
+for (const place of ["event", "runner"] as const) {
+  test(`Carnet — derrière le bandeau d'${place === "event" ? "un événement" : "un coureur"}, les orbites tournent (160 s le tour, une bague à l'envers) et un point pulse`, async () => {
+    const screen = await render(<HeroArt place={place} />);
+    const running = moving(screen.container);
+
+    const turning = running.filter(({ name }) => name === "carnet-orbit");
+    // A ring each way.
+    expect(
+      turning.map(({ direction }) => String(direction)).toSorted((a, b) => a.localeCompare(b)),
+    ).toEqual(["normal", "reverse"]);
+    for (const { duration, iterations } of turning) {
+      expect(duration).toBe(160_000);
+      expect(iterations).toBe(Infinity);
+    }
+    const pulsing = running.filter(({ name }) => name === "carnet-pulse");
+    expect(pulsing).toHaveLength(1);
+    expect(pulsing[0]?.duration).toBe(2800);
+    expect(pulsing[0]?.iterations).toBe(Infinity);
+    // The patches of the dots fade here too.
+    expect(running.filter(({ name }) => name === "carnet-veil")).toHaveLength(4);
+  });
+}
+
+test("Carnet — chaque bague tourne autour de son milieu, pas autour d'un coin du dessin", async () => {
+  const screen = await render(<HeroArt place="event" />);
+  const turning = screen.container
+    .getAnimations({ subtree: true })
+    .filter(
+      (animation) =>
+        animation instanceof CSSAnimation && animation.animationName === "carnet-orbit",
+    );
+  expect(turning).toHaveLength(2);
+  for (const animation of turning) {
+    const group = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+    const ring = group?.querySelector("circle");
+    const dot = group?.querySelector("circle:last-of-type");
+    if (!ring || !dot) throw new Error("no ring");
+    const centre = () => {
+      const box = ring.getBoundingClientRect();
+      return [box.left + box.width / 2, box.top + box.height / 2];
+    };
+    const where = () => {
+      const box = dot.getBoundingClientRect();
+      return [box.left + box.width / 2, box.top + box.height / 2];
+    };
+    animation.pause();
+    animation.currentTime = 0;
+    const [x0 = 0, y0 = 0] = centre();
+    const [dotX0 = 0, dotY0 = 0] = where();
+    // A quarter of the way round (40 s of 160): the ring has not moved, its dot has.
+    animation.currentTime = 40_000;
+    const [x1 = 0, y1 = 0] = centre();
+    const [dotX1 = 0, dotY1 = 0] = where();
+    expect(Math.hypot(x1 - x0, y1 - y0), "the middle of the ring").toBeLessThan(0.5);
+    expect(Math.hypot(dotX1 - dotX0, dotY1 - dotY0), "its dot").toBeGreaterThan(20);
+  }
+});
+
+test("Carnet — la pulsation ne se voit pas au repos : sans animation, il n'y a pas d'anneau", async () => {
+  chooseAmbient(false);
+  const screen = await render(<HeroArt place="event" />);
+  const ring = screen.container.querySelector(".carnet-pulse");
+  if (!ring) throw new Error("no pulse ring");
+  expect(getComputedStyle(ring).opacity).toBe("0");
+});
+
+test("Carnet — pour qui a demandé moins d'animations, rien ne bouge, mais tout est dessiné", async () => {
+  await emulateMedia({ reducedMotion: "reduce" });
+  const hero = await render(<HeroArt place="event" />);
+  const header = await render(<HeaderArt place="header" sun />);
+  for (const screen of [hero, header]) {
+    expect(moving(screen.container)).toEqual([]);
+    expect(screen.container.querySelectorAll(".carnet-veil")).toHaveLength(4);
+  }
+  expect(hero.container.querySelectorAll(".carnet-orbit")).not.toHaveLength(0);
+
+  // As it was, once the setting is gone.
+  await resetMedia();
+  expect(names(hero.container)).toContain("carnet-orbit");
+});
+
+test("Carnet — « Animer le fond » éteint : rien ne bouge, tout est dessiné ; rallumé, ça reprend", async () => {
+  chooseAmbient(false);
+  const hero = await render(<HeroArt place="runner" />);
+  const header = await render(<HeaderArt place="welcome" />);
+  for (const screen of [hero, header]) {
+    expect(moving(screen.container)).toEqual([]);
+    expect(screen.container.querySelectorAll(".carnet-veil")).toHaveLength(4);
+  }
+  expect(hero.container.querySelectorAll(".carnet-orbit")).not.toHaveLength(0);
+
+  // The motifs follow the choice while they are on the page.
+  chooseAmbient(true);
+  await expect.poll(() => names(hero.container)).toContain("carnet-orbit");
+  await expect.poll(() => names(header.container)).toContain("carnet-veil");
+  chooseAmbient(false);
+  await expect.poll(() => moving(hero.container)).toEqual([]);
+});
+
+test("Carnet — seul un skin au fond animé le dit : Carnet (et lui seul)", () => {
+  expect(SKINS.filter((skin) => skin.animatedBackground).map((skin) => skin.id)).toEqual([
+    "carnet",
+  ]);
+});

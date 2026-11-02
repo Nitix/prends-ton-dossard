@@ -4,7 +4,8 @@ import type { Skin } from "../types";
 // ink, a coral for what is done and an indigo, gold and teal for what is
 // counted, in hairlines and dots (a bib, dotted France, the isometric arch of a
 // start line, a fine grid of dots that fades out and in). By day only (the
-// variant has no dark mode).
+// variant has no dark mode). Its background moves, slowly (see motion.css): the
+// settings can stop it.
 
 export const skin: Skin = {
   id: "carnet",
@@ -16,4 +17,5 @@ export const skin: Skin = {
     '"Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   // The top of its header: the navy of its dark card.
   themeColor: "#161b2e",
+  animatedBackground: true,
 };
