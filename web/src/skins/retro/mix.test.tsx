@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, expect, test } from "vitest";
+import { page } from "vitest/browser";
 
 import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
 import { toEventView } from "../../features/events/api";
@@ -13,7 +14,9 @@ import {
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
-import { inApp, keepsEverything, plain } from "../../test/variant";
+import { contrast } from "../../test/colour";
+import { colourOf } from "../../test/computed";
+import { hex, inApp, keepsEverything, plain } from "../../test/variant";
 
 import "../../styles.css";
 import "../../skins/styles";
@@ -125,3 +128,31 @@ test("retro — un événement sans coureur ni épreuve est un billet sans talon
     { skin: ID },
   );
 });
+
+test.skipIf(SKIN_DEPTH === "palette")(
+  "retro — de md à 1280 px la capsule des onglets sur l'en-tête brun a un contour de papier et une ombre dure de moutarde : l'encre s'y perdrait",
+  async () => {
+    await page.viewport(1280, 800);
+    try {
+      await inApp(
+        <p>Page</p>,
+        (_drawn, shown) => {
+          const bar = shown.querySelector(".tabbar-list");
+          if (bar === null) throw new Error("the tab bar is missing");
+          const own = getComputedStyle(bar);
+          // The brown of the header behind it (the sky of the skin): the outline must stand out of it.
+          expect(
+            contrast(hex(own.borderTopColor), hex(colourOf("--dawn-sky-color"))),
+            "the outline against the header",
+          ).toBeGreaterThanOrEqual(3);
+          expect(own.boxShadow, "the hard shadow is mustard").toContain(
+            colourOf("--color-peach-400"),
+          );
+        },
+        { skin: ID, framed: true },
+      );
+    } finally {
+      await page.viewport(414, 896);
+    }
+  },
+);

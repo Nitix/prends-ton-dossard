@@ -3,6 +3,7 @@ import { FormatParts, type FormatMarks } from "../../features/events/FormatLine"
 import { RegisterLink } from "../../features/events/RegisterLink";
 import { deadlineText, registrationState } from "../../features/events/registration";
 import { useI18n } from "../../i18n/I18nProvider";
+import { daysToGo as daysToGoOf } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import type { EventHeroProps, FormatTitleProps, TrackFiguresProps, Variants } from "../types";
@@ -65,6 +66,7 @@ function Poster({ view, heading }: EventHeroProps) {
   const several = !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
+  const daysToGo = daysToGoOf(start, end, today);
 
   return (
     <header className="event-hero relative isolate overflow-hidden bg-card text-ink">
@@ -76,10 +78,14 @@ function Poster({ view, heading }: EventHeroProps) {
           >
             {event.name}
           </h1>
-          {/* Above the name, as on a poster; read after it. */}
-          <p className="event-hero-date order-first text-xs font-bold tracking-[0.08em] text-blush-700 uppercase">
-            {several ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
-          </p>
+          {/* Above the name, as on a poster; read after it. The days left before the event, which
+              Crête's ring shows and this skin's ring does not draw, are written beside the date. */}
+          <div className="event-hero-when order-first flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="event-hero-date text-xs font-bold tracking-[0.08em] text-blush-700 uppercase">
+              {several ? t.event.dateRange(f.dateLong(start), f.dateLong(end)) : f.dateLong(start)}
+            </p>
+            {daysToGo !== null && daysToGo > 0 && <p className="days-left">{f.inDays(daysToGo)}</p>}
+          </div>
           <p className="event-hero-place flex items-center gap-1.5 text-lg font-semibold text-neutral-800">
             <PinIcon className="size-[1.125rem] shrink-0 text-blush-600" />
             {event.location}
@@ -120,7 +126,7 @@ function Poster({ view, heading }: EventHeroProps) {
 
 /**
  * The days left draw no ring: the words beside it (the tag of `.days-left`) say
- * them.
+ * them, in the rows of the home page and in the poster.
  */
 function NoRing() {
   return null;

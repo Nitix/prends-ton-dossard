@@ -26,8 +26,7 @@
 /* On a phone the tabs are a flat bar from one edge of the screen to the other,
    on its foot, on one ink rule; the current tab carries the three stripes above
    it, in the paper of the bar (on a larger screen, the capsule of the mix at
-   the top of the page, outlined in paper and shadowed in mustard, since ink
-   would vanish on the brown header, and the stripes under the tab). */
+   the top of the page, and the stripes under the tab). */
 @media (max-width: 47.99rem) {
   :root[data-skin="retro"] .tabbar {
     bottom: 0;
@@ -38,12 +37,6 @@
     border-radius: 0;
     box-shadow: none;
     padding-bottom: env(safe-area-inset-bottom);
-  }
-}
-@media (min-width: 48rem) {
-  :root[data-skin="retro"] .tabbar-list {
-    border-color: var(--color-card);
-    box-shadow: 0 3px 0 var(--color-peach-400);
   }
 }
 :root[data-skin="retro"] .tab {
@@ -313,7 +306,7 @@
   background-color: var(--color-peach-400);
   color: var(--color-ink);
 }
-:root[data-skin="retro"] img.avatar {
+:root[data-skin="retro"] .avatar:not([data-tint]) {
   border: 2px solid var(--color-ink);
   box-shadow: 0 0 0 2px var(--color-card);
 }
@@ -519,7 +512,7 @@
   color: var(--color-neutral-700);
 }
 :root[data-skin="retro"] .agenda-day[aria-current="date"] .agenda-day-number,
-:root[data-skin="retro"] time.agenda-day-number[aria-current="date"] {
+:root[data-skin="retro"] .agenda-cell-body .agenda-day-number[aria-current="date"] {
   border-color: var(--color-ink);
   background-color: var(--color-peach-400);
   color: var(--color-ink);
@@ -585,7 +578,7 @@
     background-color: var(--color-ink);
     color: var(--color-card);
   }
-  :root[data-skin="retro"] .totals-header th {
+  :root[data-skin="retro"] .totals-header .eyebrow {
     color: var(--color-card);
   }
 }

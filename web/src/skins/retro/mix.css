@@ -25,6 +25,12 @@
   :root[data-skin="retro"] .tab {
     border-radius: 999px;
   }
+  /* From `md` the capsule sits on the brown of the header, where an ink outline
+     and an ink shadow vanish: it is outlined in paper and shadowed in mustard. */
+  :root[data-skin="retro"] .tabbar-list {
+    border-color: var(--color-card);
+    box-shadow: 0 3px 0 var(--color-peach-400);
+  }
 }
 
 /* The « + », an orange patch in an ink outline, with its hard shadow. */
