@@ -63,8 +63,9 @@ const SMALL_BEZEL = bezel(50, 48, 3.5, 7);
 
 /**
  * The dial of the sky: the zones in arcs round a dial, a bezel of ticks round
- * them, the hand of the stopwatch on its hub. Under the card, whole and as wide
- * as a phone allows (a dial cut by the edges of the page would be stray arcs).
+ * them, the hand of the stopwatch on its hub. Under the card, whole (a dial cut
+ * by the edges of the page would be stray arcs) and no wider than 13rem: a
+ * bigger one sat 18 % to 40 % under the sign-in card, bezel and all, at 375 px.
  */
 function Dial() {
   const radius = 62;
@@ -76,7 +77,7 @@ function Dial() {
       aria-hidden="true"
       focusable="false"
       viewBox="0 0 200 200"
-      className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 block size-[min(24rem,88vw)] -translate-x-1/2"
+      className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 block size-[min(13rem,88vw)] -translate-x-1/2"
     >
       <path d={BIG_BEZEL.short} fill="none" stroke="#fff" strokeOpacity="0.16" strokeWidth="1" />
       <path d={BIG_BEZEL.long} fill="none" stroke="#fff" strokeOpacity="0.3" strokeWidth="1.8" />
