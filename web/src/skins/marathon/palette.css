@@ -1,0 +1,132 @@
+/* « Marathon », depth palette: the poster of a big-city marathon, on the
+   structure of Crête. Off-white paper, white cards, near-black ink and one
+   electric colour, the cobalt of « la ligne bleue » painted on the road: the
+   main action, the focus, the links and the line itself. It has no dark mode:
+   the page is drawn in this one whatever the theme chosen (lib/theme.ts), so
+   Crête's light values stand for every colour it does not set, and its sky
+   (`.on-dawn`) has these colours as they are.
+
+   The masthead of the variant was white, and Crête's header carries white text
+   on its sky: here the sky is the ink of the poster, with the blue line along
+   its foot (motifs.tsx). Cobalt is `iris`, and the tints of its callouts (the
+   reminder, the duplicates, the passkey) are `peach` and `blush`: the variant
+   has no other colour. Nothing here is a shadow or a font (a palette cannot set
+   them): `--shade-*` are the colours of the shadows, fonts.css has the faces. */
+
+:root[data-skin="marathon"] {
+  /* The paper and the ink: `neutral-50` is the paper of the page. */
+  --color-neutral-50: #fafaf7;
+  --color-neutral-100: #f2f2ee;
+  --color-neutral-200: #e4e4df;
+  --color-neutral-300: #ccccc6;
+  --color-neutral-400: #8a8a84;
+  --color-neutral-500: #6e6e68;
+  --color-neutral-600: #5b5b56;
+  --color-neutral-700: #3d3d39;
+  --color-neutral-800: #222221;
+  --color-neutral-900: #0b0b0c;
+  --color-neutral-950: #050506;
+  --color-ink: #0b0b0c;
+
+  /* Cobalt, the accent: 600 is the colour of the line (white on it 5.3:1), 700
+     the colour of a word, 50 the soft ground of a chip. */
+  --color-iris-50: #e9eeff;
+  --color-iris-100: #dbe3ff;
+  --color-iris-200: #c1cfff;
+  --color-iris-300: #9db2ff;
+  --color-iris-400: #5f7fff;
+  --color-iris-500: #4068ff;
+  --color-iris-600: #2b59ff;
+  --color-iris-700: #1a3bc4;
+  --color-iris-800: #142f9e;
+  --color-iris-900: #0f2373;
+
+  /* The callouts of the variant are cobalt too: the reminder to register and
+     the duplicates (peach), the passkey and the pin of a place (blush). */
+  --color-peach-50: #f0f3ff;
+  --color-peach-100: #e1e8ff;
+  --color-peach-200: #c6d3ff;
+  --color-peach-300: #a5b8ff;
+  --color-peach-400: #7c97ff;
+  --color-peach-500: #4d72ff;
+  --color-peach-600: #2b59ff;
+  --color-peach-700: #1f48e6;
+  --color-peach-800: #1a3bc4;
+
+  --color-blush-50: #f3f6ff;
+  --color-blush-100: #e6ecff;
+  --color-blush-200: #cfdaff;
+  --color-blush-300: #adc0ff;
+  --color-blush-400: #8aa5ff;
+  --color-blush-500: #4d72ff;
+  --color-blush-600: #2b59ff;
+  --color-blush-700: #1f48e6;
+  --color-blush-800: #1a3bc4;
+
+  /* White cards on the paper; a message is an ink pill. */
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #ffffff;
+  --color-toast: #0b0b0c;
+  --color-scrim: rgb(11 11 12 / 0.55);
+  --color-relief: #0b0b0c;
+
+  /* The five steps of the slope, from flat to steep: cobalt first, then the
+     road signs. Each has 3:1 on a white card and with the ink line, and none
+     melts into another (src/features/route/slope.test.ts). */
+  --color-slope-1: #1d4ffe;
+  --color-slope-2: #008243;
+  --color-slope-3: #bd8827;
+  --color-slope-4: #d23400;
+  --color-slope-5: #ff5186;
+
+  /* Square, editorial corners. */
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.25rem;
+  --radius-2xl: 0.25rem;
+  --radius-card: 0.25rem;
+
+  /* The shadows are ink, flat and short: the colours inside Crête's shadows.
+     The variant has no halo: the glows are none. */
+  --shade-card: rgb(11 11 12 / 0.35);
+  --shade-lift: rgb(11 11 12 / 0.45);
+  --shade-bar: rgb(11 11 12 / 0.4);
+  --shade-edge: rgb(11 11 12 / 0.06);
+  --shade-edge-lift: rgb(11 11 12 / 0.08);
+  --dawn-glow-warm: transparent;
+  --dawn-glow-cool: transparent;
+  --map-frame: 0 0 0 2px #0b0b0c;
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The paints. A flat colour is a gradient of one stop. The main button, the
+     current tab and the «+» are cobalt; the header and the heroes are the
+     ink of the poster (the blue line runs along them). */
+  --dawn-soft: linear-gradient(110deg, #e9eeff 0%, #c1cfff 100%);
+  --dawn-deep: linear-gradient(110deg, #2b59ff 0%, #2b59ff 100%);
+  --dawn-sky-color: #0b0b0c;
+  --dawn-sky: linear-gradient(160deg, #0b0b0c 0%, #0b0b0c 100%);
+  --dawn-hero-color: #0b0b0c;
+  --dawn-hero: linear-gradient(150deg, #0b0b0c 0%, #0b0b0c 100%);
+  --dawn-text: linear-gradient(100deg, #2b59ff 0%, #1a3bc4 100%);
+  --dawn-line: linear-gradient(90deg, #2b59ff, #2b59ff);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #0b0b0c, #0b0b0c);
+  --dawn-ring-from: #9db2ff;
+  --dawn-ring-via: #4068ff;
+  --dawn-ring-to: #2b59ff;
+  --dawn-chip-glow: transparent;
+  --focus-glow: rgb(43 89 255 / 0.2);
+  --sky-focus: #ffffff;
+
+  /* The map of a track: the blue line on the map, the cobalt start, the ink
+     finish. */
+  --map-line-from: #5f7fff;
+  --map-line-via: #2b59ff;
+  --map-line-to: #1a3bc4;
+  --map-line: #2b59ff;
+  --map-start: #2b59ff;
+  --map-finish: #0b0b0c;
+  --map-link: #1a3bc4;
+}
