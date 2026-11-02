@@ -140,3 +140,9 @@ test("theme — index.html applique un choix gardé avant le premier dessin de l
     expect(runInline(kept), `kept: ${String(kept)}`).toEqual({ dataset: {}, style: {} });
   }
 });
+
+test("theme — l'appli suit les autres onglets dès son démarrage, pas seulement sur la page des réglages", () => {
+  // main.tsx installs the listener of the storage once, for every page.
+  const main = readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
+  expect(main).toMatch(/^followThemeElsewhere\(\);$/m);
+});

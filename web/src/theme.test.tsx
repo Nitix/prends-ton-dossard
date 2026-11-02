@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 
-import { applyTheme } from "./lib/theme";
+import { THEME_KEY, applyTheme, followThemeElsewhere, useThemeChoice } from "./lib/theme";
 import { emulateMedia, resetMedia } from "./test/media";
 
 import "./styles.css";
@@ -96,3 +96,43 @@ test("theme — le ciel de l'entête et des bandeaux ne change pas la nuit", asy
   applyTheme("dark");
   expect(look()).toEqual(day);
 });
+
+test("theme — un choix fait dans un autre onglet s'applique ici, quelle que soit la page affichée", async () => {
+  // What main.tsx installs once for the app: no settings page needs to be open.
+  const stop = followThemeElsewhere();
+  const screen = await render(<ChoiceShown />);
+  try {
+    await expect.element(screen.getByText("auto")).toBeVisible();
+    const day = painted();
+
+    // Another tab chose « Sombre »: the storage tells this one.
+    localStorage.setItem(THEME_KEY, "dark");
+    window.dispatchEvent(new StorageEvent("storage", { key: THEME_KEY, newValue: "dark" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(painted().sheet).not.toBe(day.sheet);
+    // What shows the choice (the settings, if they are open) follows.
+    await expect.element(screen.getByText("dark")).toBeVisible();
+
+    // Another key changes nothing; the storage emptied (key null) is auto again.
+    window.dispatchEvent(new StorageEvent("storage", { key: "something-else", newValue: "x" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    localStorage.removeItem(THEME_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    await expect.element(screen.getByText("auto")).toBeVisible();
+  } finally {
+    stop();
+    localStorage.removeItem(THEME_KEY);
+  }
+  // Once stopped, another tab is not followed any more.
+  localStorage.setItem(THEME_KEY, "light");
+  window.dispatchEvent(new StorageEvent("storage", { key: THEME_KEY, newValue: "light" }));
+  expect(document.documentElement.dataset.theme).toBeUndefined();
+  localStorage.removeItem(THEME_KEY);
+});
+
+/** The theme chosen on this device, as a page that shows it reads it. */
+function ChoiceShown() {
+  const [choice] = useThemeChoice();
+  return <p>{choice}</p>;
+}

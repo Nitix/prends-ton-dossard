@@ -407,7 +407,7 @@ test("SettingsPage — se déconnecter vide la session", async () => {
   expect(mocks.clear).toHaveBeenCalledOnce();
 });
 
-test("SettingsPage — un compte qui n'est pas un membre (le super-admin) n'a ni section ni requête, seulement le retour au profil et la déconnexion", async () => {
+test("SettingsPage — un compte qui n'est pas un membre (le super-admin) n'a aucune section de membre ni requête : l'Apparence, le retour au profil et la déconnexion", async () => {
   setRecord({ id: "su1", collectionName: "_superusers", email: "root@example.test" });
 
   const screen = await mountSettings();
@@ -416,10 +416,30 @@ test("SettingsPage — un compte qui n'est pas un membre (le super-admin) n'a ni
     .element(screen.getByRole("heading", { level: 1, name: fr.profile.settings }))
     .toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.profile.backToProfile })).toBeVisible();
-  await expect.element(screen.getByRole("heading", { level: 2 })).not.toBeInTheDocument();
+  // No section of a member (photo, name, email, password, passkeys, calendar, app):
+  // only the look of the app, which is a choice of the device, not of the account.
+  await expect.element(section(screen, fr.settings.appearance)).toBeVisible();
+  expect(
+    screen
+      .getByRole("heading", { level: 2 })
+      .elements()
+      .map((heading) => heading.textContent),
+  ).toEqual([fr.settings.appearance]);
   expect(requests.filter(([, fn]) => fn.mock.calls.length > 0).map(([name]) => name)).toEqual([]);
   await screen.getByRole("button", { name: fr.profile.logout }).click();
   expect(mocks.clear).toHaveBeenCalledOnce();
+});
+
+test("SettingsPage — le super-admin choisit aussi l'apparence de l'appli sur cet appareil", async () => {
+  setRecord({ id: "su1", collectionName: "_superusers", email: "root@example.test" });
+
+  const screen = await mountSettings();
+
+  const group = section(screen, fr.settings.appearance).getByRole("group");
+  const dark = group.getByRole("radio", { name: fr.settings.themeDark });
+  await dark.click();
+  await expect.element(dark).toBeChecked();
+  expect(pageTheme()).toEqual({ theme: "dark", colorScheme: "dark", kept: "dark" });
 });
 
 test("SettingsPage — sans session (entre la déconnexion et la page de connexion), la page est vide", async () => {

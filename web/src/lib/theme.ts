@@ -60,19 +60,32 @@ export function chooseTheme(choice: ThemeChoice): void {
   for (const listener of listeners) listener();
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  // A choice made in another tab of the app.
-  const changedElsewhere = (event: StorageEvent) => {
-    if (event.key !== THEME_KEY && event.key !== null) return;
-    unkept = null;
-    applyTheme(readTheme());
-    listener();
-  };
+/** A change of the storage made by another page of the site: the theme, if it was its key. */
+function changedElsewhere(event: StorageEvent): void {
+  // `null`: the whole storage was emptied.
+  if (event.key !== THEME_KEY && event.key !== null) return;
+  unkept = null;
+  applyTheme(readTheme());
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Follows a choice made in another tab or window of the app on this device:
+ * the storage tells every other page of the site when a key changes, and this
+ * page applies the theme, whatever it shows: the settings need not be open.
+ * main.tsx installs it once for the app; what it returns removes it (for a test).
+ */
+export function followThemeElsewhere(): () => void {
   window.addEventListener("storage", changedElsewhere);
   return () => {
-    listeners.delete(listener);
     window.removeEventListener("storage", changedElsewhere);
+  };
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
   };
 }
 

@@ -25,8 +25,9 @@ const BUTTON = `${PRIMARY} self-start`;
  * The settings of the signed-in user, which the profile leads to: the photo and
  * the name the group sees, the email and the password of the account, the
  * passkeys, the theme of the app on this device, the calendar link, how to
- * install the app, and the sign-out. A link
- * at the top goes back to the profile. The app shell around it owns the page's
+ * install the app, and the sign-out. An account that is not a member's (the
+ * super-admin of PocketBase) has the theme and the sign-out only. A link at
+ * the top goes back to the profile. The app shell around it owns the page's
  * `<main>`.
  */
 export function SettingsPage() {
@@ -47,6 +48,9 @@ export function SettingsPage() {
       </h1>
       {/* An account that is not a member's (the super-admin of PocketBase) has none of these. */}
       {user !== null && <AccountSections user={user} runner={runner} />}
+      {/* The look of the app is a choice of this device, not of the account: whoever is signed in has it. */}
+      <AppearanceSection />
+      {user !== null && <AppSections />}
       <button type="button" onClick={logout} className={`${SECONDARY} self-start`}>
         {t.profile.logout}
       </button>
@@ -54,7 +58,7 @@ export function SettingsPage() {
   );
 }
 
-/** What a member sets: their photo and name, their email and password, their passkeys, the look of the app, the calendar and the app. */
+/** What a member sets of their account: their photo and name, their email and password, their passkeys. */
 function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRecord | null }) {
   const { t } = useI18n();
 
@@ -78,7 +82,14 @@ function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRec
         <PasswordForm user={user} />
       </Section>
       <PasskeyList userId={user.id} />
-      <AppearanceSection />
+    </>
+  );
+}
+
+/** What a member has after the look of the app: the link of their calendar, and how to install the app. */
+function AppSections() {
+  return (
+    <>
       <CalendarSection />
       <InstallSection />
     </>
