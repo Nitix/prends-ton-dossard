@@ -596,3 +596,49 @@ test("fonts — the look of each skin brings a face for every family its stacks 
   });
   expect(missing).toEqual([]);
 });
+
+/** The faces of the samples of the picker, which the section of « Apparence » loads. */
+const SAMPLES = "skins/samples.css";
+
+test("fonts — the samples of the picker: each skin's « Aa » has a face of its titles' font, the latin file of its own face, at the weight of the sample", () => {
+  const css = existsSync(new URL(`./${SAMPLES}`, import.meta.url))
+    ? readFileSync(new URL(`./${SAMPLES}`, import.meta.url), "utf8")
+    : "";
+  const samples = facesOf(css, SAMPLES);
+  // Faces only: the section loads no colour, no stack, no other sheet of a skin.
+  expect(
+    noComments(css)
+      .replace(/@font-face\s*\{[^}]*\}/g, "")
+      .trim(),
+  ).toBe("");
+  const problems = samples.flatMap((face) => {
+    const where = `${SAMPLES}: ${face.family} ${face.file}`;
+    const own = packageFace(face.file);
+    return [
+      face.subset === "latin" ? [] : [`${where}: not the latin file`],
+      face.style === "normal" && face.weights.join() === "700,700"
+        ? []
+        : [`${where}: ${face.style} ${face.weights.join("–")}, not the sample's normal 700`],
+      own !== undefined && within(face.weights, own.weights) && face.range === own.range
+        ? []
+        : [`${where}: not what the package says of its file`],
+      // The very file of the skin's own face: the browser fetches it once for both.
+      allFaces.some((one) => one.file === face.file && one.family === face.family)
+        ? []
+        : [`${where}: no skin declares this file for this family`],
+    ].flat();
+  });
+  expect(problems).toEqual([]);
+  // Each skin: the first family of its sample that has the letters (« Chrono
+  // Digits » has the digits only) is Crête's, or a face of the samples.
+  const crete = new Set(facesOf(styles, "styles.css").map((face) => face.family));
+  const drawn = new Set(samples.map((face) => face.family));
+  const missing = SKINS.flatMap((skin) => {
+    const family = fontsOf(skin.fontSample).find((one) => !PARTIAL_FACES.includes(one));
+    return family !== undefined && (crete.has(family) || drawn.has(family))
+      ? []
+      : [`${skin.id}: ${family ?? "no family"}`];
+  });
+  expect(missing).toEqual([]);
+  expect(drawn.size).toBeGreaterThan(5);
+});

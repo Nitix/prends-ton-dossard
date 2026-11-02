@@ -21,6 +21,8 @@ type Chunk = {
   moduleIds: readonly string[];
   imports: readonly string[];
   code: string;
+  /** The stylesheets of its modules, as Vite emits them. */
+  viteMetadata?: { importedCss: ReadonlySet<string> };
 };
 type Asset = { type: "asset"; fileName: string; source: string | Uint8Array };
 
@@ -177,4 +179,32 @@ test("build — rien du skin de développement", () => {
     ...(textOf(fileName).includes('data-skin="_example"') ? [`${fileName}: its palette`] : []),
   ]);
   expect(found).toEqual([]);
+});
+
+test("build — les polices des échantillons du sélecteur viennent avec la section « Apparence », pas avec la page", () => {
+  // The sheet of the faces of the samples (skins/samples.css): the one with
+  // the face of Nuit's titles and no colour of a skin.
+  const samples = [...files.values()].filter(
+    (file) =>
+      file.type === "asset" &&
+      file.fileName.endsWith(".css") &&
+      textOf(file.fileName).includes("Space Grotesk Variable") &&
+      !textOf(file.fileName).includes("data-skin"),
+  );
+  expect(samples.map((file) => file.fileName)).toHaveLength(1);
+  const sheet = samples[0]?.fileName ?? "";
+  expect(html, "the page links it").not.toContain(sheet);
+  const importers = [...files.values()].filter(
+    (file): file is Chunk =>
+      file.type === "chunk" && (file.viteMetadata?.importedCss.has(sheet) ?? false),
+  );
+  expect(importers.length, "the parts that bring it").toBeGreaterThan(0);
+  expect(
+    importers
+      .filter(
+        (chunk) => !chunk.moduleIds.some((id) => slashed(id).endsWith("/AppearanceSection.tsx")),
+      )
+      .map((chunk) => chunk.fileName),
+    "parts without the section that bring it",
+  ).toEqual([]);
 });

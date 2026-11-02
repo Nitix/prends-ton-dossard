@@ -1,4 +1,3 @@
-import interUrl from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
 import { userEvent } from "vitest/browser";
@@ -11,7 +10,6 @@ import { SKIN_KEY, SKINS, chooseSkin, showKeptSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
 import { contrast } from "../../test/colour";
 import { shadowLayers } from "../../test/computed";
-import { fontsReady } from "../../test/fontsReady";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { AppearanceSection, SkinCard } from "./AppearanceSection";
 
@@ -102,6 +100,84 @@ function sampleOf(card: HTMLElement): HTMLElement {
 /** The ground of the page, as painted. */
 const sheet = () => getComputedStyle(document.body).backgroundColor;
 
+/** Whether a `unicode-range` (`U+0000-00FF, U+0131`) holds a character. */
+function covers(range: string, char: string): boolean {
+  const code = char.codePointAt(0) ?? 0;
+  return range.split(",").some((part) => {
+    const [from = "", to = from] = part.trim().replace(/^U\+/i, "").split("-");
+    if (from.includes("?")) {
+      return (
+        Number.parseInt(from.replaceAll("?", "0"), 16) <= code &&
+        code <= Number.parseInt(from.replaceAll("?", "F"), 16)
+      );
+    }
+    return Number.parseInt(from, 16) <= code && code <= Number.parseInt(to, 16);
+  });
+}
+
+/** The families of a `font-family` that are named in quotes: those the page declares. */
+const familiesOf = (stack: string) =>
+  [...stack.matchAll(/"([^"]+)"/g)].map(([, family = ""]) => family);
+
+/** The faces of the page of a family that draw the letters of « Aa ». */
+const letterFaces = (family: string) =>
+  [...document.fonts].filter(
+    (face) => face.family.replaceAll('"', "") === family && covers(face.unicodeRange, "A"),
+  );
+
+/** The family that draws the sample « Aa » of a skin: the first of its stack that the page has for the letters. */
+const sampleFamily = (skin: Skin) =>
+  familiesOf(skin.fontSample).find((family) => letterFaces(family).length > 0);
+
+/** The families of Crête, which every page has (styles.css). */
+const CRETE_FAMILIES = ["Inter Variable", "Plus Jakarta Sans Variable"];
+
+test("Thème — les polices des échantillons ne sont pas demandées avant que la section se montre", () => {
+  // The first test of the file: nothing has drawn the section in this page yet.
+  // The faces of the samples come with the section (its module), and a face is
+  // fetched only when text is drawn in it: none of them was asked for.
+  const families = new Set(SKINS.map(sampleFamily).filter((family) => family !== undefined));
+  for (const family of CRETE_FAMILIES) families.delete(family);
+  expect(families.size, "the families of the samples").toBeGreaterThan(4);
+  const asked = [...document.fonts]
+    .filter((face) => families.has(face.family.replaceAll('"', "")) && face.status !== "unloaded")
+    .map((face) => `${face.family} ${face.weight}: ${face.status}`);
+  expect(asked).toEqual([]);
+  const fetched = performance
+    .getEntriesByType("resource")
+    .map((entry) => entry.name)
+    .filter((name) => name.endsWith(".woff2") && !/\/(inter|plus-jakarta-sans)-latin/.test(name));
+  expect(fetched).toEqual([]);
+});
+
+test("Thème — chaque carte montre les deux couleurs du skin, et son échantillon dans la police des titres du skin, chargée avec la section", async () => {
+  const screen = await renderAppearance();
+  for (const skin of SKINS) {
+    const card = cardOf(screen, skin);
+    const swatches = [...card.querySelectorAll("[data-swatch]")].map(
+      (swatch) => getComputedStyle(swatch).backgroundColor,
+    );
+    expect(swatches, `the colours of ${skin.id}`).toEqual(skin.swatches.map(painted));
+    const sample = sampleOf(card);
+    expect(sample.getAttribute("aria-hidden"), `the sample of ${skin.id}`).toBe("true");
+    // Its stack is the one of the skin's titles, whether the skin is worn or not…
+    expect(getComputedStyle(sample).fontFamily, `the font of ${skin.id}`).toBe(
+      computedFamily(skin.fontSample),
+    );
+    // … and the page has a face of it for the letters, which the sample loads.
+    const family = sampleFamily(skin);
+    expect(family, `a face of the font of ${skin.id} for « Aa »`).toBeDefined();
+    await expect
+      .poll(() => letterFaces(family ?? "").some((face) => face.status === "loaded"), {
+        timeout: 5000,
+      })
+      .toBe(true);
+  }
+  // Not an empty search: the samples are in other faces than Crête's.
+  const families = new Set(SKINS.map(sampleFamily));
+  expect(families.size).toBeGreaterThan(5);
+});
+
 test("Thème — une carte par skin, Crête d'abord et cochée, avant « Clair ou sombre »", async () => {
   const screen = await renderAppearance();
 
@@ -126,31 +202,6 @@ test("Thème — une carte par skin, Crête d'abord et cochée, avant « Clair o
   await expect.element(screen.getByText(fr.settings.mode, { exact: true })).toBeVisible();
   const order = group.element().compareDocumentPosition(modes(screen).element());
   expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-});
-
-test("Thème — chaque carte montre les deux couleurs du skin, et son échantillon est dans sa police si et seulement si elle est chargée", async () => {
-  const screen = await renderAppearance();
-  await fontsReady();
-
-  for (const skin of SKINS) {
-    const card = cardOf(screen, skin);
-    const swatches = [...card.querySelectorAll("[data-swatch]")].map(
-      (swatch) => getComputedStyle(swatch).backgroundColor,
-    );
-    expect(swatches, `the colours of ${skin.id}`).toEqual(skin.swatches.map(painted));
-    const sample = sampleOf(card);
-    expect(sample.getAttribute("aria-hidden"), `the sample of ${skin.id}`).toBe("true");
-    const loaded = document.fonts.check(`700 1em ${skin.fontSample}`);
-    expect(sample.style.fontFamily !== "", `the font of ${skin.id} (loaded: ${loaded})`).toBe(
-      loaded,
-    );
-    // Its family when loaded, else the one of the card (the app's).
-    expect(getComputedStyle(sample).fontFamily, `the font of ${skin.id}`).toBe(
-      loaded ? computedFamily(skin.fontSample) : getComputedStyle(card).fontFamily,
-    );
-  }
-  // Crête's font is on the page (its titles): its card shows it.
-  expect(sampleOf(cardOf(screen, crete)).style.fontFamily).not.toBe("");
 });
 
 /** A colour as `getComputedStyle` gives it (`rgb(r, g, b)`), as `#rrggbb`. */
@@ -198,38 +249,6 @@ test("Thème — chaque pastille a un bord qui se voit sur sa carte, cochée ou 
         await screen.unmount();
       }
     }
-  }
-});
-
-test("Thème — une police déclarée mais pas encore chargée : l'échantillon attend, puis la prend dès qu'elle l'est", async () => {
-  // A card of a skin whose font is a face of the page, declared and not loaded:
-  // as when a skin's fonts.css has a face that nothing has used yet. The card
-  // alone, with a family of its own, whatever the skins of the registry are.
-  const family = "Sample Of A Test";
-  const skin: Skin = { ...crete, id: "sample", fontSample: `"${family}", serif` };
-  const face = new FontFace(family, `url(${interUrl})`, { weight: "100 900" });
-  document.fonts.add(face);
-  try {
-    const screen = await render(
-      <div role="radiogroup" aria-label="Thème">
-        <SkinCard skin={skin} name="Échantillon" sample="Aa" checked={false} onChoose={() => {}} />
-      </div>,
-    );
-    const sample = sampleOf(
-      screen.getByRole("radio", { name: "Échantillon" }).element().closest("label") ??
-        document.body,
-    );
-    expect(document.fonts.check(`700 1em ${skin.fontSample}`)).toBe(false);
-    // Not loaded: the app's font, and the picker does not load it to show it.
-    expect(sample.style.fontFamily).toBe("");
-    expect(face.status).toBe("unloaded");
-
-    // Loaded (the skin was chosen elsewhere): the sample takes it, on `loadingdone`.
-    await face.load();
-    await expect.poll(() => sample.style.fontFamily).not.toBe("");
-    expect(getComputedStyle(sample).fontFamily).toBe(computedFamily(skin.fontSample));
-  } finally {
-    document.fonts.delete(face);
   }
 });
 

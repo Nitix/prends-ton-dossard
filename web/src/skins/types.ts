@@ -62,8 +62,8 @@ export type Skin = {
   /** Two colours that say it in the picker (`#rrggbb`). */
   swatches: readonly [string, string];
   /**
-   * The `font-family` of its titles: the picker draws a sample in it once the
-   * font is loaded (it never loads a font to show it), else in the app's.
+   * The `font-family` of its titles: the picker draws its sample « Aa » in it,
+   * with the face that skins/samples.css declares for its letters (or Crête's).
    */
   fontSample: string;
   /**

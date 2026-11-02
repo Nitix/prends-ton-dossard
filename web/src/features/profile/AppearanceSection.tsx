@@ -1,4 +1,4 @@
-import { useId, useSyncExternalStore } from "react";
+import { useId } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { useThemeChoice, type ThemeChoice } from "../../lib/theme";
@@ -6,12 +6,17 @@ import { SKINS, useSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
 import { Section } from "./Section";
 
+// The faces of the samples of the cards (« Aa » in the font of each skin's
+// titles): with this section, on the settings page, and nowhere else. A face
+// is fetched when its sample is drawn; it is the file of the skin's own face.
+import "../../skins/samples.css";
+
 const CHOICES: readonly ThemeChoice[] = ["auto", "light", "dark"];
 
 /**
  * « Apparence » on the settings page: the look of the app on this device.
  * First « Thème », the skin (see skins/): a card for each, with its name, two
- * of its colours and a sample of its font. Then the mode, for a skin that has
+ * of its colours and a sample of the font of its titles (skins/samples.css). Then the mode, for a skin that has
  * both: Auto follows the setting of the phone; Clair and Sombre win over it.
  * A skin with one mode says so instead, and the mode chosen is kept for the
  * others. Each choice applies at once and is kept on the device (see
@@ -80,7 +85,6 @@ export function SkinCard({
   checked: boolean;
   onChoose: () => void;
 }) {
-  const fontLoaded = useFontLoaded(skin.fontSample);
   return (
     <label className="skin-choice group relative flex min-h-[4.75rem] cursor-pointer flex-col justify-between gap-2 rounded-2xl border-2 border-neutral-200 bg-card p-3 hover:border-iris-200 hover:bg-iris-50 has-checked:border-iris-600 has-checked:bg-iris-50 has-checked:text-iris-800">
       <input
@@ -107,8 +111,8 @@ export function SkinCard({
           data-font-sample
           aria-hidden="true"
           className="text-xl leading-none font-bold"
-          // The skin's font once it is loaded: the picker never loads a font to show it.
-          style={fontLoaded ? { fontFamily: skin.fontSample } : undefined}
+          // The font of the skin's titles, whether the skin is worn or not (skins/samples.css).
+          style={{ fontFamily: skin.fontSample }}
         >
           {sample}
         </span>
@@ -126,22 +130,6 @@ export function SkinCard({
         {name}
       </span>
     </label>
-  );
-}
-
-function subscribeFonts(listener: () => void): () => void {
-  document.fonts.addEventListener("loadingdone", listener);
-  return () => {
-    document.fonts.removeEventListener("loadingdone", listener);
-  };
-}
-
-/** Whether the fonts of a `font-family` are there to draw with (a font of the system always is). */
-function useFontLoaded(family: string): boolean {
-  return useSyncExternalStore(
-    subscribeFonts,
-    () => document.fonts.check(`700 1em ${family}`),
-    () => false,
   );
 }
 
