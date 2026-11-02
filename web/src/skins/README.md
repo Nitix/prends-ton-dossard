@@ -496,6 +496,10 @@ the tests. The pieces made skinnable:
   who starts them, the interested and the supporters, its days.
 - `list` tells the lists apart, for a variant that marks them (Crête does not):
   `home` (the group's next events), `upcoming` and `past` (the list), `agenda`.
+- `decorFormat` is for a variant of `EventCard` that keeps Crête's card and
+  marks its formats: it gives it to its `Base`, which puts each format's `kind`
+  on its `.event-card-format` (`data-format-kind`) and its `marks` on its line.
+  A page never gives it.
 - `parts` are the words of a format as `formatMeasures` gives them (its name,
   then its measures); `figures` the figures of a track in words (« 12,6 km »,
   « 724 m D+ », « 728 m D− »), `altitude` its lowest and highest points in
@@ -503,8 +507,11 @@ the tests. The pieces made skinnable:
   variant keeps every word, in its order (a measure in a tag keeps its
   separator « · » in the text, `sr-only`).
 - A `CountdownRing` is decoration: a variant stays hidden from screen readers
-  (`aria-hidden`), or draws nothing (the words beside it say the days: a skin
-  that marks them otherwise styles `.days-left`).
+  (`aria-hidden`), or draws nothing. On the home page the words beside it say
+  the days (a skin that marks them otherwise styles `.days-left`); Crête's hero
+  has no such words, so a skin whose ring draws nothing, or whose hero has
+  none, writes the days in its hero (`f.inDays`). `components.test.tsx` checks
+  every hero shows them.
 - `heading` is what the `h1` of a hero carries: spread it on the variant's `h1`
   (`<h1 {...heading}>`). It holds its id (the actions name it), the attribute the
   page gives the focus by, `tabIndex={-1}`, and the ref of a runner's title.

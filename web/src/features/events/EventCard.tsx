@@ -18,9 +18,10 @@ import { registrationLabel, registrationState } from "./registration";
  * chosen yet, each of its formats with its measures and its participants, then
  * its supporters. Those who do not start are not on the card. Under the place,
  * the registration deadline, if the event has one, and "Inscriptions closes"
- * once it has passed. Crête draws it alike in every list (`list`).
+ * once it has passed. Crête draws it alike in every list (`list`); a variant
+ * may mark its formats (`decorFormat`) rather than draw it again.
  */
-export function EventCardBase({ view }: EventCardProps) {
+export function EventCardBase({ view, decorFormat }: EventCardProps) {
   const { t, f } = useI18n();
   const { event, formats, start, end } = view;
   const severalDays = !start.equals(end);
@@ -74,15 +75,19 @@ export function EventCardBase({ view }: EventCardProps) {
         )}
         {formats.length > 0 && (
           <ul className="event-card-formats flex flex-col gap-2">
-            {formats.map((formatView) => (
-              <li
-                key={formatView.format.id}
-                className="event-card-format flex flex-col gap-1.5 rounded-2xl bg-neutral-50 px-3 py-2.5"
-              >
-                <FormatLine formatView={formatView} showDate={severalDays} />
-                <ParticipantChips participations={starters(formatView.participations)} />
-              </li>
-            ))}
+            {formats.map((formatView) => {
+              const decor = decorFormat?.(formatView);
+              return (
+                <li
+                  key={formatView.format.id}
+                  data-format-kind={decor?.kind}
+                  className="event-card-format flex flex-col gap-1.5 rounded-2xl bg-neutral-50 px-3 py-2.5"
+                >
+                  <FormatLine formatView={formatView} showDate={severalDays} marks={decor?.marks} />
+                  <ParticipantChips participations={starters(formatView.participations)} />
+                </li>
+              );
+            })}
           </ul>
         )}
         {/* After the formats: they come to cheer, they start nothing. The words say it, not the place. */}

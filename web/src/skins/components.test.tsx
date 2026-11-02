@@ -202,6 +202,9 @@ test("skinnable — chaque pièce dessine sa base sans variante, et la variante 
       const expected = await inApp(own ?? base());
       const drawn = await inApp(skinnable());
       expect(drawn, `${name} in ${skin.id} at ${SKIN_DEPTH}`).toBe(expected);
+      // Only a ring may draw nothing: the words beside it say the days.
+      if (name !== "CountdownRing")
+        expect(drawn, `${name} in ${skin.id} draws nothing`).not.toBe("");
       if (own === undefined) continue;
       replaced.push(`${skin.id}: ${name}`);
       // A variant draws something of its own, around the base or instead of it.
@@ -248,6 +251,53 @@ test("skinnable — le haut d'une fiche, dans chaque skin, garde le titre que la
     checked.push(skin.id);
   }
   expect(checked).toEqual(SKINS.map(({ id }) => id));
+});
+
+test("skinnable — le haut d'une fiche, dans chaque skin, montre les jours qui restent avant l'événement", async () => {
+  // Crête's hero shows them in its ring; a skin whose ring draws nothing (or
+  // whose hero has none) writes them, in words. On 1 June the event of the
+  // fixture is 12 days ahead, and no other figure of a hero is 12.
+  const missing: string[] = [];
+  for (const skin of SKINS) {
+    chooseSkin(skin.id);
+    await inApp(
+      <EventHero
+        view={view()}
+        heading={{ id: "hero-title", "data-focus": "title", tabIndex: -1 }}
+      />,
+      (drawn) => {
+        if (!/(^|\D)12(\D|$)/u.test(drawn.innerText)) missing.push(skin.id);
+      },
+    );
+  }
+  expect(missing, `heroes at ${SKIN_DEPTH} that do not show the 12 days left`).toEqual([]);
+});
+
+test("skinnable — une variante marque les épreuves de la carte que sa base dessine", async () => {
+  const props: EventCardProps = { view: view(), list: "upcoming" };
+  const plain = await inApp(<EventCardBase {...props} />, (drawn) => {
+    expect(drawn.querySelector("[data-format-kind]")).toBeNull();
+  });
+  await inApp(
+    <EventCardBase
+      {...props}
+      decorFormat={(formatView) => ({
+        kind: `k-${formatView.format.id}`,
+        marks: { before: <i aria-hidden="true" className="mark" /> },
+      })}
+    />,
+    (drawn) => {
+      const formats = [...drawn.querySelectorAll<HTMLElement>(".event-card-format")];
+      expect(formats.map((format) => format.dataset.formatKind)).toEqual(
+        props.view.formats.map(({ format }) => `k-${format.id}`),
+      );
+      for (const format of formats) {
+        expect(format.querySelector(".format-line > .mark + .format-parts")).not.toBeNull();
+      }
+    },
+  );
+  // Undecorated, the card is Crête's as it was.
+  expect(plain).toBe(await inApp(<EventCardBase {...props} />));
 });
 
 test("skinnable — la carte d'« Exemple » encadre la base qu'elle reçoit, avec les props de la carte", async () => {

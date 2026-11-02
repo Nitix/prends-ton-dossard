@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode, RefObject } from "react";
 
 import type { EventView, FormatView } from "../features/events/api.ts";
+import type { FormatMarks } from "../features/events/FormatLine.tsx";
 import type { RunnerRecord } from "../lib/types.ts";
 
 // What a skin is: a way to dress the app, chosen on the device (see index.ts
@@ -100,12 +101,24 @@ export type EmptyStateProps = { title: ReactNode; hint: ReactNode };
  */
 export type EventCardList = "home" | "upcoming" | "past" | "agenda";
 
+/**
+ * What a variant of `EventCard` adds to a format of the card its base draws:
+ * its kind (`data-format-kind` on its `.event-card-format`, for the sheet of the
+ * skin), and the marks of its line (`FormatLine`).
+ */
+export type FormatDecor = { kind?: string; marks?: FormatMarks };
+
 /** The props of features/events/EventCard.tsx: an event in a list. */
 export type EventCardProps = {
   /** The event, its formats and who is on them, its days. */
   view: EventView;
   /** The list it is in. */
   list: EventCardList;
+  /**
+   * How a variant marks each format of the card it draws through its base
+   * (`Base`), rather than drawing the card again; a page never gives it.
+   */
+  decorFormat?: (formatView: FormatView) => FormatDecor;
 };
 
 /**
