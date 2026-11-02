@@ -1,4 +1,5 @@
 import { FormatParts, type FormatMarks } from "../../features/events/FormatLine";
+import { useI18n } from "../../i18n/I18nProvider";
 import type { CountdownRingProps, FormatTitleProps, TrackFiguresProps, Variants } from "../types";
 
 // « Marathon », depth full: the pieces whose markup the variant really changes,
@@ -56,18 +57,35 @@ function SplitTimes({ figures, altitude }: TrackFiguresProps) {
 
 /**
  * The days left, as the board of a race has them: the number in heavy cobalt
- * figures (white on the sky of a hero), and nothing else, the words beside it
- * say the days.
+ * figures (white on the sky of a hero) and its unit small beside it (« 9 j », as
+ * the ring of Crête says it: a bare figure would not say what it counts). A
+ * picture, hidden from a screen reader: the words beside it (`.days-left`) say
+ * the days.
  */
 function Figure({ days, tone = "color", className = "" }: CountdownRingProps) {
+  const { formatLocale } = useI18n();
+  const parts = new Intl.NumberFormat(formatLocale, {
+    style: "unit",
+    unit: "day",
+    unitDisplay: "narrow",
+  }).formatToParts(Math.max(0, days));
+  const number = parts
+    .filter((part) => part.type === "integer" || part.type === "group")
+    .map((part) => part.value)
+    .join("");
+  const unit = parts.find((part) => part.type === "unit")?.value ?? "";
+
   return (
     <span
       aria-hidden="true"
-      className={`countdown-ring shrink-0 font-display text-[2.25rem] leading-[0.82] font-black tracking-[-0.06em] tabular-nums ${
+      className={`countdown-ring inline-flex shrink-0 items-baseline gap-0.5 font-display text-[2.25rem] leading-[0.82] ${
         tone === "light" ? "text-white" : "text-iris-600"
       } ${className}`}
     >
-      {Math.max(0, days)}
+      <span className="countdown-figure font-black tracking-[-0.06em] tabular-nums">{number}</span>
+      <span className="countdown-unit text-sm leading-none font-extrabold tracking-[0.02em]">
+        {unit}
+      </span>
     </span>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeAll, expect, test } from "vitest";
 
 import { SKIN_DEPTH, chooseSkin, variantOf } from "..";
-import { PRIMARY, SECONDARY } from "../../components/buttons";
+import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { CountdownRing } from "../../components/Dawn";
 import { Dialog } from "../../components/Dialog";
 import { SECTION } from "../../components/section";
@@ -24,6 +24,8 @@ import { TotalsTable } from "../../features/stats/TotalsTable";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { contrast } from "../../test/colour";
+import { colourOf } from "../../test/computed";
 import { hex, inApp, plain } from "../../test/variant";
 
 import fullCss from "./full.css?raw";
@@ -119,7 +121,7 @@ test.skipIf(!FULL)(
 );
 
 test.skipIf(!FULL)(
-  "marathon — les jours qui restent sont un grand chiffre cobalt, caché à un lecteur d'écran (sur le ciel d'un héros, blanc)",
+  "marathon — les jours qui restent sont un grand chiffre cobalt suivi de son unité, caché à un lecteur d'écran (sur le ciel d'un héros, blanc)",
   async () => {
     await inApp(
       <>
@@ -130,10 +132,17 @@ test.skipIf(!FULL)(
         const [onCard, onSky] = [...drawn.querySelectorAll(".countdown-ring")];
         for (const ring of [onCard, onSky]) {
           expect(ring?.getAttribute("aria-hidden")).toBe("true");
-          expect(plain(ring?.textContent)).toBe("9");
+          // The figure and its unit, as the ring of Crête says it (« 9 j »): not a bare number.
+          expect(plain(ring?.textContent)).toMatch(/^9\s?j$/u);
           expect(Number.parseFloat(style(ring).fontSize), "a big figure").toBeGreaterThanOrEqual(
             32,
           );
+          const unit = ring?.querySelector(".countdown-unit");
+          expect(unit, "the unit of the days").not.toBeNull();
+          expect(
+            Number.parseFloat(style(unit).fontSize),
+            "the unit is small beside the figure",
+          ).toBeLessThanOrEqual(16);
         }
         expect(hex(style(onCard).color)).toBe(COBALT);
         expect(hex(style(onSky).color)).toBe("#ffffff");
@@ -411,3 +420,20 @@ test("marathon — les feuilles ne nomment aucun type d'élément : seulement le
   }
   expect(named, "selectors that name an element type").toEqual([]);
 });
+
+test.skipIf(!FULL)(
+  "marathon — une action qui supprime reste rouge, lisible à 4,5:1 sur la feuille",
+  async () => {
+    await inApp(
+      <button type="button" className={`${SECONDARY} ${DANGER_TEXT}`}>
+        Supprimer
+      </button>,
+      (drawn) => {
+        const color = style(drawn.querySelector("button")).color;
+        expect(hex(color)).toBe(hex(colourOf("--color-red-700")));
+        expect(contrast(hex(color), hex(colourOf("--color-card")))).toBeGreaterThanOrEqual(4.5);
+      },
+      { skin: ID },
+    );
+  },
+);
