@@ -32,8 +32,11 @@
   --color-neutral-950: #11100e;
   --color-ink: #1c1b18;
 
-  /* Coral, the accent: white on 600 is 4.8:1. */
-  --color-iris-50: #fcefec;
+  /* Coral, the accent: white on 600 is 4.8:1. Its 50, the ground of a soft
+     panel (the card that offers a key to sign in), of a hover and of what is
+     chosen, is the paper of the variant: a coral tint there, with the glow of
+     blush-200, read as Crête's pink and lilac. */
+  --color-iris-50: #f5f4f0;
   --color-iris-100: #f9ded8;
   --color-iris-200: #f2bfb4;
   --color-iris-300: #e99a8a;
@@ -58,7 +61,9 @@
   /* Indigo: the data. */
   --color-blush-50: #f0effc;
   --color-blush-100: #e3e2fa;
-  --color-blush-200: #c9c7f4;
+  /* The glow in the corner of a soft panel and the selection of a text: the
+     gold of the notebook, not an indigo. */
+  --color-blush-200: #f2d99c;
   --color-blush-300: #a9a6ee;
   --color-blush-400: #8683e6;
   --color-blush-500: #6461db;
@@ -137,4 +142,16 @@
   --map-start: #217d72;
   --map-finish: #1c1b18;
   --map-link: #403da6;
+
+  /* The card of the sign-in pages, on the navy of the sky: the white card of
+     the variant, in a deep navy shade. A window in the warm ink of the
+     paper; a message and the pieces on the navy of a hero in the deep navy. */
+  --welcome-card: #ffffff;
+  --shade-welcome: rgb(8 10 20 / 0.6);
+  --shade-dialog: rgb(28 27 24 / 0.35);
+  --shade-toast: rgb(8 10 20 / 0.7);
+  --shade-notes: rgb(8 10 20 / 0.6);
+  --shade-photo: rgb(8 10 20 / 0.6);
+  --shade-on-dawn: rgb(8 10 20 / 0.5);
+  --hero-veil: rgb(8 10 20 / 0.2);
 }
