@@ -1,0 +1,168 @@
+/* « Aurore », depth palette: a run at dawn. A soft sunrise (peach, coral pink,
+   violet) for the header, the heroes, the main buttons and a few accents; the
+   content sits on white and on a very light lilac, in a deep plum ink. By day
+   only: the variant had no dark mode, so the page is drawn in this one whatever
+   the theme chosen (lib/theme.ts). Custom properties of Crête only, under the
+   skin's selector (see ../README.md); the fonts are in fonts.css.
+
+   « Crête » is « Aurore » dressed in the maps of « Sentier » and the chart of
+   « Chrono »: its colours by day are these. They are written out here, in full,
+   so that this skin keeps its own if Crête's change (as its fonts.css names
+   its fonts), and what differs is its art (./slots.tsx), its single mode and
+   the zones of its slope. */
+:root[data-skin="aurore"] {
+  /* The greys of the app are plum greys. */
+  --color-neutral-50: #fbf8ff;
+  --color-neutral-100: #f4effa;
+  --color-neutral-200: #e9e2f2;
+  --color-neutral-300: #d8cfe5;
+  --color-neutral-400: #b4a9c4;
+  --color-neutral-500: #8e829f;
+  --color-neutral-600: #6b6080;
+  --color-neutral-700: #4f4563;
+  --color-neutral-800: #362d49;
+  --color-neutral-900: #241b35;
+  --color-neutral-950: #170f24;
+  --color-ink: #241b35;
+
+  /* The three colours of the dawn, each with its range. The 300–400 steps are
+     the soft sky (accents, rings, glows); the 600 steps carry white text. */
+  --color-peach-50: #fff6f0;
+  --color-peach-100: #ffeadd;
+  --color-peach-200: #ffd5bc;
+  --color-peach-300: #ffb38a;
+  --color-peach-400: #ff9a6a;
+  --color-peach-500: #f47e4e;
+  --color-peach-600: #e5622f;
+  --color-peach-700: #b04a22;
+  --color-peach-800: #86391c;
+
+  --color-blush-50: #fff2f8;
+  --color-blush-100: #ffe4f0;
+  --color-blush-200: #ffc9e0;
+  --color-blush-300: #ffa3c9;
+  --color-blush-400: #ff7eb3;
+  --color-blush-500: #f0579a;
+  --color-blush-600: #d6336f;
+  --color-blush-700: #b0285c;
+  --color-blush-800: #87204a;
+
+  --color-iris-50: #f5f3ff;
+  --color-iris-100: #ece8ff;
+  --color-iris-200: #dad3ff;
+  --color-iris-300: #bdb2ff;
+  --color-iris-400: #8b7cff;
+  --color-iris-500: #7462f7;
+  --color-iris-600: #5e4ae3;
+  --color-iris-700: #4b37c4;
+  --color-iris-800: #3a2b99;
+  --color-iris-900: #2a2070;
+
+  --color-red-50: #fef2f2;
+  --color-red-200: #ffc9c9;
+  --color-red-700: #c10007;
+  --color-red-800: #9f0712;
+
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #ffffff;
+  --color-toast: #241b35;
+  --color-scrim: rgb(36 27 53 / 0.5);
+  --color-relief: #170f24;
+
+  /* The five zones of the slope, from gentle to steep, along the line of its
+     profile (coral, rose, violet): gold, rust, pink, orchid and indigo. Each is
+     3:1 on the card and on the line, and they stay apart with a colour vision
+     deficiency (src/features/route/slope.test.ts). */
+  --color-slope-1: #a88900;
+  --color-slope-2: #b94109;
+  --color-slope-3: #ef4c83;
+  --color-slope-4: #a63fae;
+  --color-slope-5: #5752ea;
+
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-card: 1.25rem;
+
+  /* Shadows tinted with violet. */
+  --shade-card: rgb(94 74 227 / 0.28);
+  --shade-lift: rgb(94 74 227 / 0.4);
+  --shade-bar: rgb(58 43 153 / 0.28);
+  --shade-edge: rgb(36 27 53 / 0.04);
+  --shade-edge-lift: rgb(36 27 53 / 0.05);
+  --map-frame:
+    0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
+    0 6px 24px -12px rgb(94 74 227 / 0.45);
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The map of a track: the colours of the dawn on a white halo, a violet start
+     and an ink finish. */
+  --map-line-from: #f47e4e;
+  --map-line-via: #d6336f;
+  --map-line-to: #5e4ae3;
+  --map-line: #d6336f;
+  --map-start: #5e4ae3;
+  --map-finish: #241b35;
+  --map-link: #4b37c4;
+
+  /* The art of the skin (./slots.tsx): the sun on the horizon, in the colours of
+     the dawn (on the sky, and in colour on white), and its halo. It draws no
+     ridge: the three of Crête's, which stand in for none of its slots, are
+     written out all the same. */
+  --motif-ridge-far-from: #e46aa6;
+  --motif-ridge-far-to: #a54cb6;
+  --motif-ridge-mid-from: #7d43b8;
+  --motif-ridge-mid-to: #5b3aa8;
+  --motif-ridge-near-from: #3b2b8a;
+  --motif-ridge-near-to: #2a2070;
+  --motif-ridge-light: #ffd5bc;
+  --motif-sun-core: #fff7f0;
+  --motif-sun-mid: #ffd2b8;
+  --motif-sun-rim: #ff9fc4;
+  --motif-halo-from: #ffd5bc;
+  --motif-halo-to: #ffb38a;
+  --motif-dawn-1: #ffb38a;
+  --motif-dawn-2: #ff7eb3;
+  --motif-dawn-3: #8b7cff;
+  --motif-peak-far: #c9bfff;
+  --motif-peak-near-from: #5e4ae3;
+  --motif-peak-near-to: #2a2070;
+  --motif-hill-near-from: #7462f7;
+  --motif-hill-near-to: #3a2b99;
+
+  /* The paints of the dawn. The soft one: rings, bars, dots (dark text only). The
+     deep one carries white text, every stop 4.6:1 at least. The sky is violet at
+     the top left, where the name is, warming to coral at the bottom right, where
+     the sun rises; the heroes are deep all over, since white text runs across them. */
+  --dawn-soft: linear-gradient(110deg, #ffb38a 0%, #ff7eb3 52%, #8b7cff 100%);
+  --dawn-deep: linear-gradient(110deg, #d6336f 0%, #a63fae 52%, #5e4ae3 100%);
+  --dawn-sky-color: #5e4ae3;
+  --dawn-sky:
+    radial-gradient(
+      120% 140% at 88% 120%,
+      rgb(255 179 138 / 0.95) 0%,
+      rgb(255 126 179 / 0.55) 32%,
+      transparent 62%
+    ),
+    linear-gradient(160deg, #4b37c4 0%, #6a4ee0 30%, #a63fae 64%, #d6336f 100%);
+  --dawn-hero-color: #5e4ae3;
+  --dawn-hero:
+    radial-gradient(80% 90% at 100% 100%, rgb(214 51 111 / 0.9) 0%, transparent 70%),
+    linear-gradient(150deg, #4b37c4 0%, #5e4ae3 30%, #8a42c4 62%, #c2367f 100%);
+  --dawn-text: linear-gradient(100deg, #d6336f 0%, #a63fae 50%, #5e4ae3 100%);
+  /* The small sun on the horizon before the title of a block, and the line under a page title. */
+  --dawn-line: linear-gradient(90deg, #ffb38a, #ff7eb3 55%, #8b7cff);
+  --dawn-marker-shadow: 0 0.2rem 0 -0.08rem rgb(139 124 255 / 0.35);
+  --dawn-horizon: linear-gradient(90deg, #ffa3c9, rgb(189 178 255 / 0.5) 45%, transparent);
+  --dawn-ring-from: #8b7cff;
+  --dawn-ring-via: #ff7eb3;
+  --dawn-ring-to: #ffb38a;
+  --dawn-chip-glow: rgb(214 51 111 / 0.6);
+  --dawn-glow-warm: rgb(214 51 111 / 0.55);
+  --dawn-glow-cool: rgb(94 74 227 / 0.45);
+  --focus-glow: rgb(139 124 255 / 0.18);
+  --sky-focus: #ffffff;
+}
