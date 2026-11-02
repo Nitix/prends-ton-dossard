@@ -20,9 +20,10 @@ import "../styles.css";
 // stylesheets into the page (in the dev server of the tests, a <style> for
 // each; in a build, a <link>, which index.html writes for the skin kept on the
 // device: noFlash.test.ts). The page of a person who stays on Crête has none of
-// them. The tests of this file share one page, in their order: the first one
-// looks at it before any skin is chosen, the second one at a look that is
-// slow to load (a look is loaded once, then kept).
+// them. The tests of this file share one page, in any order: the page as the
+// file found it is kept before any of them runs (`AT_START`), and the test of
+// a slow look draws the picker with a registry of its own, where no look is
+// loaded yet (`freshPage`).
 
 /** The session of the tests: signed in until `logout`, which tells whoever listens. */
 const session = vi.hoisted(() => ({
@@ -133,15 +134,36 @@ function painted(colour: string): string {
 /** The families that the faces of the page declare. */
 const families = () => new Set([...document.fonts].map((face) => face.family.replaceAll('"', "")));
 
-test("lazy — avant tout choix, la page n'a rien d'un autre skin que Crête : ni sa palette, ni ses polices", () => {
-  // The first test of the file: no skin was chosen in this page yet.
-  expect(OTHERS.length).toBeGreaterThan(1);
-  const selectors = [...document.styleSheets].flatMap((sheet) =>
+/** The page as this file found it, before any of its tests: what a person who stays on Crête has. */
+const AT_START = {
+  selectors: [...document.styleSheets].flatMap((sheet) =>
     rulesOf(sheet).map((rule) => rule.selectorText),
+  ),
+  families: [...families()],
+};
+
+/**
+ * The registry of the skins, the picker and the context of the language as a
+ * page has them when it opens: no look loaded yet, whatever the tests before.
+ */
+async function freshPage() {
+  vi.resetModules();
+  const registry = await import(".");
+  const { AppearanceSection } = await import("../features/profile/AppearanceSection");
+  const { I18nProvider: FreshI18n } = await import("../i18n/I18nProvider");
+  const { slots: crete } = await import("./crete");
+  return { registry, AppearanceSection, I18nProvider: FreshI18n, crete };
+}
+
+test("lazy — avant tout choix, la page n'a rien d'un autre skin que Crête : ni sa palette, ni ses polices", () => {
+  expect(OTHERS.length).toBeGreaterThan(1);
+  // Not an empty search: Crête's own rules are there.
+  expect(AT_START.selectors.length).toBeGreaterThan(100);
+  expect(AT_START.selectors.filter((selector) => /\[data-skin="[^"]+"\]/.test(selector))).toEqual(
+    [],
   );
-  expect(selectors.filter((selector) => /\[data-skin="[^"]+"\]/.test(selector))).toEqual([]);
   // Crête's faces only: Inter and Plus Jakarta Sans.
-  expect([...families()].toSorted((a, b) => a.localeCompare(b))).toEqual([
+  expect(AT_START.families.toSorted((a, b) => a.localeCompare(b))).toEqual([
     "Inter Variable",
     "Plus Jakarta Sans Variable",
   ]);
@@ -152,12 +174,15 @@ test("lazy — dans le sélecteur, le thème choisi est coché dès le clic, et 
   if (skin === undefined) throw new Error("a skin besides Crête");
   const { promise, resolve } = Promise.withResolvers<void>();
   gates.set(skin.id, promise);
-  // The section brings the faces of the samples: after the first test, which looks at the page before.
-  const { AppearanceSection } = await import("../features/profile/AppearanceSection");
+  const fresh = await freshPage();
+  // No look is loaded in this registry: Crête's motifs stand in for the skin's.
+  expect(fresh.registry.slotOf(skin, "HeaderArt"), "the look of the skin, not loaded").toBe(
+    fresh.crete.HeaderArt,
+  );
   const screen = await render(
-    <I18nProvider languages={["fr"]}>
-      <AppearanceSection />
-    </I18nProvider>,
+    <fresh.I18nProvider languages={["fr"]}>
+      <fresh.AppearanceSection />
+    </fresh.I18nProvider>,
   );
   try {
     const radio = screen.getByRole("radio", { name: skin.label.fr, exact: true });

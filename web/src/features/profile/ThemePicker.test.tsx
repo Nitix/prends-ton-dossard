@@ -11,7 +11,6 @@ import type { Skin } from "../../skins/types";
 import { contrast } from "../../test/colour";
 import { shadowLayers } from "../../test/computed";
 import { emulateMedia, resetMedia } from "../../test/media";
-import { AppearanceSection, SkinCard } from "./AppearanceSection";
 
 import "../../styles.css";
 
@@ -20,6 +19,23 @@ import "../../styles.css";
 // for a skin that has both modes. The tests of the modes themselves are those
 // of SettingsPage.test.tsx. Nothing here names a skin but Crête: the others are
 // taken from the registry, so that a skin added later is tested as it is.
+// The module of the section is imported by the tests, not by this file: what
+// the page has before it (`AT_START`) is the page of the other pages.
+
+/** The families that the faces of the page declare, and the font files it has asked for. */
+const fontsOfPage = () => ({
+  families: [...new Set([...document.fonts].map((face) => face.family.replaceAll('"', "")))],
+  files: performance
+    .getEntriesByType("resource")
+    .map((entry) => entry.name)
+    .filter((name) => name.endsWith(".woff2")),
+});
+
+/** The fonts of the page as this file found it, before the module of the section and before any test. */
+const AT_START = fontsOfPage();
+
+/** The module of the section « Apparence », with the faces of its samples. */
+const section = () => import("./AppearanceSection");
 
 afterEach(async () => {
   // The skin and the theme belong to the page and to the device: a test leaves neither to the next.
@@ -30,7 +46,8 @@ afterEach(async () => {
   await resetMedia();
 });
 
-function renderAppearance(languages = ["fr"]) {
+async function renderAppearance(languages = ["fr"]) {
+  const { AppearanceSection } = await section();
   return render(
     <I18nProvider languages={languages}>
       <AppearanceSection />
@@ -132,22 +149,19 @@ const sampleFamily = (skin: Skin) =>
 /** The families of Crête, which every page has (styles.css). */
 const CRETE_FAMILIES = ["Inter Variable", "Plus Jakarta Sans Variable"];
 
-test("Thème — les polices des échantillons ne sont pas demandées avant que la section se montre", () => {
-  // The first test of the file: nothing has drawn the section in this page yet.
-  // The faces of the samples come with the section (its module), and a face is
-  // fetched only when text is drawn in it: none of them was asked for.
-  const families = new Set(SKINS.map(sampleFamily).filter((family) => family !== undefined));
-  for (const family of CRETE_FAMILIES) families.delete(family);
-  expect(families.size, "the families of the samples").toBeGreaterThan(4);
-  const asked = [...document.fonts]
-    .filter((face) => families.has(face.family.replaceAll('"', "")) && face.status !== "unloaded")
-    .map((face) => `${face.family} ${face.weight}: ${face.status}`);
-  expect(asked).toEqual([]);
-  const fetched = performance
-    .getEntriesByType("resource")
-    .map((entry) => entry.name)
-    .filter((name) => name.endsWith(".woff2") && !/\/(inter|plus-jakarta-sans)-latin/.test(name));
-  expect(fetched).toEqual([]);
+test("Thème — les polices des échantillons viennent avec la section : la page n'en a ni déclaré ni demandé aucune avant", async () => {
+  // The families that draw the samples, but Crête's, which every page has.
+  const titles = new Set(SKINS.flatMap((skin) => familiesOf(skin.fontSample)));
+  for (const family of CRETE_FAMILIES) titles.delete(family);
+  // Before the module of the section: none declared, no file but Crête's asked for.
+  expect(AT_START.families.filter((family) => titles.has(family))).toEqual([]);
+  expect(AT_START.files.filter((file) => !/\/(inter|plus-jakarta-sans)-latin/.test(file))).toEqual(
+    [],
+  );
+  // With it, the faces of the samples are there.
+  await section();
+  const declared = fontsOfPage().families.filter((family) => titles.has(family));
+  expect(declared.length, "the families of the samples, with the section").toBeGreaterThan(5);
 });
 
 test("Thème — chaque carte montre les deux couleurs du skin, et son échantillon dans la police des titres du skin, chargée avec la section", async () => {
@@ -225,6 +239,7 @@ test("Thème — chaque pastille a un bord qui se voit sur sa carte, cochée ou 
       await chooseSkin(skin.id);
       chooseTheme(mode);
       for (const checked of [false, true]) {
+        const { SkinCard } = await section();
         const screen = await render(
           <I18nProvider languages={["fr"]}>
             <SkinCard skin={crete} name="Crête" sample="Aa" checked={checked} onChoose={() => {}} />
