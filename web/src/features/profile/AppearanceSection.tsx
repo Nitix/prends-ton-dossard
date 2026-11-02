@@ -66,8 +66,8 @@ export function AppearanceSection() {
   );
 }
 
-/** A skin in the picker: its two colours, a sample of its font, its name after the dot. */
-function SkinCard({
+/** A skin in the picker: its two colours, a sample of its font, its name after the dot (exported for its test). */
+export function SkinCard({
   skin,
   name,
   sample,

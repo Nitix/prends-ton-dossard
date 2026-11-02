@@ -33,18 +33,18 @@ function SummitDawn({ className = "" }: { className?: string }) {
     >
       <defs>
         <radialGradient id={sun} cx="0.5" cy="0.9" r="0.9">
-          <stop offset="0" stopColor="#ffb38a" />
-          <stop offset="0.6" stopColor="#ff7eb3" />
-          <stop offset="1" stopColor="#8b7cff" />
+          <stop offset="0" style={{ stopColor: "var(--motif-dawn-1)" }} />
+          <stop offset="0.6" style={{ stopColor: "var(--motif-dawn-2)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-dawn-3)" }} />
         </radialGradient>
         <linearGradient id={arc} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#ffb38a" />
-          <stop offset="0.55" stopColor="#ff7eb3" />
-          <stop offset="1" stopColor="#8b7cff" />
+          <stop offset="0" style={{ stopColor: "var(--motif-dawn-1)" }} />
+          <stop offset="0.55" style={{ stopColor: "var(--motif-dawn-2)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-dawn-3)" }} />
         </linearGradient>
         <linearGradient id={near} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#7462f7" />
-          <stop offset="1" stopColor="#3a2b99" />
+          <stop offset="0" style={{ stopColor: "var(--motif-hill-near-from)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-hill-near-to)" }} />
         </linearGradient>
       </defs>
       <g stroke={`url(#${arc})`} strokeWidth="1.5" strokeLinecap="round">

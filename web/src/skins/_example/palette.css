@@ -1,5 +1,6 @@
 /* « Exemple (dev) », depth palette: a fake palette, green and yellow, in light
-   only, over Crête's structure. It only sets custom properties of Crête, under
+   only, over Crête's structure and fonts (it has no fonts.css: a skin of
+   development declares no face). It only sets custom properties of Crête, under
    the skin's selector: every utility that paints with them follows, whatever
    its variant (a tab that is the current page, a hover), and a page in another
    skin never sees them. See ../README.md. */
@@ -9,8 +10,6 @@
    for every colour it does not set. Its sky (`.on-dawn`) has these colours too.
    src/dark.test.ts and the other contrast tests measure them as Crête's. */
 :root[data-skin="_example"] {
-  --font-display: "Example Display", ui-serif, Georgia, "Times New Roman", serif;
-
   --color-neutral-50: #f4f7f2;
   --color-neutral-100: #e8eee4;
   --color-neutral-200: #d6dfd0;
@@ -37,7 +36,8 @@
 
   --color-toast: #1f281a;
   --radius-card: 0.75rem;
-  --shadow-glow: 0 10px 28px -10px rgb(8 99 76 / 0.5), 0 4px 12px -6px rgb(21 94 117 / 0.4);
+  --dawn-glow-warm: rgb(8 99 76 / 0.5);
+  --dawn-glow-cool: rgb(21 94 117 / 0.4);
 
   /* The dawn of Crête, in green: the pills that carry white text (each stop
      at least 4.5:1 with white), the soft one, the skies, the lines. */
@@ -56,4 +56,36 @@
   --dawn-ring-to: #fde68a;
   --dawn-chip-glow: rgb(8 99 76 / 0.5);
   --focus-glow: rgb(11 122 94 / 0.2);
+
+  /* The map of a track: a green line, its ends, its links. */
+  --map-line-from: #e3b505;
+  --map-line-via: #0b7a5e;
+  --map-line-to: #155e75;
+  --map-line: #0b7a5e;
+  --map-start: #155e75;
+  --map-finish: #1f281a;
+  --map-link: #08634c;
+
+  /* Crête's motifs, which stand in for those the skin does not draw: green
+     ridges under a yellow sun. */
+  --motif-ridge-far-from: #6fd3b5;
+  --motif-ridge-far-to: #1f9a76;
+  --motif-ridge-mid-from: #0b7a5e;
+  --motif-ridge-mid-to: #08634c;
+  --motif-ridge-near-from: #064e3c;
+  --motif-ridge-near-to: #053b2e;
+  --motif-ridge-light: #fde68a;
+  --motif-sun-core: #fffbe8;
+  --motif-sun-mid: #fde68a;
+  --motif-sun-rim: #e3b505;
+  --motif-halo-from: #fde68a;
+  --motif-halo-to: #e3b505;
+  --motif-dawn-1: #fde68a;
+  --motif-dawn-2: #6fd3b5;
+  --motif-dawn-3: #0b7a5e;
+  --motif-peak-far: #a6e8d2;
+  --motif-peak-near-from: #0b7a5e;
+  --motif-peak-near-to: #053b2e;
+  --motif-hill-near-from: #1f9a76;
+  --motif-hill-near-to: #064e3c;
 }

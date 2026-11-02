@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
@@ -7,6 +7,7 @@ import { expect, test } from "vitest";
 import { SKINS } from ".";
 import {
   DEPTH_MODULE,
+  STYLES_MODULE,
   declaredModes,
   declaredThemeColor,
   depthFile,
@@ -14,6 +15,7 @@ import {
   isDevSkinFile,
   skinDepth,
   skinTable,
+  stylesFile,
   withSkins,
 } from "./plugin";
 import { DEPTHS } from "./types";
@@ -45,28 +47,56 @@ function globs(file: string): string[] {
 
 test("plugin — un build garde les feuilles et les variantes de sa profondeur et de celles d'avant, pas des suivantes", () => {
   expect(DEPTH_MODULE).toBe("virtual:skin-depth");
-  // The fonts at every depth, first (a palette may still set a `--font-*`); then
-  // each level in its own call, in this order: a deeper sheet comes after, and wins.
-  expect(globs(depthFile(dir, "palette"))).toEqual(["../*/fonts.css", "../*/palette.css"]);
-  expect(globs(depthFile(dir, "mix"))).toEqual([
+  expect(STYLES_MODULE).toBe("virtual:skin-styles");
+  // The sheets: the fonts at every depth, first, then each level in its own
+  // call, in this order: a deeper sheet comes after, and wins.
+  expect(globs(stylesFile(dir, "palette"))).toEqual(["../*/fonts.css", "../*/palette.css"]);
+  expect(globs(stylesFile(dir, "mix"))).toEqual([
     "../*/fonts.css",
     "../*/palette.css",
     "../*/mix.css",
-    "../*/mix.tsx",
   ]);
-  expect(globs(depthFile(dir, "full"))).toEqual([
+  expect(globs(stylesFile(dir, "full"))).toEqual([
     "../*/fonts.css",
     "../*/palette.css",
     "../*/mix.css",
     "../*/full.css",
-    "../*/mix.tsx + ../*/full.tsx",
   ]);
-  // Every depth exports its variants, empty for palette.
+  // The variants, in a module of their own (the registry's): none at palette.
+  expect(globs(depthFile(dir, "palette"))).toEqual([]);
+  expect(globs(depthFile(dir, "mix"))).toEqual(["../*/mix.tsx"]);
+  expect(globs(depthFile(dir, "full"))).toEqual(["../*/mix.tsx + ../*/full.tsx"]);
   for (const depth of DEPTHS) {
     expect(readFileSync(depthFile(dir, depth), "utf8"), `depth ${depth}`).toMatch(
       /export const variants\b/,
     );
   }
+});
+
+test("plugin — les feuilles des skins viennent de l'entrée seule : main.tsx, juste après styles.css", () => {
+  // Only skins/styles.ts imports the module of the sheets, and only main.tsx
+  // (and the browser tests that draw a skin) imports skins/styles.ts: so the
+  // sheets of the skins are in the stylesheet of the entry, not in the one of a
+  // part that the entry shares with the pages.
+  const main = readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
+  const imports = [...main.matchAll(/^import "([^"]+)";$/gm)].map((match) => match[1]);
+  expect(imports).toEqual(["./styles.css", "./skins/styles"]);
+  const importers = readdirSync(join(dir, ".."), { recursive: true, encoding: "utf8" })
+    .map((file) => file.replaceAll("\\", "/"))
+    .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+    .filter((file) => {
+      const text = readFileSync(join(dir, "..", file), "utf8");
+      const specifiers = [...text.matchAll(/^import (?:[^;]*? from )?"([^"]+)";$/gm)].map(
+        (match) => match[1] ?? "",
+      );
+      return specifiers.some(
+        (specifier) =>
+          specifier === STYLES_MODULE ||
+          posix.normalize(posix.join(posix.dirname(file), specifier)) === "skins/styles",
+      );
+    })
+    .toSorted();
+  expect(importers).toEqual(["main.tsx", "skins/styles.ts"]);
 });
 
 test("plugin — la table des skins : chaque skin sauf Crête, avec ses modes, comme le registre les a", () => {

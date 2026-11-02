@@ -74,7 +74,16 @@
   color: #4f4563;
 }
 .track-map.leaflet-container .leaflet-control-attribution a {
-  color: #4b37c4;
+  color: var(--map-link);
+}
+
+/* The start and the finish of the track, in the colours of the theme (a skin
+   sets them): over the fill that Leaflet writes on them. */
+.track-map .track-start {
+  fill: var(--map-start);
+}
+.track-map .track-finish {
+  fill: var(--map-finish);
 }
 
 /* The mark of the cursor of the profile on the track (see TrackMap): the dot of

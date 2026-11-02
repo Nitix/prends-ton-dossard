@@ -22,10 +22,12 @@ import { chooseTheme } from "../lib/theme";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
 import { fontsReady } from "../test/fontsReady";
+import { withoutIds } from "../test/ids";
 import { emulateMedia, resetMedia } from "../test/media";
 import type { Mode, Skin } from "./types";
 
 import "../styles.css";
+import "../skins/styles";
 
 // The main pages of the app, drawn in each skin and in each of its modes, on
 // the narrowest phone (320 px): the home page, the page of an event with the
@@ -173,14 +175,17 @@ async function framed(screen: Screen) {
   expect(targets().length).toBeGreaterThan(5);
   const small = targets()
     .filter((element) => element.getBoundingClientRect().height < 44)
-    .map((element) => element.outerHTML.slice(0, 160));
+    .map(
+      (element) =>
+        `${element.getBoundingClientRect().height}px: ${element.outerHTML.slice(0, 120)}`,
+    );
   expect(small).toEqual([]);
 }
 
 /** The mark of a skin before a block's title, drawn on its own: what each title must start with. */
 async function markerHtml(skin: Skin): Promise<string> {
   const alone = await render(createElement(slotOf(skin, "SectionMarker")));
-  const html = alone.container.innerHTML;
+  const html = withoutIds(alone.container.innerHTML);
   await alone.unmount();
   return html;
 }
@@ -195,7 +200,53 @@ function painted(property: string): string {
   return image;
 }
 
+/** A colour of the skin (`--dawn-glow-warm`…) as the browser computes it, here and now. */
+function colourOf(property: string): string {
+  const probe = document.createElement("span");
+  probe.style.color = `var(${property}, transparent)`;
+  document.body.append(probe);
+  const colour = getComputedStyle(probe).color;
+  probe.remove();
+  return colour;
+}
+
+/** The two colours of the halo of the dawn (`shadow-glow`: the main buttons, the current tab, the «+»). */
+const GLOWS = ["--dawn-glow-warm", "--dawn-glow-cool"];
+
+/** The halo of a piece of the dawn is in the colours of the skin of the page. */
+function expectGlowOfSkin(element: Element, what: string) {
+  const shadow = getComputedStyle(element).boxShadow;
+  expect(shadow, `the halo of ${what}`).not.toBe("none");
+  for (const glow of GLOWS) {
+    const colour = colourOf(glow);
+    expect(colour, `${glow} is set`).not.toBe("rgba(0, 0, 0, 0)");
+    expect(shadow, `${what}: its halo in ${glow}`).toContain(colour);
+  }
+}
+
 const CASES = SKINS.flatMap((skin) => skin.modes.map((mode) => ({ skin, mode })));
+
+/** The selectors of every rule in the stylesheets of the page, those inside `@media` and such too. */
+function selectorsOfPage(): string[] {
+  const of = (rules: CSSRuleList): string[] =>
+    [...rules].flatMap((rule) => [
+      ...(rule instanceof CSSStyleRule ? [rule.selectorText] : []),
+      ...(rule instanceof CSSGroupingRule ? of(rule.cssRules) : []),
+    ]);
+  return [...document.styleSheets].flatMap((sheet) => of(sheet.cssRules));
+}
+
+test("smoke — les feuilles de chaque skin sont dans la page (skins/styles, comme main.tsx)", () => {
+  // Without them, a skin would be drawn in Crête's colours and every test of
+  // its paints would pass for nothing.
+  const selectors = selectorsOfPage();
+  for (const skin of SKINS.filter((one) => one.id !== "crete")) {
+    expect(
+      selectors.some((selector) => selector.startsWith(`:root[data-skin="${skin.id}"]`)),
+      `the palette of ${skin.id}`,
+    ).toBe(true);
+  }
+});
 
 for (const { skin, mode } of CASES) {
   const name = `${skin.id}, ${mode}`;
@@ -217,9 +268,13 @@ for (const { skin, mode } of CASES) {
     const titles = [...document.querySelectorAll("h2.section-title")];
     expect(titles.length).toBeGreaterThan(0);
     for (const title of titles) {
-      expect(title.firstElementChild?.outerHTML, `title ${title.textContent}`).toBe(marker);
+      expect(
+        withoutIds(title.firstElementChild?.outerHTML ?? ""),
+        `title ${title.textContent}`,
+      ).toBe(marker);
     }
-    // The current tab, a variant of a utility (`aria-[current=page]:bg-dawn-deep`), takes the paint of the skin.
+    // The current tab, variants of utilities (`aria-[current=page]:bg-dawn-deep`,
+    // `aria-[current=page]:shadow-glow`), takes the paint and the halo of the skin.
     const current = screen
       .getByRole("navigation", { name: fr.nav.main })
       .getByRole("link", { name: fr.nav.home, exact: true })
@@ -227,13 +282,8 @@ for (const { skin, mode } of CASES) {
     const own = painted("--dawn-deep");
     expect(own).toMatch(/gradient/);
     expect(getComputedStyle(current).backgroundImage).toBe(own);
-    // A skin that paints its own dawn: the tab is not Crête's.
-    const root = document.documentElement;
-    const skinOf = root.dataset.skin;
-    delete root.dataset.skin;
-    const crete = painted("--dawn-deep");
-    if (skinOf !== undefined) root.dataset.skin = skinOf;
-    expect(getComputedStyle(current).backgroundImage === crete).toBe(own === crete);
+    expectGlowOfSkin(current, "the current tab");
+    expectGlowOfSkin(screen.getByRole("link", { name: fr.nav.createEvent }).element(), "the «+»");
   });
 
   test(`smoke — ${name} : la page d'un événement, sa carte, le profil de sa trace et une fenêtre`, async () => {
@@ -258,12 +308,23 @@ for (const { skin, mode } of CASES) {
       .click();
     const dialog = screen.getByRole("dialog", { name: fr.participation.addSomeoneTitle });
     await expect.element(dialog).toBeVisible();
+    // Measured once it has risen and its fonts are in: not in the middle of its entrance.
+    await Promise.all(
+      dialog
+        .element()
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    );
+    await fontsReady();
     const box = dialog.element().getBoundingClientRect();
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(WIDTH);
     const small = targets(dialog.element())
       .filter((element) => element.getBoundingClientRect().height < 44)
-      .map((element) => element.outerHTML.slice(0, 160));
+      .map(
+        (element) =>
+          `${element.getBoundingClientRect().height}px: ${element.outerHTML.slice(0, 120)}`,
+      );
     expect(small).toEqual([]);
   });
 
@@ -276,6 +337,10 @@ for (const { skin, mode } of CASES) {
       .toBeVisible();
     await expect.element(screen.getByRole("textbox").first()).toBeVisible();
     await framed(screen);
+    // The main button of the form (`PRIMARY`): its halo is the skin's.
+    const primary = document.querySelector("main .btn-primary");
+    expect(primary, "the main button of the form").not.toBeNull();
+    if (primary !== null) expectGlowOfSkin(primary, "the main button");
   });
 
   test(`smoke — ${name} : les réglages, avec le choix du thème`, async () => {

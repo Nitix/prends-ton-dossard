@@ -1,10 +1,14 @@
 @import "tailwindcss";
 
-/* The skins of development (the folders src/skins/_<name>/) and the notes of
-   the skins are not scanned for the names of classes: nothing of them reaches
-   the CSS of a build (a skin of development styles its few pieces inline). */
+/* The skins of development (the folders src/skins/_<name>/), the notes of the
+   skins and the tests are not scanned for the names of classes: nothing of them
+   reaches the CSS of a build (a skin of development styles its few pieces
+   inline), and the tests draw with the CSS of the app as it is built. */
 @source not "./skins/_*/**";
 @source not "./skins/README.md";
+@source not "./**/*.test.ts";
+@source not "./**/*.test.tsx";
+@source not "./test/**";
 
 /* The fonts are served by the site, not by Google: the two @fontsource-variable
    packages ship one variable file per script, and only the two that French
@@ -157,12 +161,14 @@
   --radius-2xl: 1.5rem;
   --radius-card: 1.25rem;
 
-  /* The shadows of the day are tinted violet; their colour is a variable (see
-     `:root`) so that the night can make them dark. */
-  --shadow-card: 0 1px 2px rgb(36 27 53 / 0.04), 0 10px 28px -16px var(--shade-card);
-  --shadow-lift: 0 2px 4px rgb(36 27 53 / 0.05), 0 18px 40px -18px var(--shade-lift);
-  --shadow-glow: 0 10px 28px -10px rgb(214 51 111 / 0.55), 0 4px 12px -6px rgb(94 74 227 / 0.45);
-  --shadow-bar: 0 -1px 0 rgb(36 27 53 / 0.04), 0 12px 40px -10px var(--shade-bar);
+  /* The shadows of the day are tinted violet; their colours are variables (see
+     `:root`) so that the night can make them dark, and a skin its own. Tailwind
+     writes these shadows into its utilities (`shadow-glow`…): only the
+     variables inside them reach a page, so a skin sets those, never these. */
+  --shadow-card: 0 1px 2px var(--shade-edge), 0 10px 28px -16px var(--shade-card);
+  --shadow-lift: 0 2px 4px var(--shade-edge-lift), 0 18px 40px -18px var(--shade-lift);
+  --shadow-glow: 0 10px 28px -10px var(--dawn-glow-warm), 0 4px 12px -6px var(--dawn-glow-cool);
+  --shadow-bar: 0 -1px 0 var(--shade-edge), 0 12px 40px -10px var(--shade-bar);
 
   --animate-rise: rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-pop: pop 380ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
@@ -249,11 +255,52 @@
     --shade-card: rgb(94 74 227 / 0.28);
     --shade-lift: rgb(94 74 227 / 0.4);
     --shade-bar: rgb(58 43 153 / 0.28);
+    /* The thin line under the shadows of a card, of a card that lifts, of the tab bar. */
+    --shade-edge: rgb(36 27 53 / 0.04);
+    --shade-edge-lift: rgb(36 27 53 / 0.05);
     --map-frame:
       0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
       0 6px 24px -12px rgb(94 74 227 / 0.45);
     --map-veil: none;
     --sheet-glow: none;
+
+    /* The map of a track (features/route/TrackMap): the gradient of its line,
+       and its colour where a gradient cannot be drawn, its start and its finish,
+       the links of its attribution. The map stays light at night. */
+    --map-line-from: #f47e4e;
+    --map-line-via: #d6336f;
+    --map-line-to: #5e4ae3;
+    --map-line: #d6336f;
+    --map-start: #5e4ae3;
+    --map-finish: #241b35;
+    --map-link: #4b37c4;
+
+    /* Crête's motifs (skins/crete/), which stand in for those a skin does not
+       draw: a skin sets these to have them in its colours. The ridges, from the
+       far to the near, from their crest to their foot, and the light on the far
+       crests; the sun and its halo; the three colours of the dawn of the mark of
+       the app and of an empty list; the two summits of the mark; the near hills
+       of an empty list. */
+    --motif-ridge-far-from: #e46aa6;
+    --motif-ridge-far-to: #a54cb6;
+    --motif-ridge-mid-from: #7d43b8;
+    --motif-ridge-mid-to: #5b3aa8;
+    --motif-ridge-near-from: #3b2b8a;
+    --motif-ridge-near-to: #2a2070;
+    --motif-ridge-light: #ffd5bc;
+    --motif-sun-core: #fff7f0;
+    --motif-sun-mid: #ffd2b8;
+    --motif-sun-rim: #ff9fc4;
+    --motif-halo-from: #ffd5bc;
+    --motif-halo-to: #ffb38a;
+    --motif-dawn-1: #ffb38a;
+    --motif-dawn-2: #ff7eb3;
+    --motif-dawn-3: #8b7cff;
+    --motif-peak-far: #c9bfff;
+    --motif-peak-near-from: #5e4ae3;
+    --motif-peak-near-to: #2a2070;
+    --motif-hill-near-from: #7462f7;
+    --motif-hill-near-to: #3a2b99;
 
     /* The paints of the dawn, the same by day and at night (they never use a
        colour that the night changes). The sky of the header and of the heroes:
@@ -286,6 +333,10 @@
     --dawn-ring-to: #ffb38a;
     /* The glow under the day of an event (its chip of sunrise). */
     --dawn-chip-glow: rgb(214 51 111 / 0.6);
+    /* The halo of what is painted with the deep dawn (`shadow-glow`: the main
+       buttons, the current tab, the «+»): its warm and its cool colour. */
+    --dawn-glow-warm: rgb(214 51 111 / 0.55);
+    --dawn-glow-cool: rgb(94 74 227 / 0.45);
     /* The halo of a field with the focus, and the ring of the focus on the sky. */
     --focus-glow: rgb(139 124 255 / 0.18);
     --sky-focus: #fff;

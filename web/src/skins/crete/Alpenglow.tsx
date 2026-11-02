@@ -72,8 +72,8 @@ const mirrored = (id: string) => (
 /** The fill of a ridge, from its crest to its foot. */
 const shade = (id: string, top: string, bottom: string) => (
   <linearGradient id={fill(id)} x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stopColor={top} />
-    <stop offset="1" stopColor={bottom} />
+    <stop offset="0" style={{ stopColor: top }} />
+    <stop offset="1" style={{ stopColor: bottom }} />
   </linearGradient>
 );
 
@@ -123,17 +123,17 @@ export function MotifDefs() {
         {mirrored(MID)}
         {mirrored(NEAR)}
         {/* Back to front, the ridges deepen: the far crests catch the pink of the dawn, the near hills are still in the night. */}
-        {shade(BACK, "#e46aa6", "#a54cb6")}
-        {shade(MID, "#7d43b8", "#5b3aa8")}
-        {shade(NEAR, "#3b2b8a", "#2a2070")}
+        {shade(BACK, "var(--motif-ridge-far-from)", "var(--motif-ridge-far-to)")}
+        {shade(MID, "var(--motif-ridge-mid-from)", "var(--motif-ridge-mid-to)")}
+        {shade(NEAR, "var(--motif-ridge-near-from)", "var(--motif-ridge-near-to)")}
         <radialGradient id={SUN} cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#fff7f0" />
-          <stop offset="0.6" stopColor="#ffd2b8" />
-          <stop offset="1" stopColor="#ff9fc4" />
+          <stop offset="0" style={{ stopColor: "var(--motif-sun-core)" }} />
+          <stop offset="0.6" style={{ stopColor: "var(--motif-sun-mid)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-sun-rim)" }} />
         </radialGradient>
         <radialGradient id={HALO} cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0.25" stopColor="#ffd5bc" stopOpacity="0.75" />
-          <stop offset="1" stopColor="#ffb38a" stopOpacity="0" />
+          <stop offset="0.25" style={{ stopColor: "var(--motif-halo-from)" }} stopOpacity="0.75" />
+          <stop offset="1" style={{ stopColor: "var(--motif-halo-to)" }} stopOpacity="0" />
         </radialGradient>
       </defs>
     </svg>
@@ -178,8 +178,8 @@ export function Contours({
   );
 }
 
-/** The near ridge's darkest colour, for what continues it under the ridges (behind a sheet). */
-export const NIGHT = "#2a2070";
+/** The near ridge's darkest colour (a property of the theme), for what continues it under the ridges (behind a sheet). */
+export const NIGHT = "var(--motif-ridge-near-to)";
 
 /**
  * The three ridges at the bottom of their positioned parent, with the sun
@@ -262,7 +262,7 @@ export function Ridges({
         <use
           href={`#${band(BACK)}`}
           fill={`url(#${fill(BACK)})`}
-          stroke="#ffd5bc"
+          style={{ stroke: "var(--motif-ridge-light)" }}
           strokeOpacity={0.6}
           strokeWidth={1.25}
         />

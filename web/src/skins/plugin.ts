@@ -7,13 +7,16 @@ import { loadEnv, type Plugin } from "vite";
 import { DEPTHS, type Depth, type Mode } from "./types.ts";
 
 // The skins at build time: what vite.config.ts runs, in Node, never in the page.
-// It sets the depth of the build (`VITE_SKIN_DEPTH`), points the module of the
-// depth at the file that bundles the stylesheets and the variants of that depth
+// It sets the depth of the build (`VITE_SKIN_DEPTH`), points the modules of the
+// depth at the files that bundle the variants and the stylesheets of that depth
 // (./depth/), and writes into index.html the table of the skins that its script
 // needs before the page is first drawn. See README.md.
 
-/** The module the app imports for the stylesheets and the variants of the depth of the build. */
+/** The module the registry imports for the variants of the depth of the build. */
 export const DEPTH_MODULE = "virtual:skin-depth";
+
+/** The module main.tsx imports (through ./styles.ts) for the stylesheets of the depth of the build. */
+export const STYLES_MODULE = "virtual:skin-styles";
 
 /** The skin of the app when none is chosen: it is drawn by styles.css itself, with no `data-skin`. */
 export const DEFAULT_SKIN = "crete";
@@ -40,9 +43,14 @@ export function envDirOf(config: { root?: string; envDir?: string | false }): st
   return config.envDir === undefined ? root : resolve(root, config.envDir);
 }
 
-/** The file that bundles a depth: its `import.meta.glob` calls take the levels up to it. */
+/** The file of the variants of a depth: its `import.meta.glob` takes the levels up to it. */
 export function depthFile(skinsDir: string, depth: Depth): string {
   return join(skinsDir, "depth", `${depth}.ts`);
+}
+
+/** The file of the stylesheets of a depth: its `import.meta.glob` calls take the levels up to it. */
+export function stylesFile(skinsDir: string, depth: Depth): string {
+  return join(skinsDir, "depth", `${depth}.styles.ts`);
 }
 
 /** The empty module that stands for each file of a skin of development in a build. */
@@ -159,6 +167,7 @@ export function skins(): Plugin {
     },
     async resolveId(source, importer, options) {
       if (source === DEPTH_MODULE) return depthFile(skinsDir, depth);
+      if (source === STYLES_MODULE) return stylesFile(skinsDir, depth);
       // A build has no skin of development: each of its files (an index, a
       // stylesheet, a variant, which the globs of the registry and of the
       // depths find) is one empty module there, so that the build has nothing

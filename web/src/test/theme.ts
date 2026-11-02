@@ -262,12 +262,169 @@ function linearParts(value: string): string[] {
   return parts;
 }
 
+/** The parts of a list, split at its commas that are not in parentheses, brackets or quotes. */
+export function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote = "";
+  let start = 0;
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at] ?? "";
+    if (quote !== "") {
+      if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "(" || char === "[") depth++;
+    else if (char === ")" || char === "]") depth--;
+    else if (char === "," && depth === 0) {
+      parts.push(text.slice(start, at).trim());
+      start = at + 1;
+    }
+  }
+  parts.push(text.slice(start).trim());
+  return parts.filter((part) => part !== "");
+}
+
 /**
- * The `#rrggbb` stops of the linear gradients of a paint of the dawn (its
- * radial glows, where no text sits, are left out), in order.
+ * The stops of the linear gradients of a paint of the dawn (its radial glows,
+ * where no text sits, are left out), in order. Each must be a `#rrggbb` colour,
+ * the one the contrast tests can measure: any other (`rgb()`, `oklch()`, a name)
+ * is an error, not a stop left out.
  */
 export function linearStops(value: string): string[] {
-  return linearParts(value).flatMap((part) => part.match(/#[0-9a-fA-F]{6}\b/g) ?? []);
+  return linearParts(value).flatMap((part) => {
+    const parts = splitTopLevel(part.slice("linear-gradient(".length, -1));
+    const [first = ""] = parts;
+    // An angle or a direction first, if any.
+    const stops = /^(to\s|-?[\d.]+(deg|turn|rad|grad)$)/.test(first) ? parts.slice(1) : parts;
+    return stops.map((stop) => {
+      const colour = stop.replace(/(\s+-?[\d.]+(%|px|rem|em)?)+$/, "").trim();
+      if (!/^#[0-9a-fA-F]{6}$/.test(colour)) {
+        throw new Error(`A stop of ${part} is not a #rrggbb colour: ${colour}`);
+      }
+      return colour;
+    });
+  });
+}
+
+/** The value of a custom property under the sky (`.on-dawn`), in a mode, in a skin. */
+export function skyValue(property: string, theme: Theme = "light", skin = DEFAULT_SKIN): string {
+  return valueIn(skyOf(theme, skin), property) ?? "";
+}
+
+// --- The rules of the stylesheets of a skin (README.md) ---
+
+/** A stylesheet of a skin, by its level. */
+export type SheetLevel = "palette" | "mix" | "full";
+
+/**
+ * What a palette may not set, though Crête declares it: the shadows (Tailwind
+ * writes them into its utilities, so only the variables in them reach a page:
+ * `--shade-*`, `--dawn-glow-*`), and the fonts (`fonts.css` has them).
+ */
+export const NOT_IN_PALETTE = /^--(shadow|inset-shadow|drop-shadow|text-shadow|font)-/;
+
+/** The at-rules that a sheet of mix or full may wrap its rules in. */
+const WRAPPERS = /^@(media|supports|container)\b/;
+
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The names of the properties that a block declares, in order. */
+function propertiesOf(body: string): string[] {
+  return body
+    .split(";")
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => declaration !== "")
+    .map((declaration) => declaration.slice(0, declaration.indexOf(":")).trim());
+}
+
+/**
+ * What is wrong with a stylesheet of a skin, by the rules of README.md (an
+ * empty list when nothing is). `known` is what Crête declares: the custom
+ * properties a palette may set.
+ *
+ * - palette.css: rules on the skin's page (`:root[data-skin="<id>"]`), its
+ *   night chosen (`…[data-theme="dark"]`) and its sky (`… .on-dawn`), and its
+ *   night followed (`…:not([data-theme="light"])`) in
+ *   `@media (prefers-color-scheme: dark)`; custom properties of Crête only,
+ *   and `color-scheme`; no shadow, no font.
+ * - mix.css and full.css: every selector is `:root[data-skin="<id>"]`, then
+ *   `[data-theme="dark"]`, `[data-theme="light"]` or `:not([data-theme="light"])`
+ *   if the rule is for a mode, then a combinator and the piece; a list is
+ *   split at its own commas (not those of `:is(a, b)`); rules may be wrapped in
+ *   `@media`, `@supports` or `@container`, as deep as needed; `@keyframes`
+ *   whose name starts with `<id>-`; no custom property, no other at-rule.
+ */
+export function sheetProblems(
+  css: string,
+  skin: string,
+  level: SheetLevel,
+  known: ReadonlySet<string>,
+): string[] {
+  const { root, darkChosen, darkFollowed, sky } = skinSelectors(skin);
+  const problems: string[] = [];
+  const say = (problem: string) => {
+    problems.push(`${skin}, ${level}.css: ${problem}`);
+  };
+  const piece = new RegExp(
+    `^${escaped(root)}(\\[data-theme="(dark|light)"\\]|:not\\(\\[data-theme="light"\\]\\))?(\\s+|\\s*[>+~]\\s*)\\S`,
+  );
+  const visit = (text: string, wrappers: string[]) => {
+    const stripped = text.replace(/\/\*[\s\S]*?\*\//g, "");
+    const tail = stripped.slice(stripped.lastIndexOf("}") + 1).trim();
+    if (tail !== "") say(`a statement ${tidy(tail)}`);
+    for (const { prelude, body } of rules(stripped)) {
+      const statements = prelude.split(";");
+      const head = tidy(statements.pop() ?? "");
+      for (const statement of statements.map(tidy).filter((one) => one !== "")) {
+        say(`a statement ${statement}`);
+      }
+      if (head.startsWith("@")) {
+        if (level === "palette") {
+          if (head === "@media (prefers-color-scheme: dark)" && wrappers.length === 0) {
+            visit(body, [head]);
+          } else say(`the at-rule ${head}`);
+        } else if (WRAPPERS.test(head)) visit(body, [...wrappers, head]);
+        else if (head.startsWith("@keyframes ")) {
+          const name = head.slice("@keyframes ".length).trim();
+          if (!name.startsWith(`${skin}-`))
+            say(`the keyframes ${name} (its name starts with "${skin}-")`);
+          for (const frame of rules(body)) {
+            for (const property of propertiesOf(frame.body).filter((one) => one.startsWith("--"))) {
+              say(`a keyframe sets ${property}`);
+            }
+          }
+        } else say(`the at-rule ${head}`);
+        continue;
+      }
+      if (body.includes("{")) {
+        say(`a rule nested in ${head}`);
+        continue;
+      }
+      const selectors = splitTopLevel(head).map(tidy);
+      const properties = propertiesOf(body);
+      if (level === "palette") {
+        const allowed = wrappers.length > 0 ? [darkFollowed] : [root, darkChosen, sky];
+        for (const selector of selectors.filter((one) => !allowed.includes(one))) {
+          say(`the selector ${selector}`);
+        }
+        for (const property of properties) {
+          if (property === "color-scheme") continue;
+          if (!property.startsWith("--")) say(`${property}, which is not a custom property`);
+          else if (NOT_IN_PALETTE.test(property)) say(`${property}, which a palette cannot change`);
+          else if (!known.has(property)) say(`${property}, which Crête does not declare`);
+        }
+      } else {
+        for (const selector of selectors.filter((one) => !piece.test(one))) {
+          say(`the selector ${selector}`);
+        }
+        for (const property of properties.filter((one) => one.startsWith("--"))) {
+          say(`a custom property ${property}`);
+        }
+      }
+    }
+  };
+  visit(css, []);
+  return problems;
 }
 
 /** A skin in one of its modes: what a test of the colours measures. */

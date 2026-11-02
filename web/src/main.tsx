@@ -16,6 +16,8 @@ import { routeTree } from "./routeTree.gen";
 import { applySkin, followSkinElsewhere, readSkin } from "./skins";
 
 import "./styles.css";
+// The stylesheets of the skins, after Crête's: in the same stylesheet of the page.
+import "./skins/styles";
 
 const queryClient = new QueryClient();
 // Moving between pages is a view transition (a cross-fade) where the browser

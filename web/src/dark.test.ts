@@ -13,6 +13,7 @@ import {
   lightTheme,
   onDawnBlock,
   rules,
+  sheetProblems,
   skinDeclarations,
   skinModes,
   skinSelectors,
@@ -20,6 +21,7 @@ import {
   skinsWithFonts,
   linearStops,
   skyColour,
+  skyValue,
   themeColour,
   themeValue,
   type SkinCase,
@@ -163,14 +165,32 @@ test("dark — le ciel de chaque skin, dans chaque mode : le texte blanc, la pas
   }
 });
 
+test("dark — la carte d'une trace, claire dans tous les modes : les liens de l'attribution à 4,5:1 sur blanc, le départ et l'arrivée à 3:1", () => {
+  for (const { skin, mode, label } of SKIN_CASES) {
+    const link = themeValue("--map-link", mode, skin);
+    expect(contrast(link, "#ffffff"), `${label}: --map-link (${link})`).toBeGreaterThanOrEqual(4.5);
+    for (const end of ["--map-start", "--map-finish"]) {
+      const colour = themeValue(end, mode, skin);
+      expect(contrast(colour, "#ffffff"), `${label}: ${end} (${colour})`).toBeGreaterThanOrEqual(3);
+    }
+  }
+});
+
 test("dark — le ciel d'un skin à deux modes reste celui de son jour, la nuit", () => {
-  // As Crête's (above): what sits on the sky has the colours of the day, at night too.
+  // As Crête's (above): what sits on the sky has the colours of the day, at
+  // night too: every property that the night changes, Crête's or the skin's.
   for (const skin of [...new Set(SKIN_CASES.map((one) => one.skin))].filter(
     (one) => skinModes(one).length > 1,
   )) {
-    for (const name of ["ink", "card", "iris-700", "neutral-600", "neutral-800", "iris-600"]) {
-      expect(skyColour(name, "dark", skin), `${skin}: ${name} on the sky at night`).toBe(
-        skyColour(name, "light", skin),
+    const changed = new Set([
+      ...darkBlocks().chosen.keys(),
+      ...skinDeclarations(skinStylesheet(skin), skinSelectors(skin).darkChosen).keys(),
+    ]);
+    changed.delete("color-scheme");
+    expect(changed.size, `the night of ${skin}`).toBeGreaterThan(30);
+    for (const property of changed) {
+      expect(skyValue(property, "dark", skin), `${skin}: ${property} on the sky at night`).toBe(
+        skyValue(property, "light", skin),
       );
     }
   }
@@ -264,43 +284,26 @@ function skinRules(css: string): { selectors: string[]; properties: string[]; me
     }));
 }
 
-test("dark — un skin ne fait que changer, sous son propre sélecteur, des propriétés que Crête déclare", () => {
+test("dark — un skin ne fait que changer, sous son propre sélecteur, ce que README.md permet : sa palette, ses pièces", () => {
   // Not an empty search: the example skin of development is one.
   expect(OTHER_SKINS.length).toBeGreaterThan(0);
-  const known = lightTheme();
+  const known = new Set(lightTheme().keys());
   for (const skin of OTHER_SKINS) {
-    const { root, darkChosen, darkFollowed, sky } = skinSelectors(skin);
-    // palette.css: the custom properties of Crête (its colours, fonts, radii,
-    // shadows, paints of the dawn), on the skin's page, night and sky; nothing
-    // else, so that every utility, whatever its variant, follows the skin.
-    const palette = skinRules(skinStylesheet(skin, "palette"));
-    expect(palette.length, `${skin} has no palette.css`).toBeGreaterThan(0);
-    for (const { selectors, properties, media } of palette) {
-      for (const selector of selectors) {
-        const allowed = media ? [darkFollowed] : [root, darkChosen, sky];
-        expect(allowed, `${skin}, palette.css: ${selector}`).toContain(selector);
-      }
-      for (const property of properties) {
-        if (property === "color-scheme") continue;
-        expect(
-          known.has(property),
-          `${skin}, palette.css sets ${property}, which is not a custom property of Crête`,
-        ).toBe(true);
-      }
-    }
-    // mix.css and full.css: rules of the skin only, which restyle with those
-    // properties and set none of their own (the tests of the colours read the palette).
-    for (const level of ["mix", "full"] as const) {
-      for (const { selectors, properties } of skinRules(skinStylesheet(skin, level))) {
-        for (const selector of selectors) {
-          expect(selector.startsWith(`${root} `), `${skin}, ${level}.css: ${selector}`).toBe(true);
-        }
-        for (const property of properties) {
-          expect(property.startsWith("--"), `${skin}, ${level}.css sets ${property}`).toBe(false);
-        }
-      }
-    }
+    expect(
+      rules(skinStylesheet(skin, "palette")).length,
+      `${skin} has no palette.css`,
+    ).toBeGreaterThan(0);
   }
+  // palette.css: custom properties of Crête on the skin's page, night and sky
+  // (no shadow, which Tailwind writes into its utilities, no font, which
+  // fonts.css has); mix.css and full.css: pieces under the skin, no custom
+  // property (src/test/skinSheets.test.ts says which forms, on sheets of its own).
+  const problems = OTHER_SKINS.flatMap((skin) =>
+    (["palette", "mix", "full"] as const).flatMap((level) =>
+      sheetProblems(skinStylesheet(skin, level), skin, level, known),
+    ),
+  );
+  expect(problems).toEqual([]);
 });
 
 /** What a face of a font may say: nothing that paints, nothing that loads more than its file. */

@@ -5,6 +5,7 @@ import { render } from "vitest-browser-react";
 import { SKIN_DEPTH, SKINS, chooseSkin, slotOf, variantOf } from ".";
 import { EmptyState, EmptyStateBase } from "../components/EmptyState";
 import { SectionMarker } from "../components/Slots";
+import { withoutIds } from "../test/ids";
 import { slotted } from "./components";
 
 import "../styles.css";
@@ -21,7 +22,7 @@ afterEach(() => {
 /** What a component draws, on its own, its ids (`useId`, new at each render) set aside. */
 async function html(element: Parameters<typeof render>[0]): Promise<string> {
   const screen = await render(element);
-  const drawn = screen.container.innerHTML.replace(/«[^»]*»|_r_[0-9a-z]+_|:r[0-9a-z]+:/g, "ID");
+  const drawn = withoutIds(screen.container.innerHTML);
   await screen.unmount();
   return drawn;
 }
@@ -53,6 +54,6 @@ test("skinnable — une liste vide est la variante du skin à la profondeur du b
     expect(drawn, `the empty state of ${skin.id} at ${SKIN_DEPTH}`).toBe(expected);
     expect(drawn === base, `${skin.id} at ${SKIN_DEPTH}`).toBe(Variant === EmptyStateBase);
   }
-  // A palette build replaces nothing.
-  expect(SKIN_DEPTH === "palette" ? replaced : 0).toBe(0);
+  // A palette build replaces nothing; a mix or full build does (the example skin replaces the empty state).
+  expect(replaced > 0, `variants drawn at ${SKIN_DEPTH}`).toBe(SKIN_DEPTH !== "palette");
 });

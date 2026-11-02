@@ -11,9 +11,10 @@ import { SKIN_KEY, SKINS, applySkin, chooseSkin, readSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
 import { fontsReady } from "../../test/fontsReady";
 import { emulateMedia, resetMedia } from "../../test/media";
-import { AppearanceSection } from "./AppearanceSection";
+import { AppearanceSection, SkinCard } from "./AppearanceSection";
 
 import "../../styles.css";
+import "../../skins/styles";
 
 // « Thème » in « Apparence », on the settings page: the skins of the app as
 // cards (a name, two colours, a sample of its font), then « Clair ou sombre »
@@ -151,35 +152,30 @@ test("Thème — chaque carte montre les deux couleurs du skin, et son échantil
   expect(sampleOf(cardOf(screen, crete)).style.fontFamily).not.toBe("");
 });
 
-/** The first family of a `font-family` list, without its quotes. */
-const firstFamily = (list: string) =>
-  list
-    .split(",")[0]
-    ?.trim()
-    .replace(/^["']|["']$/g, "") ?? "";
-
 test("Thème — une police déclarée mais pas encore chargée : l'échantillon attend, puis la prend dès qu'elle l'est", async () => {
-  // A skin whose font no face of the page declares yet (a font of the system, or one of its own).
-  const skin = SKINS.find(
-    (one) => ![...document.fonts].some((face) => face.family === firstFamily(one.fontSample)),
-  );
-  expect(skin, "a skin whose font is not on the page").toBeDefined();
-  if (skin === undefined) return;
-  // Its font, declared and not loaded: as when its skin's stylesheet has a face that nothing used yet.
-  const face = new FontFace(firstFamily(skin.fontSample), `url(${interUrl})`, {
-    weight: "100 900",
-  });
+  // A card of a skin whose font is a face of the page, declared and not loaded:
+  // as when a skin's fonts.css has a face that nothing has used yet. The card
+  // alone, with a family of its own, whatever the skins of the registry are.
+  const family = "Sample Of A Test";
+  const skin: Skin = { ...crete, id: "sample", fontSample: `"${family}", serif` };
+  const face = new FontFace(family, `url(${interUrl})`, { weight: "100 900" });
   document.fonts.add(face);
   try {
-    expect(face.status).toBe("unloaded");
-    const screen = await renderAppearance();
-    const sample = sampleOf(cardOf(screen, skin));
+    const screen = await render(
+      <div role="radiogroup" aria-label="Thème">
+        <SkinCard skin={skin} name="Échantillon" sample="Aa" checked={false} onChoose={() => {}} />
+      </div>,
+    );
+    const sample = sampleOf(
+      screen.getByRole("radio", { name: "Échantillon" }).element().closest("label") ??
+        document.body,
+    );
     expect(document.fonts.check(`700 1em ${skin.fontSample}`)).toBe(false);
     // Not loaded: the app's font, and the picker does not load it to show it.
     expect(sample.style.fontFamily).toBe("");
     expect(face.status).toBe("unloaded");
 
-    // Loaded (the skin was chosen elsewhere): the sample takes it.
+    // Loaded (the skin was chosen elsewhere): the sample takes it, on `loadingdone`.
     await face.load();
     await expect.poll(() => sample.style.fontFamily).not.toBe("");
     expect(getComputedStyle(sample).fontFamily).toBe(computedFamily(skin.fontSample));

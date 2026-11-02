@@ -13,6 +13,8 @@ export const skin: Skin = {
   modes: ["light"],
   slots: { SectionMarker: ExampleMarker, Divider: ExampleDivider },
   swatches: ["#0b7a5e", "#fde68a"],
-  fontSample: '"Example Display", ui-serif, Georgia, serif',
+  // Crête's titles: it has no fonts of its own (a skin of development declares no face).
+  fontSample:
+    '"Plus Jakarta Sans Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif',
   themeColor: "#08634c",
 };

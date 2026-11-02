@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 import { expect, test } from "vitest";
 
+import { SKINS } from "./skins";
+
 // « Crête » is set in Inter and Plus Jakarta Sans. They are served by the site
 // itself (the @fontsource-variable packages, built into /assets/ and kept by
 // the service worker), not by Google: a font that comes from another host tells
@@ -42,7 +44,11 @@ test("fonts — no request leaves the site", () => {
   // Neither the stylesheet, the files, nor the connections opened in advance.
   expect(page).not.toContain("fonts.googleapis.com");
   expect(page).not.toContain("fonts.gstatic.com");
-  expect(page).not.toMatch(/rel="(preconnect|dns-prefetch|preload)"[^>]*https?:/);
+  for (const link of page.match(/<link\b[^>]*>/g) ?? []) {
+    // In any order of its attributes.
+    const early = /\brel="(?:preconnect|dns-prefetch|preload)"/.test(link);
+    expect(early && /https?:/.test(link), `the link ${link}`).toBe(false);
+  }
   expect(styles).not.toMatch(/googleapis|gstatic/);
 
   // The stacks name the self-hosted families first, and keep the system fonts
@@ -332,8 +338,48 @@ test("fonts — every skin has its fonts.css, and none names a host or imports a
       /@import|@fontsource/,
     );
   }
-  // Nothing of the page loads a font ahead of the use of its face.
-  expect(page).not.toMatch(/rel="(preload|prefetch|modulepreload)"[^>]*(woff|font)/);
+  // Nothing of the page loads a font ahead of the use of its face, whatever the
+  // order of the attributes of its links.
+  expect(earlyFonts(page)).toEqual([]);
+  expect(
+    earlyFonts(
+      '<link href="/a.woff2" rel="preload" as="font"><link as="font" rel="prefetch" href="/b"><link rel="stylesheet" href="/c.css">',
+    ),
+  ).toHaveLength(2);
+});
+
+/** The links of a page that fetch a font before a face uses it: a preload, a prefetch, in any order of their attributes. */
+function earlyFonts(html: string): string[] {
+  return [...html.matchAll(/<link\b[^>]*>/g)]
+    .map((match) => match[0])
+    .filter(
+      (link) =>
+        /\brel="(?:preload|prefetch|modulepreload)"/.test(link) &&
+        /\.woff2?\b|\bas="font"|font/.test(link),
+    );
+}
+
+test("fonts — every family that a fonts.css names in its stacks is declared by a face, of styles.css or of a fonts.css", () => {
+  // Every folder that has one, a skin or not yet: not only those of SKIN_FONTS.
+  expect(Object.keys(skinFonts).length).toBeGreaterThan(0);
+  const declaredFamilies = new Set(allFaces.map((face) => face.family));
+  const undeclared = Object.keys(skinFonts).flatMap((id) =>
+    KINDS.flatMap((kind) =>
+      fontsOf(stackOf(id, kind) ?? "")
+        .filter((family) => !declaredFamilies.has(family))
+        .map((family) => `${id}: --font-${kind} names "${family}", which no face declares`),
+    ),
+  );
+  expect(undeclared).toEqual([]);
+});
+
+test("fonts — the sample of a skin in the picker is the stack of its titles: its fontSample is its --font-display", () => {
+  // Every skin of the registry; one with no --font-display of its own has Crête's titles.
+  expect(SKINS.length).toBeGreaterThan(1);
+  for (const skin of SKINS) {
+    const display = stackOf(skin.id, "display") ?? themeValue(styles, "--font-display");
+    expect(fontsOf(skin.fontSample), `${skin.id}: fontSample`).toEqual(fontsOf(display));
+  }
 });
 
 test("fonts — the faces of every skin are the latin and latin-ext woff2 files of the exact packages", () => {

@@ -16,7 +16,8 @@ before the page is first drawn, then by `applySkin`.
 skins/<id>/
   index.ts     the skin (required): `export const skin: Skin`
   fonts.css    its @font-face rules and `--font-*` (every depth)
-  palette.css  its custom properties: colours, radii, shadows, paints of the dawn (depth palette)
+  palette.css  its custom properties: colours, radii, colours of shadows, paints of the dawn,
+               of the map and of Crête's motifs (depth palette)
   mix.css      its signature pieces (depth mix)
   full.css     every other piece (depth full)
   mix.tsx      components it replaces at depth mix:  `export const variants: Variants`
@@ -68,13 +69,45 @@ A skin sets custom properties that `styles.css` declares for Crête (`@theme` an
 reads them, whatever its variant (`aria-[current=page]:bg-dawn-deep`, `hover:…`),
 so a skin that sets them is followed everywhere.
 
+Two kinds of Crête's properties are not a palette's to set (the guard refuses them):
+
+- `--shadow-*`: Tailwind writes these shadows into its utilities (`shadow-glow`,
+  `shadow-card`…), so a value set on a page never reaches them. Only the
+  variables inside them do: a skin sets those (`--shade-*`, `--shade-edge*`,
+  `--dawn-glow-warm`, `--dawn-glow-cool`, below).
+- `--font-*`: fonts live in `fonts.css` only (see Fonts).
+
+What a palette sets:
+
 - The colours: `--color-neutral-*`, `--color-ink`, `--color-iris-*` (the accent),
   `--color-peach-*`, `--color-blush-*`, `--color-red-*`, `--color-card`,
   `--color-raised`, `--color-field`, `--color-rim`, `--color-toast`,
   `--color-scrim`, `--color-relief`, `--color-slope-1…5`.
-- The rest of the theme: `--radius-*`, `--shadow-*`
-  (`--shadow-glow` is the halo of the buttons of the dawn), `--shade-*`,
+- The rest of the theme: `--radius-*`; the colours of the shadows
+  (`--shade-card`, `--shade-lift`, `--shade-bar`, and `--shade-edge`,
+  `--shade-edge-lift`, the thin line under a card, a card that lifts, the tab bar);
   `--map-frame`, `--map-veil`, `--sheet-glow`.
+- The map of a track (`features/route/TrackMap`, which stays light at night):
+
+  | Property                         | What paints with it                                                   |
+  | -------------------------------- | --------------------------------------------------------------------- |
+  | `--map-line-from`, `-via`, `-to` | the gradient of the line of the track                                 |
+  | `--map-line`                     | the line where a gradient cannot be drawn (a track due east or north) |
+  | `--map-start`, `--map-finish`    | the dots of the start and of the finish (3:1 on white)                |
+  | `--map-link`                     | the links of the attribution (4.5:1 on white)                         |
+
+- Crête's motifs, which stand in for the slots a skin does not draw: a palette
+  skin that sets these has them in its colours without drawing anything.
+
+  | Property                                                                                           | What paints with it                                                                                               |
+  | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+  | `--motif-ridge-far-from`, `-to`; `--motif-ridge-mid-from`, `-to`; `--motif-ridge-near-from`, `-to` | the three ridges, from their crest to their foot (`HeaderArt`, `HeroArt`; `-near-to` is also the band under them) |
+  | `--motif-ridge-light`                                                                              | the light on the far crests                                                                                       |
+  | `--motif-sun-core`, `-mid`, `-rim`; `--motif-halo-from`, `-to`                                     | the sun over the ridges, and its halo                                                                             |
+  | `--motif-dawn-1`, `-2`, `-3`                                                                       | the sun of the mark of the app (`BrandMark`) and of an empty list (`EmptyArt`)                                    |
+  | `--motif-peak-far`, `--motif-peak-near-from`, `-to`                                                | the two summits of the mark                                                                                       |
+  | `--motif-hill-near-from`, `-to`                                                                    | the near hills of an empty list                                                                                   |
+
 - The paints of the dawn, which Crête writes out and the night leaves alone:
 
   | Property                           | What paints with it                                                                                                    |
@@ -89,6 +122,7 @@ so a skin that sets them is followed everywhere.
   | `--dawn-horizon`                   | the line after `.month-title`                                                                                          |
   | `--dawn-ring-from`, `-via`, `-to`  | the ring of the days left (CountdownRing)                                                                              |
   | `--dawn-chip-glow`                 | the glow under the day of an event (DateChip)                                                                          |
+  | `--dawn-glow-warm`, `-cool`        | the halo of what `--dawn-deep` paints (`shadow-glow`: main buttons, current tab, «+»)                                  |
   | `--focus-glow`                     | the halo of a field with the focus                                                                                     |
   | `--sky-focus`                      | the ring of the focus on the sky                                                                                       |
 
@@ -138,8 +172,8 @@ colours as they are. The tests measure, in every skin and mode: white text on th
 linear stops of `--dawn-sky` and `--dawn-hero` (4.5:1), « S'inscrire » (`iris-700`
 on a white pill, 4.5:1), the notes of an event (`ink` on a frosted card over the
 hero, 4.5:1). A skin with both modes keeps the colours of its day on the sky at
-night (a test, as for Crête): it puts them back the same way, every colour its
-night changes:
+night (a test, as for Crête, checks every property that Crête's night or its own
+changes): it puts them back the same way:
 
 ```css
 :root[data-skin="<id>"] .on-dawn {
@@ -197,8 +231,11 @@ nothing else (a test says so): `@font-face` rules, and `--font-sans`,
   draws nothing in them: no file is requested, none is preloaded (`index.html`
   has no preload) or precached (`public/sw.js` keeps the page only; a file of
   `/assets/` is kept when it is first requested).
-- `fontSample` is the family the picker draws « Aa » in, once loaded: it names a
-  family of this file, and the picker never loads a font.
+- `fontSample` is the `--font-display` stack of the skin's `fonts.css` (Crête's
+  when it has none; a test compares their families): the picker draws « Aa » in
+  it once loaded, and never loads a font to show it.
+- Every family named in a stack of a `fonts.css` is declared by a face, of
+  `styles.css` or of a `fonts.css` (a test checks every folder that has one).
 
 ## Slots (motifs)
 
@@ -240,14 +277,41 @@ the Tailwind classes; the semantic classes carry no style of Crête but
 | `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-on-dawn` | the buttons (`components/buttons.ts`)                       |
 | `.card`, `.month-title`, `.eyebrow`, `.sheet`                   | already in `styles.css`                                     |
 
-`mix.css` and `full.css` hold rules under `:root[data-skin="<id>"] …` only, and set
-no custom property (a test says so: the colours stay in the palette, where the
-contrast tests read them):
+`mix.css` and `full.css` set no custom property (the colours stay in the palette,
+where the contrast tests read them), and every rule is the skin's. The forms they
+may use, and only these (`sheetProblems` in `../test/theme.ts`, tested on sheets of
+its own in `../test/skinSheets.test.ts`, and run on every skin by `../dark.test.ts`):
+
+- A rule whose every selector is `:root[data-skin="<id>"]`, then, for a rule of
+  one mode, `[data-theme="dark"]`, `[data-theme="light"]` or
+  `:not([data-theme="light"])`, then a combinator (a space, `>`, `+`, `~`) and the
+  piece. A list is split at its own commas, not at those of `:is(a, b)` or
+  `:where(…)`, so each of its selectors starts so.
+- Such rules wrapped in `@media`, `@supports` or `@container`, as deep as needed
+  (the night followed: `@media (prefers-color-scheme: dark)` with
+  `:not([data-theme="light"])`; forced colours: `@media (forced-colors: active)`).
+- `@keyframes <id>-<name>`: a name of the skin, since keyframes are global.
+- Nothing else: no rule without the piece (`:root[data-skin="<id>"]` alone is the
+  palette's), no nested rule, no `@font-face`, `@import` or `@layer`.
 
 ```css
 /* mix.css */
 :root[data-skin="<id>"] .event-card {
   border-radius: 0.375rem;
+}
+:root[data-skin="<id>"][data-theme="dark"] .tabbar ul,
+:root[data-skin="<id>"] .tab:is([aria-current="page"], :hover) {
+  box-shadow: none;
+}
+@media (min-width: 48rem) {
+  :root[data-skin="<id>"] .app-header {
+    min-height: 10rem;
+  }
+}
+@keyframes <id>-rise {
+  from {
+    opacity: 0;
+  }
 }
 ```
 
@@ -256,9 +320,18 @@ contrast tests read them):
 `palette` (default), `mix` or `full`, read at build time by `plugin.ts` (from the
 environment, or the `.env` files of Vite's `envDir`), which fails the build on any
 other value. It is a constant of the build: `SKIN_DEPTH` in `index.ts`
-(`BUILD_SKIN_DEPTH`). The plugin points the module `virtual:skin-depth` at
-`depth/<depth>.ts`, whose `import.meta.glob` calls take the files of that level
-and of the ones before it, in order (a deeper sheet wins):
+(`BUILD_SKIN_DEPTH`). The plugin points two modules at the files of the depth,
+whose `import.meta.glob` calls take the files of that level and of the ones before
+it, in order (a deeper sheet wins):
+
+- `virtual:skin-styles` → `depth/<depth>.styles.ts`, the stylesheets. Only
+  `styles.ts` imports it, and only `main.tsx` imports `styles.ts`, right after
+  `styles.css`: the sheets of the skins are in the entry stylesheet, the one the
+  page links, after Crête's. Imported by the registry (which Vite puts in a part
+  shared with the pages), they would be a second stylesheet that every page
+  waits for. A browser test that draws a skin imports `skins/styles` as it imports
+  `styles.css`. The map's sheet stays its own, loaded with the map.
+- `virtual:skin-depth` → `depth/<depth>.ts`, the variants, for the registry.
 
 | Depth     | Stylesheets                                       | Variants              |
 | --------- | ------------------------------------------------- | --------------------- |
@@ -304,9 +377,14 @@ typecheck. `EmptyState` is skinnable already (`_example/mix.tsx` replaces it).
   directory, the table of the skins written in `index.html` and its script
   before the first paint.
 - `components.test.tsx`: `slotted` and `skinnable` in each skin, at the depth of the run.
+- `tokens.test.tsx`: in each skin, Crête's motifs and the map of a track take
+  every colour from a `--motif-*` or `--map-*` property (none written out).
 - `smoke.test.tsx`: every skin × mode, at 320 px: home, an event with its map,
   profile and a dialog, the form, the settings, forced colours; 44 px targets,
-  the marks of the titles, the current tab in the skin's paint.
+  the marks of the titles, the current tab, the «+» and the main button in the
+  skin's paint and halo; the skins' sheets in the page.
+- `../test/skinSheets.test.ts`: the forms a palette, a mix and a full sheet may
+  and may not use (`sheetProblems`), and the stops a gradient may have.
 - `../dark.test.ts`, `../contrast.test.ts`, `../dashed.test.ts`,
   `../features/route/slope.test.ts`: every skin × mode (`SKIN_CASES` of
   `../test/theme.ts`), the sky included, and the guards of the stylesheets

@@ -42,17 +42,20 @@ export function PeakGlyph({ className = "" }: { className?: string }) {
     <svg aria-hidden="true" focusable="false" viewBox="0 0 36 36" className={className}>
       <defs>
         <linearGradient id={sun} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffb38a" />
-          <stop offset="0.55" stopColor="#ff7eb3" />
-          <stop offset="1" stopColor="#8b7cff" />
+          <stop offset="0" style={{ stopColor: "var(--motif-dawn-1)" }} />
+          <stop offset="0.55" style={{ stopColor: "var(--motif-dawn-2)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-dawn-3)" }} />
         </linearGradient>
         <linearGradient id={near} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#5e4ae3" />
-          <stop offset="1" stopColor="#2a2070" />
+          <stop offset="0" style={{ stopColor: "var(--motif-peak-near-from)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-peak-near-to)" }} />
         </linearGradient>
       </defs>
       <circle cx="23.5" cy="17.5" r="6.5" fill={`url(#${sun})`} />
-      <path d="M-1 29 7 20.5l3.5 3L17 13l5.2 8.3 2.3-2.3L37 29v8H-1z" fill="#c9bfff" />
+      <path
+        d="M-1 29 7 20.5l3.5 3L17 13l5.2 8.3 2.3-2.3L37 29v8H-1z"
+        style={{ fill: "var(--motif-peak-far)" }}
+      />
       <path d="M-1 31.5 6 27l4 2 7.5-6.2 5.5 4.6 4-2.6 9 5.7V37H-1z" fill={`url(#${near})`} />
       <path
         d="M4.5 33.2 10 29.6l3.6 1 4-3.3 4.4 2.7"
