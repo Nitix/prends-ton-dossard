@@ -164,7 +164,7 @@ Les migrations de la base s'appliquent au démarrage. Le volume n'est pas touch�
 
 Une instance à part du vrai site (son domaine, son dossier, son volume, son `.env`) peut laisser des curieux entrer sans compte : la page de connexion y montre un bouton « Entrer dans la démo », qui ouvre le compte d'Alice sans rien taper. Ce que les visiteurs y font reste : on ne remet jamais la démo à zéro (voir plus bas pour le faire quand même). **Le vrai site ne définit jamais `DEMO_LOGIN_EMAIL`** : n'importe qui entrerait dans ce compte.
 
-1. **Installer l'instance** comme le vrai site (« Mise en service »), dans son propre dossier, avec son propre `APP_URL` (par exemple `https://demo-prends-ton-dossard.ketra.fr`). Pas de `bootstrap-admin` : la base vient du `seed`.
+1. **Installer l'instance** comme le vrai site (« Mise en service »), dans son propre dossier **au nom différent** de celui du vrai site (par exemple `/opt/ptd-demo`) : Docker Compose nomme le projet et le volume d'après le nom du dossier, et deux dossiers du même nom partageraient la base. Avec son propre `APP_URL` (par exemple `https://demo-prends-ton-dossard.ketra.fr`). Pas de `bootstrap-admin` : la base vient du `seed`.
 
 2. **La remplir des données de test.** Le programme de production refuse `seed` hors de `localhost` sans `--force`. Les comptes ont tous le même mot de passe, qui est public s'il n'est pas donné : en choisir un au hasard, que personne n'a besoin de connaître (le bouton ne le demande pas), garde fermés les comptes Admin et Bob. Il garde aussi le compte d'Alice hors de portée par son email et son mot de passe : les réglages demandent le mot de passe actuel pour changer l'un ou l'autre, et aucun visiteur ne le connaît, donc personne ne peut s'approprier le compte partagé.
 
