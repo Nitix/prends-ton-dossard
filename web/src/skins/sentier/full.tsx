@@ -156,11 +156,10 @@ function EmptyTrail({ title, hint }: VariantPropsOf<"EmptyState">) {
 }
 
 /**
- * The ring of the days left, drawn as nothing: a hidden element (components.test.tsx
- * wants a piece to leave something in its box), with no words, as its base says none.
+ * The ring of the days left, drawn as nothing: the words beside it say the days.
  */
 function NoRing() {
-  return <span hidden aria-hidden="true" className="countdown-ring" />;
+  return null;
 }
 
 export const variants: Variants = {

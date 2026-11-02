@@ -321,6 +321,8 @@ hidden from that search.
 A skin may use the files of another, but the other then holds it:
 
 - `alpage/` imports `../sentier/motifs` (the blaze, the patch, the ridges, the sun);
+- `alpage/full.tsx` imports `terrainOf` from `../sentier/terrain` (the terrain of a
+  race type, from its label);
 - `sentier/` and `alpage/` import `Contours` from `../crete/Alpenglow`, and
   `sentier/motifs.tsx` (so Alpage too) a path of `../crete/motifPaths`;
 - `Contours` draws with the paths of Crête's `MotifDefs`, which `routes/__root.tsx`

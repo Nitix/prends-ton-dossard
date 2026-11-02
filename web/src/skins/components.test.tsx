@@ -84,7 +84,8 @@ async function inApp(element: ReactNode, look?: (drawn: HTMLElement) => void): P
   });
   await router.load();
   const screen = await render(<RouterProvider router={router} />);
-  await expect.poll(() => screen.container.querySelector("[data-drawn] > *")).not.toBeNull();
+  // The box is there once the page is: a variant may draw nothing in it (a ring).
+  await expect.poll(() => screen.container.querySelector("[data-drawn]")).not.toBeNull();
   const box = screen.container.querySelector<HTMLElement>("[data-drawn]");
   if (look && box) look(box);
   const drawn = withoutIds(box?.innerHTML ?? "");

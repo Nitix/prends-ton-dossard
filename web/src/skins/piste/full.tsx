@@ -124,12 +124,10 @@ function NumeralFigures({ figures, altitude }: TrackFiguresProps) {
 
 /**
  * No ring: the days left are in words, in a tag like a bib (`.days-left`), and
- * the ring would only repeat them. It draws a hidden mark rather than nothing
- * at all: the shared test of the pieces (components.test.tsx) waits for
- * something in the box of each one.
+ * the ring would only repeat them.
  */
 function NoRing() {
-  return <span aria-hidden="true" hidden />;
+  return null;
 }
 
 export const variants: Variants = {

@@ -8,9 +8,7 @@ import { useToday } from "../../lib/useToday";
 import { skinnable } from "../../skins/components";
 import type { EventHeroProps } from "../../skins/types";
 import { RegisterLink } from "./RegisterLink";
-import { DAYS_LEFT_SHOWN, registrationLabel, registrationState } from "./registration";
-
-const SEPARATOR = " · ";
+import { deadlineText, registrationState } from "./registration";
 
 /**
  * The top of the page of an event, its hero: its name (the title of the page),
@@ -60,13 +58,7 @@ export function EventHeroBase({ view, heading }: EventHeroProps) {
             className="event-hero-deadline flex items-start gap-2 self-start rounded-2xl bg-(--hero-veil) px-3 py-2 text-sm font-semibold ring-1 ring-white/25"
           >
             <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
-            {/* The deadline and its days left, two texts: `deadlineText` is the same sentence in one, for a variant. */}
-            <span>
-              {registrationLabel(deadline, f, t)}
-              {deadline.kind === "open" &&
-                deadline.daysLeft <= DAYS_LEFT_SHOWN &&
-                `${SEPARATOR}${t.event.daysLeft(deadline.daysLeft)}`}
-            </span>
+            <span>{deadlineText(deadline, f, t)}</span>
           </p>
         )}
         {event.notes && (

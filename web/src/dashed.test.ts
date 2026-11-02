@@ -158,7 +158,11 @@ test("dashed — la pastille d'un participant à confirmer garde 3:1, avec de la
 const DECORATION: readonly { piece: string; why: string; skins?: readonly string[] }[] = [
   { piece: ".bib-tear", why: "the tear-off line of a bib (Dossard)" },
   { piece: ".perforation", why: "the perforation of a ticket (Rétro)" },
-  { piece: ".runner-hero", why: "the ring cut around the photo on a runner's hero (Dossard)" },
+  {
+    piece: ".runner-hero",
+    why: "the ring cut around the photo on a runner's hero (Dossard)",
+    skins: ["dossard"],
+  },
   // Dossard (Task 5): the frame of an empty list, a tear-off line round it.
   { piece: ".empty-state", why: "the dashed frame of an empty list (Dossard)", skins: ["dossard"] },
 ];

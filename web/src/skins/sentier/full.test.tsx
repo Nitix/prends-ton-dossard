@@ -468,8 +468,8 @@ test.skipIf(SKIN_DEPTH !== "full")(
   "« Sentier » full — l'anneau des jours restants ne dessine rien, une liste vide est une carte ouverte sur sa carte de montagne",
   async () => {
     await within(<CountdownRing days={9} />, (drawn) => {
-      // Hidden: it takes no room, and says nothing to a screen reader.
-      expect(styleOf(need(drawn, ".countdown-ring")).display).toBe("none");
+      // Nothing: it takes no room, and says nothing to a screen reader.
+      expect(drawn.childElementCount).toBe(0);
       expect(said(drawn).texts).toEqual([]);
     });
     await within(<EmptyState title="Rien ici" hint="Ajoute-en un." />, (drawn) => {
