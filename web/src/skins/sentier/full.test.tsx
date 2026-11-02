@@ -108,7 +108,7 @@ test.skipIf(SKIN_DEPTH !== "full")(
       (_drawn, root) => {
         const header = need(root, ".app-header").getBoundingClientRect();
         const nav = need(root, ".tabbar").getBoundingClientRect();
-        expect(header.height, "the header").toBe(104);
+        expect(header.height, "the header").toBe(112);
         expect(nav.top).toBeGreaterThanOrEqual(header.top);
         expect(nav.bottom).toBeLessThanOrEqual(header.bottom);
         // The capsule is the pine of the bar, with white words: they read, the current one and the others.
@@ -129,6 +129,42 @@ test.skipIf(SKIN_DEPTH !== "full")(
       },
       { framed: true },
     );
+  },
+);
+
+test.skipIf(SKIN_DEPTH !== "full")(
+  "« Sentier » full — du md, en haut de la page la capsule des onglets reste dans la barre de pin, sous la ligne des crêtes ; défilée, elle flotte sur la page",
+  async () => {
+    for (const width of [1024, 1280]) {
+      await page.viewport(width, 800);
+      await within(
+        <div style={{ height: 3000 }}>Page</div>,
+        (_drawn, root) => {
+          // The cream of the page rises into the bar as the near ridge: its highest point is
+          // the top of that path, in the units of its 120-high box.
+          const ridges = need(root, ".header-ridges");
+          const near = ridges.querySelectorAll("path")[1];
+          if (!(near instanceof SVGPathElement)) throw new Error("no near ridge");
+          const box = ridges.getBoundingClientRect();
+          const crest = box.top + (near.getBBox().y / 120) * box.height;
+          const capsule = need(root, ".tabbar-list").getBoundingClientRect();
+          expect(
+            capsule.bottom,
+            `the capsule ends over the ridge line at ${width} px`,
+          ).toBeLessThanOrEqual(crest);
+          expect(capsule.top, "and under the top of the bar").toBeGreaterThanOrEqual(0);
+          // Scrolled, it floats over the page: the pine pill, at the top of the screen.
+          window.scrollTo(0, 600);
+          const nav = need(root, ".tabbar");
+          expect(styleOf(nav).position).toBe("sticky");
+          const pill = need(root, ".tabbar-list");
+          expect(styleOf(pill).backgroundColor).toBe(colourOf("--color-iris-600"));
+          expect(pill.getBoundingClientRect().top).toBeLessThanOrEqual(16);
+          window.scrollTo(0, 0);
+        },
+        { framed: true },
+      );
+    }
   },
 );
 

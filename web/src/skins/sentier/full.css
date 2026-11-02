@@ -21,14 +21,17 @@
   }
 }
 
-/* From md the tabs are on the pine bar, the name at its left: a bar of 6.5 rem, the
-   sheet of the page rising 1.75 rem over it. The capsule of the tabs is the pine of
-   the bar (it shows as a pill only when the page scrolls under it), its words white,
-   the current one underlined by the blaze. */
+/* From md the tabs are on the pine bar, the name at its left: a bar of 7 rem, the sheet of
+   the page rising 1.75 rem over it. The capsule of the tabs is the pine of the bar (it
+   shows as a pill only when the page scrolls under it), its words white, the current one
+   underlined by the blaze. At the top of the page it stays inside the pine: it is as tall
+   as a tab (no padding, no edge), 44 px from 16, and the bar is tall enough that the cream
+   of the page, which rises into it as the near ridge, starts lower than its foot (the
+   highest point of that ridge is at 64 px, the capsule ends at 60). */
 @media (width >= 48rem) {
   :root[data-skin="sentier"] .app-header-bar {
-    height: 6.5rem;
-    padding-top: 1.375rem;
+    height: 7rem;
+    padding-top: 1.25rem;
   }
   :root[data-skin="sentier"] .app-header .header-ridges {
     height: 2.75rem;
@@ -37,12 +40,13 @@
     bottom: 2.25rem;
   }
   :root[data-skin="sentier"] .tabbar {
-    margin-top: -5.5rem;
-    margin-bottom: 2rem;
+    margin-top: -6rem;
+    margin-bottom: 3.25rem;
   }
   :root[data-skin="sentier"] .tabbar-list {
+    border-width: 0;
+    padding-block: 0;
     background-color: var(--color-iris-600);
-    border-color: transparent;
     box-shadow: 0 8px 24px -12px var(--shade-bar);
   }
   :root[data-skin="sentier"] .tab {
