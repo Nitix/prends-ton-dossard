@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/router"
@@ -92,19 +95,30 @@ func (e *apiError) Error() string {
 // status and the body of the answer. An error is a request that could not be
 // sent: an answer, whatever its status, is not one.
 func (a *innerAPI) do(ctx context.Context, method, path string, body any) (status int, data []byte, err error) {
-	if err := checkRoute(method, path); err != nil {
+	c, err := callerOf(ctx)
+	if err != nil {
 		return 0, nil, err
+	}
+	if err := checkRoute(c.role, method, path); err != nil {
+		return 0, nil, err
+	}
+	var encoded []byte
+	if body != nil {
+		if encoded, err = json.Marshal(body); err != nil {
+			return 0, nil, fmt.Errorf("mcp: encoding the body of %s %s: %w", method, pathOf(path), err)
+		}
+	}
+	if pathOf(path) == batchPath {
+		if encoded, err = checkBatch(c.role, encoded); err != nil {
+			return 0, nil, err
+		}
 	}
 	var reader io.Reader
 	contentType := ""
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return 0, nil, fmt.Errorf("mcp: encoding the body of %s %s: %w", method, pathOf(path), err)
-		}
+	if encoded != nil {
 		reader, contentType = bytes.NewReader(encoded), "application/json"
 	}
-	return a.serve(ctx, method, path, reader, contentType)
+	return a.serve(ctx, c, method, path, reader, contentType)
 }
 
 // get reads path into out: a 2xx answer is decoded, any other is an *apiError.
@@ -125,9 +139,25 @@ func (a *innerAPI) send(ctx context.Context, method, path string, body, out any)
 // sendForm sends a multipart/form-data body, as the site's SDK does for a new
 // file: fields and files. Removing a file is a JSON request ({"avatar": null},
 // {"gpx": null}), as the site does.
+//
+// A batch is never a form: the requests of its form could not be checked.
 func (a *innerAPI) sendForm(ctx context.Context, method, path string, fields map[string]string, files []formFile, out any) error {
-	if err := checkRoute(method, path); err != nil {
+	c, err := callerOf(ctx)
+	if err != nil {
 		return err
+	}
+	if err := checkRoute(c.role, method, path); err != nil {
+		return err
+	}
+	if pathOf(path) == batchPath {
+		return fmt.Errorf("%w: a batch as a form", errRoute)
+	}
+	for _, file := range files {
+		// The media type goes in a header of the part, as it is: a line break
+		// would add one.
+		if strings.ContainsFunc(file.ContentType, unicode.IsControl) {
+			return fmt.Errorf("mcp: the media type of the file %s holds a control character", file.Field)
+		}
 	}
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
@@ -152,15 +182,16 @@ func (a *innerAPI) sendForm(ctx context.Context, method, path string, fields map
 		return fmt.Errorf("mcp: writing the form of %s %s: %w", method, pathOf(path), err)
 	}
 
-	status, data, err := a.serve(ctx, method, path, &body, form.FormDataContentType())
+	status, data, err := a.serve(ctx, c, method, path, &body, form.FormDataContentType())
 	if err != nil {
 		return err
 	}
 	return decode(method, path, status, data, out)
 }
 
-// quoteEscaper escapes a name in a Content-Disposition, as mime/multipart does.
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+// quoteEscaper escapes a name in a Content-Disposition, as mime/multipart does:
+// the quotes, and the line breaks, which would end the header.
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"", "\r", "%0D", "\n", "%0A")
 
 // serve sends the request through the router, as the caller, and returns the
 // answer.
@@ -170,11 +201,7 @@ var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
 // the process. Of the request of the assistant, it carries only what says where
 // it came from (its host, its address, the headers of the trusted proxy): never
 // its Authorization.
-func (a *innerAPI) serve(ctx context.Context, method, path string, body io.Reader, contentType string) (int, []byte, error) {
-	c, err := callerOf(ctx)
-	if err != nil {
-		return 0, nil, err
-	}
+func (a *innerAPI) serve(ctx context.Context, c *caller, method, path string, body io.Reader, contentType string) (int, []byte, error) {
 	a.once.Do(func() { a.mux, a.muxErr = a.router.BuildMux() })
 	if a.muxErr != nil {
 		return 0, nil, fmt.Errorf("mcp: building the router: %w", a.muxErr)
@@ -299,8 +326,8 @@ func pathOf(path string) string {
 // The records that the tools read and write, and what they do with each
 // collection's: list (GET …/records), view (GET …/records/{id}), create (POST
 // …/records), update (PATCH …/records/{id}), delete (DELETE …/records/{id}).
-// The rules of each collection decide what the caller may do; this list only
-// keeps the in-process API from sending anything else.
+// The rules of each collection decide what the caller may do; these lists only
+// keep the in-process API from sending anything else.
 const (
 	recordList   = "list"
 	recordView   = "view"
@@ -309,38 +336,54 @@ const (
 	recordDelete = "delete"
 )
 
-var collectionRoutes = map[string][]string{
+// memberRecords are what the tools of every token do with the records of each
+// collection (spec § 6.3). A member tool that an admin uses on every record
+// (the photo, the name, the passkeys) is one of them.
+var memberRecords = map[string][]string{
 	// The races, their formats, the participations, the comments, the rides
-	// and lodgings (spec § 6.4 to 6.9), and the race types (§ 6.11).
+	// and lodgings (spec § 6.4 to 6.8).
 	"events":         {recordList, recordView, recordCreate, recordUpdate, recordDelete},
 	"formats":        {recordList, recordView, recordCreate, recordUpdate, recordDelete},
 	"participations": {recordList, recordView, recordCreate, recordUpdate, recordDelete},
 	"comments":       {recordList, recordView, recordCreate, recordUpdate, recordDelete},
 	"offers":         {recordList, recordView, recordCreate, recordUpdate, recordDelete},
 	"offer_members":  {recordList, recordView, recordCreate, recordDelete},
-	"race_types":     {recordList, recordView, recordCreate, recordUpdate, recordDelete},
-	// The runners: the reads, the photo and the name (§ 6.9, 6.10), and the
-	// runners without an account of the admin (§ 6.11).
-	"runners": {recordList, recordView, recordCreate, recordUpdate, recordDelete},
+	"race_types":     {recordList, recordView},
+	// The runners: the reads, the photo and the name (§ 6.9, 6.10).
+	"runners": {recordList, recordView, recordUpdate},
 	// The passkeys of the settings (§ 6.10): never made here (WebAuthn needs
 	// the device).
 	"passkeys": {recordList, recordView, recordUpdate, recordDelete},
-	// The pending links of the members page (§ 6.11), without their token.
+}
+
+// adminRecords are what only the admin tools do (spec § 6.11): the call of a
+// member cannot send them, whatever the wiring, and the rules of the site
+// refuse them to a member besides.
+var adminRecords = map[string][]string{
+	// admin_create_race_type, admin_update_race_type, admin_delete_race_type.
+	"race_types": {recordCreate, recordUpdate, recordDelete},
+	// admin_create_runner, admin_delete_runner.
+	"runners": {recordCreate, recordDelete},
+	// admin_list_members: the pending links, without their token.
 	"invitations": {recordList},
-	// The role and the disabling of an account (§ 6.11).
+	// admin_set_role, admin_set_disabled.
 	"users": {recordUpdate},
 }
 
-// otherRoutes are the routes of the site, besides the records, that the tools
-// send requests to. {id} stands for the id of a record.
+// batchPath is the batch of PocketBase: its requests are checked one by one
+// (checkBatch).
+const batchPath = "/api/batch"
+
+// memberRoutes are the routes of the site, besides the records, that the tools
+// of every token send requests to. {id} stands for the id of a record.
 //
 // Never POST /api/app/mcp-tokens: a token does not make a token, whose secret
 // would go through the assistant (spec § 10). The session of an inner request
 // would open that route: this list is what keeps it shut.
-var otherRoutes = []string{
+var memberRoutes = []string{
 	// create_event, update_event: the event, its formats and a participation,
 	// in one transaction, as the form of the site.
-	"POST /api/batch",
+	"POST " + batchPath,
 	// calendar_link.
 	"GET /api/app/calendar",
 	"POST /api/app/calendar",
@@ -348,6 +391,10 @@ var otherRoutes = []string{
 	// mcp_tokens: the list, and a revocation.
 	"GET /api/app/mcp-tokens",
 	"DELETE /api/app/mcp-tokens/{id}",
+}
+
+// adminRoutes are the routes that only the admin tools send requests to.
+var adminRoutes = []string{
 	// admin_create_link, admin_revoke_link.
 	"POST /api/app/invitations",
 	"DELETE /api/app/invitations/{id}",
@@ -356,43 +403,49 @@ var otherRoutes = []string{
 	"POST /api/app/admin/merge-formats",
 }
 
-// route is a method and the segments of a path, where "{id}" matches an id.
+// route is a method and the segments of a path, where "{id}" matches an id,
+// and the role that may send it: an admin sends the routes of a member too.
 type route struct {
 	method   string
 	segments []string
+	role     role
 }
 
 // routes are the requests that the in-process API may send.
 var routes = func() []route {
 	var all []route
-	add := func(method, path string) {
-		all = append(all, route{method: method, segments: strings.Split(strings.TrimPrefix(path, "/"), "/")})
+	add := func(r role, method, path string) {
+		all = append(all, route{method: method, segments: strings.Split(strings.TrimPrefix(path, "/"), "/"), role: r})
 	}
-	for collection, actions := range collectionRoutes {
-		records := "/api/collections/" + collection + "/records"
-		for _, action := range actions {
-			switch action {
-			case recordList:
-				add(http.MethodGet, records)
-			case recordView:
-				add(http.MethodGet, records+"/{id}")
-			case recordCreate:
-				add(http.MethodPost, records)
-			case recordUpdate:
-				add(http.MethodPatch, records+"/{id}")
-			case recordDelete:
-				add(http.MethodDelete, records+"/{id}")
-			default:
-				panic("mcp: unknown action " + action + " on " + collection)
+	for r, records := range map[role]map[string][]string{roleMember: memberRecords, roleAdmin: adminRecords} {
+		for collection, actions := range records {
+			path := "/api/collections/" + collection + "/records"
+			for _, action := range actions {
+				switch action {
+				case recordList:
+					add(r, http.MethodGet, path)
+				case recordView:
+					add(r, http.MethodGet, path+"/{id}")
+				case recordCreate:
+					add(r, http.MethodPost, path)
+				case recordUpdate:
+					add(r, http.MethodPatch, path+"/{id}")
+				case recordDelete:
+					add(r, http.MethodDelete, path+"/{id}")
+				default:
+					panic("mcp: unknown action " + action + " on " + collection)
+				}
 			}
 		}
 	}
-	for _, r := range otherRoutes {
-		method, path, ok := strings.Cut(r, " ")
-		if !ok {
-			panic("mcp: a route without a method: " + r)
+	for r, list := range map[role][]string{roleMember: memberRoutes, roleAdmin: adminRoutes} {
+		for _, line := range list {
+			method, path, ok := strings.Cut(line, " ")
+			if !ok {
+				panic("mcp: a route without a method: " + line)
+			}
+			add(r, method, path)
 		}
-		add(method, path)
 	}
 	return all
 }()
@@ -410,10 +463,11 @@ func isID(s string) bool {
 // errRoute is the refusal of a request that is not one of routes.
 var errRoute = errors.New("mcp: a request that the tools may not send")
 
-// checkRoute refuses a request that is not one of routes: path is a path and a
-// query, never an address, written only in the plain characters of a route and
-// of an id (no dot segment, no escape), and its path is one of the method.
-func checkRoute(method, path string) error {
+// checkRoute refuses a request that is not one of routes for a caller of that
+// role: path is a path and a query, never an address, written only in the plain
+// characters of a route and of an id (no dot segment, no escape), and its path
+// is one of the method.
+func checkRoute(r role, method, path string) error {
 	refuse := func() error {
 		return fmt.Errorf("%w: %s %s", errRoute, method, pathOf(path))
 	}
@@ -423,12 +477,48 @@ func checkRoute(method, path string) error {
 		return refuse()
 	}
 	segments := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
-	for _, r := range routes {
-		if r.method == method && r.matches(segments) {
+	for _, allowed := range routes {
+		if allowed.role <= r && allowed.method == method && allowed.matches(segments) {
 			return nil
 		}
 	}
 	return refuse()
+}
+
+// batchRequest is a request of a batch, as PocketBase reads it
+// (core.InternalRequest), without the headers of its own that it may carry:
+// a tool sends none.
+type batchRequest struct {
+	Method string         `json:"method"`
+	URL    string         `json:"url"`
+	Body   jsontext.Value `json:"body,omitzero"`
+}
+
+// checkBatch checks each request of the body of a batch as checkRoute checks a
+// request: a batch is not a second way in. It returns the body to send, written
+// again from what it checked, so that what PocketBase reads is what was
+// checked. It reads the body strictly: names in their exact case, once each,
+// and nothing else (no headers of a request, which would be sent as they are).
+// A batch in a batch, or a batch without a request, is refused.
+func checkBatch(r role, body []byte) ([]byte, error) {
+	var batch struct {
+		Requests []batchRequest `json:"requests"`
+	}
+	if err := jsonv2.Unmarshal(body, &batch, jsonv2.RejectUnknownMembers(true)); err != nil {
+		return nil, fmt.Errorf("%w: a batch that cannot be read: %v", errRoute, err)
+	}
+	if len(batch.Requests) == 0 {
+		return nil, fmt.Errorf("%w: a batch without a request", errRoute)
+	}
+	for i, request := range batch.Requests {
+		if pathOf(request.URL) == batchPath {
+			return nil, fmt.Errorf("%w: a batch in request %d of a batch", errRoute, i)
+		}
+		if err := checkRoute(r, request.Method, request.URL); err != nil {
+			return nil, fmt.Errorf("%w (request %d of a batch)", err, i)
+		}
+	}
+	return jsonv2.Marshal(batch)
 }
 
 // matches reports whether the segments of a path are the ones of the route.

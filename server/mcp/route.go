@@ -17,7 +17,8 @@
 // the token (limit.go), and is served by one of two servers of the official SDK,
 // the one of the role of the account, read again at each request: a member's has
 // no admin tool at all. The server keeps no session (stateless) and answers in
-// JSON: every request stands alone.
+// JSON: every request stands alone, and holds one message (no JSON-RPC batch,
+// which the limit would count once).
 //
 // # Where the tests live
 //
@@ -27,9 +28,12 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"regexp"
 	"slices"
 	"sync"
 	"time"
@@ -51,7 +55,8 @@ const endpoint = "/mcp"
 const challenge = `Bearer realm="prends-ton-dossard"`
 
 // maxBodyBytes bounds the body of a request: a race of twenty formats is a few
-// kilobytes; a big file goes through the upload route.
+// kilobytes; a big file goes through the upload route. The route reads the body
+// under it, to refuse a batch, before the SDK, which is given it too.
 const maxBodyBytes = 1 << 20
 
 // now is the clock of the package ("today", the limit of the tokens), which the
@@ -125,12 +130,22 @@ func Register(app core.App, cfg config.Config) {
 				remoteAddr: e.Request.RemoteAddr,
 				forwarded:  trustedHeaders(e),
 			}
+			defer func() { e.Set(apis.RequestEventKeyLogMeta, c.logMeta()) }()
+
+			if e.Request.Method == http.MethodPost {
+				body, err := io.ReadAll(http.MaxBytesReader(e.Response, e.Request.Body, maxBodyBytes))
+				var tooLarge *http.MaxBytesError
+				switch {
+				case errors.As(err, &tooLarge):
+					return e.Error(http.StatusRequestEntityTooLarge, "", nil)
+				case err != nil:
+					return e.BadRequestError("", nil)
+				case isBatch(body):
+					return e.JSON(http.StatusBadRequest, batchRefusal)
+				}
+				e.Request.Body = io.NopCloser(bytes.NewReader(body))
+			}
 			handler.ServeHTTP(e.Response, e.Request.WithContext(withCaller(e.Request.Context(), c)))
-			e.Set(apis.RequestEventKeyLogMeta, map[string]any{
-				"mcpToken": token.Id,
-				"mcpUser":  user.Id,
-				"mcpTools": c.loggedCalls(),
-			})
 			return nil
 		}
 		// GET and DELETE are declared too: the SDK answers them 405, where the
@@ -140,6 +155,27 @@ func Register(app core.App, cfg config.Config) {
 		}
 		return se.Next()
 	})
+}
+
+// isBatch reports whether body is a JSON-RPC batch: an array, after the blanks
+// that JSON allows. The SDK serves one when the version of the protocol is
+// missing or older than 2025-06-18, which removed them: one request for the
+// limit of the token, and as many tool calls as fit in the body, all at once.
+// No client of today sends one.
+func isBatch(body []byte) bool {
+	rest := bytes.TrimLeft(body, " \t\r\n")
+	return len(rest) > 0 && rest[0] == '['
+}
+
+// batchRefusal is the answer to a batch: the JSON-RPC error of an invalid
+// request, which has no id to answer.
+var batchRefusal = map[string]any{
+	"jsonrpc": "2.0",
+	"id":      nil,
+	"error": map[string]any{
+		"code":    -32600,
+		"message": "batches are not supported: send one JSON-RPC message per request",
+	},
 }
 
 // trustedHeaders are the headers of the request that the site reads the
@@ -190,8 +226,10 @@ type caller struct {
 	forwarded http.Header
 
 	mu sync.Mutex
-	// calls are the tools called, for the request log.
+	// calls are the tools called, for the request log: maxLoggedCalls at most,
+	// and how many more.
 	calls []toolCall
+	more  int
 }
 
 // toolCall is a tool that a request called, as the request log names it.
@@ -199,10 +237,28 @@ type toolCall struct {
 	Tool string `json:"tool"`
 }
 
+// The names of the tools in the request log. The name is what the assistant
+// sent, before the SDK knows whether such a tool exists: the log keeps it only
+// when it has the shape of the name of a tool, and a few of them, so that an
+// assistant cannot fill the log with what it sends.
+var toolName = regexp.MustCompile(`^[a-z_]{1,64}$`)
+
+const (
+	invalidToolName = "(invalid)"
+	maxLoggedCalls  = 16
+)
+
 // called notes a call of the tool.
 func (c *caller) called(tool string) {
+	if !toolName.MatchString(tool) {
+		tool = invalidToolName
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if len(c.calls) >= maxLoggedCalls {
+		c.more++
+		return
+	}
 	c.calls = append(c.calls, toolCall{Tool: tool})
 }
 
@@ -214,6 +270,22 @@ func (c *caller) loggedCalls() []toolCall {
 		return []toolCall{}
 	}
 	return slices.Clone(c.calls)
+}
+
+// logMeta is the meta of the request log: the token, its account, and the
+// tools called.
+func (c *caller) logMeta() map[string]any {
+	meta := map[string]any{
+		"mcpToken": c.token.Id,
+		"mcpUser":  c.user.Id,
+		"mcpTools": c.loggedCalls(),
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.more > 0 {
+		meta["mcpToolsMore"] = c.more
+	}
+	return meta
 }
 
 // callerKey is the key of the caller in the context of a request.

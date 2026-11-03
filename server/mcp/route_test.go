@@ -181,9 +181,16 @@ func TestMCP_Initialize(t *testing.T) {
 				ServerInfo      struct {
 					Name string `json:"name"`
 				} `json:"serverInfo"`
-				Instructions string `json:"instructions"`
+				Instructions string          `json:"instructions"`
+				Capabilities json.RawMessage `json:"capabilities"`
 			}
 			resultOf(t, body, &result)
+			// Tools, and nothing else: without logging and tools.listChanged,
+			// which the SDK advertises by default, the subscriptions/listen of
+			// the protocol 2026-07-28 does not hold a connection open.
+			if got := string(result.Capabilities); got != `{"tools":{}}` {
+				t.Errorf("capabilities = %s, want {\"tools\":{}}", got)
+			}
 			if result.ServerInfo.Name != "prends-ton-dossard" {
 				t.Errorf("serverInfo.name = %q, want prends-ton-dossard", result.ServerInfo.Name)
 			}
@@ -618,6 +625,159 @@ func waitForRequests(t *testing.T, app *tests.TestApp, want int) []*core.Log {
 			t.Fatalf("%d requests in the log after 5 seconds, want %d", requests, want)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// A JSON-RPC batch would be one request for the limit of the token, and as many
+// tool calls, all at once, as fit in the body: the SDK takes one when the
+// version of the protocol is missing or older than 2025-06-18. The server
+// refuses a batch at every version, and serves a single message at every one.
+func TestMCP_BatchesAreRefused(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	token := newToken(t, app, fx.Alice)
+	counted := mcp.CountInnerRequests(t)
+
+	whoami := func(id int, version string) map[string]any {
+		params := map[string]any{"name": "whoami", "arguments": map[string]any{}}
+		if version >= "2026-07-28" {
+			// The protocol 2026-07-28 says who the client is in every request.
+			params["_meta"] = map[string]any{
+				"io.modelcontextprotocol/protocolVersion":    version,
+				"io.modelcontextprotocol/clientInfo":         map[string]any{"name": "test", "version": "0"},
+				"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+			}
+		}
+		return map[string]any{"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": params}
+	}
+	headers := func(version string) map[string]string {
+		h := map[string]string{}
+		if version != "" {
+			h["MCP-Protocol-Version"] = version
+		}
+		if version >= "2026-07-28" {
+			h["Mcp-Method"] = "tools/call"
+			h["Mcp-Name"] = "whoami"
+		}
+		return h
+	}
+
+	for _, version := range append([]string{""}, mcpsdk.SupportedProtocolVersions()...) {
+		name := version
+		if name == "" {
+			name = "no version"
+		}
+		t.Run(name, func(t *testing.T) {
+			before := counted.Total()
+			batch, err := json.Marshal([]any{whoami(1, version), whoami(2, version)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// With blanks before it, as JSON allows.
+			_, body := send(t, app, http.MethodPost, bearer(token), headers(version), " \n\t"+string(batch), http.StatusBadRequest)
+			if !strings.Contains(body, `"code":-32600`) || !strings.Contains(body, "batch") {
+				t.Errorf("the batch is answered %.200s, want the refusal of the server", body)
+			}
+			if got := counted.Total() - before; got != 0 {
+				t.Errorf("the batch made %d inner requests, want none", got)
+			}
+
+			single, err := json.Marshal(whoami(1, version))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, body = send(t, app, http.MethodPost, bearer(token), headers(version), string(single), http.StatusOK)
+			var result struct {
+				IsError           bool           `json:"isError"`
+				StructuredContent map[string]any `json:"structuredContent"`
+			}
+			resultOf(t, body, &result)
+			if result.IsError || result.StructuredContent["role"] != "member" {
+				t.Errorf("a single call of whoami answers %.200s", body)
+			}
+		})
+	}
+}
+
+// The name of a tool in the request log is the one that was asked when it has
+// the shape of a tool's name, else a mark: an assistant does not fill the log
+// with what it sends. And there are a few at most.
+func TestMCP_LoggedToolNamesAreBounded(t *testing.T) {
+	t.Run("the names", func(t *testing.T) {
+		long := strings.Repeat("a", 64)
+		got, more := mcp.NoteCalls("whoami", "admin_merge", long, long+"a", "Whoami", "", "who ami", "whoami\n", "tool2")
+		want := []string{"whoami", "admin_merge", long, "(invalid)", "(invalid)", "(invalid)", "(invalid)", "(invalid)", "(invalid)"}
+		if !slices.Equal(got, want) || more != 0 {
+			t.Errorf("logged %q (%d more), want %q", got, more, want)
+		}
+	})
+
+	t.Run("how many", func(t *testing.T) {
+		names := make([]string, 20)
+		for i := range names {
+			names[i] = "whoami"
+		}
+		got, more := mcp.NoteCalls(names...)
+		if len(got) != 16 || more != 4 {
+			t.Errorf("20 calls: %d logged and %d more, want 16 and 4", len(got), more)
+		}
+	})
+
+	t.Run("through /mcp", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		app.Settings().Logs.MaxDays = 5 // the logs are off in a test application
+		token := newToken(t, app, fx.Alice)
+
+		_, body := rpc(t, app, bearer(token), http.StatusOK, "tools/call", map[string]any{"name": strings.Repeat("x", 100_000), "arguments": map[string]any{}})
+		if !strings.Contains(body, `"code":-32602`) {
+			t.Errorf("a tool that does not exist is answered %.200s", body)
+		}
+
+		// PocketBase cuts an entry that is too big, and keeps a mark of it:
+		// wait for the message, which it keeps.
+		var entry *core.Log
+		deadline := time.Now().Add(5 * time.Second)
+		for entry == nil && time.Now().Before(deadline) {
+			for _, e := range testutil.RequestLogs(t, app, 0) {
+				if e.Message == "POST /mcp" {
+					entry = e
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if entry == nil {
+			t.Fatal("no POST /mcp in the log after 5 seconds")
+		}
+		if entry.Data["__pb_truncated__"] != nil {
+			t.Error("the entry was too big for the log, which cut it")
+		}
+		meta, _ := entry.Data["meta"].(map[string]any)
+		tools, _ := json.Marshal(meta["mcpTools"])
+		if string(tools) != `[{"tool":"(invalid)"}]` {
+			t.Errorf("meta.mcpTools = %.200s, want the mark", tools)
+		}
+	})
+}
+
+// A body over 1 MiB is refused, before it is read further: a race of twenty
+// formats is a few kilobytes.
+func TestMCP_BodyLimit(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	token := newToken(t, app, fx.Alice)
+
+	ping := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+	padded := func(size int) string {
+		return ping + strings.Repeat(" ", size-len(ping))
+	}
+	extra := map[string]string{"MCP-Protocol-Version": protocolVersion}
+	send(t, app, http.MethodPost, bearer(token), extra, padded(1<<20), http.StatusOK)
+	// The refusal of the route, which reads the body before the SDK: it does
+	// not read more than the limit.
+	_, body := send(t, app, http.MethodPost, bearer(token), extra, padded(1<<20+1), http.StatusRequestEntityTooLarge)
+	if !strings.Contains(body, `"status":413`) {
+		t.Errorf("the body over the limit is answered %.200s, want the route's refusal", body)
 	}
 }
 

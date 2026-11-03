@@ -1,8 +1,12 @@
 package mcp_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -230,6 +234,153 @@ func TestInner_Refusals(t *testing.T) {
 	// The batch is one transaction: its first request is not written either.
 	if events, err := app.FindAllRecords("events", dbx.HashExp{"name": "Trail d'essai"}); err != nil || len(events) != 0 {
 		t.Errorf("the event of the failed batch is there: %d (%v)", len(events), err)
+	}
+}
+
+// A batch is checked request by request against the same list: it is not a
+// second way in. What is sent is what was checked.
+func TestInner_BatchRequestsAreChecked(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	counted := mcp.CountInnerRequests(t)
+
+	event := map[string]any{"name": "Trail d'essai", "location": "Annecy", "start_date": "2026-09-12"}
+	request := func(method, url string, body any) map[string]any {
+		return map[string]any{"method": method, "url": url, "body": body}
+	}
+	batch := func(requests ...map[string]any) map[string]any {
+		return map[string]any{"requests": requests}
+	}
+	const events = "/api/collections/events/records"
+
+	inside(t, app, func(t testing.TB, inner *mcp.InnerAPI, as func(*core.Record) context.Context) {
+		for _, row := range []struct {
+			name string
+			body any
+		}{
+			{"a collection that is not in the list", batch(request(http.MethodPost, events, event), request(http.MethodPost, "/api/collections/mcp_tokens/records", map[string]any{"name": "x"}))},
+			{"an upsert", batch(request(http.MethodPut, events, event))},
+			{"a method in lower case", batch(request("post", events, event))},
+			{"a batch in a batch", batch(request(http.MethodPost, "/api/batch", batch(request(http.MethodPost, events, event))))},
+			{"a route of the admin, for a member", batch(request(http.MethodPost, "/api/collections/race_types/records", map[string]any{"label": "Essai"}))},
+			{"an id that is not one", batch(request(http.MethodPatch, events+"/x", event))},
+			{"headers of its own", batch(map[string]any{"method": http.MethodPost, "url": events, "body": event, "headers": map[string]any{"X-Forwarded-For": "203.0.113.1"}})},
+			{"two urls that differ by case", map[string]any{"requests": []any{json.RawMessage(`{"method":"POST","url":"/api/collections/events/records","URL":"/api/collections/mcp_tokens/records","body":{}}`)}}},
+			{"no request", batch()},
+			{"no body", nil},
+		} {
+			if err := inner.Send(as(fx.Alice), http.MethodPost, "/api/batch", row.body, nil); err == nil || errors.As(err, new(*mcp.APIError)) {
+				t.Errorf("%s: %v, want a refusal before the API", row.name, err)
+			}
+		}
+		// A batch is never a form: its requests could not be read.
+		if err := inner.SendForm(as(fx.Alice), http.MethodPost, "/api/batch", map[string]string{"@jsonPayload": `{"requests":[]}`}, nil, nil); err == nil {
+			t.Error("a batch was sent as a form")
+		}
+		if got := counted.Total(); got != 0 {
+			t.Errorf("%d inner requests were sent, want none", got)
+		}
+
+		// A batch of the list goes, as it was checked.
+		var answer []struct {
+			Status int `json:"status"`
+		}
+		if err := inner.Send(as(fx.Alice), http.MethodPost, "/api/batch", batch(request(http.MethodPost, events, event)), &answer); err != nil {
+			t.Fatalf("a batch of the list: %v", err)
+		}
+		if len(answer) != 1 || answer[0].Status != http.StatusOK {
+			t.Errorf("a batch of the list answers %+v", answer)
+		}
+	})
+	if events, err := app.FindAllRecords("events", dbx.HashExp{"name": "Trail d'essai"}); err != nil || len(events) != 1 {
+		t.Errorf("%d events made by the batch (%v), want 1", len(events), err)
+	}
+	if tokens, err := app.FindAllRecords("mcp_tokens", dbx.HashExp{"user": fx.Alice.Id}); err != nil || len(tokens) != 0 {
+		t.Errorf("Alice has %d tokens (%v), want none", len(tokens), err)
+	}
+}
+
+// The routes of the admin tools are refused to a member's call before the API,
+// whose rules refuse them too: a mistake of the wiring is not enough to open
+// one (spec § 6.3).
+func TestInner_AdminRoutesNeedAnAdmin(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	counted := mcp.CountInnerRequests(t)
+
+	routes := []struct {
+		method, path string
+		body         any
+	}{
+		{http.MethodPatch, "/api/collections/users/records/" + fx.Bob.Id, map[string]any{}},
+		{http.MethodGet, "/api/collections/invitations/records", nil},
+		{http.MethodPost, "/api/collections/runners/records", map[string]any{"name": "Julie"}},
+		{http.MethodDelete, "/api/collections/runners/records/" + fx.SamRunner.Id, nil},
+		{http.MethodPost, "/api/collections/race_types/records", map[string]any{"label": "Essai"}},
+		{http.MethodPatch, "/api/collections/race_types/records/" + fx.Trail.Id, map[string]any{}},
+		{http.MethodDelete, "/api/collections/race_types/records/" + fx.Backyard.Id, nil},
+		{http.MethodPost, "/api/app/invitations", map[string]any{}},
+		{http.MethodDelete, "/api/app/invitations/" + strings.Repeat("a", 15), nil},
+		{http.MethodPost, "/api/app/admin/merge-events", map[string]any{}},
+		{http.MethodPost, "/api/app/admin/merge-formats", map[string]any{}},
+	}
+	inside(t, app, func(t testing.TB, inner *mcp.InnerAPI, as func(*core.Record) context.Context) {
+		for _, r := range routes {
+			if _, _, err := inner.Do(as(fx.Alice), r.method, r.path, r.body); err == nil {
+				t.Errorf("a member's call sent %s %s", r.method, r.path)
+			}
+		}
+		if got := counted.Total(); got != 0 {
+			t.Fatalf("a member's calls sent %d requests, want none", got)
+		}
+
+		// An admin's reach the API, which decides.
+		for _, r := range routes {
+			if _, _, err := inner.Do(as(fx.Admin), r.method, r.path, r.body); err != nil {
+				t.Errorf("an admin's call of %s %s was not sent: %v", r.method, r.path, err)
+			}
+		}
+		if got := counted.Total(); got != len(routes) {
+			t.Errorf("an admin's calls sent %d requests, want %d", got, len(routes))
+		}
+
+		// A route of every token is a member's too.
+		if err := inner.Get(as(fx.Alice), "/api/collections/race_types/records", nil); err != nil {
+			t.Errorf("a member reads the race types: %v", err)
+		}
+	})
+}
+
+// The name of a file is escaped as mime/multipart escapes it, line breaks
+// included, and a media type with a control character is refused: neither can
+// add a header to the part.
+func TestInner_FormHeaders(t *testing.T) {
+	for _, name := range []string{`trace.gpx`, `a "quoted" name`, `back\slash`, "two\r\nlines: x", "piste é.gpx"} {
+		var body bytes.Buffer
+		form := multipart.NewWriter(&body)
+		if _, err := form.CreateFormFile("gpx", name); err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf(`form-data; name="gpx"; filename="%s"`, mcp.QuoteEscape(name))
+		if !strings.Contains(body.String(), "Content-Disposition: "+want+"\r\n") {
+			t.Errorf("%q: mime/multipart writes %q, the package %q", name, body.String(), want)
+		}
+	}
+
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	counted := mcp.CountInnerRequests(t)
+	inside(t, app, func(t testing.TB, inner *mcp.InnerAPI, as func(*core.Record) context.Context) {
+		for _, contentType := range []string{"image/png\r\nX-Injected: 1", "image/png\n", "image/\x00png"} {
+			err := inner.SendForm(as(fx.Alice), http.MethodPatch, "/api/collections/runners/records/"+fx.AliceRunner.Id, nil,
+				[]mcp.FormFile{{Field: "avatar", Name: "alice.png", ContentType: contentType, Data: testutil.PNG(t, 4, 4)}}, nil)
+			if err == nil {
+				t.Errorf("the media type %q was sent", contentType)
+			}
+		}
+	})
+	if got := counted.Total(); got != 0 {
+		t.Errorf("%d inner requests were sent, want none", got)
 	}
 }
 

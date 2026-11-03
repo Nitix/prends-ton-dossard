@@ -154,5 +154,21 @@ func AddMemberTool(t testing.TB, name string, handler func()) {
 	t.Cleanup(func() { memberTools = previous })
 }
 
+// NoteCalls notes the calls of these tools in a caller, and returns the tools
+// that its request log names, and how many more it was called.
+func NoteCalls(names ...string) (logged []string, more int) {
+	c := &caller{}
+	for _, name := range names {
+		c.called(name)
+	}
+	for _, call := range c.loggedCalls() {
+		logged = append(logged, call.Tool)
+	}
+	return logged, c.more
+}
+
+// QuoteEscape is how a name is written in the Content-Disposition of a part.
+func QuoteEscape(s string) string { return quoteEscaper.Replace(s) }
+
 // InputSchema is inputSchema.
 func InputSchema[T any](enums map[string][]string) *jsonschema.Schema { return inputSchema[T](enums) }
