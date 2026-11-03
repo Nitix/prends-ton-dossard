@@ -117,7 +117,7 @@ export const en = {
   mcp: {
     title: "AI assistant (MCP)",
     intro:
-      "A token lets an AI assistant (Claude Code, Claude Desktop…) do on the site what you do there, in your name, without opening it. Everything it does is signed with your name, and it asks for your agreement before deleting anything. It can do nothing more than you: administration only if you are an admin, and never your password or your email.",
+      "A token lets an AI assistant (Claude Code, Claude Desktop…) do on the site what you do there, in your name, without opening it. Everything it does is signed with your name, and it asks for your agreement before deleting anything. It can do nothing more than you: administration only if you are an admin, and never your password or your email. Changing your password or your email revokes all your tokens.",
     empty: "No tokens yet.",
     created: (date: string) => `Created on ${date}`,
     lastUsed: (date: string) => `Used on ${date}`,

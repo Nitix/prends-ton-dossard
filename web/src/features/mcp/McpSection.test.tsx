@@ -281,6 +281,8 @@ test("McpSection — sans jeton, « Aucun jeton pour l'instant. » et « Nouveau
 
   await expect.element(section(screen)).toHaveAccessibleName(fr.mcp.title);
   await expect.element(section(screen).getByText(fr.mcp.intro)).toBeVisible();
+  // The server deletes the tokens when the password or the email changes: the section says so.
+  expect(fr.mcp.intro).toContain("Changer ton mot de passe ou ton email révoque tous tes jetons.");
   await expect.element(section(screen).getByText(fr.mcp.empty)).toBeVisible();
   const create = button(screen, fr.mcp.create);
   await expect.element(create).toBeVisible();

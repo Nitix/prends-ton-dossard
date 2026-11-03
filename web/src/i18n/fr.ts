@@ -135,7 +135,7 @@ export const fr = {
   mcp: {
     title: "Assistant IA (MCP)",
     intro:
-      "Un jeton laisse un assistant IA (Claude Code, Claude Desktop…) faire sur le site ce que tu y fais, en ton nom, sans l'ouvrir. Tout ce qu'il fait est signé de ton nom, et il te demande ton accord avant de supprimer quoi que ce soit. Il ne peut rien de plus que toi : l'administration seulement si tu es admin, et jamais ton mot de passe ni ton email.",
+      "Un jeton laisse un assistant IA (Claude Code, Claude Desktop…) faire sur le site ce que tu y fais, en ton nom, sans l'ouvrir. Tout ce qu'il fait est signé de ton nom, et il te demande ton accord avant de supprimer quoi que ce soit. Il ne peut rien de plus que toi : l'administration seulement si tu es admin, et jamais ton mot de passe ni ton email. Changer ton mot de passe ou ton email révoque tous tes jetons.",
     empty: "Aucun jeton pour l'instant.",
     created: (date: string) => `Créé le ${date}`,
     lastUsed: (date: string) => `Utilisé le ${date}`,
