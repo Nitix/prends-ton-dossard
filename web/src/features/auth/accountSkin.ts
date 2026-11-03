@@ -59,21 +59,34 @@ function forgetUnsaved(): void {
 /** The saves on their way: they go one after the other, so that the last choice is the one the account keeps. */
 let saving: Promise<void> = Promise.resolve();
 
+/** How many saves are on their way: the device forgets that the account is behind when the last one is done. */
+let inFlight = 0;
+
+/** Settles when the saves on their way have, successfully or not (for a test, or whoever needs the account to be told). */
+export const whenSaved = (): Promise<void> => saving;
+
 /**
- * Tells the account the skin chosen. A failure (offline, the server's refusal)
- * is not thrown: the device keeps the choice, and remembers that the account
- * does not have it.
+ * Tells the account the skin chosen. The device marks the account as not told
+ * before the update leaves, and forgets it when the last one has succeeded: an
+ * update that never ends, because the app was killed (an iPhone's, swiped
+ * away), leaves the mark, and the next start sends the device's skin instead of
+ * reading the account's older one. A failure (offline, the server's refusal) is
+ * not thrown: the device keeps the choice, and the mark.
  */
 function save(userId: string, skin: string): Promise<void> {
+  markUnsaved(userId);
+  inFlight++;
   const previous = saving;
   saving = (async () => {
     // It never rejects: the previous save has caught its own failure.
     await previous;
     try {
       await pb.collection("users").update(userId, { skin });
-      forgetUnsaved();
+      inFlight--;
+      // Not while a later choice is still on its way: it is what the account lacks.
+      if (inFlight === 0) forgetUnsaved();
     } catch {
-      markUnsaved(userId);
+      inFlight--;
     }
   })();
   return saving;

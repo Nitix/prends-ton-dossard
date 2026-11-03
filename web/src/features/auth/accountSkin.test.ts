@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import type { UserRecord } from "../../lib/types";
 import { SKIN_KEY, SKINS, chooseSkin, readSkin } from "../../skins";
-import { UNSAVED_KEY, chooseSkinOnAccount, syncAccountSkin } from "./accountSkin";
+import { UNSAVED_KEY, chooseSkinOnAccount, syncAccountSkin, whenSaved } from "./accountSkin";
 
 // The skin follows the account: chosen in the settings, it is kept on the
 // account as well as on the device; at sign-in and when a session is restored,
@@ -77,7 +77,23 @@ beforeEach(async () => {
   await chooseSkin("crete");
 });
 
-afterEach(() => {
+/** The updates that a test holds back, opened when it ends: a failed test does not leave the chain of saves stuck for the next. */
+const held: PromiseWithResolvers<void>[] = [];
+
+/** An update that waits until the test opens it. */
+function holdUpdate(): PromiseWithResolvers<void> {
+  const gate = Promise.withResolvers<void>();
+  held.push(gate);
+  server.update.mockImplementationOnce(async () => {
+    await gate.promise;
+  });
+  return gate;
+}
+
+afterEach(async () => {
+  for (const gate of held.splice(0)) gate.resolve();
+  // What was held has finished before the stand-ins go: it would write into the next test's storage.
+  await whenSaved();
   vi.unstubAllGlobals();
 });
 
@@ -155,10 +171,7 @@ test("compte — personne de connecté : le choix vaut pour l'appareil, rien n'e
 });
 
 test("compte — deux choix qui se suivent sont enregistrés dans l'ordre, le second quand le premier est parti", async () => {
-  const release = Promise.withResolvers<void>();
-  server.update.mockImplementationOnce(async () => {
-    await release.promise;
-  });
+  const release = holdUpdate();
   const one = chooseSkinOnAccount(A, "u1");
   await vi.waitFor(() => {
     expect(server.update).toHaveBeenCalledTimes(1);
@@ -187,6 +200,72 @@ test("compte — hors ligne : l'appareil garde le choix, sans erreur, et se souv
   await chooseSkinOnAccount(B, "u1");
   expect(server.update).toHaveBeenLastCalledWith("u1", { skin: B });
   expect(stored.has(UNSAVED_KEY)).toBe(false);
+});
+
+// An envoi coupé en route (l'appli d'un iPhone, glissée hors de l'écran) n'est
+// ni un succès ni une erreur que l'appli verrait : l'appareil doit déjà savoir
+// que le compte n'a pas le choix.
+test("compte — le choix est marqué non reçu avant que l'envoi parte, et la marque s'efface au succès", async () => {
+  const release = holdUpdate();
+
+  const choosing = chooseSkinOnAccount(A, "u1");
+  await vi.waitFor(() => {
+    expect(server.update).toHaveBeenCalledTimes(1);
+  });
+  // In flight: the app could be killed now.
+  expect(stored.get(UNSAVED_KEY)).toBe("u1");
+
+  release.resolve();
+  await choosing;
+  expect(stored.has(UNSAVED_KEY)).toBe(false);
+});
+
+test("compte — un envoi qui aboutit pendant qu'un autre attend ne fait pas oublier celui qui attend", async () => {
+  const gateOne = holdUpdate();
+  const gateTwo = holdUpdate();
+
+  const one = chooseSkinOnAccount(A, "u1");
+  await vi.waitFor(() => {
+    expect(server.update).toHaveBeenCalledTimes(1);
+  });
+  const two = chooseSkinOnAccount(B, "u1");
+  await vi.waitFor(() => {
+    expect(root.dataset.skin).toBe(B);
+  });
+
+  gateOne.resolve();
+  await one;
+  await vi.waitFor(() => {
+    expect(server.update).toHaveBeenCalledTimes(2);
+  });
+  // The first choice reached the account; the last one has not: killed now, it would be lost.
+  expect(stored.get(UNSAVED_KEY)).toBe("u1");
+
+  gateTwo.resolve();
+  await two;
+  expect(stored.has(UNSAVED_KEY)).toBe(false);
+});
+
+test("compte — un envoi coupé en route : à la reprise, le choix de l'appareil passe avant le thème plus ancien du compte", async () => {
+  // The app is killed mid-flight: that page's update is held, as if it never ended
+  // (the test opens it at the end, for the next test's sake), and the page is gone.
+  holdUpdate();
+  void chooseSkinOnAccount(A, "u1");
+  await vi.waitFor(() => {
+    expect(server.update).toHaveBeenCalledTimes(1);
+  });
+  expect(device()).toBe(A);
+
+  // The next start is a page of its own: the modules are new, the device is the same.
+  vi.resetModules();
+  const next = await import("./accountSkin");
+  server.update.mockClear();
+  server.update.mockResolvedValue({});
+  // The account still has the older skin.
+  await next.syncAccountSkin(user("u1", B));
+
+  expect(device()).toBe(A);
+  expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: A });
 });
 
 // Signing in, restoring a session
