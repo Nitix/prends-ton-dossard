@@ -1050,6 +1050,21 @@ func TestRules_UserSkin(t *testing.T) {
 			Contains:    []string{`"totalItems":0`},
 			NotContains: []string{`"name":"Alice"`},
 		},
+		{
+			// The control of the row above: the same filter, asked by somebody who
+			// may read her account, finds her runner. Without it, a filter that
+			// matched nothing for another reason (a field that is not there, a
+			// quote that is not understood) would pass as well.
+			Name:   "an admin finds alice by the skin of her account",
+			As:     "admin",
+			Before: aliceChose,
+			Method: http.MethodGet,
+			URL: func(testutil.Fixture) string {
+				return "/api/collections/runners/records?filter=user.skin%3D%27nuit%27"
+			},
+			Status:   http.StatusOK,
+			Contains: []string{`"totalItems":1`, `"name":"Alice"`},
+		},
 	}
 	// The shape of an id, as the migration sets it.
 	for _, bad := range []string{
