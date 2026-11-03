@@ -124,6 +124,32 @@ func TestMCPTokens_DisablingTheAccountDeletesItsTokens(t *testing.T) {
 		}
 	})
 
+	// A disabled account should have no token, but one can be there: made for
+	// the account while it was disabled (Create does not look), or left by a
+	// disabling whose deletion failed after the update was committed, or made
+	// between the update and the deletion. Enabling the account must not bring
+	// it back to life.
+	t.Run("a token on a disabled account is gone once it is enabled again", func(t *testing.T) {
+		w := newWorld(t)
+		patchAccount(t, w.app, w.fx.Admin, w.fx.Bob.Id, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
+		leftover, _ := mustCreate(t, w.app, w.fx.Bob, "Claude")
+		if accepted(w.app, leftover, w.fx.Bob) {
+			t.Fatal("the test needs a token that a disabled account does not get through with")
+		}
+
+		patchAccount(t, w.app, w.fx.Admin, w.fx.Bob.Id, `{"disabled":false}`, http.StatusOK, `"disabled":false`)
+
+		if got := tokenCount(t, w.app, w.fx.Bob); got != 0 {
+			t.Errorf("Bob has %d tokens after being enabled again, want none", got)
+		}
+		if accepted(w.app, leftover, w.fx.Bob) {
+			t.Errorf("the token %s... that was made for a disabled account works once it is enabled", first8(leftover))
+		}
+		if got := tokenCount(t, w.app, w.fx.Alice); got != 2 {
+			t.Errorf("Alice has %d tokens, want her 2", got)
+		}
+	})
+
 	t.Run("an update that does not disable keeps the tokens", func(t *testing.T) {
 		w := newWorld(t)
 

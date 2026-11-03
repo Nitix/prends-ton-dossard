@@ -48,6 +48,23 @@ func validationCode(err error, field string) string {
 	return fieldErr.Code()
 }
 
+// idOf and collectionOf are what a test message says of a record: never the
+// record itself, whose printout holds its fields (the hash of a token; the
+// email, the password hash and the token key of an account).
+func idOf(record *core.Record) string {
+	if record == nil {
+		return "no record"
+	}
+	return record.Id
+}
+
+func collectionOf(record *core.Record) string {
+	if record == nil {
+		return "no collection"
+	}
+	return record.Collection().Name
+}
+
 // first8 is all that a test may print of a token.
 func first8(token string) string {
 	if len(token) > 8 {
@@ -77,7 +94,7 @@ func TestMCPTokens_CreateGivesTheSecretOnce(t *testing.T) {
 	sum := sha256.Sum256([]byte(secret))
 	wantHash := hex.EncodeToString(sum[:])
 	if got := record.GetString("token_hash"); got != wantHash {
-		t.Errorf("token_hash = %q, want the SHA-256 of the secret, %q", got, wantHash)
+		t.Errorf("the token_hash of the returned record is not the SHA-256 of the secret")
 	}
 	if record.GetString("user") != fx.Alice.Id || record.GetString("name") != "Claude" {
 		t.Errorf("the record is for user %q named %q, want Alice and Claude", record.GetString("user"), record.GetString("name"))
@@ -93,7 +110,7 @@ func TestMCPTokens_CreateGivesTheSecretOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := stored.GetString("token_hash"); got != wantHash {
-		t.Errorf("the stored token_hash = %q, want %q", got, wantHash)
+		t.Errorf("the token_hash of the stored record is not the SHA-256 of the secret")
 	}
 	for _, r := range map[string]*core.Record{"returned": record, "stored": stored} {
 		fields, err := json.Marshal(r.FieldsData())
@@ -222,10 +239,10 @@ func TestMCPTokens_Authenticate(t *testing.T) {
 				wantUser, wantToken = fx.Bob, bobRecord
 			}
 			if user == nil || user.Id != wantUser.Id || user.Collection().Name != "users" {
-				t.Errorf("the account is %v, want %s (%s)", user, row.wantUser, wantUser.Id)
+				t.Errorf("the account is %s (%s), want %s (%s)", idOf(user), collectionOf(user), row.wantUser, wantUser.Id)
 			}
 			if token == nil || token.Id != wantToken.Id || token.Collection().Name != "mcp_tokens" {
-				t.Errorf("the token is %v, want the record %s", token, wantToken.Id)
+				t.Errorf("the token is the record %s (%s), want %s", idOf(token), collectionOf(token), wantToken.Id)
 			}
 			// Checking a token records nothing: that is Touch.
 			stored, err := app.FindRecordById("mcp_tokens", wantToken.Id)

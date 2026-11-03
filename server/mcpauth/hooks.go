@@ -33,6 +33,13 @@ func Register(app core.App, cfg config.Config) {
 	// A disabled account has no token: they are deleted with the update that
 	// disables it, and do not come back when the account is enabled again, as
 	// the sessions that the disabling closes do not.
+	//
+	// They are deleted when the account is enabled again too. None should be
+	// there then, and one can be: a deletion that failed after the update was
+	// committed (a request has no transaction around its update), a token made
+	// between the update and the deletion, or one made for the account while it
+	// was disabled. Without this, that token would work again, which is what the
+	// deletion is for.
 	app.OnRecordUpdate("users").BindFunc(func(e *core.RecordEvent) error {
 		// The account as it is stored, as the guards of the accounts package do:
 		// not Record.Original, which is stale for a record that was changed and
@@ -49,7 +56,7 @@ func Register(app core.App, cfg config.Config) {
 		if err := e.Next(); err != nil {
 			return err
 		}
-		if before.GetBool("disabled") || !e.Record.GetBool("disabled") {
+		if before.GetBool("disabled") == e.Record.GetBool("disabled") {
 			return nil
 		}
 		return deleteTokensOf(e.App, e.Record.Id)
