@@ -6,12 +6,19 @@ import "./styles.css";
 // What can be clicked shows the hand, as a link does: Tailwind 4 gives buttons
 // the arrow of the system. What cannot be clicked keeps its own cursor.
 
-test("cursor — un bouton, un menu dépliant, une case et la carte qui la porte montrent la main ; un bouton désactivé, non", async () => {
+test("cursor — un bouton, un menu dépliant, une case et la carte qui la porte montrent la main ; un bouton désactivé, ou « aria-disabled », non", async () => {
   const screen = await render(
     <div>
       <button type="button">Enregistrer</button>
       <button type="button" disabled>
         Bientôt
+      </button>
+      {/* The project's own way to say a button is busy or out of reach (it keeps the focus). */}
+      <button type="button" aria-disabled="true">
+        Occupé
+      </button>
+      <button type="button" aria-disabled="false">
+        Libre
       </button>
       <details>
         <summary>Plus</summary>
@@ -36,8 +43,10 @@ test("cursor — un bouton, un menu dépliant, une case et la carte qui la porte
     return getComputedStyle(found).cursor;
   };
   expect({
-    button: cursor("button:not(:disabled)"),
+    button: cursor("button:not(:disabled):not([aria-disabled])"),
     disabled: cursor("button:disabled"),
+    ariaDisabled: cursor('button[aria-disabled="true"]'),
+    ariaEnabled: cursor('button[aria-disabled="false"]'),
     summary: cursor("summary"),
     select: cursor("select"),
     radio: cursor('input[type="radio"]'),
@@ -47,6 +56,8 @@ test("cursor — un bouton, un menu dépliant, une case et la carte qui la porte
   }).toEqual({
     button: "pointer",
     disabled: "not-allowed",
+    ariaDisabled: "not-allowed",
+    ariaEnabled: "pointer",
     summary: "pointer",
     select: "pointer",
     radio: "pointer",
