@@ -29,7 +29,7 @@ export function ParticipantChips({
 
   if (participations.length === 0) return null;
   return (
-    <ul aria-label={label ?? t.event.participants} className="flex flex-wrap gap-y-1 pl-1.5">
+    <ul aria-label={label ?? t.event.participants} className="chips flex flex-wrap gap-y-1 pl-1.5">
       {participations.map(({ participation, runner, addedBy }) => {
         const confirmed = participation.confirmed;
         const title = confirmed || !addedBy ? runner.name : t.event.addedBy(addedBy.name);
@@ -37,9 +37,10 @@ export function ParticipantChips({
           <li
             key={participation.id}
             title={title}
-            className={`-ml-1.5 inline-flex size-9 items-center justify-center rounded-full text-xs font-bold shadow-[0_0_0_2.5px_var(--color-card)] ${
+            data-confirmed={confirmed}
+            className={`chip -ml-1.5 inline-flex size-9 items-center justify-center rounded-full text-xs font-bold shadow-[0_0_0_2.5px_var(--color-card)] ${
               confirmed
-                ? "bg-dawn-deep text-white"
+                ? "bg-dawn-deep text-dawn-deep-ink"
                 : "border-2 border-dashed border-neutral-600 bg-card text-neutral-700"
             }`}
           >

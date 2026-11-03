@@ -6,14 +6,21 @@ import { describe, expect, test } from "vitest";
 
 import { INPUT, READ_ONLY_INPUT } from "./components/Field";
 import { contrast } from "./test/colour";
-import { block, themeColour, type Theme } from "./test/theme";
+import {
+  SKIN_CASES,
+  appStylesheet,
+  linearStops,
+  themeColour,
+  themeValue,
+  type Theme,
+} from "./test/theme";
 
 // Contrasts that the classes of the app decide, measured on the values of the
-// theme (styles.css) with the formula of WCAG 2, by day and at night.
+// theme (styles.css) with the formula of WCAG 2, by day and at night, and on
+// those of every other skin (src/skins/) in each mode it has.
 
-const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const styles = appStylesheet();
 const root = fileURLToPath(new URL(".", import.meta.url));
-const THEMES: Theme[] = ["light", "dark"];
 
 /** The source files of the app, not its tests. */
 function sources(dir: string): string[] {
@@ -48,14 +55,16 @@ const hexOf = (rgb: number[]) =>
     .join("")}`;
 
 /**
- * The colours of a linear gradient of a `@utility` of styles.css, at its stops
- * and at every sixteenth of the way between two of them (a gradient is mixed
- * in sRGB, and a point between two stops can be lighter than both).
+ * The colours of a paint of the dawn (`--dawn-deep`…, which the utilities of
+ * styles.css paint with and a skin sets), at its stops and at every sixteenth
+ * of the way between two of them (a gradient is mixed in sRGB, and a point
+ * between two stops can be lighter than both).
  */
-function gradientColours(utility: string): string[] {
-  const body = block(styles, `@utility ${utility}`);
-  const stops = [...(body ?? "").matchAll(/(#[0-9a-fA-F]{6})\s+\d+%/g)].map((m) => m[1] ?? "");
-  if (stops.length < 2) throw new Error(`@utility ${utility} has no gradient of #rrggbb stops`);
+function gradientColours(property: string, mode: Theme, skin: string): string[] {
+  const stops = linearStops(themeValue(property, mode, skin));
+  if (stops.length < 2) {
+    throw new Error(`${property} has no gradient of #rrggbb stops (${skin}, ${mode})`);
+  }
   return stops.slice(1).flatMap((to, i) => {
     const from = channels(stops[i] ?? "");
     const end = channels(to);
@@ -69,14 +78,57 @@ function gradientColours(utility: string): string[] {
 const brightened = (hex: string, factor: number) =>
   hexOf(channels(hex).map((value) => value * factor));
 
+/**
+ * A class of a class string, under any variants (`aria-[current=page]:bg-dawn-deep`),
+ * with those variants. A string may be a template with strings in it (`${a ? "x" : ""}`):
+ * a class ends at a space or a quote.
+ *
+ * What this reading of the sources cannot see, so what the guards built on it
+ * miss: a class with an opacity (`text-white/90` is not `text-white`); a text
+ * colour set on a child, in a class string of its own; a variant of the form
+ * `[&…]:` (`[&>span]:text-white`), which does not start like a class; and the
+ * branches of a template, read as one string (`bg-dawn-deep` in one branch and
+ * `text-dawn-deep-ink` in the other count as one pair).
+ */
+function withVariants(classes: string, name: string): string[] {
+  return [
+    ...classes.matchAll(
+      new RegExp(`(?:^|[\\s"'])((?:[a-z-]+(?:-\\[[^\\]\\s]*\\])?:)*)${name}(?=[\\s"']|$)`, "g"),
+    ),
+  ].map((match) => match[1] ?? "");
+}
+
 describe("contrast", () => {
-  test("contrast — le texte blanc d'un bouton en dégradé garde 4,5:1 au survol, à l'appui et au focus, le jour et la nuit", () => {
-    // The pills of sunrise that carry white text: the main button, the + button, a chosen tab or day…
-    const buttons = classStrings("bg-dawn-deep", "text-white");
-    expect(buttons.length, "no class string paints white text on bg-dawn-deep").toBeGreaterThan(0);
+  test("contrast — ce que peint l'aube profonde écrit dans --dawn-deep-ink, jamais en blanc écrit dans la classe", () => {
+    // What `bg-dawn-deep` paints (the main button, the «+», the current tab, a
+    // chosen day, a chip…) writes its text in `text-dawn-deep-ink`, under the
+    // same variants: white in Crête, the dark of a skin whose deep dawn is light.
+    const painted = sources(root).flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(/"([^"\n]*)"|`([^`]*)`/g)]
+        .map((match) => match[1] ?? match[2] ?? "")
+        .filter((text) => withVariants(text, "bg-dawn-deep").length > 0)
+        .map((text) => ({ where: relative(root, file), classes: text })),
+    );
+    // Not an empty search: the pieces above, and those of a variant (the current tab).
+    expect(painted.length).toBeGreaterThanOrEqual(8);
+    expect(painted.some(({ classes }) => /aria-\[current=page\]:bg-dawn-deep/.test(classes))).toBe(
+      true,
+    );
+    const problems = painted.flatMap(({ where, classes }) => [
+      ...withVariants(classes, "text-white").map((variant) => `${where}: ${variant}text-white`),
+      ...withVariants(classes, "bg-dawn-deep")
+        .filter((variant) => !withVariants(classes, "text-dawn-deep-ink").includes(variant))
+        .map((variant) => `${where}: ${variant}bg-dawn-deep without ${variant}text-dawn-deep-ink`),
+    ]);
+    expect(problems).toEqual([]);
+  });
+
+  test("contrast — le texte d'un bouton en dégradé (--dawn-deep-ink) garde 4,5:1 au survol, à l'appui et au focus, le jour et la nuit", () => {
+    // The pills of sunrise that carry a text: the main button, the + button, a chosen tab or day…
+    const buttons = classStrings("bg-dawn-deep", "text-dawn-deep-ink");
+    expect(buttons.length, "no class string writes on bg-dawn-deep").toBeGreaterThan(0);
     // The sunrise is painted in its own colours, whatever the theme: the same
-    // stops by day and at night, as the white of the text.
-    const colours = gradientColours("bg-dawn-deep");
+    // stops by day and at night, as its ink. A skin sets its own (`--dawn-deep`, `--dawn-deep-ink`).
     for (const { where, classes } of buttons) {
       // The filters of its states (`hover:brightness-110`…), and the button at rest.
       const factors = [
@@ -85,14 +137,16 @@ describe("contrast", () => {
           (match) => Number(match[1]) / 100,
         ),
       ];
-      for (const theme of THEMES) {
+      for (const { skin, mode, label } of SKIN_CASES) {
+        const colours = gradientColours("--dawn-deep", mode, skin);
+        const ink = themeValue("--dawn-deep-ink", mode, skin);
         for (const factor of factors) {
           const worst = Math.min(
-            ...colours.map((colour) => contrast("#ffffff", brightened(colour, factor))),
+            ...colours.map((colour) => contrast(ink, brightened(colour, factor))),
           );
           expect(
             worst,
-            `${where}: white on bg-dawn-deep at brightness ${factor} (${theme})`,
+            `${where}: ${ink} on bg-dawn-deep at brightness ${factor} (${label})`,
           ).toBeGreaterThanOrEqual(4.5);
         }
       }
@@ -114,12 +168,12 @@ describe("contrast", () => {
         borders.map(({ state }) => state),
         `the edge of ${what}`,
       ).toContain("at rest");
-      for (const theme of THEMES) {
+      for (const { skin, mode, label } of SKIN_CASES) {
         for (const { state, colour } of borders) {
-          const ratio = contrast(themeColour(colour, theme), themeColour(ground, theme));
+          const ratio = contrast(themeColour(colour, mode, skin), themeColour(ground, mode, skin));
           expect(
             ratio,
-            `${what}: border-${colour} ${state} on ${ground} (${theme})`,
+            `${what}: border-${colour} ${state} on ${ground} (${label})`,
           ).toBeGreaterThanOrEqual(3);
         }
       }
@@ -127,10 +181,10 @@ describe("contrast", () => {
     // The ring of a field with the focus is drawn by styles.css over the classes.
     const focused = /:focus\s*\{\s*border-color:\s*var\(--color-([a-z]+-\d+)\)/.exec(styles)?.[1];
     expect(focused, "the border of a field with the focus in styles.css").toBeDefined();
-    for (const theme of THEMES) {
+    for (const { skin, mode, label } of SKIN_CASES) {
       expect(
-        contrast(themeColour(focused ?? "", theme), themeColour("field", theme)),
-        `a field with the focus: border-${focused} (${theme})`,
+        contrast(themeColour(focused ?? "", mode, skin), themeColour("field", mode, skin)),
+        `a field with the focus: border-${focused} (${label})`,
       ).toBeGreaterThanOrEqual(3);
     }
   });

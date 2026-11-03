@@ -66,8 +66,8 @@ export function DurationInput({
   }
 
   return (
-    <fieldset className="flex flex-col gap-1">
-      <legend className="text-sm font-medium">{label}</legend>
+    <fieldset className="field flex flex-col gap-1">
+      <legend className="field-label text-sm font-medium">{label}</legend>
       <div className="flex items-center gap-2">
         <input
           name={`${name}-hours`}

@@ -1,8 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useId, useRef, type ReactNode, type RefObject } from "react";
 
-import { Contours, Ridges } from "../../components/Alpenglow";
-import { Avatar } from "../../components/Avatar";
+import { BlockTitle } from "../../components/BlockTitle";
 import { LoadFailure } from "../../components/LoadFailure";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useRunners } from "../events/api";
@@ -10,6 +9,7 @@ import { formatDisplayName } from "../events/formatName";
 import { resultParts } from "../results/resultText";
 import { byYear, useResults, type ResultRow } from "../stats/stats";
 import { TotalsTable } from "../stats/TotalsTable";
+import { RunnerHero } from "./RunnerHero";
 
 const SEPARATOR = " · ";
 
@@ -34,39 +34,8 @@ export function RunnerProfile({ runnerId, extra }: { runnerId: string; extra?: R
 
   return (
     <div className="flex flex-col gap-8">
-      {/* A hero: the runner on the sky of the dawn drawn like a map, in front of the ridges, the sun rising behind them. */}
-      <header className="on-dawn relative flex items-center gap-4 overflow-hidden rounded-[1.75rem] bg-dawn-hero p-5 pb-12 text-white shadow-glow md:gap-6 md:p-7 md:pb-14">
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute -top-16 -left-12 size-48 rounded-full bg-iris-400/35 blur-3xl" />
-          <Contours className="mask-[linear-gradient(to_bottom,rgb(0_0_0/0.35),#000_80%)] text-white opacity-[0.14]" />
-          <Ridges className="h-24 md:hidden" center={1560} sun={1870} sunSize={24} steep={1.1} />
-          <Ridges
-            className="hidden h-28 md:block"
-            center={1300}
-            sun={1500}
-            sunSize={26}
-            steep={1.15}
-          />
-        </span>
-        {/* On the narrowest phones (under 360 px) the photo is smaller and the name scales down
-            with the screen, so that a first name such as « Guillaume » or « Maximilien » fits
-            beside the photo: the name wraps between its words, never inside one. Only a word
-            that could not fit on a line of its own would still be broken (`break-words`). */}
-        {runner && (
-          <Avatar
-            runner={runner}
-            thumb="256x256"
-            className="avatar-soft relative size-20 shrink-0 text-2xl font-extrabold shadow-[0_0_0_4px_rgb(255_255_255/0.85),0_12px_30px_-10px_rgb(36_27_53/0.6)] min-[22.5rem]:size-24 min-[22.5rem]:text-3xl md:size-28"
-          />
-        )}
-        <h1
-          ref={heading}
-          tabIndex={-1}
-          className="relative min-w-0 font-display text-[clamp(1.5rem,8vw,1.875rem)] leading-[1.1] font-extrabold tracking-tight break-words md:text-[2.25rem]"
-        >
-          {runner ? runner.name : t.runner.title}
-        </h1>
-      </header>
+      {/* The hero: the photo and the name of the runner, the title of the page (see RunnerHero). */}
+      <RunnerHero runner={runner} heading={{ ref: heading, tabIndex: -1 }} />
       {extra}
       {/* A refresh that fails keeps what the page already shows. */}
       {runner ? (
@@ -115,10 +84,12 @@ function Years({ rows }: { rows: ResultRow[] }) {
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
-        {t.runner.years}
-      </h2>
+    <section
+      aria-labelledby={headingId}
+      data-block="years"
+      className="page-block flex flex-col gap-3"
+    >
+      <BlockTitle id={headingId}>{t.runner.years}</BlockTitle>
       <TotalsTable
         caption={t.runner.years}
         firstColumn={t.stats.year}
@@ -138,14 +109,16 @@ function History({ rows }: { rows: ResultRow[] }) {
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
-        {t.runner.history}
-      </h2>
+    <section
+      aria-labelledby={headingId}
+      data-block="history"
+      className="page-block flex flex-col gap-3"
+    >
+      <BlockTitle id={headingId}>{t.runner.history}</BlockTitle>
       {rows.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.runner.noHistory}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="race-list flex flex-col gap-2">
           {rows.map((row) => (
             <HistoryRow key={row.participation.id} row={row} />
           ))}
@@ -165,7 +138,7 @@ function HistoryRow({ row }: { row: ResultRow }) {
   const result = resultParts(participation, f, t);
 
   return (
-    <li className="card flex flex-col p-4">
+    <li className="history-row card flex flex-col p-4">
       <h3 className="card-title">
         <Link
           to="/evenements/$id"
@@ -182,7 +155,7 @@ function HistoryRow({ row }: { row: ResultRow }) {
       </p>
       <p className="text-sm text-neutral-600">{f.dateLong(date)}</p>
       {result.length > 0 && (
-        <p className="mt-1 self-start rounded-full bg-iris-50 px-2.5 py-1 text-sm font-semibold text-iris-800 ring-1 ring-iris-100">
+        <p className="result-tag mt-1 self-start rounded-full bg-iris-50 px-2.5 py-1 text-sm font-semibold text-iris-800 ring-1 ring-iris-100">
           {result.join(SEPARATOR)}
         </p>
       )}

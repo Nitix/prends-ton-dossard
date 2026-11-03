@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
@@ -694,6 +695,12 @@ func TestRules_DownThenUp(t *testing.T) {
 		}
 		return all
 	}
+	// The migration 9j replaces the update rule of the accounts (to keep the skin
+	// of an account to its owner), and the migration 4 puts back its own: the
+	// rules to compare with are those of the migration 4, as 9j's rollback leaves them.
+	if err := migrationFile(t, "9j_user_skin.go").Down(app); err != nil {
+		t.Fatal(err)
+	}
 	before := map[string][]*string{}
 	for _, name := range names {
 		before[name] = rules(name)
@@ -849,4 +856,229 @@ func TestRules_Passkeys(t *testing.T) {
 			Status: http.StatusNoContent,
 		},
 	})
+}
+
+// The skin of an account (migration 9j) is the theme of the site that its
+// owner chose. A person sets their own, with the update that already lets them
+// edit their account, and nobody else's: not another member, and not an admin,
+// who edits the other fields of an account. Only the owner and the admins read
+// an account, so the skin is not shown to the other members.
+func TestRules_UserSkin(t *testing.T) {
+	alice := func(fx testutil.Fixture) *core.Record { return fx.Alice }
+	bob := func(fx testutil.Fixture) *core.Record { return fx.Bob }
+	admin := func(fx testutil.Fixture) *core.Record { return fx.Admin }
+
+	// skinIs checks the skin that an account is stored with.
+	skinIs := func(account func(testutil.Fixture) *core.Record, want string) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+		return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			t.Helper()
+			if got := mustFind(t, app, "users", account(fx).Id).GetString("skin"); got != want {
+				t.Errorf("the skin of the account is %q, want %q", got, want)
+			}
+		}
+	}
+	// aliceChose gives Alice a skin without going through the rules.
+	aliceChose := func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		setFields(t, app, "users", fx.Alice.Id, map[string]any{"skin": "nuit"})
+	}
+
+	rows := []testutil.Row{
+		{
+			Name:     "alice sets her skin",
+			As:       "alice",
+			Method:   http.MethodPatch,
+			URL:      recordOf("users", alice),
+			Body:     body(`{"skin":"nuit"}`),
+			Status:   http.StatusOK,
+			Contains: []string{`"skin":"nuit"`},
+			After:    skinIs(alice, "nuit"),
+		},
+		{
+			Name:     "alice clears her skin",
+			As:       "alice",
+			Before:   aliceChose,
+			Method:   http.MethodPatch,
+			URL:      recordOf("users", alice),
+			Body:     body(`{"skin":""}`),
+			Status:   http.StatusOK,
+			Contains: []string{`"skin":""`},
+			After:    skinIs(alice, ""),
+		},
+		{
+			Name:   "alice cannot set the skin of bob",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"skin":"nuit"}`),
+			Status: http.StatusNotFound,
+			After:  skinIs(bob, ""),
+		},
+		{
+			// An admin edits the other fields of another account (its role, its
+			// disabled flag), but its skin is its owner's choice.
+			Name:   "an admin cannot set the skin of bob",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"skin":"nuit"}`),
+			Status: http.StatusNotFound,
+			After:  skinIs(bob, ""),
+		},
+		{
+			Name:   "an admin cannot slip the skin of bob in with his role",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"role":"admin","skin":"nuit"}`),
+			Status: http.StatusNotFound,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				skinIs(bob, "")(t, app, fx)
+				if got := mustFind(t, app, "users", fx.Bob.Id).GetString("role"); got != "member" {
+					t.Errorf("bob's role = %q, want member", got)
+				}
+			},
+		},
+		{
+			Name:   "an admin sets their own skin",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", admin),
+			Body:   body(`{"skin":"nuit"}`),
+			Status: http.StatusOK,
+			After:  skinIs(admin, "nuit"),
+		},
+		{
+			Name:   "an admin still changes the disabled flag of bob",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"disabled":true}`),
+			Status: http.StatusOK,
+		},
+		{
+			Name:   "alice cannot set her skin together with her role",
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", alice),
+			Body:   body(`{"role":"admin","skin":"nuit"}`),
+			Status: http.StatusNotFound,
+			After:  skinIs(alice, ""),
+		},
+		{
+			Name:   "anon cannot set a skin",
+			As:     "anon",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", alice),
+			Body:   body(`{"skin":"nuit"}`),
+			Status: http.StatusNotFound,
+			After:  skinIs(alice, ""),
+		},
+
+		// Who reads it: the owner, in every response about their account, and the
+		// admins. No other member does, whichever way they ask.
+		{
+			Name:     "alice reads her skin",
+			As:       "alice",
+			Before:   aliceChose,
+			Method:   http.MethodGet,
+			URL:      recordOf("users", alice),
+			Status:   http.StatusOK,
+			Contains: []string{`"skin":"nuit"`},
+		},
+		{
+			Name:     "alice gets her skin when she signs in",
+			As:       "anon",
+			Before:   aliceChose,
+			Method:   http.MethodPost,
+			URL:      func(testutil.Fixture) string { return "/api/collections/users/auth-with-password" },
+			Body:     body(`{"identity":"alice@example.test","password":"` + testutil.Password + `"}`),
+			Status:   http.StatusOK,
+			Contains: []string{`"skin":"nuit"`},
+		},
+		{
+			Name:     "an admin reads the skin of alice",
+			As:       "admin",
+			Before:   aliceChose,
+			Method:   http.MethodGet,
+			URL:      recordOf("users", alice),
+			Status:   http.StatusOK,
+			Contains: []string{`"skin":"nuit"`},
+		},
+		{
+			Name:        "bob cannot read the skin of alice",
+			As:          "bob",
+			Before:      aliceChose,
+			Method:      http.MethodGet,
+			URL:         recordOf("users", alice),
+			Status:      http.StatusNotFound,
+			NotContains: []string{"nuit"},
+		},
+		{
+			Name:        "bob lists no account but his own",
+			As:          "bob",
+			Before:      aliceChose,
+			Method:      http.MethodGet,
+			URL:         records("users"),
+			Status:      http.StatusOK,
+			Contains:    []string{`"totalItems":1`, "bob@example.test"},
+			NotContains: []string{"nuit", "alice@example.test"},
+		},
+		{
+			// The runner of Alice is public to the members, and `expand=user` asks
+			// for her account with it: the view rule of the accounts decides, so
+			// the account is left out.
+			Name:        "bob cannot read the skin of alice by expanding her runner",
+			As:          "bob",
+			Before:      aliceChose,
+			Method:      http.MethodGet,
+			URL:         func(fx testutil.Fixture) string { return records("runners", fx.AliceRunner.Id)(fx) + "?expand=user" },
+			Status:      http.StatusOK,
+			Contains:    []string{`"name":"Alice"`},
+			NotContains: []string{"nuit", "alice@example.test", `"skin"`},
+		},
+		{
+			// Nor can he find her by it: a filter on the account of a runner would
+			// tell which runner chose a skin, one guess at a time.
+			Name:   "bob cannot find alice by the skin of her account",
+			As:     "bob",
+			Before: aliceChose,
+			Method: http.MethodGet,
+			URL: func(testutil.Fixture) string {
+				return "/api/collections/runners/records?filter=user.skin%3D%27nuit%27"
+			},
+			Status:      http.StatusOK,
+			Contains:    []string{`"totalItems":0`},
+			NotContains: []string{`"name":"Alice"`},
+		},
+		{
+			// The control of the row above: the same filter, asked by somebody who
+			// may read her account, finds her runner. Without it, a filter that
+			// matched nothing for another reason (a field that is not there, a
+			// quote that is not understood) would pass as well.
+			Name:   "an admin finds alice by the skin of her account",
+			As:     "admin",
+			Before: aliceChose,
+			Method: http.MethodGet,
+			URL: func(testutil.Fixture) string {
+				return "/api/collections/runners/records?filter=user.skin%3D%27nuit%27"
+			},
+			Status:   http.StatusOK,
+			Contains: []string{`"totalItems":1`, `"name":"Alice"`},
+		},
+	}
+	// The shape of an id, as the migration sets it.
+	for _, bad := range []string{
+		"Nuit", "nuit chaud", "1nuit", "-nuit", "nuit_chaud", "<b>nuit</b>", "crête", strings.Repeat("a", 33),
+	} {
+		rows = append(rows, testutil.Row{
+			Name:   "alice cannot set the skin " + bad,
+			As:     "alice",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", alice),
+			Body:   func(testutil.Fixture) string { return fmt.Sprintf(`{"skin":%q}`, bad) },
+			Status: http.StatusBadRequest,
+			After:  skinIs(alice, ""),
+		})
+	}
+	testutil.RunRows(t, rows)
 }

@@ -20,8 +20,8 @@ export async function emulateMedia(media: Media): Promise<void> {
 /**
  * Gives the media features back to the browser: no override is left, and the
  * page has what the tests run with (headless Chromium: a light setting, no
- * forced colours).
+ * forced colours, no request for less motion).
  */
 export async function resetMedia(): Promise<void> {
-  await commands.emulateMedia({ colorScheme: null, forcedColors: null });
+  await commands.emulateMedia({ colorScheme: null, forcedColors: null, reducedMotion: null });
 }

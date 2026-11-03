@@ -59,7 +59,7 @@ export function EventPicker({
   const [changing, setChanging] = useState(false);
 
   return (
-    <section aria-labelledby={titleId} className="card flex flex-col gap-3 p-4">
+    <section aria-labelledby={titleId} className="event-picker card flex flex-col gap-3 p-4">
       <h2 id={titleId} className="text-sm font-semibold">
         {title}
       </h2>
@@ -138,7 +138,7 @@ function Search({
                 onClick={() => {
                   onPick({ id: event.id, label });
                 }}
-                className="press min-h-11 w-full rounded-xl border border-neutral-200 bg-card px-3.5 py-2 text-left break-words hover:border-iris-200 hover:bg-iris-50"
+                className="event-picker-option press min-h-11 w-full rounded-xl border border-neutral-200 bg-card px-3.5 py-2 text-left break-words hover:border-iris-200 hover:bg-iris-50"
               >
                 {label}
               </button>

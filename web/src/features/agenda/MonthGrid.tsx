@@ -46,7 +46,7 @@ export function MonthGrid({
   // has no room at its sides there (312 px for seven, 44.5 px each), only
   // above and below. From `md` it is back between them.
   return (
-    <div className="-mx-4 bg-card px-1 py-2 shadow-card md:mx-0 md:overflow-hidden md:rounded-[1.25rem] md:p-2">
+    <div className="month-grid -mx-4 bg-card px-1 py-2 shadow-card md:mx-0 md:overflow-hidden md:rounded-[1.25rem] md:p-2">
       <table
         aria-labelledby={labelledBy}
         aria-busy={busy}
@@ -59,7 +59,7 @@ export function MonthGrid({
               <th
                 key={day.dayOfWeek}
                 scope="col"
-                className="pb-2 font-display text-[0.6875rem] font-bold tracking-[0.08em] text-neutral-600 uppercase"
+                className="month-grid-weekday pb-2 font-display text-[0.6875rem] font-bold tracking-[0.08em] text-neutral-600 uppercase"
               >
                 {f.weekday(day, "short")}
               </th>
@@ -109,14 +109,15 @@ function DayCell({
   // Today has a ring around its number, and the selected day is filled in:
   // neither is told by the colour alone.
   const ring = isToday ? "font-bold" : "border-transparent";
-  const number = `flex size-7 items-center justify-center rounded-full border-2 text-sm tabular-nums ${ring}`;
-  // On the sunrise of the selected day, the ring of today is white.
-  const numberOnPhone = `${number} ${isToday ? (isSelected ? "border-white" : "border-iris-600 text-iris-700") : ""}`;
+  const number = `agenda-day-number flex size-7 items-center justify-center rounded-full border-2 text-sm tabular-nums ${ring}`;
+  // On the sunrise of the selected day, the ring of today is in its ink (white in Crête).
+  const numberOnPhone = `${number} ${isToday ? (isSelected ? "border-dawn-deep-ink" : "border-iris-600 text-iris-700") : ""}`;
   const numberOnDesktop = `${number} ${isToday ? "border-iris-600 bg-iris-600 text-card" : ""}`;
 
   return (
     <td
-      className={`px-0 py-0.5 align-top md:border md:border-neutral-100 md:p-0 ${inMonth ? "" : "md:bg-neutral-50"}`}
+      data-in-month={inMonth}
+      className={`agenda-cell px-0 py-0.5 align-top md:border md:border-neutral-100 md:p-0 ${inMonth ? "" : "md:bg-neutral-50"}`}
     >
       <button
         type="button"
@@ -126,9 +127,9 @@ function DayCell({
         onClick={() => {
           onSelect(day);
         }}
-        className={`press flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl md:hidden ${
+        className={`agenda-day press flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl md:hidden ${
           isSelected
-            ? "bg-dawn-deep text-white shadow-glow"
+            ? "bg-dawn-deep text-dawn-deep-ink shadow-glow"
             : inMonth
               ? "hover:bg-iris-50"
               : "text-neutral-600 hover:bg-iris-50"
@@ -136,19 +137,22 @@ function DayCell({
       >
         <span className={numberOnPhone}>{day.day}</span>
         {/* The name of the button says how many events there are. */}
-        <span aria-hidden="true" className="flex h-3 items-center gap-0.5 text-xs leading-none">
+        <span
+          aria-hidden="true"
+          className="agenda-dots flex h-3 items-center gap-0.5 text-xs leading-none"
+        >
           {Array.from({ length: dots }, (_, i) => (
             <span
               key={i}
               data-testid="dot"
-              className={`size-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blush-500"}`}
+              className={`agenda-dot size-1.5 rounded-full ${isSelected ? "bg-dawn-deep-ink" : "bg-blush-500"}`}
             />
           ))}
           {more > 0 && <span>+{more}</span>}
         </span>
       </button>
       <div
-        className={`hidden min-h-24 flex-col gap-1 p-1 md:flex ${inMonth ? "" : "text-neutral-600"}`}
+        className={`agenda-cell-body hidden min-h-24 flex-col gap-1 p-1 md:flex ${inMonth ? "" : "text-neutral-600"}`}
       >
         <time
           dateTime={day.toString()}
@@ -158,14 +162,14 @@ function DayCell({
           {day.day}
         </time>
         {views.length > 0 && (
-          <ul aria-label={f.date(day)} className="flex flex-col gap-0.5">
+          <ul aria-label={f.date(day)} className="agenda-events flex flex-col gap-0.5">
             {views.map((view) => (
               <li key={view.event.id}>
                 <Link
                   to="/evenements/$id"
                   params={{ id: view.event.id }}
                   title={view.event.name}
-                  className="block truncate rounded-lg bg-iris-50 px-1.5 py-1 text-xs font-semibold text-iris-800 ring-1 ring-iris-100 hover:bg-iris-100 pointer-coarse:min-h-11 pointer-coarse:py-3"
+                  className="agenda-event block truncate rounded-lg bg-iris-50 px-1.5 py-1 text-xs font-semibold text-iris-800 ring-1 ring-iris-100 hover:bg-iris-100 pointer-coarse:min-h-11 pointer-coarse:py-3"
                 >
                   {view.event.name}
                 </Link>

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { CountdownRing } from "../../components/Dawn";
 import { UNCONFIRMED } from "../../components/section";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -128,16 +129,18 @@ export function UpcomingSection({
   if (rows?.length === 0 && empty === undefined) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
-        {title}
-      </h2>
+    <section
+      aria-labelledby={headingId}
+      data-block="upcoming"
+      className="page-block flex flex-col gap-3"
+    >
+      <BlockTitle id={headingId}>{title}</BlockTitle>
       {rows === undefined ? (
         <output>{t.common.loading}</output>
       ) : rows.length === 0 ? (
         <p className="text-sm text-neutral-600">{empty}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="race-list flex flex-col gap-2">
           {rows.map((row) => (
             <UpcomingRow key={row.participation.id} row={row} today={today} dateStyle="countdown" />
           ))}
@@ -180,7 +183,8 @@ export function UpcomingRow({
 
   return (
     <li
-      className={`flex items-center gap-3.5 p-3.5 pr-4 ${
+      data-confirmed={confirmed}
+      className={`upcoming-row flex items-center gap-3.5 p-3.5 pr-4 ${
         // The radius of a card: an upcoming race not confirmed has the shape of the others.
         confirmed ? "card" : `rounded-[1.25rem] ${UNCONFIRMED}`
       }`}
@@ -207,7 +211,7 @@ export function UpcomingRow({
           </p>
           {/* The words are the countdown: nothing here is told by a colour. */}
           {dateStyle === "countdown" && (
-            <p className="font-semibold text-iris-700">{f.inDays(daysLeft)}</p>
+            <p className="days-left font-semibold text-iris-700">{f.inDays(daysLeft)}</p>
           )}
         </div>
         {!confirmed && <p className="text-sm text-neutral-600">{t.event.unconfirmed}</p>}

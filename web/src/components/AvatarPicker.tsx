@@ -93,7 +93,7 @@ export function AvatarPicker({ runner }: { runner: RunnerRecord }) {
   }
 
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="avatar-picker flex flex-col items-start gap-3">
       <Avatar
         runner={runner}
         thumb="256x256"

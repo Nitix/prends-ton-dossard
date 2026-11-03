@@ -1,5 +1,7 @@
 import { useId, type ReactNode, type Ref } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
+
 /**
  * A part of the profile or of the settings page: a heading, and a region named by it.
  * On the settings page, each is a white card (`boxed`); on the profile, the
@@ -24,16 +26,15 @@ export function Section({
   return (
     <section
       aria-labelledby={headingId}
-      className={`flex flex-col gap-3 ${boxed ? "card p-4 md:p-5" : ""}`}
+      className={`profile-section flex flex-col gap-3 ${boxed ? "card p-4 md:p-5" : ""}`}
     >
-      <h2
+      <BlockTitle
         id={headingId}
         ref={headingRef}
         tabIndex={headingRef === undefined ? undefined : -1}
-        className="block-title"
       >
         {title}
-      </h2>
+      </BlockTitle>
       {children}
     </section>
   );

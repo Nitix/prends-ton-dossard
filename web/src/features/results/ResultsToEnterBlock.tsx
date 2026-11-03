@@ -2,6 +2,7 @@ import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-q
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -82,11 +83,15 @@ export function ResultsToEnter({ pageHeading }: { pageHeading: RefObject<HTMLEle
   if (rows.length === 0) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 ref={heading} id={headingId} tabIndex={-1} className="block-title">
+    <section
+      aria-labelledby={headingId}
+      data-block="results"
+      className="page-block flex flex-col gap-3"
+    >
+      <BlockTitle ref={heading} id={headingId} tabIndex={-1}>
         {t.results.toEnterTitle}
-      </h2>
-      <ul className="flex flex-col gap-3">
+      </BlockTitle>
+      <ul className="race-list flex flex-col gap-3">
         {rows.map((row) => (
           <ResultRow key={row.participation.id} row={row} onDealtWith={setDealt} />
         ))}
@@ -171,7 +176,7 @@ function ResultRow({
   const busyClass = busy ? "opacity-60" : "";
 
   return (
-    <li className="card flex flex-col gap-3 p-4">
+    <li className="result-row card flex flex-col gap-3 p-4">
       <div className="flex flex-col">
         <h3 id={titleId} className="card-title">
           <Link

@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 import { contrast, deltaE, type Vision } from "../../test/colour";
-import { themeColour } from "../../test/theme";
+import { SKIN_CASES, themeColour } from "../../test/theme";
 import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_FILLS, SLOPE_ZONES, slopeZone } from "./slope";
 
 test("slopeZone — cinq zones, une pente sur la borne est dans la zone du dessus", () => {
@@ -143,4 +143,40 @@ test("slope — le dessin prend les couleurs du thème : celles de styles.css, d
   }
   // By day, the line of the profile is the ink that the tests above measure.
   expect(themeColour("relief", "light")).toBe(themeColour("ink", "light"));
+});
+
+// Every skin of the app (src/skins/) draws the profile with its own colours of
+// the zones (`--color-slope-1` to `-5`), its card and its line (`--color-relief`),
+// in each mode it has: the same numbers hold, Crête's by day and at night too.
+
+test("slope — chaque skin, dans chaque mode : 3:1 sur la carte et avec la ligne, des zones distinctes", () => {
+  for (const { skin, mode, label } of SKIN_CASES) {
+    const card = themeColour("card", mode, skin);
+    const line = themeColour("relief", mode, skin);
+    const zones = SLOPE_ZONES.map((zone) => ({
+      zone,
+      color: themeColour(`slope-${zone}`, mode, skin),
+    }));
+    expect(contrast(line, card), `${label}: the line on the card`).toBeGreaterThanOrEqual(3);
+    for (const { zone, color } of zones) {
+      expect(contrast(color, card), `${label}: zone ${zone} on the card`).toBeGreaterThanOrEqual(3);
+      expect(contrast(color, line), `${label}: zone ${zone} with the line`).toBeGreaterThanOrEqual(
+        3,
+      );
+    }
+    for (const [i, first] of zones.entries()) {
+      for (const next of zones.slice(i + 1)) {
+        const names = `${label}: zones ${first.zone} and ${next.zone}`;
+        expect(deltaE(first.color, next.color), `${names}, normal vision`).toBeGreaterThanOrEqual(
+          LEAST.normal,
+        );
+        for (const vision of VISIONS) {
+          expect(
+            deltaE(first.color, next.color, vision),
+            `${names}, ${vision}`,
+          ).toBeGreaterThanOrEqual(LEAST.deficient);
+        }
+      }
+    }
+  }
 });

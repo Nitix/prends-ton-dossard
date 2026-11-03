@@ -1,0 +1,33 @@
+/* « Aurore »: a run at dawn. A soft sunrise (peach, coral pink,
+   violet) for the header, the heroes, the main buttons and a few accents; the
+   content sits on white and on a very light lilac, in a deep plum ink. By day
+   only: the variant had no dark mode, so the page is drawn in this one whatever
+   the theme chosen (lib/theme.ts). Custom properties of Crête only, under the
+   skin's selector (see ../README.md); the fonts are in fonts.css.
+
+   « Crête » is « Aurore » dressed in the maps of « Sentier » and the chart of
+   « Chrono »: Crête's day is Aurore's, and Crête's values stand for every one
+   that is not here. What differs is its art (./slots.tsx), its single mode, the
+   line of its profile and the zones of its slope. Its halo and its shades are
+   Crête's too, said here all the same: every skin owns those (the smoke tests
+   read them in the skin's own sheet). */
+:root[data-skin="aurore"] {
+  --color-relief: #170f24;
+
+  /* The five zones of the slope, from gentle to steep, along the line of its
+     profile (coral, rose, violet): gold, rust, pink, orchid and indigo. Each is
+     3:1 on the card and on the line, and they stay apart with a colour vision
+     deficiency (src/features/route/slope.test.ts). */
+  --color-slope-1: #a88900;
+  --color-slope-2: #b94109;
+  --color-slope-3: #ef4c83;
+  --color-slope-4: #a63fae;
+  --color-slope-5: #5752ea;
+
+  /* The halo of the main buttons, and the violet shade of a window and of the
+     card of the sign-in pages: the variant's own. */
+  --dawn-glow-warm: rgb(214 51 111 / 0.55);
+  --dawn-glow-cool: rgb(94 74 227 / 0.45);
+  --shade-dialog: rgb(42 32 112 / 0.55);
+  --shade-welcome: rgb(42 32 112 / 0.6);
+}

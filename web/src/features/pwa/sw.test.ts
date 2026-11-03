@@ -384,6 +384,36 @@ test("sw — un fichier de /assets/ gardé répond même sans réseau", async ()
   await expect(worker.get("/assets/b.js")).rejects.toBe(OFFLINE);
 });
 
+test("sw — un skin choisi une fois se dessine sans réseau : la page gardée, ses feuilles et son look, de /assets/", async () => {
+  // A skin's look is loaded when it is chosen (skins/README.md): its sheets
+  // (linked by index.html for the skin kept, with no CORS, or by the look, with
+  // CORS), the part of its motifs, its faces. Each is a file of /assets/, kept
+  // the first time it is asked for; the page is kept too. Offline, the next
+  // visit has them all.
+  const worker = loadWorker();
+  const look: [path: string, mode: string][] = [
+    ["/assets/look-Nu1t.css", "no-cors"],
+    ["/assets/fonts-Shar.css", "cors"],
+    ["/assets/look-Nu1t.js", "cors"],
+    ["/assets/space-grotesk-latin-wght-normal-Fa3e.woff2", "cors"],
+  ];
+  worker.network.mockImplementation((input) => {
+    const url =
+      typeof input === "object" && input !== null && "url" in input
+        ? String(input.url)
+        : String(input);
+    return Promise.resolve(reply(`network ${new URL(url, ORIGIN).pathname}`));
+  });
+  await worker.get("/", { mode: "navigate" });
+  for (const [path, mode] of look) await worker.get(path, { mode });
+
+  worker.network.mockRejectedValue(OFFLINE);
+  expect((await worker.get("/connexion", { mode: "navigate" })).label).toBe("network /");
+  for (const [path, mode] of look) {
+    expect((await worker.get(path, { mode })).label, `offline: ${path}`).toBe(`network ${path}`);
+  }
+});
+
 test("sw — seules les requêtes GET de la même origine sont traitées", async () => {
   const worker = loadWorker();
   worker.network.mockResolvedValue(reply("from the network"));

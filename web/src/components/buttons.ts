@@ -1,17 +1,19 @@
 // The classes of the buttons, at least 44 px tall (a tap target): round pills
-// that sink a little when pressed.
+// that sink a little when pressed. Each starts with its semantic class
+// (`.btn-primary`…), which a skin may restyle (see skins/README.md).
 
 /**
- * The main action of a screen or a dialog: a pill of sunrise, white text (4.6:1
- * at least). Under the pointer it darkens a little, which keeps the text above
- * 4.5:1 (a lighter sunrise would bring its pink to 3.9:1; src/contrast.test.ts).
+ * The main action of a screen or a dialog: a pill of sunrise, its text in the
+ * ink of the deep dawn (`--dawn-deep-ink`: white in Crête, 4.6:1 at least).
+ * Under the pointer it darkens a little, which keeps the text above 4.5:1 (a
+ * lighter sunrise would bring its pink to 3.9:1; src/contrast.test.ts).
  */
 export const PRIMARY =
-  "press min-h-11 rounded-full bg-dawn-deep px-5 text-[0.9375rem] font-semibold text-white shadow-glow hover:brightness-95 disabled:opacity-60 disabled:shadow-none";
+  "btn-primary press min-h-11 rounded-full bg-dawn-deep px-5 text-[0.9375rem] font-semibold text-dawn-deep-ink shadow-glow hover:brightness-95 disabled:opacity-60 disabled:shadow-none";
 
 /** An action next to the main one: cancel, and the actions of a bar. */
 export const SECONDARY =
-  "press min-h-11 rounded-full border border-neutral-200 bg-card px-4 text-[0.9375rem] font-medium shadow-[0_1px_2px_rgb(36_27_53/0.05)] hover:border-iris-200 hover:bg-iris-50 disabled:opacity-60";
+  "btn-secondary press min-h-11 rounded-full border border-neutral-200 bg-card px-4 text-[0.9375rem] font-medium shadow-[0_1px_2px_rgb(36_27_53/0.05)] hover:border-iris-200 hover:bg-iris-50 disabled:opacity-60";
 
 /**
  * A white pill on the sky (a hero): the main action there. The sky keeps the
@@ -19,7 +21,7 @@ export const SECONDARY =
  * the rest: an edge in the colour of a button's text keeps it a button.
  */
 export const ON_DAWN =
-  "press min-h-11 rounded-full bg-white px-5 text-[0.9375rem] font-semibold text-iris-700 shadow-[0_8px_24px_-10px_rgb(36_27_53/0.5)] hover:bg-iris-50 forced-colors:border forced-colors:border-[ButtonText]";
+  "btn-on-dawn press min-h-11 rounded-full bg-white px-5 text-[0.9375rem] font-semibold text-iris-700 shadow-[0_8px_24px_-10px_var(--shade-on-dawn)] hover:bg-iris-50 forced-colors:border forced-colors:border-[ButtonText]";
 
 /**
  * The action that deletes something, in a dialog that asks first. Its text has
@@ -27,7 +29,7 @@ export const ON_DAWN =
  * night (6:1 at least either way).
  */
 export const DANGER =
-  "press min-h-11 rounded-full bg-red-700 px-5 text-[0.9375rem] font-semibold text-card hover:bg-red-800 disabled:opacity-60";
+  "btn-danger press min-h-11 rounded-full bg-red-700 px-5 text-[0.9375rem] font-semibold text-card hover:bg-red-800 disabled:opacity-60";
 
 /** The colour of the text of an action that deletes something: it goes with a button style above. */
 export const DANGER_TEXT = "text-red-700 hover:border-red-200! hover:bg-red-50!";

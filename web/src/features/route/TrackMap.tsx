@@ -58,14 +58,13 @@ const PADDING_BOTTOM_RIGHT: PointTuple = [16, 52];
 /** The user asks the system for less motion. */
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
-// The colours of the track and of its two ends. The start and the finish also
+// The colours of the track and of its two ends are properties of the theme
+// (`--map-*` in styles.css), which a skin sets. The start and the finish also
 // differ by their size (the start is a dot in the ring of the finish, so both
 // show when the race ends where it starts) and are named in words.
 // The line is painted with the gradient of the dawn, and in this colour where
 // the gradient cannot be drawn (see below).
-const LINE_COLOR = "#d6336f";
-const START_COLOR = "#5e4ae3";
-const FINISH_COLOR = "#241b35";
+const LINE_COLOR = "var(--map-line)";
 const START_RADIUS = 6;
 const FINISH_RADIUS = 10;
 
@@ -224,7 +223,6 @@ export default function TrackMap({
     // or no width, on which a gradient has nothing to be drawn.
     const line = polyline(latLngs, {
       className: "track-line",
-      color: `url(#${gradient}) ${LINE_COLOR}`,
       weight: 5,
       opacity: 1,
       interactive: false,
@@ -238,10 +236,11 @@ export default function TrackMap({
       radius,
       interactive: false,
     });
-    circleMarker([last.lat, last.lon], mark("track-finish", FINISH_COLOR, FINISH_RADIUS))
+    // The fills of the start and of the finish are in TrackMap.css (`--map-start`, `--map-finish`).
+    circleMarker([last.lat, last.lon], mark("track-finish", "none", FINISH_RADIUS))
       .bindTooltip(finish, labelOptions(FINISH_RADIUS, 14))
       .addTo(map);
-    circleMarker([first.lat, first.lon], mark("track-start", START_COLOR, START_RADIUS))
+    circleMarker([first.lat, first.lon], mark("track-start", "none", START_RADIUS))
       .bindTooltip(start, labelOptions(START_RADIUS, -14))
       .addTo(map);
 
@@ -249,6 +248,11 @@ export default function TrackMap({
       paddingTopLeft: PADDING_TOP_LEFT,
       paddingBottomRight: PADDING_BOTTOM_RIGHT,
     });
+    // The colours of the line are properties of the theme, which a skin sets: a
+    // style of its element, there once the map is drawn, since the id of the
+    // gradient is the map's own.
+    const path = line.getElement();
+    if (path instanceof SVGElement) path.style.stroke = `url(#${gradient}) ${LINE_COLOR}`;
 
     // The mark of the cursor of the profile: one dot, made once and moved (see
     // `place`, which paints it), over the track. A ring of the card around it,
@@ -364,9 +368,9 @@ export default function TrackMap({
       <svg aria-hidden="true" width="0" height="0" className="absolute">
         <defs>
           <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#f47e4e" />
-            <stop offset="0.5" stopColor="#d6336f" />
-            <stop offset="1" stopColor="#5e4ae3" />
+            <stop offset="0" style={{ stopColor: "var(--map-line-from)" }} />
+            <stop offset="0.5" style={{ stopColor: "var(--map-line-via)" }} />
+            <stop offset="1" style={{ stopColor: "var(--map-line-to)" }} />
           </linearGradient>
         </defs>
       </svg>

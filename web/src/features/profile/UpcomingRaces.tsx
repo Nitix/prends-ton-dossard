@@ -37,7 +37,7 @@ export function UpcomingRaces({ runnerId }: { runnerId: string }) {
       ) : races.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.profile.noUpcoming}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="race-list flex flex-col gap-2">
           {races.map((race) => (
             <UpcomingRow key={race.participation.id} row={race} today={today} dateStyle="long" />
           ))}

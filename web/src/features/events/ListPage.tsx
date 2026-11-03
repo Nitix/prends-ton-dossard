@@ -92,13 +92,16 @@ function MonthSection({ month, views }: { month: Temporal.PlainYearMonth; views:
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section aria-labelledby={headingId} className="month-section flex flex-col gap-3">
       <h2 id={headingId} className="month-title">
         {f.monthTitle(month)}
       </h2>
-      <ul className="flex flex-col gap-3.5">
+      {/* From `md`, two columns: the cards of a row stretch to the height of the taller one
+          (`*:h-full` fills the item, which the grid has stretched). On a phone, a column. It is
+          a grid all the way, with no `flex` to switch from. */}
+      <ul className="event-list grid grid-cols-1 gap-3.5 md:grid-cols-2">
         {views.map((view) => (
-          <li key={view.event.id}>
+          <li key={view.event.id} className="*:h-full">
             <EventCard view={view} />
           </li>
         ))}

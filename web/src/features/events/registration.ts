@@ -4,6 +4,12 @@ import type { Formatters } from "../../lib/format";
 import type { EventRecord } from "../../lib/types";
 
 /**
+ * The days left before the deadline that a hero counts beside it: a week or
+ * less.
+ */
+export const DAYS_LEFT_SHOWN = 7;
+
+/**
  * Where the registration of an event stands: still open until `deadline`, or
  * closed.
  */
@@ -41,4 +47,19 @@ export function registrationLabel(state: RegistrationState, f: Formatters, t: Me
   return state.kind === "open"
     ? t.event.registrationUntil(f.date(state.deadline))
     : t.event.registrationClosed;
+}
+
+/** What separates the deadline from the days left in `deadlineText`. */
+const SEPARATOR = " · ";
+
+/**
+ * The deadline as a hero says it: `registrationLabel`, and in its last week
+ * (`DAYS_LEFT_SHOWN` days or less) the days left after it: "Inscriptions
+ * jusqu'au mer. 10 juin · plus que 3 jours".
+ */
+export function deadlineText(state: RegistrationState, f: Formatters, t: Messages): string {
+  const label = registrationLabel(state, f, t);
+  return state.kind === "open" && state.daysLeft <= DAYS_LEFT_SHOWN
+    ? `${label}${SEPARATOR}${t.event.daysLeft(state.daysLeft)}`
+    : label;
 }

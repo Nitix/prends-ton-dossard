@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ClientResponseError } from "pocketbase";
 import { startTransition, useActionState, useId, useRef, useState } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { Field, INPUT } from "../../components/Field";
 import { useToast } from "../../components/Toast";
@@ -212,7 +213,7 @@ function Period({
   const settled = dates.every(isSettled);
   if (settled && said !== text) setSaid(text);
   return (
-    <output id={id} className="text-sm text-neutral-700 empty:sr-only">
+    <output id={id} className="period-line text-sm text-neutral-700 empty:sr-only">
       {settled ? text : said}
     </output>
   );
@@ -393,13 +394,13 @@ function EventFields({
           submit();
         });
       }}
-      className="flex flex-col gap-6"
+      className="event-form flex flex-col gap-6"
     >
       <h1 tabIndex={-1} className="page-title">
         {initial ? t.form.editTitle : t.form.createTitle}
       </h1>
 
-      <div className="card flex flex-col gap-4 p-4 md:p-5">
+      <div className="form-card card flex flex-col gap-4 p-4 md:p-5">
         <Field label={t.form.name} error={eventError("name")}>
           {(control) => (
             <input
@@ -513,9 +514,9 @@ function EventFields({
       </div>
 
       <section aria-labelledby="formats-title" className="flex flex-col gap-4">
-        <h2 ref={formatsTitle} id="formats-title" tabIndex={-1} className="block-title text-xl">
+        <BlockTitle ref={formatsTitle} id="formats-title" tabIndex={-1} className="text-xl">
           {t.form.formatsTitle}
-        </h2>
+        </BlockTitle>
         {draft.rows.map((row, index) => (
           <FormatFieldset
             key={row.key}
@@ -537,7 +538,7 @@ function EventFields({
       </section>
 
       {joinOffered && (
-        <section className="card flex flex-col gap-3 p-4">
+        <section className="form-card card flex flex-col gap-3 p-4">
           <label className="flex min-h-11 items-center gap-3">
             <input
               type="checkbox"
@@ -587,7 +588,7 @@ function EventFields({
           {t.form.periodShortens(f.date(parseDate(former.start)), f.date(parseDate(former.end)))}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="form-actions flex flex-wrap gap-2">
         <button
           type="submit"
           disabled={pending}

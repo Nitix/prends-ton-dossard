@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useLatestComments } from "./api";
 import { excerpt } from "./excerpt";
@@ -21,19 +22,21 @@ export function LatestComments() {
   if (!data || data.length === 0) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
-        {t.home.latestCommentsTitle}
-      </h2>
+    <section
+      aria-labelledby={headingId}
+      data-block="comments"
+      className="page-block flex flex-col gap-3"
+    >
+      <BlockTitle id={headingId}>{t.home.latestCommentsTitle}</BlockTitle>
       <ul className="flex flex-col gap-2">
         {data.map(({ comment, author, event }) => (
           <li
             key={comment.id}
-            className="card relative flex flex-col gap-1 overflow-hidden p-4 pl-5"
+            className="latest-comment card relative flex flex-col gap-1 overflow-hidden p-4 pl-5"
           >
             <span
               aria-hidden="true"
-              className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-dawn"
+              className="latest-comment-mark absolute inset-y-4 left-0 w-1 rounded-r-full bg-dawn"
             />
             <p className="text-sm text-neutral-700">
               {t.home.commentOn(

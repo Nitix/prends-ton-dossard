@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 import { contrast } from "./test/colour";
-import { block, themeColour, type Theme } from "./test/theme";
+import { SKIN_CASES, appStylesheet, block, themeColour, type Theme } from "./test/theme";
 
 // A dashed border says « not confirmed » or « to confirm » next to the words,
 // so that the state is never told by colour alone: but a dash that is pale on
@@ -13,14 +13,18 @@ import { block, themeColour, type Theme } from "./test/theme";
 // that carries a state, and has the 3:1 that WCAG 2 asks of one, against the
 // two grounds it sits between: the white of a card (the inside of the row, and
 // the card around the chips) and the very light lilac of the sheet of the page;
-// at night (the dark theme), the dark card and the dark sheet.
+// at night (the dark theme), the dark card and the dark sheet. The same in
+// every skin (src/skins/), in each mode it has.
 
-const GROUNDS = {
-  "the white of a card": "#ffffff",
-  "the sheet (neutral-50)": themeColour("neutral-50"),
-  "a card at night": themeColour("card", "dark"),
-  "the sheet at night": themeColour("neutral-50", "dark"),
-};
+const GROUNDS = SKIN_CASES.flatMap(({ skin, mode, label }) => [
+  { ground: `a card (${label})`, background: themeColour("card", mode, skin), skin, mode },
+  {
+    ground: `the sheet, neutral-50 (${label})`,
+    background: themeColour("neutral-50", mode, skin),
+    skin,
+    mode,
+  },
+]);
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 
@@ -76,8 +80,8 @@ test("dashed — every dashed border has 3:1 against a card and against the shee
       colour,
       `${where}: "${classes}" gives its dashed border no colour of the theme`,
     ).toBeDefined();
-    for (const [ground, background] of Object.entries(GROUNDS)) {
-      const hex = themeColour(colour ?? "", ground.endsWith("at night") ? "dark" : "light");
+    for (const { ground, background, skin, mode } of GROUNDS) {
+      const hex = themeColour(colour ?? "", mode, skin);
       expect(
         contrast(hex, background),
         `${where}: border-${colour} (${hex}) on ${ground}`,
@@ -94,13 +98,13 @@ const rgb = (hex: string) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at,
  * (`.avatar-soft` in styles.css), at its stops and at every sixteenth of the
  * way between two (a gradient is mixed in sRGB).
  */
-function pastels(theme: Theme): string[] {
-  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+function pastels(theme: Theme, skin?: string): string[] {
+  const styles = appStylesheet();
   const gradient = /background-image:\s*linear-gradient\(([^;]*)\);/.exec(
     block(styles, ".avatar-soft") ?? "",
   )?.[1];
   const stops = [...(gradient ?? "").matchAll(/var\(--color-([a-z]+-\d+)\)/g)].map((match) =>
-    themeColour(match[1] ?? "", theme),
+    themeColour(match[1] ?? "", theme, skin),
   );
   return stops.slice(1).flatMap((to, i) =>
     Array.from({ length: 17 }, (_, step) => {
@@ -122,14 +126,14 @@ test("dashed — la pastille d'un participant à confirmer garde 3:1, avec de la
   const chips = dashedBorders().filter(({ where }) => where.endsWith("ParticipantChips.tsx"));
   expect(chips.length, "the dashed chip of ParticipantChips.tsx was not found").toBeGreaterThan(0);
   for (const { classes, colour } of chips) {
-    for (const theme of ["light", "dark"] as const) {
-      const grounds = pastels(theme);
+    for (const { skin, mode, label } of SKIN_CASES) {
+      const grounds = pastels(mode, skin);
       expect(grounds.length, "the pastel of .avatar-soft").toBeGreaterThan(2);
-      const hex = themeColour(colour ?? "", theme);
+      const hex = themeColour(colour ?? "", mode, skin);
       for (const ground of grounds) {
         expect(
           contrast(hex, ground),
-          `"${classes}": border-${colour} (${hex}) on the pastel ${ground} (${theme})`,
+          `"${classes}": border-${colour} (${hex}) on the pastel ${ground} (${label})`,
         ).toBeGreaterThanOrEqual(3.5);
       }
     }

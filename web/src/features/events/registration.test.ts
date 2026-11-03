@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
-import { registrationLabel, registrationState } from "./registration";
+import { deadlineText, registrationLabel, registrationState } from "./registration";
 
 const date = (s: string) => Temporal.PlainDate.from(s);
 
@@ -74,5 +74,42 @@ describe("registrationLabel", () => {
     expect(registrationLabel({ kind: "closed" }, createFormatters("en-GB"), en)).toBe(
       "Registration closed",
     );
+  });
+});
+
+/** An open registration until 10 June, `daysLeft` days ahead. */
+const openFor = (daysLeft: number) =>
+  ({ kind: "open", deadline: date("2026-06-10"), daysLeft }) as const;
+
+describe("deadlineText", () => {
+  const inFrench = createFormatters("fr-FR");
+
+  test("deadlineText — plus d'une semaine avant : la date seule, comme registrationLabel", () => {
+    expect(plain(deadlineText(openFor(8), inFrench, fr))).toBe(
+      "Inscriptions jusqu'au mer. 10 juin",
+    );
+    expect(plain(deadlineText(openFor(30), inFrench, fr))).toBe(
+      "Inscriptions jusqu'au mer. 10 juin",
+    );
+  });
+
+  test("deadlineText — une semaine ou moins avant : les jours qui restent, après « · »", () => {
+    // DAYS_LEFT_SHOWN is 7: the week is counted, its last day as « dernier jour ».
+    expect(plain(deadlineText(openFor(7), inFrench, fr))).toBe(
+      "Inscriptions jusqu'au mer. 10 juin · plus que 7 jours",
+    );
+    expect(plain(deadlineText(openFor(1), inFrench, fr))).toBe(
+      "Inscriptions jusqu'au mer. 10 juin · plus qu'un jour",
+    );
+    expect(plain(deadlineText(openFor(0), inFrench, fr))).toBe(
+      "Inscriptions jusqu'au mer. 10 juin · dernier jour",
+    );
+    expect(plain(deadlineText(openFor(3), createFormatters("en-GB"), en))).toBe(
+      `Registration until Wed 10 Jun · ${en.event.daysLeft(3)}`,
+    );
+  });
+
+  test("deadlineText — close : « Inscriptions closes », sans jours", () => {
+    expect(deadlineText({ kind: "closed" }, inFrench, fr)).toBe("Inscriptions closes");
   });
 });

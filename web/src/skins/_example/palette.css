@@ -1,0 +1,100 @@
+/* « Exemple (dev) »: a fake palette, green and yellow, in light
+   only, over Crête's structure and fonts (it has no fonts.css: a skin of
+   development declares no face). It only sets custom properties of Crête, under
+   the skin's selector: every utility that paints with them follows, whatever
+   its variant (a tab that is the current page, a hover), and a page in another
+   skin never sees them. See ../README.md. */
+
+/* The colours of the day. The skin has no dark mode: the page is drawn in this
+   one whatever the theme chosen (lib/theme.ts), so Crête's light values stand
+   for every colour it does not set. Its sky (`.on-dawn`) has these colours too.
+   src/dark.test.ts and the other contrast tests measure them as Crête's. */
+:root[data-skin="_example"] {
+  --color-neutral-50: #f4f7f2;
+  --color-neutral-100: #e8eee4;
+  --color-neutral-200: #d6dfd0;
+  --color-neutral-300: #bccab3;
+  --color-neutral-400: #98a88d;
+  --color-neutral-500: #6b7c60;
+  --color-neutral-600: #526248;
+  --color-neutral-700: #3e4b36;
+  --color-neutral-800: #2c3726;
+  --color-neutral-900: #1f281a;
+  --color-neutral-950: #141a10;
+  --color-ink: #1f281a;
+
+  --color-iris-50: #ecfbf6;
+  --color-iris-100: #d2f4e8;
+  --color-iris-200: #a6e8d2;
+  --color-iris-300: #6fd3b5;
+  --color-iris-400: #1f9a76;
+  --color-iris-500: #179a77;
+  --color-iris-600: #0b7a5e;
+  --color-iris-700: #08634c;
+  --color-iris-800: #064e3c;
+  --color-iris-900: #053b2e;
+
+  --color-toast: #1f281a;
+  --radius-card: 0.75rem;
+  --shade-dialog: rgb(6 78 60 / 0.5);
+  --shade-welcome: rgb(6 78 60 / 0.55);
+  --dawn-glow-warm: rgb(8 99 76 / 0.5);
+  --dawn-glow-cool: rgb(21 94 117 / 0.4);
+
+  /* The dawn of Crête, in green: the pills that carry white text (each stop
+     at least 4.5:1 with white), the soft one, the skies, the lines. */
+  --dawn-soft: linear-gradient(110deg, #a6e8d2 0%, #fde68a 52%, #6fd3b5 100%);
+  --dawn-deep: linear-gradient(110deg, #08634c 0%, #0b7a5e 52%, #155e75 100%);
+  --dawn-sky-color: #08634c;
+  --dawn-sky: linear-gradient(160deg, #064e3c 0%, #08634c 45%, #155e75 100%);
+  --dawn-hero-color: #08634c;
+  --dawn-hero: linear-gradient(150deg, #064e3c 0%, #08634c 45%, #155e75 100%);
+  --dawn-text: linear-gradient(100deg, #08634c 0%, #155e75 100%);
+  --dawn-line: linear-gradient(90deg, #fde68a, #1f9a76);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #1f9a76, transparent);
+  --dawn-ring-from: #0b7a5e;
+  --dawn-ring-via: #1f9a76;
+  --dawn-ring-to: #fde68a;
+  --dawn-chip-glow: rgb(8 99 76 / 0.5);
+  --focus-glow: rgb(11 122 94 / 0.2);
+
+  /* The map of a track: a green line, its ends, its links, the ink and the
+     shade of its words and of its zoom. */
+  --map-ink: #1f281a;
+  --map-hover: #ecfbf6;
+  --map-shade: rgb(31 40 26 / 0.4);
+  --map-line-from: #e3b505;
+  --map-line-via: #0b7a5e;
+  --map-line-to: #155e75;
+  --map-line: #0b7a5e;
+  --map-start: #155e75;
+  --map-finish: #1f281a;
+  --map-link: #08634c;
+
+  /* Crête's motifs, which stand in for those the skin does not draw: green
+     ridges under a yellow sun. */
+  --motif-ridge-far-from: #6fd3b5;
+  --motif-ridge-far-to: #1f9a76;
+  --motif-ridge-mid-from: #0b7a5e;
+  --motif-ridge-mid-to: #08634c;
+  --motif-ridge-near-from: #064e3c;
+  --motif-ridge-near-to: #053b2e;
+  --motif-ridge-light: #fde68a;
+  --motif-sun-core: #fffbe8;
+  --motif-sun-mid: #fde68a;
+  --motif-sun-rim: #e3b505;
+  --motif-halo-from: #fde68a;
+  --motif-halo-to: #e3b505;
+  --motif-dawn-1: #fde68a;
+  --motif-dawn-2: #6fd3b5;
+  --motif-dawn-3: #0b7a5e;
+  --motif-peak-far: #a6e8d2;
+  --motif-peak-near-from: #0b7a5e;
+  --motif-peak-near-to: #053b2e;
+  --motif-hill-near-from: #1f9a76;
+  --motif-hill-near-to: #064e3c;
+  --motif-mark-shade: rgb(31 40 26 / 0.4);
+  --motif-name-shade: rgb(6 78 60 / 0.4);
+  --motif-sun-glow: rgb(227 181 5 / 0.6);
+}

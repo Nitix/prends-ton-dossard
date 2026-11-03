@@ -123,6 +123,17 @@ export const en = {
   },
   settings: {
     appearance: "Appearance",
+    skin: "Theme",
+    mode: "Light or dark",
+    onlyLight: "This theme only has a light mode.",
+    onlyDark: "This theme only has a dark mode.",
+    animateBackground: "Animate the background",
+    animateBackgroundHint:
+      "The drawings in this theme's background move slowly. No effect if your device asks for less motion.",
+    fontSample: "Aa",
+    skinLoading: "Loading the theme…",
+    skinLoadFailed: "This theme could not be loaded: check your connection.",
+    skinLoadFailedOnline: "This theme could not be loaded: reload the app.",
     themeAuto: "Auto (like your system)",
     themeLight: "Light",
     themeDark: "Dark",

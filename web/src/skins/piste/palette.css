@@ -1,0 +1,159 @@
+/* « Piste »: the athletics track at golden hour. A terracotta
+   track red for the accent, a deep ink for the text, the main buttons and the
+   band of the header, a warm cream for the page, white cards, warm greys for
+   the lane lines and the borders; the day only (see ../README.md).
+
+   The scales of Crête's three colours are re-read in the one family of the
+   variant, the track red: iris (the accent: links, the focus ring, what is
+   chosen), peach (the reminder to register, the chip of a deadline) and blush
+   (the pin of a place, what is to confirm) are its steps, the 600 and darker
+   being the ones that carry a text on light. The variant's one cool blue, for
+   the information, stays on the map (the start of a track). */
+:root[data-skin="piste"] {
+  /* The warm greys, from the cream of the page (50) to the ink (900). */
+  --color-neutral-50: #fbf6ef;
+  --color-neutral-100: #f4ece1;
+  --color-neutral-200: #e9dfd2;
+  --color-neutral-300: #d8ccbc;
+  --color-neutral-400: #a99a87;
+  --color-neutral-500: #85786a;
+  --color-neutral-600: #675d53;
+  --color-neutral-700: #463f39;
+  --color-neutral-800: #2b2c33;
+  --color-neutral-900: #1b1f2a;
+  --color-neutral-950: #12151d;
+  --color-ink: #1b1f2a;
+
+  /* The track: the accent. 500 is the brand red. */
+  --color-iris-50: #fdf1ec;
+  --color-iris-100: #fadfd5;
+  --color-iris-200: #f3bba8;
+  --color-iris-300: #ea9277;
+  --color-iris-400: #e8603f;
+  --color-iris-500: #d2452b;
+  --color-iris-600: #b8361f;
+  --color-iris-700: #962b19;
+  --color-iris-800: #742316;
+  --color-iris-900: #521a11;
+
+  --color-peach-50: #fdf1ec;
+  --color-peach-100: #fadfd5;
+  --color-peach-200: #f3bba8;
+  --color-peach-300: #ea9277;
+  --color-peach-400: #e8603f;
+  --color-peach-500: #d2452b;
+  --color-peach-600: #b8361f;
+  --color-peach-700: #962b19;
+  --color-peach-800: #742316;
+
+  --color-blush-50: #fdf1ec;
+  --color-blush-100: #fadfd5;
+  --color-blush-200: #f3bba8;
+  --color-blush-300: #ea9277;
+  --color-blush-400: #e8603f;
+  --color-blush-500: #d2452b;
+  --color-blush-600: #b8361f;
+  --color-blush-700: #962b19;
+  --color-blush-800: #742316;
+
+  /* Danger, as it was. */
+  --color-red-50: #fef2f2;
+  --color-red-200: #fecaca;
+  --color-red-700: #b91c1c;
+  --color-red-800: #991b1b;
+
+  /* White cards on the cream; the edge of a window is a lane line. */
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #e4d9cb;
+  --color-toast: #1b1f2a;
+  --color-scrim: rgb(27 31 42 / 0.5);
+  --color-relief: #12151d;
+
+  /* The five zones of the slope, flat to steep: the cool blue of the variant,
+     the deep green of the infield, the sand of the long-jump pit, the track
+     red itself, and the violet of the evening for the steepest. 3:1 on the
+     card and with the ink line, and apart with a colour vision deficiency too
+     (src/features/route/slope.test.ts); none is one of Crête's. */
+  --color-slope-1: #4a85c8;
+  --color-slope-2: #257867;
+  --color-slope-3: #a7906e;
+  --color-slope-4: #d2452b;
+  --color-slope-5: #8348b7;
+
+  /* Its titles: Barlow Condensed in italic capitals, as the variant's, a hair
+     apart (the title of a page 0.005em, a block's and a card's 0.015em). */
+  --display-style: italic;
+  --display-transform: uppercase;
+  --display-tracking: 0.005em;
+
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+  --radius-card: 0.875rem;
+
+  /* The shadows are ink, light and close, a track-red glow under the main pill. */
+  --shade-card: rgb(27 31 42 / 0.28);
+  --shade-lift: rgb(27 31 42 / 0.38);
+  --shade-bar: rgb(27 31 42 / 0.28);
+  --shade-edge: rgb(27 31 42 / 0.04);
+  --shade-edge-lift: rgb(27 31 42 / 0.04);
+  /* The map has a frame of the track red, like the kerb of a track, and its mat. */
+  --map-frame: 0 0 0 2px #d2452b, 0 0 0 6px #fdf1ec;
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The track in red (on its white halo), its start in the one cool blue, its
+     finish in ink, the links of its attribution. */
+  --map-line-from: #e8603f;
+  --map-line-via: #d2452b;
+  --map-line-to: #b8361f;
+  --map-line: #d2452b;
+  --map-start: #2f6db5;
+  --map-finish: #1b1f2a;
+  --map-link: #962b19;
+
+  /* The paints of the dawn, flat as the variant's colours are. What carries
+     white text is the ink (the variant's main button): the band of the header
+     and the heroes are ink, lit by the red-amber glow of the end of the day. */
+  --dawn-soft: linear-gradient(90deg, #d2452b, #e8603f);
+  --dawn-deep: linear-gradient(110deg, #1b1f2a, #1b1f2a);
+  --dawn-sky-color: #1b1f2a;
+  --dawn-sky:
+    radial-gradient(120% 160% at 100% 0%, rgb(232 96 63 / 0.38), transparent 55%),
+    radial-gradient(60% 120% at 85% 100%, rgb(242 160 80 / 0.16), transparent 60%),
+    linear-gradient(#1b1f2a, #1b1f2a);
+  --dawn-hero-color: #1b1f2a;
+  --dawn-hero:
+    radial-gradient(120% 160% at 100% 0%, rgb(232 96 63 / 0.38), transparent 55%),
+    radial-gradient(60% 120% at 85% 100%, rgb(242 160 80 / 0.16), transparent 60%),
+    linear-gradient(#1b1f2a, #1b1f2a);
+  --dawn-text: linear-gradient(100deg, #b8361f, #962b19);
+  /* The stroke of the track red under the title of a page, and the small mark before a block's. */
+  --dawn-line: linear-gradient(90deg, #d2452b, #e8603f);
+  --dawn-marker-shadow: none;
+  /* The line after the month over a list: a lane line. */
+  --dawn-horizon: linear-gradient(90deg, #d8ccbc, rgb(216 204 188 / 0.4) 55%, transparent);
+  --dawn-ring-from: #ea9277;
+  --dawn-ring-via: #d2452b;
+  --dawn-ring-to: #962b19;
+  --dawn-chip-glow: rgb(27 31 42 / 0.4);
+  /* The halo of the main pills: the red of the track, over an ink shadow. */
+  --dawn-glow-warm: rgb(210 69 43 / 0.55);
+  --dawn-glow-cool: rgb(27 31 42 / 0.3);
+  --focus-glow: rgb(210 69 43 / 0.18);
+  --sky-focus: #fbf6ef;
+
+  /* The card of the sign-in pages, on the ink of the band: the white card of
+     the variant, in a deep ink shade. A window (the variant's shade), a
+     message and the pieces on the band of a hero in the ink. */
+  --welcome-card: #ffffff;
+  --shade-welcome: rgb(10 12 18 / 0.6);
+  --shade-dialog: rgb(27 31 42 / 0.55);
+  --shade-toast: rgb(27 31 42 / 0.7);
+  --shade-notes: rgb(27 31 42 / 0.6);
+  --shade-photo: rgb(27 31 42 / 0.6);
+  --shade-on-dawn: rgb(27 31 42 / 0.5);
+  --hero-veil: rgb(27 31 42 / 0.2);
+}

@@ -1,0 +1,74 @@
+/* The theme of the app for the utilities of a skin (its utilities.css, with
+   Tailwind's prefix: `nuit:fill-iris-600`). A skin sets the colours, the radii
+   and the fonts of the theme on its page (palette.css, fonts.css); a prefixed
+   utility would read a prefixed copy of them (`--nuit-color-iris-600`), with
+   Crête's values. Here each one reads the property of the page itself, where
+   it is used (`inline`). The same names as the `@theme` of ../theme.css, and the
+   stacks that a fonts.css may set besides (`--font-mono`, `--font-serif`):
+   plugin.test.ts checks it. */
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --color-neutral-50: var(--color-neutral-50);
+  --color-neutral-100: var(--color-neutral-100);
+  --color-neutral-200: var(--color-neutral-200);
+  --color-neutral-300: var(--color-neutral-300);
+  --color-neutral-400: var(--color-neutral-400);
+  --color-neutral-500: var(--color-neutral-500);
+  --color-neutral-600: var(--color-neutral-600);
+  --color-neutral-700: var(--color-neutral-700);
+  --color-neutral-800: var(--color-neutral-800);
+  --color-neutral-900: var(--color-neutral-900);
+  --color-neutral-950: var(--color-neutral-950);
+  --color-ink: var(--color-ink);
+  --color-peach-50: var(--color-peach-50);
+  --color-peach-100: var(--color-peach-100);
+  --color-peach-200: var(--color-peach-200);
+  --color-peach-300: var(--color-peach-300);
+  --color-peach-400: var(--color-peach-400);
+  --color-peach-500: var(--color-peach-500);
+  --color-peach-600: var(--color-peach-600);
+  --color-peach-700: var(--color-peach-700);
+  --color-peach-800: var(--color-peach-800);
+  --color-blush-50: var(--color-blush-50);
+  --color-blush-100: var(--color-blush-100);
+  --color-blush-200: var(--color-blush-200);
+  --color-blush-300: var(--color-blush-300);
+  --color-blush-400: var(--color-blush-400);
+  --color-blush-500: var(--color-blush-500);
+  --color-blush-600: var(--color-blush-600);
+  --color-blush-700: var(--color-blush-700);
+  --color-blush-800: var(--color-blush-800);
+  --color-iris-50: var(--color-iris-50);
+  --color-iris-100: var(--color-iris-100);
+  --color-iris-200: var(--color-iris-200);
+  --color-iris-300: var(--color-iris-300);
+  --color-iris-400: var(--color-iris-400);
+  --color-iris-500: var(--color-iris-500);
+  --color-iris-600: var(--color-iris-600);
+  --color-iris-700: var(--color-iris-700);
+  --color-iris-800: var(--color-iris-800);
+  --color-iris-900: var(--color-iris-900);
+  --color-red-50: var(--color-red-50);
+  --color-red-200: var(--color-red-200);
+  --color-red-700: var(--color-red-700);
+  --color-red-800: var(--color-red-800);
+  --color-card: var(--color-card);
+  --color-raised: var(--color-raised);
+  --color-field: var(--color-field);
+  --color-rim: var(--color-rim);
+  --color-toast: var(--color-toast);
+  --color-scrim: var(--color-scrim);
+  --color-relief: var(--color-relief);
+  --color-slope-1: var(--color-slope-1);
+  --color-slope-2: var(--color-slope-2);
+  --color-slope-3: var(--color-slope-3);
+  --color-slope-4: var(--color-slope-4);
+  --color-slope-5: var(--color-slope-5);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-card: var(--radius-card);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+}

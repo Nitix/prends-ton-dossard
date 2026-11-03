@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* The skins of development (the folders src/skins/_<name>/), the notes of the
+   skins and the tests are not scanned for the names of classes: nothing of them
+   reaches the CSS of a build (a skin of development styles its few pieces
+   inline), and the tests draw with the CSS of the app as it is built. */
+@source not "./skins/_*/**";
+/* Nor are the folders of the other skins, and the one they share: each look
+   brings the utilities of its motifs in a sheet of its own (its utilities.css),
+   loaded with it, so that a person who stays on « Crête » loads none of them.
+   A new skin adds its folder here (skins/plugin.test.ts says so). */
+@source not "./skins/{alpage,aurore,carnet,chrono,dossard,marathon,nuit,piste,retro,sentier,shared}/**";
+@source not "./skins/README.md";
+@source not "./**/*.test.ts";
+@source not "./**/*.test.tsx";
+@source not "./test/**";
+
 /* The fonts are served by the site, not by Google: the two @fontsource-variable
    packages ship one variable file per script, and only the two that French
    needs are used (latin, and latin-ext for a name such as Łukasz). The browser
@@ -58,184 +73,9 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* « Crête »: the dawn over the ridges, drawn like a map. A soft sunrise (peach,
-   coral pink, violet) for the header, the heroes, the main buttons and a few
-   accents, with the contour lines of a map and the mountains at the foot of the
-   sky (see components/Alpenglow.tsx); the content sits on white and on a very
-   light lilac, in a deep plum ink. These are the colours of the day; at night
-   (the dark theme, further down) the sky stays and the content goes dark. */
-@theme {
-  --font-sans:
-    "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display:
-    "Plus Jakarta Sans Variable", "Inter Variable", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-
-  /* The greys of the app are plum greys: every `neutral-*` class takes them. */
-  --color-neutral-50: #fbf8ff;
-  --color-neutral-100: #f4effa;
-  --color-neutral-200: #e9e2f2;
-  --color-neutral-300: #d8cfe5;
-  --color-neutral-400: #b4a9c4;
-  --color-neutral-500: #8e829f;
-  --color-neutral-600: #6b6080;
-  --color-neutral-700: #4f4563;
-  --color-neutral-800: #362d49;
-  --color-neutral-900: #241b35;
-  --color-neutral-950: #170f24;
-  --color-ink: #241b35;
-
-  /* The three colours of the dawn, each with its range. The 300–400 steps are
-     the soft sky (accents, rings, glows); the 600 steps carry white text. */
-  --color-peach-50: #fff6f0;
-  --color-peach-100: #ffeadd;
-  --color-peach-200: #ffd5bc;
-  --color-peach-300: #ffb38a;
-  --color-peach-400: #ff9a6a;
-  --color-peach-500: #f47e4e;
-  --color-peach-600: #e5622f;
-  --color-peach-700: #b04a22;
-  --color-peach-800: #86391c;
-
-  --color-blush-50: #fff2f8;
-  --color-blush-100: #ffe4f0;
-  --color-blush-200: #ffc9e0;
-  --color-blush-300: #ffa3c9;
-  --color-blush-400: #ff7eb3;
-  --color-blush-500: #f0579a;
-  --color-blush-600: #d6336f;
-  --color-blush-700: #b0285c;
-  --color-blush-800: #87204a;
-
-  --color-iris-50: #f5f3ff;
-  --color-iris-100: #ece8ff;
-  --color-iris-200: #dad3ff;
-  --color-iris-300: #bdb2ff;
-  --color-iris-400: #8b7cff;
-  --color-iris-500: #7462f7;
-  --color-iris-600: #5e4ae3;
-  --color-iris-700: #4b37c4;
-  --color-iris-800: #3a2b99;
-  --color-iris-900: #2a2070;
-
-  /* The reds of Tailwind that the app uses (an error, a delete), written out
-     so that the dark theme can give them their night. */
-  --color-red-50: #fef2f2;
-  --color-red-200: #ffc9c9;
-  --color-red-700: #c10007;
-  --color-red-800: #9f0712;
-
-  /* The grounds of the content, from the lowest: the sheet of the page is
-     `neutral-50`; on it a card; over a card, what floats (a window, a menu,
-     the tab bar); in it, a field. All white by day. */
-  --color-card: #ffffff;
-  --color-raised: #ffffff;
-  --color-field: #ffffff;
-  /* The edge of a window and the frame of the map: white on white by day. */
-  --color-rim: #ffffff;
-  /* The pill of a message (a toast, the offline band), white text on it. */
-  --color-toast: #241b35;
-  /* The veil behind a window. */
-  --color-scrim: rgb(36 27 53 / 0.5);
-  /* The line of the elevation profile, over its zones. */
-  --color-relief: #241b35;
-  /* The five zones of the slope, from gentle to steep (see features/route/slope.ts). */
-  --color-slope-1: #7c8dd6;
-  --color-slope-2: #4ca378;
-  --color-slope-3: #ba8907;
-  --color-slope-4: #b74802;
-  --color-slope-5: #ce0a6d;
-
-  --radius-lg: 0.875rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  --radius-card: 1.25rem;
-
-  /* The shadows of the day are tinted violet; their colour is a variable (see
-     `:root`) so that the night can make them dark. */
-  --shadow-card: 0 1px 2px rgb(36 27 53 / 0.04), 0 10px 28px -16px var(--shade-card);
-  --shadow-lift: 0 2px 4px rgb(36 27 53 / 0.05), 0 18px 40px -18px var(--shade-lift);
-  --shadow-glow: 0 10px 28px -10px rgb(214 51 111 / 0.55), 0 4px 12px -6px rgb(94 74 227 / 0.45);
-  --shadow-bar: 0 -1px 0 rgb(36 27 53 / 0.04), 0 12px 40px -10px var(--shade-bar);
-
-  --animate-rise: rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  --animate-pop: pop 380ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
-
-  @keyframes rise {
-    from {
-      opacity: 0;
-      transform: translateY(14px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-  @keyframes pop {
-    0% {
-      transform: scale(0.6);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-}
-
-/* The soft sunrise: rings, the active tab's halo, small bars and dots. Dark
-   text only, if any (plum ink is 5:1 on its darkest step). */
-@utility bg-dawn {
-  background-image: linear-gradient(110deg, #ffb38a 0%, #ff7eb3 52%, #8b7cff 100%);
-}
-
-/* The same sunrise, a few steps deeper, for what carries white text: every
-   stop is at least 4.6:1 with white. */
-@utility bg-dawn-deep {
-  background-image: linear-gradient(110deg, #d6336f 0%, #a63fae 52%, #5e4ae3 100%);
-}
-
-/* The sky of the header and of the heroes: violet at the top left, where the
-   white text is, warming to coral at the bottom right, where the sun rises. */
-@utility bg-dawn-sky {
-  background-color: #5e4ae3;
-  background-image:
-    radial-gradient(
-      120% 140% at 88% 120%,
-      rgb(255 179 138 / 0.95) 0%,
-      rgb(255 126 179 / 0.55) 32%,
-      transparent 62%
-    ),
-    linear-gradient(160deg, #4b37c4 0%, #6a4ee0 30%, #a63fae 64%, #d6336f 100%);
-}
-
-/* The sky of a hero (the page of an event): deep all over, since white text
-   runs across it (4.6:1 at least everywhere); the sun is drawn on top. */
-@utility bg-dawn-hero {
-  background-color: #5e4ae3;
-  background-image:
-    radial-gradient(80% 90% at 100% 100%, rgb(214 51 111 / 0.9) 0%, transparent 70%),
-    linear-gradient(150deg, #4b37c4 0%, #5e4ae3 30%, #8a42c4 62%, #c2367f 100%);
-}
-
-/* Big numbers in the deep colours of the dawn (each stop 4.6:1 on white). */
-@utility text-dawn {
-  background-image: linear-gradient(100deg, #d6336f 0%, #a63fae 50%, #5e4ae3 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-}
-
-/* A frosted card over the gradient: white enough for plum ink to stay 13:1 by
-   day, the night of a card at night (the ink 12:1 on it, over the sky). */
-@utility glass {
-  background-color: color-mix(in srgb, var(--color-card) 95%, transparent);
-  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-    background-color: color-mix(in srgb, var(--color-card) 82%, transparent);
-    -webkit-backdrop-filter: blur(14px) saturate(1.4);
-    backdrop-filter: blur(14px) saturate(1.4);
-  }
-}
+/* The theme of Tailwind (`@theme`) and the utilities of the app (`@utility`), in
+   theme.css: the sheet of the utilities of a skin imports it too (its utilities.css). */
+@import "./theme.css";
 
 @layer base {
   /* The light theme is the theme when nothing says otherwise. Saying so keeps
@@ -248,11 +88,132 @@
     --shade-card: rgb(94 74 227 / 0.28);
     --shade-lift: rgb(94 74 227 / 0.4);
     --shade-bar: rgb(58 43 153 / 0.28);
+    /* The thin line under the shadows of a card, of a card that lifts, of the tab bar. */
+    --shade-edge: rgb(36 27 53 / 0.04);
+    --shade-edge-lift: rgb(36 27 53 / 0.05);
+    /* The shade of a window (components/Dialog) and of the card of the sign-in
+       pages (routes/__root), the same by day and at night. */
+    --shade-dialog: rgb(42 32 112 / 0.55);
+    --shade-welcome: rgb(42 32 112 / 0.6);
+    /* The ground laid over the frosted glass of that card (none: the glass of a
+       card shows the sky through), and its rim (the rim of a window, at 70 %). */
+    --welcome-card: transparent;
+    --welcome-rim: color-mix(in oklab, var(--color-rim) 70%, transparent);
+    /* The shade of a message (components/Toast); on the sky of a hero, the
+       shade of the notes of an event, of the photo of a runner and of a white
+       pill (`ON_DAWN`), the ring that cuts the photo out of the sky, and the
+       veil under the end of the registrations (and, a little lighter, in the
+       ring of the days left). */
+    --shade-toast: rgb(36 27 53 / 0.7);
+    --shade-notes: rgb(36 27 53 / 0.6);
+    --shade-photo: rgb(36 27 53 / 0.6);
+    --shade-on-dawn: rgb(36 27 53 / 0.5);
+    --photo-ring: rgb(255 255 255 / 0.85);
+    --hero-veil: rgb(36 27 53 / 0.2);
+    /* The style of the display face in the titles (`.page-title`, `.block-title`,
+       `.card-title`, `display-title`): upright, as written, at the width of the
+       face; the letter-spacing of the title of a page (a block's and a card's
+       are 0.01em wider). */
+    --display-style: normal;
+    --display-transform: none;
+    --display-stretch: normal;
+    --display-tracking: -0.025em;
     --map-frame:
       0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
       0 6px 24px -12px rgb(94 74 227 / 0.45);
     --map-veil: none;
     --sheet-glow: none;
+
+    /* The map of a track (features/route/TrackMap): the gradient of its line,
+       and its colour where a gradient cannot be drawn, its start and its finish,
+       the links of its attribution. The map stays light at night. */
+    --map-line-from: #f47e4e;
+    --map-line-via: #d6336f;
+    --map-line-to: #5e4ae3;
+    --map-line: #d6336f;
+    --map-start: #5e4ae3;
+    --map-finish: #241b35;
+    --map-link: #4b37c4;
+    /* The words of the start and of the finish, and the zoom buttons, on
+       Leaflet's white: their ink, the ground of a zoom button under the
+       pointer, their shade. */
+    --map-ink: #241b35;
+    --map-hover: #f5f3ff;
+    --map-shade: rgb(36 27 53 / 0.45);
+
+    /* Crête's motifs (skins/crete/), which stand in for those a skin does not
+       draw: a skin sets these to have them in its colours. The ridges, from the
+       far to the near, from their crest to their foot, and the light on the far
+       crests; the sun and its halo; the three colours of the dawn of the mark of
+       the app and of an empty list; the two summits of the mark; the near hills
+       of an empty list. */
+    --motif-ridge-far-from: #e46aa6;
+    --motif-ridge-far-to: #a54cb6;
+    --motif-ridge-mid-from: #7d43b8;
+    --motif-ridge-mid-to: #5b3aa8;
+    --motif-ridge-near-from: #3b2b8a;
+    --motif-ridge-near-to: #2a2070;
+    --motif-ridge-light: #ffd5bc;
+    --motif-sun-core: #fff7f0;
+    --motif-sun-mid: #ffd2b8;
+    --motif-sun-rim: #ff9fc4;
+    --motif-halo-from: #ffd5bc;
+    --motif-halo-to: #ffb38a;
+    --motif-dawn-1: #ffb38a;
+    --motif-dawn-2: #ff7eb3;
+    --motif-dawn-3: #8b7cff;
+    --motif-peak-far: #c9bfff;
+    --motif-peak-near-from: #5e4ae3;
+    --motif-peak-near-to: #2a2070;
+    --motif-hill-near-from: #7462f7;
+    --motif-hill-near-to: #3a2b99;
+    /* The shade under the tile of the mark and behind the name of the app, on
+       the sky; the glow of the sun of the divider (RidgeDivider). */
+    --motif-mark-shade: rgb(36 27 53 / 0.45);
+    --motif-name-shade: rgb(42 32 112 / 0.35);
+    --motif-sun-glow: rgb(255 154 106 / 0.6);
+
+    /* The paints of the dawn, the same by day and at night (they never use a
+       colour that the night changes). The sky of the header and of the heroes:
+       a colour under a gradient. src/dark.test.ts and src/contrast.test.ts
+       measure the white text on them. */
+    --dawn-soft: linear-gradient(110deg, #ffb38a 0%, #ff7eb3 52%, #8b7cff 100%);
+    --dawn-deep: linear-gradient(110deg, #d6336f 0%, #a63fae 52%, #5e4ae3 100%);
+    /* The ink of what the deep dawn paints (`text-dawn-deep-ink`): its words,
+       its icons, the ring and the dots of a chosen day. */
+    --dawn-deep-ink: #ffffff;
+    --dawn-sky-color: #5e4ae3;
+    --dawn-sky:
+      radial-gradient(
+        120% 140% at 88% 120%,
+        rgb(255 179 138 / 0.95) 0%,
+        rgb(255 126 179 / 0.55) 32%,
+        transparent 62%
+      ),
+      linear-gradient(160deg, #4b37c4 0%, #6a4ee0 30%, #a63fae 64%, #d6336f 100%);
+    --dawn-hero-color: #5e4ae3;
+    --dawn-hero:
+      radial-gradient(80% 90% at 100% 100%, rgb(214 51 111 / 0.9) 0%, transparent 70%),
+      linear-gradient(150deg, #4b37c4 0%, #5e4ae3 30%, #8a42c4 62%, #c2367f 100%);
+    --dawn-text: linear-gradient(100deg, #d6336f 0%, #a63fae 50%, #5e4ae3 100%);
+    /* The crest under the title of a page, and the small sun before the title of a block. */
+    --dawn-line: linear-gradient(90deg, #ffb38a, #ff7eb3 55%, #8b7cff);
+    --dawn-marker-shadow: 0 0.2rem 0 -0.08rem rgb(139 124 255 / 0.35);
+    /* The horizon after the month over a list of events. */
+    --dawn-horizon: linear-gradient(90deg, #ffa3c9, rgb(189 178 255 / 0.5) 45%, transparent);
+    /* The ring of the days left, from its start to its end. */
+    --dawn-ring-from: #8b7cff;
+    --dawn-ring-via: #ff7eb3;
+    --dawn-ring-to: #ffb38a;
+    /* The glow under the day of an event (its chip of sunrise). */
+    --dawn-chip-glow: rgb(214 51 111 / 0.6);
+    /* The halo of what is painted with the deep dawn (`shadow-glow`: the main
+       buttons, the current tab, the «+»): its warm and its cool colour. */
+    --dawn-glow-warm: rgb(214 51 111 / 0.55);
+    --dawn-glow-cool: rgb(94 74 227 / 0.45);
+    /* The halo of a field with the focus, and the ring of the focus on the sky. */
+    --focus-glow: rgb(139 124 255 / 0.18);
+    --sky-focus: #fff;
   }
 
   /* « Crête » at night: the dark theme. The sky of the header and of the
@@ -382,8 +343,10 @@
      event or of a runner, the name of the app on the login page), the colours
      of the day are back, every one that the night changes. A white pill on a
      hero stays white with its violet text, the notes of an event stay a
-     frosted white. */
-  .on-dawn {
+     frosted white. This is Crête's sky (no `data-skin` on <html>): under
+     another skin, the sky has the colours of that skin, unless its stylesheet
+     puts others back there (see src/skins/README.md). */
+  :root:not([data-skin]) .on-dawn {
     color-scheme: light;
     --color-neutral-50: #fbf8ff;
     --color-neutral-100: #f4effa;
@@ -479,10 +442,29 @@
   }
 }
 
+/* What can be clicked shows the hand, as a link does (Tailwind 4 leaves buttons
+   the arrow of the system), and what is out of reach says so. `:where` keeps
+   them weightless: a `cursor-*` utility still wins. */
+@layer base {
+  :where(
+    button,
+    summary,
+    select,
+    input:is([type="checkbox"], [type="radio"], [type="file"]),
+    label:has(input:is([type="checkbox"], [type="radio"]))
+  ) {
+    cursor: pointer;
+  }
+  :where(button, select, input):disabled,
+  :where([aria-disabled="true"], label:has(input:disabled)) {
+    cursor: not-allowed;
+  }
+}
+
 @layer components {
   /* What sits on the sky takes a white focus ring. */
   .on-dawn :focus-visible {
-    outline-color: #fff;
+    outline-color: var(--sky-focus);
   }
 
   /* The title of a page, and under it a short crest line, in the colours of the sunrise. */
@@ -491,7 +473,10 @@
     font-size: 1.75rem;
     line-height: 1.15;
     font-weight: 800;
-    letter-spacing: -0.025em;
+    font-style: var(--display-style);
+    font-stretch: var(--display-stretch);
+    text-transform: var(--display-transform);
+    letter-spacing: var(--display-tracking);
     color: var(--color-ink);
   }
   .page-title::after {
@@ -500,12 +485,13 @@
     width: 3.25rem;
     height: 0.5625rem;
     margin-top: 0.45rem;
-    background-image: linear-gradient(90deg, #ffb38a, #ff7eb3 55%, #8b7cff);
+    background-image: var(--dawn-line);
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 52 9'%3E%3Cpath d='M1.5 7.5 8 4.5l3.5 2L19 1.5l6 5 3.5-2.5 5 3.5 4-3 5 2.5 8-3' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
       center / 100% 100% no-repeat;
   }
 
-  /* The title of a block: a small sun on the horizon before it. */
+  /* The title of a block (an `h2.section-title`), after the mark of the skin
+     (its `SectionMarker`, the first child of the title). */
   .block-title {
     display: flex;
     align-items: center;
@@ -514,17 +500,20 @@
     font-size: 1.125rem;
     line-height: 1.3;
     font-weight: 700;
-    letter-spacing: -0.015em;
+    font-style: var(--display-style);
+    font-stretch: var(--display-stretch);
+    text-transform: var(--display-transform);
+    letter-spacing: calc(var(--display-tracking) + 0.01em);
     color: var(--color-ink);
   }
-  .block-title::before {
-    content: "";
+  /* Crête's mark: a small sun on the horizon. */
+  .section-marker {
     flex: none;
     width: 0.9rem;
     height: 0.45rem;
     border-radius: 0.9rem 0.9rem 0 0;
-    background-image: linear-gradient(90deg, #ffb38a, #ff7eb3 55%, #8b7cff);
-    box-shadow: 0 0.2rem 0 -0.08rem rgb(139 124 255 / 0.35);
+    background-image: var(--dawn-line);
+    box-shadow: var(--dawn-marker-shadow);
   }
 
   /* The title of a card: an event, a race. */
@@ -533,7 +522,10 @@
     font-size: 1.0625rem;
     line-height: 1.3;
     font-weight: 700;
-    letter-spacing: -0.015em;
+    font-style: var(--display-style);
+    font-stretch: var(--display-stretch);
+    text-transform: var(--display-transform);
+    letter-spacing: calc(var(--display-tracking) + 0.01em);
   }
 
   /* The month over a list of events: in capitals, then the horizon. */
@@ -553,7 +545,7 @@
     content: "";
     flex: 1;
     height: 1px;
-    background-image: linear-gradient(90deg, #ffa3c9, rgb(189 178 255 / 0.5) 45%, transparent);
+    background-image: var(--dawn-horizon);
   }
 
   /* The initials of a runner who has no photo: a pastel of the dawn (its deep
@@ -705,7 +697,7 @@
   textarea
 ):focus {
   border-color: var(--color-iris-500);
-  box-shadow: 0 0 0 4px rgb(139 124 255 / 0.18);
+  box-shadow: 0 0 0 4px var(--focus-glow);
 }
 
 /* The cursor of the elevation profile: a range with no track and no thumb to

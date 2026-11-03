@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Avatar } from "../../components/Avatar";
+import { BlockTitle } from "../../components/BlockTitle";
 import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { Field, INPUT } from "../../components/Field";
@@ -69,10 +70,10 @@ export function CommentsSection({ eventId, me }: { eventId: string; me: Me | nul
   const comments = query.data;
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title">
+    <section aria-labelledby={headingId} className={`comments flex flex-col gap-3 ${SECTION}`}>
+      <BlockTitle id={headingId} ref={heading} tabIndex={-1}>
         {comments ? t.comments.title(comments.length) : t.comments.heading}
-      </h2>
+      </BlockTitle>
       {comments ? (
         comments.length === 0 ? (
           <p className="text-sm text-neutral-600">{t.comments.empty}</p>
@@ -193,7 +194,7 @@ function CommentItem({
   const canDelete = !!me && canDeleteComment(author, me);
 
   return (
-    <li className="flex flex-col gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100">
+    <li className="comment flex flex-col gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100">
       <div className="flex items-center gap-3">
         <Avatar
           runner={author}
@@ -319,7 +320,7 @@ function EditForm({
   }
 
   return (
-    <form ref={form} onSubmit={submit} className="flex flex-col gap-2">
+    <form ref={form} onSubmit={submit} className="comment-form flex flex-col gap-2">
       <Field label={t.comments.editLabel} error={message}>
         {(control) => (
           <textarea
@@ -386,7 +387,7 @@ function NewComment({ eventId }: { eventId: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
+    <form onSubmit={submit} className="comment-form flex flex-col gap-2">
       <Field label={t.comments.newLabel} hint={t.comments.sendHint} error={message}>
         {(control) => (
           <textarea

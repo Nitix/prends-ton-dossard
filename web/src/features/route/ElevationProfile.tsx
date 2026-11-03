@@ -300,8 +300,8 @@ function Profile({
   };
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div ref={box} className="relative w-full">
+    <div className="elevation-profile flex flex-col gap-2.5">
+      <div ref={box} className="profile-chart relative w-full">
         <svg
           // A drawing in SVG has no <img> to stand for it: role="img" makes it a picture.
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
@@ -325,7 +325,9 @@ function Profile({
               x2={MARGIN.left + plotWidth}
               y1={y(ele)}
               y2={y(ele)}
-              className={i === 0 ? "stroke-neutral-400" : "stroke-neutral-200"}
+              className={
+                i === 0 ? "profile-baseline stroke-neutral-400" : "profile-grid stroke-neutral-200"
+              }
               strokeWidth={1}
               shapeRendering="crispEdges"
             />
@@ -346,7 +348,7 @@ function Profile({
           <path
             d={line}
             fill="none"
-            className="stroke-relief"
+            className="profile-line stroke-relief"
             strokeWidth={1.75}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -359,7 +361,7 @@ function Profile({
               dy="0.35em"
               textAnchor="end"
               fontSize={LABEL_FONT_SIZE}
-              className="fill-neutral-600 tabular-nums forced-colors:fill-[CanvasText]"
+              className="profile-label fill-neutral-600 tabular-nums forced-colors:fill-[CanvasText]"
             >
               {f.meters(ele)}
             </text>
@@ -371,7 +373,7 @@ function Profile({
                 x2={x(km)}
                 y1={bottom}
                 y2={bottom + TICK_LENGTH}
-                className="stroke-neutral-400"
+                className="profile-tick stroke-neutral-400"
                 strokeWidth={1}
                 shapeRendering="crispEdges"
               />
@@ -382,7 +384,7 @@ function Profile({
                   dy="0.8em"
                   textAnchor={anchor}
                   fontSize={LABEL_FONT_SIZE}
-                  className="fill-neutral-600 tabular-nums forced-colors:fill-[CanvasText]"
+                  className="profile-label fill-neutral-600 tabular-nums forced-colors:fill-[CanvasText]"
                 >
                   {f.km(km)}
                 </text>
@@ -394,7 +396,7 @@ function Profile({
             cx={x(summit.km)}
             cy={y(summit.ele)}
             r={4}
-            className="fill-relief stroke-card"
+            className="profile-summit fill-relief stroke-card"
             strokeWidth={2}
           />
           {at && (
@@ -461,7 +463,7 @@ function Profile({
         {/* The highest altitude, over the summit; the cursor's figures in its place while it is there. */}
         <p
           aria-hidden="true"
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-dawn-deep px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-white tabular-nums shadow-glow"
+          className="profile-reading pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-dawn-deep px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-dawn-deep-ink tabular-nums shadow-glow"
           style={{
             left: Math.min(
               Math.max(x(at ? at.km : summit.km), MARGIN.left + 44),
@@ -476,7 +478,10 @@ function Profile({
         </p>
       </div>
       {/* The legend of the zones of the slope: each colour with its words. */}
-      <div aria-hidden="true" className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 pl-1">
+      <div
+        aria-hidden="true"
+        className="profile-legend flex flex-wrap items-center gap-x-3.5 gap-y-1.5 pl-1"
+      >
         <span className="eyebrow">{t.route.slope}</span>
         {legend.map(({ zone, text }) => (
           <span

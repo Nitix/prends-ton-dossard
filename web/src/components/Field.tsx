@@ -7,11 +7,11 @@ import { useId, type ReactNode } from "react";
  * src/contrast.test.ts measures it).
  */
 export const INPUT =
-  "min-h-11 rounded-xl border border-neutral-500 bg-field px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-400 focus:border-iris-500 focus:shadow-[0_0_0_4px_rgb(139_124_255/0.18)] aria-invalid:border-red-700";
+  "field-input min-h-11 rounded-xl border border-neutral-500 bg-field px-3.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(36_27_53/0.04)] transition-[border-color,box-shadow] hover:border-iris-400 focus:border-iris-500 focus:shadow-[0_0_0_4px_var(--focus-glow)] aria-invalid:border-red-700";
 
 /** The look of a field that shows a text to copy, read-only: its edge, on the soft ground of a panel. */
 export const READ_ONLY_INPUT =
-  "min-h-11 rounded-xl border border-neutral-500 bg-neutral-50 px-3.5 text-base text-neutral-800";
+  "field-input field-readonly min-h-11 rounded-xl border border-neutral-500 bg-neutral-50 px-3.5 text-base text-neutral-800";
 
 /** What the control of a field gets, to be linked to its label, its hint and its error. */
 export type FieldControl = {
@@ -53,8 +53,8 @@ export function Field({
     .join(" ");
 
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-semibold text-neutral-800">
+    <div className="field flex flex-col gap-1">
+      <label htmlFor={id} className="field-label text-sm font-semibold text-neutral-800">
         {label}
       </label>
       {children({
@@ -63,12 +63,12 @@ export function Field({
         "aria-invalid": error !== null,
       })}
       {hint !== undefined && (
-        <p id={hintId} className="text-sm text-neutral-600">
+        <p id={hintId} className="field-hint text-sm text-neutral-600">
           {hint}
         </p>
       )}
       {error !== null && (
-        <p id={errorId} role="alert" className="text-sm font-medium text-red-700">
+        <p id={errorId} role="alert" className="field-error text-sm font-medium text-red-700">
           {error}
         </p>
       )}

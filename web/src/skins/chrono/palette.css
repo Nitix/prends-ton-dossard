@@ -1,0 +1,166 @@
+/* « Chrono »: the screen of a GPS watch, on the structure of
+   Crête. Ink on a cool grey page, white cards, and no colour but the five
+   heart-rate zones that every runner knows, always beside words. It has no dark
+   mode: the page is drawn in this one whatever the theme chosen (lib/theme.ts),
+   so Crête's light values stand for every colour it does not set, and its sky
+   (`.on-dawn`) has these colours as they are.
+
+   The accent is the ink of the start button of a watch: Crête's accent range
+   (`iris`) is the slate of the ink, which makes the focus ring, the links and
+   the chosen day ink, as in the variant; the main button, the current tab and
+   the «+» are ink through `--dawn-deep`. The zones are not a range of the app,
+   so they show where a palette reaches them: the five steps of the slope, the
+   line under a title, the ring of the days left, the track on the map (orange,
+   the fourth zone), and the motifs. The variant's header was white with the
+   strip of the zones on its top edge; Crête's carries white text on its sky, so
+   the sky is the ink of a watch screen, the strip along its foot. Orange
+   (`peach`) is the reminder to register, blue (`blush`) the passkey and a
+   participation to confirm. Nothing here is a shadow or a font (a palette
+   cannot set them): `--shade-*` are the colours of the shadows, fonts.css has
+   the faces. */
+
+:root[data-skin="chrono"] {
+  /* The cool greys: 600 is the secondary text, 400 the dashes of what is not
+     confirmed. */
+  --color-neutral-50: #f6f7f9;
+  --color-neutral-100: #edeff2;
+  --color-neutral-200: #e1e4e9;
+  --color-neutral-300: #c9ced6;
+  --color-neutral-400: #858d98;
+  --color-neutral-500: #6b7480;
+  --color-neutral-600: #555d68;
+  --color-neutral-700: #3c434c;
+  --color-neutral-800: #252b32;
+  --color-neutral-900: #101418;
+  --color-neutral-950: #0a0d10;
+  --color-ink: #101418;
+
+  /* The accent is the ink, in a slate range. */
+  --color-iris-50: #eef1f5;
+  --color-iris-100: #e1e6ed;
+  --color-iris-200: #c9d1dc;
+  --color-iris-300: #9aa5b4;
+  --color-iris-400: #6b7684;
+  --color-iris-500: #3c434c;
+  --color-iris-600: #252b32;
+  --color-iris-700: #1b2127;
+  --color-iris-800: #101418;
+  --color-iris-900: #0a0d10;
+
+  /* The fourth zone, orange: the reminder to register. */
+  --color-peach-50: #fdebdb;
+  --color-peach-100: #fbdcc0;
+  --color-peach-200: #f8c9a0;
+  --color-peach-300: #f5ac6e;
+  --color-peach-400: #f28b30;
+  --color-peach-500: #de7421;
+  --color-peach-600: #c2631a;
+  --color-peach-700: #a14a06;
+  --color-peach-800: #7c3a04;
+
+  /* The first zone, blue: the passkey, the pin of a place, a participation to
+     confirm. */
+  --color-blush-50: #f1f6fc;
+  --color-blush-100: #e8f0f9;
+  --color-blush-200: #cfe0f2;
+  --color-blush-300: #a9c6e6;
+  --color-blush-400: #7aa7d9;
+  --color-blush-500: #4f86bf;
+  --color-blush-600: #2e5c8f;
+  --color-blush-700: #264c75;
+  --color-blush-800: #1d3a5b;
+
+  /* The danger of the app is the red of the fifth zone, deep enough for a text. */
+  --color-red-50: #fce4e5;
+  --color-red-200: #f6b6b8;
+  --color-red-700: #b42328;
+  --color-red-800: #8f1b1f;
+
+  /* White cards on the cool page; a message is an ink pill. */
+  --color-card: #ffffff;
+  --color-raised: #ffffff;
+  --color-field: #ffffff;
+  --color-rim: #ffffff;
+  --color-toast: #101418;
+  --color-scrim: rgb(16 20 24 / 0.55);
+  --color-relief: #101418;
+
+  /* The five steps of the slope, from flat to steep: the five zones of the
+     variant (blue, green, yellow, orange, red), each darkened, and a little
+     moved in hue where two of them were too near, until it has 3:1 on a white
+     card and with the ink line, and none melts into another, with a colour
+     vision deficiency either (src/features/route/slope.test.ts). */
+  --color-slope-1: #5b8fc3;
+  --color-slope-2: #00a167;
+  --color-slope-3: #ad7e00;
+  --color-slope-4: #b73800;
+  --color-slope-5: #ff556c;
+
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+  --radius-card: 0.875rem;
+
+  /* The shadows are ink, barely there: the colours inside Crête's shadows. The
+     variant has no halo: the glows are none. */
+  --shade-card: rgb(16 20 24 / 0.16);
+  --shade-lift: rgb(16 20 24 / 0.28);
+  --shade-bar: rgb(16 20 24 / 0.2);
+  --shade-edge: rgb(16 20 24 / 0.06);
+  --shade-edge-lift: rgb(16 20 24 / 0.08);
+  --dawn-glow-warm: transparent;
+  --dawn-glow-cool: transparent;
+  --map-frame: 0 0 0 1px #e1e4e9, 0 8px 24px -14px rgb(16 20 24 / 0.3);
+  --map-veil: none;
+  --sheet-glow: none;
+
+  /* The paints. A flat colour is a gradient of one stop. The main button, the
+     current tab and the «+» are ink (white on it 18:1); the header and the
+     heroes are the ink of a watch screen. The zones are the ones of the
+     variant: the strip under a title, the ring of the days left. */
+  --dawn-soft: linear-gradient(
+    110deg,
+    #e8f0f9 0%,
+    #e3f6ec 25%,
+    #fdf5da 50%,
+    #fdebdb 75%,
+    #fce4e5 100%
+  );
+  --dawn-deep: linear-gradient(110deg, #101418 0%, #101418 100%);
+  --dawn-sky-color: #101418;
+  --dawn-sky: linear-gradient(160deg, #101418 0%, #101418 100%);
+  --dawn-hero-color: #101418;
+  --dawn-hero: linear-gradient(150deg, #101418 0%, #101418 100%);
+  --dawn-text: linear-gradient(100deg, #101418 0%, #252b32 100%);
+  --dawn-line: linear-gradient(90deg, #7aa7d9, #3dbe7a 25%, #f5c542 50%, #f28b30 75%, #e5484d);
+  --dawn-marker-shadow: none;
+  --dawn-horizon: linear-gradient(90deg, #c9ced6, transparent);
+  --dawn-ring-from: #7aa7d9;
+  --dawn-ring-via: #f5c542;
+  --dawn-ring-to: #e5484d;
+  --dawn-chip-glow: rgb(16 20 24 / 0.25);
+  --focus-glow: rgb(16 20 24 / 0.12);
+  --sky-focus: #ffffff;
+
+  /* The map of a track: the orange of the fourth zone, a green start, an ink
+     finish. */
+  --map-line-from: #f6a35a;
+  --map-line-via: #f28b30;
+  --map-line-to: #d9701a;
+  --map-line: #f28b30;
+  --map-start: #1a7444;
+  --map-finish: #101418;
+  --map-link: #2e5c8f;
+
+  /* The card of the sign-in pages, on the ink of the sky: the white card of
+     the variant, in a black shade. A window (the variant's shade), a message
+     and the pieces on the sky of a hero in the ink. */
+  --welcome-card: #ffffff;
+  --shade-welcome: rgb(0 0 0 / 0.55);
+  --shade-dialog: rgb(16 20 24 / 0.5);
+  --shade-toast: rgb(16 20 24 / 0.7);
+  --shade-notes: rgb(16 20 24 / 0.6);
+  --shade-photo: rgb(16 20 24 / 0.6);
+  --shade-on-dawn: rgb(16 20 24 / 0.5);
+  --hero-veil: rgb(16 20 24 / 0.2);
+}

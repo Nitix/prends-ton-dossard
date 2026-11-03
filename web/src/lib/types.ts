@@ -28,6 +28,8 @@ export type UserRecord = BaseRecord & {
   email: string;
   role: Role;
   disabled: boolean;
+  /** The id of the skin (the theme) the person chose, for every device: empty until they choose (see features/auth/accountSkin). */
+  skin?: string;
 };
 
 export type RunnerRecord = BaseRecord & {

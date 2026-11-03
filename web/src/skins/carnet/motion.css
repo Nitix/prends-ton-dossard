@@ -1,0 +1,246 @@
+/* « Carnet »'s background moves, slowly, as the logbook of the v4 did: the
+   patches where its sheet of dots fades out and comes back in, the orbits of the
+   data that turn (one ring the other way), a dot of data that pulses. This file
+   is the layout of those drawings and their motion, in the skin's own classes
+   (`carnet-*`, never a class of the app, and no Tailwind utility on what moves: motifs.tsx).
+   It is the one place where the app has animations that never end
+   (src/motion.test.ts lets this file have them, on these conditions):
+
+   - only under `prefers-reduced-motion: no-preference`: whoever asked their
+     system for less motion has the drawings, standing still;
+   - only inside a drawing that has `data-moving` (motifs.tsx: the person has the
+     background on, `lib/ambient.ts`, « Animer le fond » in the settings):
+     without it, the drawings stand still too;
+   - only what the compositor does alone (`transform`, `opacity`), and only on a
+     box of HTML: never an element inside an `<svg>` (WebKit gives such an
+     element no layer of its own, and would draw it again at every frame). A ring
+     of the orbits is an `<svg>` in a box that turns, the pulse a box; the cost
+     is a few small layers, not a repaint of the page.
+
+   No colour of its own: a patch takes the colour of the ground it lies on, a
+   custom property of the palette. */
+
+/* ── The drawings ─────────────────────────────────────────────────────── */
+
+/* What a slot draws behind a header or a hero: the whole box, never touched. */
+.carnet-art {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* The ground of the sky, which the patches of the sheet are made of; the hero's is its own. */
+  --carnet-ground: var(--dawn-sky-color);
+}
+.carnet-art[data-ground="hero"] {
+  --carnet-ground: var(--dawn-hero-color);
+}
+
+/* The sheet of dots, in its box: it fades out towards where the page goes on
+   (the foot of a header, the foot of an event's hero, the left of a runner's). */
+.carnet-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.carnet-dots[data-fade="header"] {
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.carnet-dots[data-fade="event"] {
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.3), #000 85%);
+}
+.carnet-dots[data-fade="runner"] {
+  mask-image: linear-gradient(to left, #000, transparent 85%);
+}
+.carnet-dots-sheet {
+  position: absolute;
+  inset: 0;
+}
+
+/* A patch of the ground over the sheet, where it fades (its place, its size
+   and its strength at rest are in its style: motifs.tsx). The `--veil-*` are its
+   pace in the motion below: how long it takes to go and come back, where it is
+   in that, how far it drifts, how strong it is at most and at least; the
+   motifs set them for each patch, these are for a patch that has none. */
+.carnet-veil {
+  --veil-period: 18s;
+  --veil-delay: 0s;
+  --veil-drift: 2rem;
+  --veil-max: 0.8;
+  --veil-min: 0.08;
+  position: absolute;
+  border-radius: 9999px;
+  background-image: radial-gradient(closest-side, var(--carnet-ground) 45%, transparent);
+}
+
+/* ── The sheet of the page ────────────────────────────────────────────── */
+
+/* The v4's living background, behind the content of a page, on its sheet:
+   `PageArt` is the first child of the `.sheet`, as tall as it, under the `main`
+   (a layer of -1 in the sheet's own stacking context), and never in the way of a
+   tap. The patches fade the dots into the colour of the paper. The foot of the
+   sheet fades the dots out, so that on a short page they do not stop at a line. */
+.carnet-art[data-ground="paper"] {
+  --carnet-ground: var(--color-neutral-50);
+}
+.carnet-page {
+  z-index: -1;
+  border-radius: inherit;
+  overflow: clip;
+  /* A pale mark of the palette's grey over the paper: the words on it keep 4.5:1 on a dot too
+     (skins/pageArt.test.tsx measures it). */
+  --carnet-dot: color-mix(in srgb, var(--color-neutral-400) 40%, transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 6rem), transparent);
+}
+
+/* As tall as the screen, and under the eyes while the page scrolls: the box of
+   `.carnet-page` is as tall as the sheet, and clips it (`overflow: clip` makes
+   no scroll container, so that this sticks to the screen). */
+.carnet-page-sheet {
+  position: sticky;
+  top: 0;
+  display: block;
+  height: 100dvh;
+}
+
+/* The dots: one pixel every four, a mask (its shape only) over a colour of the palette. */
+.carnet-page-dots {
+  position: absolute;
+  inset: 0;
+  background-color: var(--carnet-dot);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E");
+  mask-size: 4px 4px;
+}
+
+/* The orbits of the data: a drawing in a corner, past the edge of its box,
+   over the dots and under what is written. Each ring is an `<svg>` that fills
+   its box (`carnet-orbit-art`), the box being what turns. */
+.carnet-orbits {
+  display: block;
+  pointer-events: none;
+}
+.carnet-orbit,
+.carnet-orbit-back {
+  position: absolute;
+  inset: 0;
+}
+.carnet-orbit-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.carnet-hero-orbit {
+  position: absolute;
+  opacity: 0.8;
+}
+.carnet-hero-orbit-event {
+  top: -5rem;
+  right: -5rem;
+  width: 18rem;
+  height: 18rem;
+}
+.carnet-hero-orbit-runner {
+  top: -4rem;
+  right: -4rem;
+  width: 15rem;
+  height: 15rem;
+}
+
+/* The corner of the header where the orbits turn, in the column of the page
+   (so that on a wide screen it is the page's corner, not the screen's). */
+.carnet-column {
+  position: relative;
+  display: block;
+  height: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+}
+.carnet-header-orbit {
+  position: absolute;
+  top: -4rem;
+  right: -3.5rem;
+  width: 15rem;
+  height: 15rem;
+  opacity: 0.7;
+}
+
+/* From `md` the tabs are in the header, in a capsule at the right (it ends 4.625
+   rem from the top). The orbit must not pass beside a tab, where a dot would read
+   as a stray bullet: so the column is cut under the capsule, with a little room
+   (5.375 rem: the dot, and the pulse that swells round it), and the orbit
+   rises behind the sheet, its dots seen only there. In rem, so that it holds
+   when the text is larger and the capsule with it. */
+@media (width >= 48rem) {
+  .carnet-column {
+    overflow: hidden;
+    margin-top: 5.375rem;
+    height: calc(100% - 5.375rem);
+  }
+  .carnet-header-orbit {
+    top: -4.75rem;
+    right: -1.5rem;
+  }
+}
+
+/* The pulse: a box on the teal dot of the back ring (at 84 of the 120 from the
+   middle of its box, 8 of 240 wide: 85 % across, 3.33 % wide), in the colour of
+   that dot. It turns with the ring and swells from its middle (the box's own).
+   It is not there when it does not move. */
+.carnet-pulse {
+  position: absolute;
+  left: 83.3333%;
+  top: 48.3333%;
+  width: 3.3333%;
+  height: 3.3333%;
+  border-radius: 9999px;
+  background-color: var(--dawn-ring-from);
+  opacity: 0;
+}
+
+/* ── The motion ───────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* A patch of the sheet: it goes out and comes back, and drifts a little, each at its
+     own pace (`--veil-*` above: its period, where it is in it, how far it drifts, how
+     strong it is at most and at least). */
+  .carnet-art[data-moving] .carnet-veil {
+    animation: carnet-veil var(--veil-period) ease-in-out var(--veil-delay) infinite;
+  }
+  .carnet-art[data-moving] .carnet-orbit {
+    animation: carnet-orbit 160s linear infinite;
+  }
+  .carnet-art[data-moving] .carnet-orbit-back {
+    animation: carnet-orbit 160s linear infinite reverse;
+  }
+  .carnet-art[data-moving] .carnet-pulse {
+    animation: carnet-pulse 2.8s ease-out infinite;
+  }
+
+  @keyframes carnet-veil {
+    0%,
+    100% {
+      opacity: var(--veil-max);
+      transform: translate3d(calc(var(--veil-drift) * -1), 0, 0);
+    }
+    50% {
+      opacity: var(--veil-min);
+      transform: translate3d(var(--veil-drift), 0, 0);
+    }
+  }
+  @keyframes carnet-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes carnet-pulse {
+    0% {
+      transform: scale(0.6);
+      opacity: 0.55;
+    }
+    80%,
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+}

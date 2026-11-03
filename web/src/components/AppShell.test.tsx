@@ -265,7 +265,8 @@ test("AppShell — zones tactiles d'au moins 44 px", async () => {
 
 test("AppShell — barre d'onglets en bas sous md, qui flotte ; en haut à partir de md, dans l'en-tête", async () => {
   // A page longer than the screen, to see where the bar is once the page scrolls.
-  const screen = await renderShell(<div className="h-[3000px]">Contenu de la page</div>);
+  // Its height is inline: a class named only in a test is not in the CSS.
+  const screen = await renderShell(<div style={{ height: 3000 }}>Contenu de la page</div>);
   const nav = screen.getByRole("navigation", { name: fr.nav.main });
   await expect.element(nav).toBeVisible();
 
@@ -277,6 +278,7 @@ test("AppShell — barre d'onglets en bas sous md, qui flotte ; en haut à parti
   expect(gap).toBeGreaterThan(0);
   expect(gap).toBeLessThanOrEqual(16);
   window.scrollTo(0, 1000);
+  expect(window.scrollY, "the page has scrolled").toBeGreaterThan(0);
   expect(window.innerHeight - nav.element().getBoundingClientRect().bottom).toBe(gap);
 
   // From md, at the top, over the sky of the header; it stays at the top as the page scrolls.
@@ -288,6 +290,7 @@ test("AppShell — barre d'onglets en bas sous md, qui flotte ; en haut à parti
   expect(bar.top).toBeGreaterThanOrEqual(0);
   expect(bar.bottom).toBeLessThanOrEqual(header.bottom);
   window.scrollTo(0, 1000);
+  expect(window.scrollY, "the page has scrolled").toBeGreaterThan(0);
   const top = nav.element().getBoundingClientRect().top;
   expect(top).toBeGreaterThanOrEqual(0);
   expect(top).toBeLessThanOrEqual(16);

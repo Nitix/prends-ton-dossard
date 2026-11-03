@@ -62,13 +62,13 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
         {t.nav.calendar}
       </h1>
       <Filters search={search} withPeriod={false} />
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
+      <section className="agenda-month flex flex-col gap-3">
+        <div className="month-nav flex items-center justify-between gap-2">
           <MonthLink target={month.subtract({ months: 1 })} label={t.agenda.previous} glyph="‹" />
           <h2
             id={headingId}
             aria-live="polite"
-            className="font-display text-xl font-extrabold tracking-tight first-letter:uppercase"
+            className="month-nav-title font-display text-xl font-extrabold display-title first-letter:uppercase"
           >
             {f.monthTitle(month)}
           </h2>
@@ -145,7 +145,7 @@ function MonthLink({
       to="."
       search={(previous) => ({ ...previous, mois: target.toString(), jour: undefined })}
       aria-label={label}
-      className="press flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-card text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
+      className="nav-arrow press flex size-11 items-center justify-center rounded-full border border-neutral-200 bg-card text-2xl leading-none text-iris-700 shadow-card hover:bg-iris-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </Link>

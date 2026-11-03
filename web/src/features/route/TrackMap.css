@@ -43,27 +43,30 @@
 .track-map .leaflet-tile-pane {
   filter: saturate(0.6) brightness(1.04) contrast(0.95);
 }
+/* The zoom buttons and the words of the start and of the finish, on Leaflet's
+   white, in the ink and the shade of the theme (`--map-ink`, `--map-hover`,
+   `--map-shade`: a skin sets them). */
 .track-map.leaflet-container .leaflet-bar {
   overflow: hidden;
   border: 0;
   border-radius: 0.875rem;
-  box-shadow: 0 8px 20px -8px rgb(36 27 53 / 0.45);
+  box-shadow: 0 8px 20px -8px var(--map-shade);
 }
 .track-map.leaflet-container .leaflet-bar a {
-  color: #241b35;
+  color: var(--map-ink);
   font-weight: 600;
 }
 .track-map.leaflet-container .leaflet-bar a:hover {
-  background: #f5f3ff;
+  background: var(--map-hover);
 }
 .track-map.leaflet-container .leaflet-tooltip {
   border: 0;
   border-radius: 999px;
   padding: 3px 10px;
-  color: #241b35;
+  color: var(--map-ink);
   font-family: var(--font-display);
   font-weight: 700;
-  box-shadow: 0 6px 16px -6px rgb(36 27 53 / 0.45);
+  box-shadow: 0 6px 16px -6px var(--map-shade);
 }
 .track-map.leaflet-container .leaflet-tooltip::before {
   display: none;
@@ -74,7 +77,16 @@
   color: #4f4563;
 }
 .track-map.leaflet-container .leaflet-control-attribution a {
-  color: #4b37c4;
+  color: var(--map-link);
+}
+
+/* The start and the finish of the track, in the colours of the theme (a skin
+   sets them): over the fill that Leaflet writes on them. */
+.track-map .track-start {
+  fill: var(--map-start);
+}
+.track-map .track-finish {
+  fill: var(--map-finish);
 }
 
 /* The mark of the cursor of the profile on the track (see TrackMap): the dot of

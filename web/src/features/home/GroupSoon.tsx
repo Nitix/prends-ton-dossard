@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { useI18n } from "../../i18n/I18nProvider";
 import { sortEvents, type EventView } from "../events/api";
 import { EventCard } from "../events/EventCard";
@@ -28,14 +29,16 @@ export function GroupSoon({ views }: { views: EventView[] }) {
   const soon = soonOf(views);
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="block-title">
-        {t.home.groupTitle}
-      </h2>
+    <section
+      aria-labelledby={headingId}
+      data-block="group"
+      className="page-block flex flex-col gap-3"
+    >
+      <BlockTitle id={headingId}>{t.home.groupTitle}</BlockTitle>
       {soon.length === 0 ? (
         <p className="text-sm text-neutral-600">{t.home.groupEmpty}</p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="event-list flex flex-col gap-3">
           {soon.map((view) => (
             <li key={view.event.id}>
               <EventCard view={view} />

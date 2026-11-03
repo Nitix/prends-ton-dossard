@@ -32,8 +32,8 @@ export function SelectField({
   const id = useId();
   const hintId = useId();
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+    <div className="field flex flex-col gap-1">
+      <label htmlFor={id} className="field-label text-sm font-medium">
         {label}
       </label>
       <select
@@ -50,7 +50,7 @@ export function SelectField({
         {children}
       </select>
       {hint !== undefined && (
-        <p id={hintId} className="text-sm text-neutral-600">
+        <p id={hintId} className="field-hint text-sm text-neutral-600">
           {hint}
         </p>
       )}

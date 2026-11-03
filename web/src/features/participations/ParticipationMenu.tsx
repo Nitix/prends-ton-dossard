@@ -18,7 +18,8 @@ import {
 import { ChooseFormatDialog } from "./ChooseFormatDialog";
 import { isNotFound, participationError } from "./errors";
 
-const ITEM = "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left hover:bg-iris-50";
+const ITEM =
+  "menu-item flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left hover:bg-iris-50";
 
 /** Which dialog the menu has opened, if any. */
 type Opened = "remove" | "choose" | "result";
@@ -137,7 +138,7 @@ export function ParticipationMenu({
         type="button"
         popoverTarget={menuId}
         aria-label={t.participation.actionsFor(runner.name)}
-        className="press flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-neutral-700 hover:bg-card hover:text-iris-700 hover:shadow-card"
+        className="menu-button press flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-neutral-700 hover:bg-card hover:text-iris-700 hover:shadow-card"
       >
         <span aria-hidden="true">⋯</span>
       </button>
@@ -166,8 +167,8 @@ export function ParticipationMenu({
                   {/* The current status is not told by the weight of the text alone: a check pops in a sun. */}
                   <span
                     aria-hidden="true"
-                    className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
-                      current ? "animate-pop bg-dawn-deep text-white" : ""
+                    className={`menu-check flex size-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
+                      current ? "animate-pop bg-dawn-deep text-dawn-deep-ink" : ""
                     }`}
                   >
                     {current ? "✓" : ""}

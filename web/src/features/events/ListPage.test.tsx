@@ -864,3 +864,42 @@ test("ListPage — zones tactiles d'au moins 44 px", async () => {
   }
   await page.viewport(414, 896);
 });
+
+/** The columns of a grid, as the browser lays it out (`none`, for what is not a grid, is one). */
+const columnsOf = (list: Element) => {
+  const tracks = getComputedStyle(list).gridTemplateColumns;
+  return tracks === "none" ? 1 : tracks.split(" ").length;
+};
+
+test("ListPage — les événements d'un mois sont sur deux colonnes dès `md` (48 rem), sur une seule en dessous", async () => {
+  // Three events in June: a second row, whose card has no neighbour.
+  mocks.events.mockResolvedValue([
+    eventRecord,
+    event2Record,
+    { ...event2Record, id: "event4", name: "Cross du Salève", start_date: "2026-06-27" },
+  ]);
+  try {
+    await page.viewport(767, 900);
+    const { screen } = await renderList();
+    await expect.element(screen.getByText("Cross du Salève")).toBeVisible();
+    const list = document.querySelector(".event-list");
+    if (!list) throw new Error("no list of events");
+    // Under `md`: one card per row, as on a phone.
+    expect(columnsOf(list), "767 px").toBe(1);
+    const cards = [...list.querySelectorAll(".event-card")];
+    expect(new Set(cards.map((card) => card.getBoundingClientRect().left)).size).toBe(1);
+
+    for (const width of [768, 1024, 1280]) {
+      await page.viewport(width, 900);
+      expect(columnsOf(list), `${width} px`).toBe(2);
+      const lefts = cards.map((card) => Math.round(card.getBoundingClientRect().left));
+      // The first two side by side, the third under the first.
+      expect(lefts[1], `${width} px: the second card is beside the first`).toBeGreaterThan(
+        lefts[0] ?? 0,
+      );
+      expect(lefts[2], `${width} px: the third is under the first`).toBe(lefts[0]);
+    }
+  } finally {
+    await page.viewport(414, 896);
+  }
+});

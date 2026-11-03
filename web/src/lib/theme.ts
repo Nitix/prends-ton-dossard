@@ -26,15 +26,33 @@ export function readTheme(): ThemeChoice {
 }
 
 /**
+ * The mode of the skin of the page when it has one only (see skins/index.ts):
+ * the page is drawn in it whatever the choice, which stays kept for the skins
+ * that have both. None for « Crête ».
+ */
+let only: "light" | "dark" | null = null;
+
+/**
  * Puts a choice on the page: `data-theme` on <html> for a forced theme, none
  * for auto, and the colour scheme that the native controls (a date, a select,
- * the scroll bars) follow.
+ * the scroll bars) follow. Under a skin that has one mode only, that mode.
  */
 export function applyTheme(choice: ThemeChoice): void {
   const root = document.documentElement;
-  if (choice === "auto") delete root.dataset.theme;
-  else root.dataset.theme = choice;
-  root.style.colorScheme = choice === "auto" ? "light dark" : choice;
+  const shown = only ?? choice;
+  if (shown === "auto") delete root.dataset.theme;
+  else root.dataset.theme = shown;
+  root.style.colorScheme = shown === "auto" ? "light dark" : shown;
+}
+
+/**
+ * Draws the page in the only mode of its skin, or (`null`, a skin with both
+ * modes) in the one chosen on the device again. index.html does the same
+ * before the page is first drawn.
+ */
+export function forceMode(mode: "light" | "dark" | null): void {
+  only = mode;
+  applyTheme(current());
 }
 
 /** Keeps a choice on the device (auto is kept as nothing); false when the storage refuses. */

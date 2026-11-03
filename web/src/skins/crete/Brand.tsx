@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../../i18n/I18nProvider";
 import { Contours, NIGHT, Ridges } from "./Alpenglow";
 
 /**
@@ -15,14 +15,14 @@ export function BrandMark({ size = "md" }: { size?: "md" | "lg" }) {
     <span className="flex items-center gap-3">
       <span
         aria-hidden="true"
-        className={`flex shrink-0 overflow-hidden rounded-xl bg-white shadow-[0_6px_18px_-6px_rgb(36_27_53/0.45)] ${
+        className={`flex shrink-0 overflow-hidden rounded-xl bg-white shadow-[0_6px_18px_-6px_var(--motif-mark-shade)] ${
           big ? "size-11" : "size-9"
         }`}
       >
         <PeakGlyph className="size-full" />
       </span>
       <span
-        className={`font-display leading-none font-extrabold tracking-tight text-white drop-shadow-[0_1px_8px_rgb(42_32_112/0.35)] ${
+        className={`font-display leading-none font-extrabold tracking-tight text-white drop-shadow-[0_1px_8px_var(--motif-name-shade)] ${
           big ? "text-[1.75rem]" : "text-[1.3125rem]"
         }`}
       >
@@ -42,17 +42,20 @@ export function PeakGlyph({ className = "" }: { className?: string }) {
     <svg aria-hidden="true" focusable="false" viewBox="0 0 36 36" className={className}>
       <defs>
         <linearGradient id={sun} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffb38a" />
-          <stop offset="0.55" stopColor="#ff7eb3" />
-          <stop offset="1" stopColor="#8b7cff" />
+          <stop offset="0" style={{ stopColor: "var(--motif-dawn-1)" }} />
+          <stop offset="0.55" style={{ stopColor: "var(--motif-dawn-2)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-dawn-3)" }} />
         </linearGradient>
         <linearGradient id={near} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#5e4ae3" />
-          <stop offset="1" stopColor="#2a2070" />
+          <stop offset="0" style={{ stopColor: "var(--motif-peak-near-from)" }} />
+          <stop offset="1" style={{ stopColor: "var(--motif-peak-near-to)" }} />
         </linearGradient>
       </defs>
       <circle cx="23.5" cy="17.5" r="6.5" fill={`url(#${sun})`} />
-      <path d="M-1 29 7 20.5l3.5 3L17 13l5.2 8.3 2.3-2.3L37 29v8H-1z" fill="#c9bfff" />
+      <path
+        d="M-1 29 7 20.5l3.5 3L17 13l5.2 8.3 2.3-2.3L37 29v8H-1z"
+        style={{ fill: "var(--motif-peak-far)" }}
+      />
       <path d="M-1 31.5 6 27l4 2 7.5-6.2 5.5 4.6 4-2.6 9 5.7V37H-1z" fill={`url(#${near})`} />
       <path
         d="M4.5 33.2 10 29.6l3.6 1 4-3.3 4.4 2.7"

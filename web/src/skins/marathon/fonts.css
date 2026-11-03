@@ -1,0 +1,7 @@
+/* « Marathon »: Inter Tight for the titles, over Inter, in 600–900 and in italic
+   800–900. Its faces are in ../shared/fonts.css: « Chrono » sets its text in it too. */
+:root[data-skin="marathon"] {
+  --font-sans:
+    "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Inter Tight Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}

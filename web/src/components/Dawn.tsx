@@ -23,6 +23,7 @@ export function DateChip({
   size = "md",
 }: {
   start: Temporal.PlainDate;
+  /** The last day, for an event of several days. */
   end?: Temporal.PlainDate;
   /** The date in words, read instead of the chip. */
   label: string;
@@ -42,25 +43,25 @@ export function DateChip({
       <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
-        className={`relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_rgb(214_51_111/0.6)] ${
+        className={`date-chip relative flex shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-2xl bg-dawn-deep text-dawn-deep-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_10px_24px_-10px_var(--dawn-chip-glow)] ${
           big ? "w-[4.75rem] py-2.5" : "w-[3.75rem] py-2"
         }`}
       >
-        <span className="relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
+        <span className="date-chip-top relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
           {twoMonths ? month(start) : f.weekday(start, "short").replace(".", "")}
         </span>
         <span
-          className={`relative font-display leading-[1.05] font-extrabold tracking-tight tabular-nums ${
+          className={`date-chip-day relative font-display leading-[1.05] font-extrabold tracking-tight tabular-nums ${
             big ? "text-[2rem]" : several ? "text-[1.125rem]" : "text-[1.625rem]"
           }`}
         >
           {several ? `${start.day}–${end.day}` : start.day}
         </span>
-        <span className="relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
+        <span className="date-chip-bottom relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
           {month(several ? end : start)}
         </span>
         {start.year !== thisYear && (
-          <span className="relative font-display text-[0.5625rem] leading-none font-semibold tracking-[0.1em] opacity-90">
+          <span className="date-chip-year relative font-display text-[0.5625rem] leading-none font-semibold tracking-[0.1em] opacity-90">
             {start.year}
           </span>
         )}
@@ -77,16 +78,18 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 /**
  * The days left before a race or a deadline, as a ring of sunrise that fills
  * as the day comes, with the number in it. It only shows: the days are said in
- * words beside it.
+ * words beside it. `tone` is "color" on white, "light" (white) on the sky of a
+ * hero.
  */
 export function CountdownRing({
   days,
   tone = "color",
   className = "",
 }: {
+  /** The days left: 0 on the day. */
   days: number;
-  /** "color" on white, "light" (white) on the sky of a hero. */
   tone?: "color" | "light";
+  /** Its place in what holds it (a margin). */
   className?: string;
 }) {
   const light = tone === "light";
@@ -107,20 +110,27 @@ export function CountdownRing({
   const unit = parts.find((p) => p.type === "unit")?.value ?? "";
 
   return (
-    <span aria-hidden="true" className={`relative inline-flex size-14 shrink-0 ${className}`}>
+    <span
+      aria-hidden="true"
+      className={`countdown-ring relative inline-flex size-14 shrink-0 ${className}`}
+    >
       <svg viewBox="0 0 56 56" className="size-full -rotate-90">
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#8b7cff" />
-            <stop offset="0.5" stopColor="#ff7eb3" />
-            <stop offset="1" stopColor="#ffb38a" />
+            <stop offset="0" style={{ stopColor: "var(--dawn-ring-from)" }} />
+            <stop offset="0.5" style={{ stopColor: "var(--dawn-ring-via)" }} />
+            <stop offset="1" style={{ stopColor: "var(--dawn-ring-to)" }} />
           </linearGradient>
         </defs>
         <circle
           cx="28"
           cy="28"
           r={RING_RADIUS}
-          fill={light ? "rgb(36 27 53 / 0.18)" : "none"}
+          fill={light ? undefined : "none"}
+          // On the sky, the veil of a hero (`--hero-veil`), a little lighter.
+          style={
+            light ? { fill: "color-mix(in srgb, var(--hero-veil) 90%, transparent)" } : undefined
+          }
           // The track: faint white on the sky, the soft violet of the theme on a card.
           stroke={light ? "rgb(255 255 255 / 0.28)" : undefined}
           className={light ? undefined : "stroke-iris-100"}

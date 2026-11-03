@@ -300,7 +300,8 @@ test("SettingsPage — Apparence : Auto, Clair, Sombre", async () => {
   const screen = await renderSettings();
 
   const appearance = section(screen, fr.settings.appearance);
-  const group = appearance.getByRole("group", { name: fr.settings.appearance });
+  // « Clair ou sombre », beside « Thème »: the mode of a skin that has both.
+  const group = appearance.getByRole("group", { name: fr.settings.mode });
   const auto = group.getByRole("radio", { name: fr.settings.themeAuto });
   const light = group.getByRole("radio", { name: fr.settings.themeLight });
   const dark = group.getByRole("radio", { name: fr.settings.themeDark });

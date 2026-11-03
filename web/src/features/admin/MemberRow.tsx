@@ -62,7 +62,7 @@ export function MemberRow({
   }
 
   return (
-    <li className="card flex flex-col gap-3 p-4">
+    <li className="member-row card flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
         <Avatar
           runner={runner}

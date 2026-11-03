@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Avatar } from "../../components/Avatar";
+import { BlockTitle } from "../../components/BlockTitle";
 import { DANGER, DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { Dialog } from "../../components/Dialog";
 import { SECTION } from "../../components/section";
@@ -179,10 +180,15 @@ export function OffersSection({
   }, [proposed, proposing, canPropose]);
 
   return (
-    <section ref={root} aria-labelledby={headingId} className={`flex flex-col gap-3 ${SECTION}`}>
-      <h2 id={headingId} ref={heading} tabIndex={-1} className="block-title">
+    <section
+      ref={root}
+      aria-labelledby={headingId}
+      data-kind={kind}
+      className={`offers flex flex-col gap-3 ${SECTION}`}
+    >
+      <BlockTitle id={headingId} ref={heading} tabIndex={-1}>
         {t.offers.title[kind]}
-      </h2>
+      </BlockTitle>
       {offers && all ? (
         <>
           {offers.length === 0 ? (
@@ -387,7 +393,7 @@ function OfferItem({
     <article
       data-offer={offer.id}
       aria-labelledby={titleId}
-      className="flex flex-col gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100"
+      className="offer flex flex-col gap-2 rounded-2xl bg-neutral-50 p-3.5 ring-1 ring-neutral-100"
     >
       <div className="flex items-center gap-3">
         <Avatar
@@ -427,7 +433,7 @@ function OfferItem({
         )}
       </p>
       {members.length > 0 && (
-        <ul className="flex flex-col gap-1">
+        <ul className="offer-passengers flex flex-col gap-1">
           {members.map(({ member, runner }) => (
             <li key={member.id} className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-3">

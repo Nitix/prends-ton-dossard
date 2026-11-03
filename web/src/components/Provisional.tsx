@@ -6,7 +6,7 @@ export function Provisional() {
   const { t } = useI18n();
 
   return (
-    <div className="flex flex-col items-center justify-center p-4">
+    <div className="provisional flex flex-col items-center justify-center p-4">
       <h1 tabIndex={-1} className="page-title">
         {t.common.appName}
       </h1>

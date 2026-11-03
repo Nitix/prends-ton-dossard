@@ -5,6 +5,7 @@ import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 import type { BrowserCommand } from "vitest/node";
 
+import { skins } from "./src/skins/plugin.ts";
 import type { Media } from "./src/test/mediaFeatures.ts";
 
 /**
@@ -29,6 +30,9 @@ export default defineConfig({
     // by @vitejs/plugin-react itself, without Babel. It is experimental.
     react({ compiler: true }),
     tailwindcss(),
+    // The skins (src/skins/README.md): the skins of development left out of a
+    // build, and the table of the skins in the script of index.html.
+    skins(),
   ],
   server: {
     // The port is part of APP_URL, which is the WebAuthn origin: if 5173 is
@@ -50,6 +54,8 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           include: ["src/**/*.test.ts"],
+          // The real app, built once for the run: build.test.ts and lookFailure.test.ts read it.
+          globalSetup: ["./src/test/builtApp.setup.ts"],
         },
       },
       {

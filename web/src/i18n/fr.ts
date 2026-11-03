@@ -145,6 +145,24 @@ export const fr = {
   // The appearance of the app on this device (see lib/theme.ts): the dark theme, chosen or following the phone.
   settings: {
     appearance: "Apparence",
+    // The skin of the app (see skins/): its name in the picker comes from the skin itself.
+    skin: "Thème",
+    // Beside « Thème »: Auto, Clair, Sombre, for a theme that has both modes.
+    mode: "Clair ou sombre",
+    onlyLight: "Ce thème n'a qu'un mode clair.",
+    onlyDark: "Ce thème n'a qu'un mode sombre.",
+    // The switch of a theme whose background moves (see lib/ambient.ts), and what it does.
+    animateBackground: "Animer le fond",
+    animateBackgroundHint:
+      "Les dessins du fond de ce thème bougent doucement. Sans effet si ton appareil demande moins d'animations.",
+    // A few letters in the font of a theme, on its card.
+    fontSample: "Aa",
+    // The message when a theme chosen cannot be loaded (offline, and never chosen on this device): the page keeps the theme it had.
+    // Said politely (a live region) while the look of a theme chosen loads: its card is checked at once.
+    skinLoading: "Chargement du thème…",
+    skinLoadFailed: "Ce thème n'a pas pu se charger : vérifie ta connexion.",
+    // Online: the look is gone even after the page was reloaded, so it is not the connection.
+    skinLoadFailedOnline: "Ce thème n'a pas pu se charger : recharge l'application.",
     themeAuto: "Auto (comme le système)",
     themeLight: "Clair",
     themeDark: "Sombre",

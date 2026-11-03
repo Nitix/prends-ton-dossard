@@ -3,15 +3,16 @@ import type { ReactNode } from "react";
 
 import { useSession } from "../features/auth/session";
 import { useI18n } from "../i18n/I18nProvider";
-import { BrandMark, DawnSky } from "./Brand";
 import { OfflineBanner } from "./OfflineBanner";
+import { BrandMark, HeaderArt, PageArt } from "./Slots";
 import { TabBar } from "./TabBar";
 
 /**
  * The frame of every signed-in page: the offline banner, the sky of the header
  * with the name of the app, its map and its mountains, the tabs, the page
  * itself on a sheet that rises over the ridges, and the floating button that
- * creates an event. It owns the
+ * creates an event. The art of the sky, of the sheet and the name of the app are the skin's
+ * (`HeaderArt`, `PageArt`, `BrandMark`). It owns the
  * page's `<main>`, so the pages inside must not render another one.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -26,13 +27,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
       <OfflineBanner />
-      <header className="on-dawn relative overflow-hidden bg-dawn-sky text-white">
-        <DawnSky sun={!withHero} />
-        <div className="relative mx-auto flex max-w-5xl items-center px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-16 md:h-40 md:items-start md:pt-[1.625rem] md:pb-0">
+      <header className="app-header on-dawn relative overflow-hidden bg-dawn-sky text-white">
+        <HeaderArt place="header" sun={!withHero} />
+        <div className="app-header-bar relative mx-auto flex max-w-5xl items-center px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-16 md:h-40 md:items-start md:pt-[1.625rem] md:pb-0">
           {/* The name of the app leads home, as on most sites. */}
           <Link
             to="/"
-            className="-m-1.5 flex min-h-11 items-center rounded-2xl p-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="brand-link -m-1.5 flex min-h-11 items-center rounded-2xl p-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <BrandMark />
           </Link>
@@ -41,8 +42,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <TabBar isAdmin={isAdmin} />
       {/* The sheet of the page, over the sky. On a phone, room under the content for the tab bar
           and the floating button; on a tablet, for the button, which floats over the right of the
-          column (from `lg` the wider screen has it beside the column). */}
+          column (from `lg` the wider screen has it beside the column). The skin's `PageArt` is the
+          first thing in it, behind the page (Crête draws none). */}
       <div className="sheet relative z-10 -mt-7 rounded-t-[1.75rem] bg-neutral-50 md:rounded-t-[2rem]">
+        <PageArt />
         <main className="mx-auto max-w-3xl px-4 pt-6 pb-44 md:px-5 md:pt-8 md:pb-28 lg:max-w-4xl lg:pb-12">
           {children}
         </main>
@@ -50,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Link
         to="/evenements/nouveau"
         aria-label={t.nav.createEvent}
-        className="press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-white shadow-glow ring-4 ring-card/70 hover:brightness-95 md:right-6 md:bottom-6"
+        className="fab press group fixed right-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-30 flex size-14 items-center justify-center rounded-full bg-dawn-deep text-dawn-deep-ink shadow-glow ring-4 ring-card/70 hover:brightness-95 md:right-6 md:bottom-6"
       >
         <svg
           aria-hidden="true"

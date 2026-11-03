@@ -30,7 +30,7 @@ export function OfflineBanner() {
   return (
     <output className="block">
       {!online && (
-        <p className="bg-toast px-4 py-2 text-center text-sm font-medium text-white">
+        <p className="offline-banner bg-toast px-4 py-2 text-center text-sm font-medium text-white">
           {t.common.offline}
         </p>
       )}

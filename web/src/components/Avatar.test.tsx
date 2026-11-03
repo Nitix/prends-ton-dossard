@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
 import { pixelURL } from "../test/images";
-import { Avatar } from "./Avatar";
+import { Avatar, tintOf } from "./Avatar";
 
 type Rec = Record<string, unknown>;
 
@@ -91,4 +91,22 @@ test("Avatar — la classe donnée va sur la photo comme sur les initiales", asy
 
   const initials = await render(<Avatar runner={alice} thumb="96x96" className="size-12" />);
   expect(initials.getByText("AM").element().classList.contains("size-12")).toBe(true);
+});
+
+test("Avatar — la photo et les initiales portent .avatar, les initiales une teinte de 0 à 11, toujours la même pour un coureur", async () => {
+  const bare = await render(<Avatar runner={alice} thumb="96x96" />);
+  const initials = bare.getByText("AM", { exact: true }).element();
+  expect(initials.classList.contains("avatar")).toBe(true);
+  expect(initials.getAttribute("data-tint")).toBe(String(tintOf(alice.id)));
+  await bare.unmount();
+  const photo = await render(<Avatar runner={withPhoto} thumb="96x96" />);
+  const img = photo.container.querySelector("img");
+  expect(img?.classList.contains("avatar")).toBe(true);
+  expect(img?.hasAttribute("data-tint")).toBe(false);
+  await photo.unmount();
+  // The same runner, the same tint; the tints spread over the twelve.
+  expect(tintOf("aliceRunner0000")).toBe(tintOf("aliceRunner0000"));
+  const tints = new Set(Array.from({ length: 60 }, (_, i) => tintOf(`runner${i}`)));
+  expect([...tints].every((tint) => Number.isInteger(tint) && tint >= 0 && tint < 12)).toBe(true);
+  expect(tints.size).toBeGreaterThan(8);
 });

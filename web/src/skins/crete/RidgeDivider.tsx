@@ -26,7 +26,7 @@ export function RidgeDivider({ className = "" }: { className?: string }) {
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <span className="absolute top-0.5 left-[68%] size-2.5 rounded-full bg-peach-400 shadow-[0_0_10px_2px_rgb(255_154_106/0.6)]" />
+      <span className="absolute top-0.5 left-[68%] size-2.5 rounded-full bg-peach-400 shadow-[0_0_10px_2px_var(--motif-sun-glow)]" />
     </div>
   );
 }

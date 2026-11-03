@@ -266,11 +266,11 @@ export function FormatFieldset({
   };
 
   return (
-    <fieldset className="card flex min-w-0 flex-col gap-4 p-4 pt-2">
+    <fieldset className="format-fieldset card flex min-w-0 flex-col gap-4 p-4 pt-2">
       <legend
         ref={title}
         tabIndex={-1}
-        className="rounded-full bg-dawn-deep px-3.5 py-1 font-display text-sm font-bold text-white shadow-glow"
+        className="format-legend rounded-full bg-dawn-deep px-3.5 py-1 font-display text-sm font-bold text-dawn-deep-ink shadow-glow"
       >
         {t.form.formatTitle(number)}
       </legend>

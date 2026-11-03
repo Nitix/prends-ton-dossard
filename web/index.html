@@ -5,17 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Prends ton dossard</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- The header is the violet sky of the dawn in both themes: so is the bar of the browser. -->
+    <!-- The header is the violet sky of the dawn in both themes: so is the bar of the browser
+         (another skin sets its own colour, see below). -->
     <meta name="theme-color" content="#5e4ae3" />
     <meta name="color-scheme" content="light dark" />
     <!-- A theme chosen in the settings (lib/theme.ts), on <html> before the page is drawn:
-         no flash of the other one. Auto is left to the phone, through the stylesheet. -->
+         no flash of the other one. Auto is left to the phone, through the stylesheet.
+         Then the skin chosen (skins/index.ts), from the table of the skins, their modes,
+         their colours and their stylesheets that the build writes in place of the empty
+         one (skins/plugin.ts): a skin with one mode only is drawn in it, whatever the theme.
+         Its stylesheets are written into the page as it is read, as if it had them: the
+         browser draws nothing, and runs no script after them, before they are loaded.
+         The parts of its look are preloaded with them, for the app's first render. -->
     <script>
       try {
         const theme = localStorage.getItem("ptd-theme");
         if (theme === "light" || theme === "dark") {
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme;
+        }
+        const skins = /* skins */ {};
+        const skin = localStorage.getItem("ptd-skin");
+        if (skin !== null && Object.hasOwn(skins, skin)) {
+          const { modes, themeColor, sheets, scripts } = skins[skin];
+          for (const sheet of sheets) document.write(`<link rel="stylesheet" href="${sheet}">`);
+          for (const script of scripts) {
+            document.write(`<link rel="modulepreload" crossorigin href="${script}">`);
+          }
+          document.documentElement.dataset.skin = skin;
+          if (modes.length === 1) {
+            document.documentElement.dataset.theme = modes[0];
+            document.documentElement.style.colorScheme = modes[0];
+          }
+          document.querySelector('meta[name="theme-color"]').content = themeColor;
         }
       } catch (error) {}
     </script>
