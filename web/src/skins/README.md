@@ -29,12 +29,16 @@ not part of it: it stays the device's own.
   unless it is Crête's (nobody having chosen is Crête). A skin that this build
   does not have is Crête on the device, and the account is left alone. A
   renewal of the session that is already open does not do this: it would undo a
-  choice that is on its way.
-- **Offline**: a choice whose save fails stays on the device, which remembers
-  that the account was not told (`localStorage["ptd-skin-unsaved"]`, the id of
-  the account). The next sign-in or restored session of that account sends the
-  device's skin to it, instead of reading the account's. Nothing else retries,
-  and the choice shows no error.
+  choice that is on its way. The start waits for the skin of the account to be
+  on the page (its look loaded: no flash), not for a save: what the account
+  lacks is sent in the background, in the order of the choices.
+- **Offline, or cut off**: the device marks the account as not told
+  (`localStorage["ptd-skin-unsaved"]`, the id of the account) before the save
+  leaves, and forgets it when the last save has succeeded. A save that fails
+  (offline) or that never ends (the app was killed: an iPhone's, swiped away)
+  leaves the mark, and the next sign-in or restored session of that account
+  sends the device's skin to it, instead of reading the account's. Nothing else
+  retries, and the choice shows no error.
 - **Signing out** leaves the skin on the device and on the page.
 - A skin whose look cannot be loaded when it is chosen (offline, never chosen
   on this device) gives a message (« Ce thème n'a pas pu se charger : vérifie ta
@@ -120,7 +124,14 @@ looks which share them share).
   choices in a row: the last one wins, whichever loads first. A look that
   cannot be loaded (offline, never loaded before) leaves the page and the
   device as they were, and `chooseSkin` says so (`failed`), for the picker to
-  tell the person. The page is **not reloaded** for it: the look goes through
+  tell the person. After a deploy, though, an app that was opened before it
+  (an iPhone keeps one suspended for days) asks for a look that the server no
+  longer has: online, that is the likely reason, so the choice is kept on the
+  device (and the account marked as not told), and the page reloads once, under
+  the same guard as the chunks (`reloadOnce`), into the build that has the look,
+  which wears it. Offline, or when the page was just reloaded and the look is
+  missing for good, it is the message, and the page is as it was. Otherwise the
+  page is **not reloaded** for a look: it goes through
   Vite's preload helper, which fires `vite:preloadError` when an import fails,
   and `reloadOnStaleChunks` (`lib/staleChunks.ts`, `main.tsx`) reloads the
   page for a route chunk that is gone after a deploy; it is told to leave a
@@ -134,9 +145,10 @@ looks which share them share).
   sheets, and a page with the code and not the sheets is neither Crête nor the
   skin. Vite's helper takes a failed sheet for done and never asks for it again
   (nor does it see that a link written by `index.html` failed), so after the
-  code is loaded `loadSkin` checks that the palette is in the page, asks again
-  for the sheets that are missing (a link with no rule: Chromium gives a failed
-  link an empty sheet), and rejects if it is still not there. A choice that
+  code is loaded `loadSkin` asks again for the sheets that are missing (a link
+  with no rule: Chromium gives a failed link an empty sheet), and rejects unless
+  the palette is in the page and no sheet is missing: a shared sheet (the
+  faces, the trail) can fail while the palette's loads. A choice that
   failed so is tried again, sheets included, the next time. A sheet asked for
   again lands after `styles.css`, whatever its place was: the sheets of a look
   do not depend on that order (below), which is also why this and the order of
@@ -147,7 +159,10 @@ looks which share them share).
   is no longer in the app (a skin removed since), or whose look cannot be
   loaded (its code, or a sheet that stays missing: all or nothing, above), is
   Crête for this page, with no error; the device keeps the choice, and a sheet
-  that failed once is asked for again before that.
+  that failed once is asked for again before that. A skin that is worn without
+  its look is Crête, whoever asked for the look: a signed-in member whose
+  account has the same skin asks for it again while the start waits, and shares
+  the load.
 - **Before the first paint**: the build writes into `index.html` the table of
   the skins (`plugin.ts`), in the order of their names: for each, its modes,
   its colour and the files of its look, from the bundle (`lookFiles`): its
@@ -415,8 +430,9 @@ nothing else (a test says so): `@font-face` rules, and `--font-sans`,
   Jakarta Sans are declared in `styles.css`: name them, do not declare them
   again.
 - The browser fetches a face only when text is drawn in its family. None is
-  preloaded (`index.html` has no preload) or precached (`public/sw.js` keeps
-  the page only; a file of `/assets/` is kept when it is first requested).
+  preloaded (`index.html` writes a `modulepreload` for the parts of the look of
+  the skin kept, never for a face) or precached (`public/sw.js` keeps the page
+  only; a file of `/assets/` is kept when it is first requested).
 - `fontSample` is the `--font-display` stack of the skin's `fonts.css` (Crête's
   when it has none; a test compares their families). The picker draws its
   « Aa » in it, whether the skin is worn or not: `samples.css`, which the section
@@ -447,7 +463,9 @@ that list, `plugin.test.ts` says so). Each of these folders has its own
   (`nuit:absolute nuit:w-40 nuit:md:w-56`), and this sheet makes only those:
   never a selector of `styles.css` (see Loading on demand). A class without
   the prefix is made by nothing (`plugin.test.ts` refuses an utility without
-  it). A class that is not one of Tailwind keeps its name: `route-dots` of
+  it, compiling with the app's theme: `size-12`, `md:w-56` and `fill-peach-400`
+  make nothing without it; and a prefixed class that makes nothing in this
+  sheet). A class that is not one of Tailwind keeps its name: `route-dots` of
   `styles.css`, a hook.
 - It reads the app's theme (`theme.css`: the `@theme` and the `@utility` of
   the app, which `styles.css` imports in its place). With a prefix, Tailwind
@@ -633,7 +651,8 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   the theme kept), no folder of a skin importing another's, the list of folders
   that `styles.css` does not scan, the prefix of their utilities and
   `theme-vars.css`.
-- `build.test.ts`: the real app, built: the page of a person who stays on Crête
+- `build.test.ts`: the real app, built once for the run (`../test/builtApp.setup.ts`,
+  read through `../test/builtApp.ts`: no test builds again): the page of a person who stays on Crête
   links one stylesheet with nothing of another skin, and its entry and what it
   preloads have no motif of another skin; each other skin is a part of its
   own, with its sheets and its parts in the table; no rule of a look's sheet
@@ -684,12 +703,17 @@ on a tab, `aria-pressed` on a chosen day, `data-in-month`, `data-checked`,
   font of each skin (neither declared nor asked for before the module of the
   section), the edge of a swatch (3:1 on its card, in every skin and mode).
 - `../features/pwa/sw.test.ts`: a skin chosen once is drawn offline.
-- `lookFailure.test.ts`: the real app, built, in a real Chromium, with Vite's
-  own helper loading the looks and the routes: a look that fails (404 or
-  offline) does not reload the page and is chosen with its sheets once the
-  network is back; a route chunk gone, online, reloads, and offline does not; a
-  kept skin whose sheet fails is Crête, and one that fails once is asked for
-  again. `sheets.test.tsx`: what the page has of a look's sheets.
+- `lookFailure.test.ts`: the real app (the build of the run), in a real
+  Chromium, with Vite's own helper loading the looks and the routes: a look that
+  fails (404 or offline) does not reload the page and is chosen with its sheets
+  once the network is back; a route chunk gone, online, reloads, and offline
+  does not; a kept skin whose sheet fails (its palette's or a shared one) is
+  Crête, and one that fails once is asked for again; signed in, with the
+  account's skin the device's, the same; in the settings, a look gone after a
+  deploy keeps the choice and reloads once (and offline gives the message, with
+  no reload). Its negative claims are read after a positive signal that the
+  failure was handled, not after a wait. `sheets.test.tsx`: what the page has of
+  a look's sheets.
 - `../features/auth/accountSkin.test.ts`, `accountSkin.signin.test.tsx`,
   `session.test.ts`, `../features/profile/ThemePicker.account.test.tsx`: the
   skin on the account (what is saved, and in which order; sign-in, session
