@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -371,3 +373,98 @@ func (u *uploads) Bytes() int {
 
 // OfName is ofName: « de » before a name, elided as French does.
 func OfName(name string) string { return ofName(name) }
+
+// The admin tools (admin_*.go).
+
+// adminHandlers are the handlers of the admin tools, by name, each reading its
+// arguments from their JSON.
+var adminHandlers = map[string]func(*tools, context.Context, []byte) error{
+	"admin_list_members":     handlerOf((*tools).adminListMembers),
+	"admin_create_runner":    handlerOf((*tools).adminCreateRunner),
+	"admin_delete_runner":    handlerOf((*tools).adminDeleteRunner),
+	"admin_create_link":      handlerOf((*tools).adminCreateLink),
+	"admin_revoke_link":      handlerOf((*tools).adminRevokeLink),
+	"admin_set_role":         handlerOf((*tools).adminSetRole),
+	"admin_set_disabled":     handlerOf((*tools).adminSetDisabled),
+	"admin_create_race_type": handlerOf((*tools).adminCreateRaceType),
+	"admin_update_race_type": handlerOf((*tools).adminUpdateRaceType),
+	"admin_delete_race_type": handlerOf((*tools).adminDeleteRaceType),
+	"admin_merge":            handlerOf((*tools).adminMerge),
+}
+
+// handlerOf calls a handler with the arguments that a JSON gives, and returns
+// its error as the handler returns it.
+func handlerOf[In, Out any](handler func(*tools, context.Context, *mcpsdk.CallToolRequest, In) (*mcpsdk.CallToolResult, Out, error)) func(*tools, context.Context, []byte) error {
+	return func(t *tools, ctx context.Context, args []byte) error {
+		var in In
+		if err := json.Unmarshal(args, &in); err != nil {
+			return err
+		}
+		_, _, err := handler(t, ctx, &mcpsdk.CallToolRequest{}, in)
+		return err
+	}
+}
+
+// AdminToolNames are the names of the admin tools that CallAdminTool knows, in
+// order.
+func AdminToolNames() []string { return slices.Sorted(maps.Keys(adminHandlers)) }
+
+// CallAdminTool calls the handler of the admin tool name directly, with args,
+// for the caller of ctx (whom no server chose), and returns its error as the
+// handler returns it.
+func CallAdminTool(ctx context.Context, app core.App, inner *InnerAPI, name string, args map[string]any) error {
+	handler, ok := adminHandlers[name]
+	if !ok {
+		return fmt.Errorf("no admin tool %s", name)
+	}
+	data, err := json.Marshal(args)
+	if err != nil {
+		return err
+	}
+	t := &tools{deps: &deps{app: app, inner: inner, confirms: newConfirmations(time.Now)}}
+	return handler(t, ctx, data)
+}
+
+// The members, as admin_list_members reads them, and the port of
+// features/admin/memberState.ts.
+type (
+	InvitationRecord = invitationRecord
+	AccountRecord    = accountRecord
+	MemberRunner     = memberRunner
+)
+
+// WithAccount is a runner as the members list reads it: with its account (nil
+// for none).
+func WithAccount(r RunnerRecord, account *AccountRecord) MemberRunner {
+	m := memberRunner{runnerRecord: r}
+	m.Expand.User = account
+	return m
+}
+
+func MemberState(runner RunnerRecord, user *AccountRecord, pending *InvitationRecord, now time.Time) string {
+	return memberState(runner, user, pending, now)
+}
+
+// Member is a member as toMembers gives it: the name of the runner, and the rest.
+type Member struct {
+	Runner            string
+	User              *AccountRecord
+	State             string
+	Invitation, Reset *InvitationRecord
+}
+
+func ToMembers(runners []MemberRunner, invitations []InvitationRecord, now time.Time) []Member {
+	var out []Member
+	for _, m := range toMembers(runners, invitations, now) {
+		out = append(out, Member{Runner: m.runner.Name, User: m.user, State: m.state, Invitation: m.invitation, Reset: m.reset})
+	}
+	return out
+}
+
+func ExpiryDay(expiresAt string) string { return expiryDay(expiresAt) }
+
+// What a merge does, as the route answers it, and the port of describeMerge of
+// features/admin/mergePreview.ts.
+type MergeResult = mergeResult
+
+func DescribeMerge(r MergeResult) []string { return describeMerge(r) }

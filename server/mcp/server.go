@@ -94,8 +94,20 @@ var (
 		addMcpTokens,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
-	// the member tools.
-	adminTools = []func(*mcpsdk.Server, *tools){}
+	// the member tools (spec § 6.11). Each also starts with requireAdmin.
+	adminTools = []func(*mcpsdk.Server, *tools){
+		addAdminListMembers,
+		addAdminCreateRunner,
+		addAdminDeleteRunner,
+		addAdminCreateLink,
+		addAdminRevokeLink,
+		addAdminSetRole,
+		addAdminSetDisabled,
+		addAdminCreateRaceType,
+		addAdminUpdateRaceType,
+		addAdminDeleteRaceType,
+		addAdminMerge,
+	}
 )
 
 // newServer makes the server of a role: the member tools, and the admin tools

@@ -37,7 +37,12 @@ var (
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
-	wantAdminTools = []string{}
+	wantAdminTools = []string{
+		"admin_list_members", "admin_create_runner", "admin_delete_runner",
+		"admin_create_link", "admin_revoke_link", "admin_set_role", "admin_set_disabled",
+		"admin_create_race_type", "admin_update_race_type", "admin_delete_race_type",
+		"admin_merge",
+	}
 )
 
 // hints are the annotations of a tool (spec § 6.1).
@@ -94,6 +99,20 @@ var wantHints = map[string]hints{
 	"passkeys":      {destructive: true},
 	"calendar_link": {destructive: true},
 	"mcp_tokens":    {destructive: true},
+	// The admin tools: every one that can ask for a confirmation is destructive;
+	// adding a runner or a race type, and renaming a type, never ask. A role, an
+	// account turned off or on and a type changed are set to a value: idempotent.
+	"admin_list_members":     {readOnly: true},
+	"admin_create_runner":    {},
+	"admin_delete_runner":    {destructive: true},
+	"admin_create_link":      {destructive: true},
+	"admin_revoke_link":      {destructive: true},
+	"admin_set_role":         {destructive: true, idempotent: true},
+	"admin_set_disabled":     {destructive: true, idempotent: true},
+	"admin_create_race_type": {},
+	"admin_update_race_type": {idempotent: true},
+	"admin_delete_race_type": {destructive: true},
+	"admin_merge":            {destructive: true},
 }
 
 // realm is the challenge of a refused token.

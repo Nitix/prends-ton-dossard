@@ -78,14 +78,17 @@ func summaryOfResult(result toolResult) string {
 	return summary
 }
 
-// dbState is what the races, the runners and the settings hold, for a test to see
-// that nothing was written: each record of the collections that the tools write,
-// with the moment it was last changed. The MCP tokens are told by their ids
-// alone: each call of an assistant records its use in its own token.
+// dbState is what the races, the runners, the settings and the admin hold, for a
+// test to see that nothing was written: each record of the collections that the
+// tools write, with the moment it was last changed. The MCP tokens are told by
+// their ids alone: each call of an assistant records its use in its own token.
 func dbState(t testing.TB, app core.App) string {
 	t.Helper()
 	var lines []string
-	for _, collection := range []string{"events", "formats", "participations", "comments", "offers", "offer_members", "runners", "passkeys", "calendar_feeds", "mcp_tokens"} {
+	for _, collection := range []string{
+		"events", "formats", "participations", "comments", "offers", "offer_members", "runners", "passkeys", "calendar_feeds", "mcp_tokens",
+		"users", "invitations", "race_types",
+	} {
 		records, err := app.FindAllRecords(collection)
 		if err != nil {
 			t.Fatal(err)
@@ -372,6 +375,80 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			asked(t, callTool(t, app, alice, "set_track", map[string]any{"format_id": fx.F42.Id, "upload_id": trackSlot}))
 		})
 	})
+
+	// The admin tools, with the admin's token: a runner that can be deleted, an
+	// invitation waiting for Sam, a type that no format uses, and the two races of
+	// the fixture to merge.
+	create(t, app, "runners", map[string]any{"name": "Julie"})
+	waiting := linkWaiting(t, app, fx.SamRunner, "invite", "member")
+	for _, row := range []struct {
+		name string
+		tool string
+		args map[string]any
+		want []string
+		// previews are the requests of the site's own preview that the first call
+		// sends: a dry run, which writes nothing.
+		previews int
+	}{
+		{
+			"admin_delete_runner", "admin_delete_runner",
+			map[string]any{"runner": "Julie"},
+			[]string{"Le coureur « Julie »", "sera supprimé"}, 0,
+		},
+		{
+			"admin_create_link: a reset", "admin_create_link",
+			map[string]any{"runner": "Bob", "kind": "reset"},
+			[]string{"nouveau mot de passe pour le compte de Bob", "sessions ouvertes"}, 0,
+		},
+		{
+			"admin_create_link: an invitation that replaces the one waiting", "admin_create_link",
+			map[string]any{"runner": "Sam", "kind": "invite"},
+			[]string{"créer le compte de Sam", "Le lien d'invitation en attente pour Sam (valable jusqu'au " + parisDayOf(t, waiting, "expires_at") + ") cessera de marcher"}, 0,
+		},
+		{
+			"admin_create_link: an invitation that gives the admin role", "admin_create_link",
+			map[string]any{"runner": "Julie", "kind": "invite", "role": "admin"},
+			[]string{"créer le compte de Julie", "avec le rôle admin"}, 0,
+		},
+		{
+			"admin_revoke_link", "admin_revoke_link",
+			map[string]any{"runner": "Sam", "kind": "invite"},
+			[]string{"Le lien d'invitation de Sam (valable jusqu'au " + parisDayOf(t, waiting, "expires_at") + ") ne fonctionnera plus"}, 0,
+		},
+		{
+			"admin_set_role", "admin_set_role",
+			map[string]any{"runner": "Bob", "role": "admin"},
+			[]string{"Le compte de Bob passerait de membre à admin"}, 0,
+		},
+		{
+			"admin_set_disabled: disabling", "admin_set_disabled",
+			map[string]any{"runner": "Bob", "disabled": true},
+			[]string{"Le compte de Bob serait désactivé", "sessions ouvertes seraient fermées", "jetons d'assistant (MCP) supprimés"}, 0,
+		},
+		{
+			"admin_delete_race_type", "admin_delete_race_type",
+			map[string]any{"race_type": "Backyard"},
+			[]string{"Le type de course « Backyard »", "time_limit"}, 0,
+		},
+		{
+			"admin_merge: the site's preview", "admin_merge",
+			map[string]any{"kind": "events", "keep_id": fx.Event.Id, "merge_id": fx.Event2.Id},
+			[]string{"« Trail des Crêtes »", "« 10 km de Lyon »", "1 épreuve déplacée", "La fusion est définitive."}, 1,
+		},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			before := dbState(t, app)
+			counted := mcp.CountInnerRequests(t)
+			_, message, details := asked(t, callTool(t, app, admin, row.tool, row.args))
+			mentions(t, message, details, row.want...)
+			if got := counted.Total() - counted.Of(http.MethodGet); got != row.previews || counted.Of(http.MethodPost) != row.previews {
+				t.Errorf("%d inner requests that are not reads, want %d POST of the site's preview", got, row.previews)
+			}
+			if after := dbState(t, app); after != before {
+				t.Errorf("the database changed:\nbefore\n%s\nafter\n%s", before, after)
+			}
+		})
+	}
 }
 
 // A file sent with start_upload is not taken by the first call, which asks for a
