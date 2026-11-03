@@ -58,7 +58,13 @@ vi.mock("../lib/pb", () => ({
       onChange: () => () => {},
     },
     filter: (raw: string) => raw,
-    send: () => Promise.resolve({}),
+    // The settings page asks for the tokens of the assistants, which are a list; the other pages have no use for the answer.
+    send: (path: string) =>
+      Promise.resolve(
+        path === "/api/app/mcp-tokens"
+          ? { url: "http://localhost:5173/mcp", max: 5, tokens: [] }
+          : {},
+      ),
     collection: (name: string) => ({
       getFullList: () => Promise.resolve(lists[name] ?? []),
       getList: () => Promise.resolve({ items: [], page: 1, perPage: 1, totalItems: 0 }),

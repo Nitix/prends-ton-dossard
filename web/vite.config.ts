@@ -39,7 +39,8 @@ export default defineConfig({
     // taken, failing is better than serving from an origin passkeys refuse.
     port: 5173,
     strictPort: true,
-    proxy: { "/api": "http://127.0.0.1:8090" },
+    // The MCP server is at /mcp, next to the API.
+    proxy: { "/api": "http://127.0.0.1:8090", "/mcp": "http://127.0.0.1:8090" },
   },
   build: {
     // The Go program embeds this directory (server/webdist).

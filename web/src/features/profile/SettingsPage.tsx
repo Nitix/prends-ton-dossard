@@ -13,6 +13,7 @@ import { pb } from "../../lib/pb";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
 import { logout, useSession } from "../auth/session";
 import { CalendarSection } from "../calendar/CalendarSection";
+import { McpSection } from "../mcp/McpSection";
 import { InstallSection } from "../pwa/InstallSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { failureOf, text, type Failure } from "./forms";
@@ -24,11 +25,11 @@ const BUTTON = `${PRIMARY} self-start`;
 /**
  * The settings of the signed-in user, which the profile leads to: the photo and
  * the name the group sees, the email and the password of the account, the
- * passkeys, the theme of the app on this device, the calendar link, how to
- * install the app, and the sign-out. An account that is not a member's (the
- * super-admin of PocketBase) has the theme and the sign-out only. A link at
- * the top goes back to the profile. The app shell around it owns the page's
- * `<main>`.
+ * passkeys, the theme of the app on this device, the calendar link, the tokens
+ * of the AI assistants, how to install the app, and the sign-out. An account
+ * that is not a member's (the super-admin of PocketBase) has the theme and the
+ * sign-out only. A link at the top goes back to the profile. The app shell
+ * around it owns the page's `<main>`.
  */
 export function SettingsPage() {
   const { t } = useI18n();
@@ -86,11 +87,15 @@ function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRec
   );
 }
 
-/** What a member has after the look of the app: the link of their calendar, and how to install the app. */
+/**
+ * What a member has after the look of the app: the link of their calendar, the
+ * tokens of their AI assistants (absent on the demo), and how to install the app.
+ */
 function AppSections() {
   return (
     <>
       <CalendarSection />
+      <McpSection />
       <InstallSection />
     </>
   );

@@ -10,14 +10,18 @@ import (
 	"courses/server/config"
 )
 
-// Register attaches the hooks of the tokens to app, whatever the site is. The
-// routes that make and revoke tokens (outside the demo, which has no tokens)
-// are what cfg is for.
+// Register attaches the hooks of the tokens to app, whatever the site is, and
+// the routes that list, make and revoke tokens, outside the demo (which has
+// none: its account is shared by everybody).
 //
 // The hooks keep invariants of the data, so they are model hooks: they also
 // protect the writes that do not come from the API (the Go code, the
 // commands, the dashboard).
 func Register(app core.App, cfg config.Config) {
+	if !cfg.Demo() {
+		registerRoutes(app, cfg)
+	}
+
 	// An account has at most MaxPerAccount tokens.
 	app.OnRecordCreate("mcp_tokens").BindFunc(func(e *core.RecordEvent) error {
 		count, err := e.App.CountRecords("mcp_tokens", dbx.HashExp{"user": e.Record.GetString("user")})

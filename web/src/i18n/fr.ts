@@ -131,6 +131,42 @@ export const fr = {
     renewHint: "L'ancien lien cessera de marcher.",
     remove: "Supprimer le lien",
   },
+  // The "AI assistant" section of the settings page (see features/mcp): the personal tokens with which an assistant acts on the site as the member.
+  mcp: {
+    title: "Assistant IA (MCP)",
+    intro:
+      "Un jeton laisse un assistant IA (Claude Code, Claude Desktop…) faire sur le site ce que tu y fais, en ton nom, sans l'ouvrir. Tout ce qu'il fait est signé de ton nom, et il te demande ton accord avant de supprimer quoi que ce soit. Il ne peut rien de plus que toi : l'administration seulement si tu es admin, et jamais ton mot de passe ni ton email.",
+    empty: "Aucun jeton pour l'instant.",
+    created: (date: string) => `Créé le ${date}`,
+    lastUsed: (date: string) => `Utilisé le ${date}`,
+    neverUsed: "Jamais utilisé",
+    // The name of the token is in the accessible name only: the buttons of a
+    // list would otherwise sound the same.
+    revoke: "Révoquer",
+    revokeLabel: (name: string) => `Révoquer le jeton « ${name} »`,
+    revokeTitle: "Révoquer le jeton ?",
+    revokeWarning: (name: string) =>
+      `L'assistant qui utilise « ${name} » n'aura plus accès au site.`,
+    revoked: "Jeton révoqué.",
+    create: "Nouveau jeton",
+    limit: (max: number) => `Tu as déjà ${max} jetons : révoque-en un pour en créer un autre.`,
+    // The window that makes a token: its name first, then the token, shown once.
+    createTitle: "Nouveau jeton",
+    name: "Nom du jeton",
+    nameHint: "Pour le reconnaître : « Claude sur mon PC », par exemple.",
+    createSubmit: "Créer le jeton",
+    showOnce: "Copie ce jeton maintenant : il ne sera plus jamais affiché.",
+    tokenLabel: "Jeton",
+    copyToken: "Copier le jeton",
+    tokenCopied: "Jeton copié.",
+    claudeCode: "Pour Claude Code, lance cette commande dans un terminal :",
+    commandLabel: "Commande",
+    copyCommand: "Copier la commande",
+    commandCopied: "Commande copiée.",
+    otherClients: (url: string) =>
+      `Pour un autre assistant : l'adresse est ${url}, avec l'en-tête Authorization: Bearer suivi du jeton. Le README du site explique Claude Desktop.`,
+    done: "J'ai copié le jeton",
+  },
   // The "App" section of the settings page (see features/pwa): putting the site on the home screen.
   install: {
     title: "Application",

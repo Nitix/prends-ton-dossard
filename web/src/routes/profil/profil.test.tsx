@@ -29,7 +29,13 @@ vi.mock("../../lib/pb", () => ({
       onChange: () => () => {},
     },
     filter: (raw: string) => raw,
-    send: () => Promise.resolve({ exists: false }),
+    // The settings page asks for the calendar link and for the tokens of the assistants, by path.
+    send: (path: string) =>
+      Promise.resolve(
+        path === "/api/app/mcp-tokens"
+          ? { url: "http://localhost:5173/mcp", max: 5, tokens: [] }
+          : { exists: false },
+      ),
     collection: (name: string) => ({
       getFullList: () => Promise.resolve(name === "runners" ? [alice] : []),
       getList: () => Promise.resolve({ items: [] }),

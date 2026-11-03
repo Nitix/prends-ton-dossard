@@ -90,3 +90,32 @@ func TestLoad_DemoLoginEmail(t *testing.T) {
 		})
 	}
 }
+
+// The demo is the site with an account that anybody can sign in to: it is what
+// DEMO_LOGIN_EMAIL turns on, and the parts of the site that a shared account
+// must not have (the tokens of the assistants) ask Demo.
+func TestLoad_Demo(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		want        bool
+	}{
+		{name: "without the variable", value: "", want: false},
+		{name: "with only spaces", value: "  ", want: false},
+		{name: "with the variable", value: "alice@example.test", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Load(func(key string) string {
+				if key == "DEMO_LOGIN_EMAIL" {
+					return tc.value
+				}
+				return ""
+			})
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := cfg.Demo(); got != tc.want {
+				t.Errorf("Demo() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
