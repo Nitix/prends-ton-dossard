@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { useI18n } from "../../i18n/I18nProvider";
 import type { FormatView } from "./api";
 import { formatMeasures } from "./formatName";
@@ -6,14 +8,22 @@ const SEPARATOR = " · ";
 
 /**
  * The parts of a format, as `formatMeasures` gives them: its name in bold, in
- * ink, then its measures after their separators, in the text.
+ * ink, then its measures, each after its separator (in the text). A measure is
+ * a span that does not wrap (« 1 200 m D+ » is one thing: in a narrow column,
+ * such as one of the two of the list at 768 px, the line goes on to the next
+ * line between two measures, never inside one). The words are the same.
  */
 function FormatParts({ parts }: { parts: readonly string[] }) {
   const [name = "", ...measures] = parts;
   return (
     <>
       <span className="format-name font-semibold text-ink">{name}</span>
-      {measures.length > 0 && `${SEPARATOR}${measures.join(SEPARATOR)}`}
+      {measures.map((measure) => (
+        <Fragment key={measure}>
+          {SEPARATOR}
+          <span className="format-measure whitespace-nowrap">{measure}</span>
+        </Fragment>
+      ))}
     </>
   );
 }
