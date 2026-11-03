@@ -636,6 +636,8 @@ export const en = {
     passkey_failed: "The passkey could not be verified.",
     passkey_session_expired: "The request has expired. Start over.",
     account_disabled: "This account is disabled. Contact the admin.",
+    token_invalid: "This token is not valid, or it was revoked.",
+    token_limit: "You already have 5 tokens: revoke one to make another.",
     // PocketBase's own validation codes.
     validation_required: "This field is required.",
     validation_not_unique: "This value is already in use.",

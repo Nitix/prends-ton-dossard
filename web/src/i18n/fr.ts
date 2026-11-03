@@ -808,6 +808,8 @@ export const fr = {
     passkey_failed: "La clé d'accès n'a pas pu être vérifiée.",
     passkey_session_expired: "La demande a expiré. Recommence.",
     account_disabled: "Ce compte est désactivé. Contacte l'admin.",
+    token_invalid: "Ce jeton n'est pas valide, ou il a été révoqué.",
+    token_limit: "Tu as déjà 5 jetons : révoque-en un pour en créer un autre.",
     // PocketBase's own validation codes.
     validation_required: "Ce champ est obligatoire.",
     validation_not_unique: "Cette valeur est déjà utilisée.",
