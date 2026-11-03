@@ -33,6 +33,7 @@ var (
 		"add_participation", "update_participation", "remove_participation", "set_result",
 		"add_comment", "update_comment", "delete_comment", "add_offer", "update_offer", "delete_offer", "offer_place",
 		"start_upload", "set_photo", "set_track",
+		"rename_runner", "passkeys", "calendar_link", "mcp_tokens",
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
@@ -85,6 +86,14 @@ var wantHints = map[string]hints{
 	"start_upload": {},
 	"set_photo":    {destructive: true},
 	"set_track":    {destructive: true},
+	// A name is replaced by another, as a comment is: nothing is lost that the
+	// person does not see. A passkey, a link of the calendar and a token are only
+	// deleted, renewed or revoked with a confirmation, and these tools also read:
+	// they are not read-only.
+	"rename_runner": {idempotent: true},
+	"passkeys":      {destructive: true},
+	"calendar_link": {destructive: true},
+	"mcp_tokens":    {destructive: true},
 }
 
 // realm is the challenge of a refused token.

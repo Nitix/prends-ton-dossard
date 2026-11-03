@@ -78,18 +78,23 @@ func summaryOfResult(result toolResult) string {
 	return summary
 }
 
-// dbState is what the races and the runners hold, for a test to see that
-// nothing was written: each record of the collections that the tools write, with
-// the moment it was last changed.
+// dbState is what the races, the runners and the settings hold, for a test to see
+// that nothing was written: each record of the collections that the tools write,
+// with the moment it was last changed. The MCP tokens are told by their ids
+// alone: each call of an assistant records its use in its own token.
 func dbState(t testing.TB, app core.App) string {
 	t.Helper()
 	var lines []string
-	for _, collection := range []string{"events", "formats", "participations", "comments", "offers", "offer_members", "runners"} {
+	for _, collection := range []string{"events", "formats", "participations", "comments", "offers", "offer_members", "runners", "passkeys", "calendar_feeds", "mcp_tokens"} {
 		records, err := app.FindAllRecords(collection)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, r := range records {
+			if collection == "mcp_tokens" {
+				lines = append(lines, collection+" "+r.Id)
+				continue
+			}
 			lines = append(lines, collection+" "+r.Id+" "+r.GetString("updated"))
 		}
 	}
@@ -150,6 +155,14 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	trace := withFile(t, app, fx.F42, "gpx", "trace.gpx", gpx)
 	photoSlot := uploaded(t, app, alice, "photo", png)
 	trackSlot := uploaded(t, app, alice, "track", gpx)
+	// What the settings tools are asked about: two passkeys of Alice (one of them
+	// used), the link of her calendar, and a second token of hers.
+	phone := passkeyFor(t, app, fx.Alice, "iPhone")
+	update(t, app, phone, map[string]any{"last_used_at": "2026-04-02 23:30:00.000Z"}) // 1:30 on the 3rd in Paris
+	passkeyFor(t, app, fx.Alice, "PC du boulot")
+	linkFor(t, app, fx.Alice)
+	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
+	update(t, app, storedRecord(t, app, "mcp_tokens", desktopID), map[string]any{"last_used_at": "2026-04-20 08:00:00.000Z"})
 
 	for _, row := range []struct {
 		name string
@@ -286,6 +299,31 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			map[string]any{"format_id": fx.F42.Id, "remove": true},
 			[]string{"La trace actuelle de « Trail 42 km » (Trail des Crêtes) serait retirée", fileURL("formats", fx.F42.Id, trace)},
 		},
+		{
+			"passkeys: one of two deleted", "passkeys",
+			map[string]any{"action": "delete", "passkey_id": phone.Id},
+			[]string{"La clé d'accès « iPhone »", "dernière utilisation : 2026-04-03", "ne pourra plus te connecter"},
+		},
+		{
+			"calendar_link: renewed", "calendar_link",
+			map[string]any{"action": "renew"},
+			[]string{"L'ancien lien cessera de marcher", "ne recevront plus tes courses"},
+		},
+		{
+			"calendar_link: deleted", "calendar_link",
+			map[string]any{"action": "delete"},
+			[]string{"Le lien cessera de marcher", "ne recevront plus tes courses"},
+		},
+		{
+			"mcp_tokens: another token revoked", "mcp_tokens",
+			map[string]any{"action": "revoke", "token_id": desktopID},
+			[]string{"le jeton « Claude Desktop »", "dernière utilisation : 2026-04-20", "n'aura plus accès au site"},
+		},
+		{
+			"mcp_tokens: the token of the call revoked", "mcp_tokens",
+			map[string]any{"action": "revoke", "token_id": idOfToken(alice)},
+			[]string{"le jeton « Claude sur mon PC »", "C'est le jeton de l'assistant qui fait cette demande", "cet appel sera son dernier"},
+		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			writesNothing(t, app, func() {
@@ -294,6 +332,20 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			})
 		})
 	}
+
+	// The only passkey of an account is the one that is asked about: the
+	// confirmation says what it means for signing in, for the person's own account
+	// and for the one of somebody else, by the admin.
+	t.Run("passkeys: the only one of an account", func(t *testing.T) {
+		own := passkeyFor(t, app, fx.Admin, "Clé de l'admin")
+		bobs := passkeyFor(t, app, fx.Bob, "Pixel")
+		writesNothing(t, app, func() {
+			_, message, details := asked(t, callTool(t, app, admin, "passkeys", map[string]any{"action": "delete", "passkey_id": own.Id}))
+			mentions(t, message, details, "C'est ta seule clé d'accès", "qu'avec ton mot de passe")
+			_, message, details = asked(t, callTool(t, app, admin, "passkeys", map[string]any{"action": "delete", "passkey_id": bobs.Id}))
+			mentions(t, message, details, "Bob ne pourra plus se connecter avec la clé d'accès « Pixel »", "C'est la seule clé d'accès de Bob")
+		})
+	})
 
 	// An admin changes the offer of somebody else: the confirmation says whose it is.
 	t.Run("update_offer: the offer of somebody else, by the admin", func(t *testing.T) {
@@ -448,6 +500,10 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", testutil.PNG(t, 16, 16))
 	onePhoto := uploaded(t, app, alice, "photo", testutil.PNG(t, 20, 20))
 	otherPhoto := uploaded(t, app, alice, "photo", testutil.PNG(t, 21, 21))
+	// Two passkeys, a link of the calendar and a second token of Alice.
+	phone, pc := passkeyFor(t, app, fx.Alice, "iPhone"), passkeyFor(t, app, fx.Alice, "PC du boulot")
+	linkFor(t, app, fx.Alice)
+	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
 
 	const other = "Confirmation refusée : elle ne correspond pas à cette demande."
 	for _, row := range []struct {
@@ -468,6 +524,11 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 		{"offer_place for Bob, on Sam", "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"}, alice, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Sam"}},
 		{"the delete_offer of Alice, by the admin", "delete_offer", map[string]any{"offer_id": ride.Id}, admin, "delete_offer", map[string]any{"offer_id": ride.Id}},
 		{"set_photo with another file", "set_photo", map[string]any{"upload_id": onePhoto}, alice, "set_photo", map[string]any{"upload_id": otherPhoto}},
+		{"passkeys: another key", "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": pc.Id}},
+		{"calendar_link: the renewal for the deletion", "calendar_link", map[string]any{"action": "renew"}, alice, "calendar_link", map[string]any{"action": "delete"}},
+		{"calendar_link: another language", "calendar_link", map[string]any{"action": "renew", "lang": "fr"}, alice, "calendar_link", map[string]any{"action": "renew", "lang": "en"}},
+		{"mcp_tokens: another token", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, alice, "mcp_tokens", map[string]any{"action": "revoke", "token_id": idOfToken(alice)}},
+		{"mcp_tokens: the token of Alice, through another tool", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.firstTool, row.firstArgs))
@@ -647,6 +708,11 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 	png := testutil.PNG(t, 16, 16)
 	withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", png)
 	photoSlot := uploaded(t, app, alice, "photo", png)
+	// A passkey, the link of the calendar and a second token of Alice, which Bob
+	// has no right to: he has no link at all.
+	phone := passkeyFor(t, app, fx.Alice, "iPhone")
+	linkFor(t, app, fx.Alice)
+	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
 
 	for _, row := range []struct {
 		name string
@@ -667,6 +733,10 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 		{"the refusal of an offer that is somebody else's", "delete_offer", map[string]any{"offer_id": ride.Id}, bob, "delete_offer", map[string]any{"offer_id": ride.Id}},
 		{"the refusal of a place that is not there", "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"}, alice, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Sam"}},
 		{"the refusal of a photo that is somebody else's", "set_photo", map[string]any{"upload_id": photoSlot}, bob, "set_photo", map[string]any{"runner": "Alice", "remove": true}},
+		{"a passkey that is somebody else's", "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}, bob, "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}},
+		{"a passkey that is not an id", "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": "iPhone"}},
+		{"a link that is not there", "calendar_link", map[string]any{"action": "renew"}, bob, "calendar_link", map[string]any{"action": "renew"}},
+		{"a token that is somebody else's", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, bob, "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.tool, row.args))
@@ -716,6 +786,111 @@ func TestTools_Confirmation_StateChangedForAnOffer(t *testing.T) {
 	if storedRecord(t, app, "offers", ride.Id) == nil {
 		t.Error("the offer is gone")
 	}
+}
+
+// What the person agreed to in the settings is not what would be done any more:
+// the token is refused, and the new confirmation says how it is now.
+func TestTools_Confirmation_StateChangedForSettings(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	admin := newToken(t, app, fx.Admin)
+
+	t.Run("a passkey that was the only one of the account is not any more", func(t *testing.T) {
+		pixel := passkeyFor(t, app, fx.Bob, "Pixel")
+		args := map[string]any{"action": "delete", "passkey_id": pixel.Id}
+		token, message, _ := asked(t, callTool(t, app, admin, "passkeys", args))
+		if !strings.Contains(message, "C'est la seule clé d'accès de Bob") {
+			t.Fatalf("the first confirmation does not say that it is the only key: %s", message)
+		}
+		// Meanwhile, Bob adds another one.
+		passkeyFor(t, app, fx.Bob, "Pixel 2")
+
+		writesNothing(t, app, func() {
+			again := callTool(t, app, admin, "passkeys", with(args, token))
+			_, message, details := asked(t, again)
+			const want = "Confirmation refusée : la situation a changé depuis. Plus d'actualité : « C'est la seule clé d'accès de Bob"
+			if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+				t.Errorf("the summary is %q, want it to start with %q", summary, want)
+			}
+			if all := message + strings.Join(details, ""); strings.Contains(all, "seule clé") {
+				t.Errorf("the new confirmation still says that it is the only key: %s", all)
+			}
+		})
+		if storedRecord(t, app, "passkeys", pixel.Id) == nil {
+			t.Error("the passkey is gone")
+		}
+	})
+
+	t.Run("a passkey that was used in the meantime", func(t *testing.T) {
+		phone := passkeyFor(t, app, fx.Alice, "iPhone")
+		passkeyFor(t, app, fx.Alice, "PC du boulot")
+		args := map[string]any{"action": "delete", "passkey_id": phone.Id}
+		token, _, _ := asked(t, callTool(t, app, alice, "passkeys", args))
+		update(t, app, phone, map[string]any{"last_used_at": "2026-05-01 09:55:00.000Z"})
+
+		writesNothing(t, app, func() {
+			again := callTool(t, app, alice, "passkeys", with(args, token))
+			_, message, details := asked(t, again)
+			const want = "Confirmation refusée : la situation a changé depuis. Nouveau : « La clé d'accès « iPhone » (dernière utilisation : 2026-05-01) ne pourra plus te connecter »"
+			if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+				t.Errorf("the summary is %q, want it to start with %q", summary, want)
+			}
+			mentions(t, message, details, "dernière utilisation : 2026-05-01")
+		})
+	})
+
+	t.Run("the link was made again on the site in the meantime", func(t *testing.T) {
+		linkFor(t, app, fx.Alice)
+		args := map[string]any{"action": "delete"}
+		token, _, _ := asked(t, callTool(t, app, alice, "calendar_link", args))
+		// Meanwhile, the person made a new link from the site: that is not the one
+		// that she agreed to delete.
+		link, err := app.FindFirstRecordByData("calendar_feeds", "user", fx.Alice.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := app.Delete(link); err != nil {
+			t.Fatal(err)
+		}
+		linkFor(t, app, fx.Alice)
+
+		writesNothing(t, app, func() {
+			again := callTool(t, app, alice, "calendar_link", with(args, token))
+			asked(t, again)
+			const want = "Confirmation refusée : la situation a changé depuis. Rien n'a été fait"
+			if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+				t.Errorf("the summary is %q, want it to start with %q", summary, want)
+			}
+		})
+		if _, err := app.FindFirstRecordByData("calendar_feeds", "user", fx.Alice.Id); err != nil {
+			t.Errorf("the link is gone: %v", err)
+		}
+	})
+
+	t.Run("a token that was used on another day in the meantime", func(t *testing.T) {
+		_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
+		desktop := storedRecord(t, app, "mcp_tokens", desktopID)
+		update(t, app, desktop, map[string]any{"last_used_at": "2026-04-20 08:00:00.000Z"})
+		args := map[string]any{"action": "revoke", "token_id": desktopID}
+		token, _, _ := asked(t, callTool(t, app, alice, "mcp_tokens", args))
+		update(t, app, desktop, map[string]any{"last_used_at": "2026-04-30 08:00:00.000Z"})
+
+		writesNothing(t, app, func() {
+			again := callTool(t, app, alice, "mcp_tokens", with(args, token))
+			_, message, details := asked(t, again)
+			const want = "Confirmation refusée : la situation a changé depuis. Nouveau : « Révoquer le jeton « Claude Desktop » (dernière utilisation : 2026-04-30)"
+			if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+				t.Errorf("the summary is %q, want it to start with %q", summary, want)
+			}
+			mentions(t, message, details, "dernière utilisation : 2026-04-30")
+		})
+		if storedRecord(t, app, "mcp_tokens", desktopID) == nil {
+			t.Error("the token is gone")
+		}
+	})
 }
 
 // The risk went away between the two calls: nothing is written, and the

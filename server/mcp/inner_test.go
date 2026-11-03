@@ -441,3 +441,80 @@ func TestInner_CannotCreateAToken(t *testing.T) {
 		t.Errorf("Alice has %d tokens, want none", len(tokens))
 	}
 }
+
+// The tools of the settings reach the passkeys, the calendar link and the tokens
+// by the routes that they need, with the methods that they need, and no others:
+// no passkey is made (WebAuthn needs the device), no token (its secret would go
+// through the assistant), the feed of a calendar is not read, and the tables that
+// only the routes of the site read (the links of the calendar, the tokens) have no
+// route of their own. A member's call and an admin's are alike here.
+func TestInner_SettingsRoutes(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	counted := mcp.CountInnerRequests(t)
+	id := strings.Repeat("a", 15)
+
+	inside(t, app, func(t testing.TB, inner *mcp.InnerAPI, as func(*core.Record) context.Context) {
+		for _, caller := range []*core.Record{fx.Alice, fx.Admin} {
+			for _, row := range []struct{ method, path string }{
+				{http.MethodPost, "/api/collections/passkeys/records"},
+				{http.MethodPost, "/api/app/passkeys/register/begin"},
+				{http.MethodPost, "/api/app/passkeys/register/finish"},
+				{http.MethodPost, "/api/app/passkeys/login/begin"},
+				{http.MethodPost, "/api/app/passkeys/login/finish"},
+				{http.MethodPut, "/api/collections/passkeys/records/" + id},
+				{http.MethodGet, "/api/app/calendar/" + id + ".ics"},
+				{http.MethodPut, "/api/app/calendar"},
+				{http.MethodPatch, "/api/app/calendar"},
+				{http.MethodGet, "/api/collections/calendar_feeds/records"},
+				{http.MethodPost, "/api/collections/calendar_feeds/records"},
+				{http.MethodDelete, "/api/collections/calendar_feeds/records/" + id},
+				{http.MethodPost, "/api/app/mcp-tokens"},
+				{http.MethodGet, "/api/app/mcp-tokens/" + id},
+				{http.MethodPatch, "/api/app/mcp-tokens/" + id},
+				{http.MethodPut, "/api/app/mcp-tokens/" + id},
+				{http.MethodGet, "/api/collections/mcp_tokens/records"},
+				{http.MethodPost, "/api/collections/mcp_tokens/records"},
+				{http.MethodPatch, "/api/collections/mcp_tokens/records/" + id},
+				{http.MethodDelete, "/api/collections/mcp_tokens/records/" + id},
+				{http.MethodPost, "/api/app/me/email"},
+				{http.MethodPost, "/api/app/me/password"},
+				{http.MethodPost, "/api/collections/runners/records/" + id + "/passkeys"},
+			} {
+				if _, _, err := inner.Do(as(caller), row.method, row.path, map[string]any{}); err == nil {
+					t.Errorf("%s %s was sent for %s", row.method, row.path, caller.Email())
+				}
+			}
+		}
+		if got := counted.Total(); got != 0 {
+			t.Fatalf("%d inner requests were sent for routes that are not in the list, want none", got)
+		}
+
+		// The routes of the tools are sent, for a member: the API decides what it
+		// answers.
+		var sent int
+		for _, row := range []struct {
+			method, path string
+			body         any
+		}{
+			{http.MethodPatch, "/api/collections/runners/records/" + fx.AliceRunner.Id, map[string]any{"name": "Alice"}},
+			{http.MethodGet, "/api/collections/passkeys/records?fields=id", nil},
+			{http.MethodGet, "/api/collections/passkeys/records/" + id, nil},
+			{http.MethodPatch, "/api/collections/passkeys/records/" + id, map[string]any{"name": "iPhone"}},
+			{http.MethodDelete, "/api/collections/passkeys/records/" + id, nil},
+			{http.MethodGet, "/api/app/calendar", nil},
+			{http.MethodPost, "/api/app/calendar", map[string]any{"lang": "fr"}},
+			{http.MethodDelete, "/api/app/calendar", nil},
+			{http.MethodGet, "/api/app/mcp-tokens", nil},
+			{http.MethodDelete, "/api/app/mcp-tokens/" + id, nil},
+		} {
+			if _, _, err := inner.Do(as(fx.Alice), row.method, row.path, row.body); err != nil {
+				t.Errorf("%s %s was not sent: %v", row.method, row.path, err)
+			}
+			sent++
+		}
+		if got := counted.Total(); got != sent {
+			t.Errorf("%d inner requests were sent, want the %d of the tools", got, sent)
+		}
+	})
+}

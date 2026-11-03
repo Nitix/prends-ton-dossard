@@ -88,6 +88,10 @@ var (
 		addStartUpload,
 		addSetPhoto,
 		addSetTrack,
+		addRenameRunner,
+		addPasskeys,
+		addCalendarLink,
+		addMcpTokens,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

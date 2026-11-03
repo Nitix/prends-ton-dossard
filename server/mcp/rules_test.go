@@ -430,6 +430,139 @@ func offerToolRows() []ruleRow {
 	return rows
 }
 
+// ruleAccounts are the accounts of the three people of the table.
+var ruleAccounts = map[string]func(fx testutil.Fixture) *core.Record{
+	"Alice": func(fx testutil.Fixture) *core.Record { return fx.Alice },
+	"Bob":   func(fx testutil.Fixture) *core.Record { return fx.Bob },
+	"Admin": func(fx testutil.Fixture) *core.Record { return fx.Admin },
+}
+
+// settingsToolRows are the rows of the profile and the settings: the name of a
+// runner is changed by its account and by the admins; a passkey is renamed by its
+// account alone (an admin included), and deleted by it and by the admins; a link of
+// the calendar and a token are only ever the caller's own, and the token of
+// somebody else is not found.
+func settingsToolRows() []ruleRow {
+	var rows []ruleRow
+	// The names that the rows give are told apart by a counter: a refused row must
+	// not find the write of another.
+	named := 0
+	fresh := func() string {
+		named++
+		return fmt.Sprintf("Nom de règle %d", named)
+	}
+	everybody := map[string]bool{"Alice": true, "Bob": true, "Admin": true}
+	owners := []string{"Alice", "Bob", "Admin"}
+
+	// A passkey: whose it is, then what is done to it.
+	passkeyCase := func(action string, allowed func(person, owner string) bool, site func(args map[string]any) (string, string, string)) {
+		for _, owner := range owners {
+			rows = append(rows, forEachPerson("passkeys", action+": a passkey of "+owner, map[string]bool{
+				"Alice": allowed("Alice", owner), "Bob": allowed("Bob", owner), "Admin": allowed("Admin", owner),
+			}, func(string) (prepareRow, siteRequest) {
+				return func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+					key := passkeyFor(t, app, ruleAccounts[owner](fx), "Clé de "+owner)
+					if action == "delete" {
+						return map[string]any{"action": "delete", "passkey_id": key.Id}, func() bool { return storedRecord(t, app, "passkeys", key.Id) == nil }
+					}
+					name := fresh()
+					return map[string]any{"action": "rename", "passkey_id": key.Id, "name": name}, func() bool {
+						stored := storedRecord(t, app, "passkeys", key.Id)
+						return stored != nil && stored.GetString("name") == name
+					}
+				}, site
+			})...)
+		}
+	}
+	passkeyCase("rename", func(person, owner string) bool { return person == owner },
+		func(args map[string]any) (string, string, string) {
+			return http.MethodPatch, "/api/collections/passkeys/records/" + args["passkey_id"].(string), fmt.Sprintf(`{"name":%q}`, args["name"])
+		})
+	passkeyCase("delete", func(person, owner string) bool { return person == owner || person == "Admin" },
+		func(args map[string]any) (string, string, string) {
+			return http.MethodDelete, "/api/collections/passkeys/records/" + args["passkey_id"].(string), ""
+		})
+
+	// The link of the calendar: one's own, whatever the person.
+	hasLink := func(t testing.TB, app core.App, user *core.Record) *core.Record {
+		t.Helper()
+		found, err := app.FindFirstRecordByData("calendar_feeds", "user", user.Id)
+		if err != nil {
+			return nil
+		}
+		return found
+	}
+	calendarCase := func(action string, prepared func(t *testing.T, app core.App, user *core.Record) func() bool) {
+		rows = append(rows, forEachPerson("calendar_link", action+": one's own link", everybody, func(person string) (prepareRow, siteRequest) {
+			return func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+				return map[string]any{"action": action}, prepared(t, app, ruleAccounts[person](fx))
+			}, nil
+		})...)
+	}
+	// The link, as it was before the call: none for a creation, one for the others.
+	reset := func(t *testing.T, app core.App, user *core.Record, wanted bool) *core.Record {
+		t.Helper()
+		if old := hasLink(t, app, user); old != nil {
+			if err := app.Delete(old); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if wanted {
+			linkFor(t, app, user)
+		}
+		return hasLink(t, app, user)
+	}
+	calendarCase("create", func(t *testing.T, app core.App, user *core.Record) func() bool {
+		reset(t, app, user, false)
+		return func() bool { return hasLink(t, app, user) != nil }
+	})
+	calendarCase("renew", func(t *testing.T, app core.App, user *core.Record) func() bool {
+		before := reset(t, app, user, true).GetString("token")
+		return func() bool {
+			link := hasLink(t, app, user)
+			return link != nil && link.GetString("token") != before
+		}
+	})
+	calendarCase("delete", func(t *testing.T, app core.App, user *core.Record) func() bool {
+		reset(t, app, user, true)
+		return func() bool { return hasLink(t, app, user) == nil }
+	})
+
+	// A token: its owner revokes it; for anybody else it is not there.
+	revokeSite := func(args map[string]any) (string, string, string) {
+		return http.MethodDelete, "/api/app/mcp-tokens/" + args["token_id"].(string), ""
+	}
+	for _, owner := range owners {
+		revoke := func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+			_, id := tokenOf(t, app, ruleAccounts[owner](fx), "Jeton de "+owner)
+			return map[string]any{"action": "revoke", "token_id": id}, func() bool { return storedRecord(t, app, "mcp_tokens", id) == nil }
+		}
+		rows = append(rows, forEachPerson("mcp_tokens", "revoke: a token of "+owner, map[string]bool{
+			"Alice": owner == "Alice", "Bob": owner == "Bob", "Admin": owner == "Admin",
+		}, func(string) (prepareRow, siteRequest) { return revoke, revokeSite })...)
+	}
+
+	// A name: whose runner it is. Last: the rows after it call the runners by their
+	// names.
+	rename := func(runner func(fx testutil.Fixture) *core.Record) prepareRow {
+		return func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+			r, name := runner(fx), fresh()
+			return map[string]any{"runner": r.Id, "name": name}, func() bool {
+				return storedRecord(t, app, "runners", r.Id).GetString("name") == name
+			}
+		}
+	}
+	renameSite := func(args map[string]any) (string, string, string) {
+		return http.MethodPatch, "/api/collections/runners/records/" + args["runner"].(string), fmt.Sprintf(`{"name":%q}`, args["name"])
+	}
+	rows = append(rows, forEachPerson("rename_runner", "one's own runner", everybody, func(person string) (prepareRow, siteRequest) {
+		return rename(rulePeople[person]), renameSite
+	})...)
+	rows = append(rows, eachPerson("rename_runner", "the runner of Bob", false, true, true, rename(rulePeople["Bob"]), renameSite)...)
+	rows = append(rows, eachPerson("rename_runner", "Sam, who has no account", false, false, true, rename(rulePeople["Sam"]), renameSite)...)
+	return rows
+}
+
 // ruleRows is every row. A task that adds write tools adds its own here.
 var ruleRows = func() []ruleRow {
 	var rows []ruleRow
@@ -437,6 +570,7 @@ var ruleRows = func() []ruleRow {
 	rows = append(rows, participationToolRows()...)
 	rows = append(rows, commentToolRows()...)
 	rows = append(rows, offerToolRows()...)
+	rows = append(rows, settingsToolRows()...)
 	return rows
 }()
 
@@ -506,7 +640,7 @@ func TestTools_FollowTheRulesOfTheOwner(t *testing.T) {
 	}
 
 	// The table covers every write tool of the races, the formats, the
-	// participations, the comments and the offers, for the three people.
+	// participations, the comments, the offers and the settings, for the three people.
 	covered := map[string]map[string]bool{}
 	for _, row := range ruleRows {
 		if covered[row.tool] == nil {
@@ -518,6 +652,7 @@ func TestTools_FollowTheRulesOfTheOwner(t *testing.T) {
 		"create_event", "update_event", "delete_event", "add_format", "update_format", "delete_format",
 		"add_participation", "update_participation", "remove_participation", "set_result",
 		"add_comment", "update_comment", "delete_comment", "add_offer", "update_offer", "delete_offer", "offer_place",
+		"rename_runner", "passkeys", "calendar_link", "mcp_tokens",
 	} {
 		for _, person := range []string{"Alice", "Bob", "Admin"} {
 			if !covered[tool][person] {

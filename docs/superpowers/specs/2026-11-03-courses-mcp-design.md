@@ -693,7 +693,11 @@ Le fichier lui-même n'est pas transformé, sauf ce que le site fait aussi (ci-d
 
 ### 6.10 Profil et réglages
 
-**`rename_runner`** (Réglages → « Nom » ; Membres → « Renommer » pour un admin) — `runner` facultatif (soi par défaut), `name` (1 à 50, unique sans tenir compte de la casse : `validation_not_unique`). Son propre coureur, ou n'importe lequel pour un admin. → le coureur.
+**`rename_runner`** (Réglages → « Nom » ; Membres → « Renommer » pour un admin) — `runner` facultatif (soi par défaut), `name` (1 à 50, unique sans tenir compte de la casse : `validation_not_unique`). Son propre coureur, ou n'importe lequel pour un admin. → `{ "done", "runner": RUNNER, "summary" }`.
+
+- Le refus du site est annoncé, sans rien envoyer : « Le nom de Bob ne peut être changé que depuis son propre compte, ou par un admin. », et, pour un coureur sans compte, « Le nom de Sam ne peut être changé que par un admin : Sam n'a pas de compte. ».
+- Le nom est envoyé sans les blancs qui l'entourent, comme le formulaire ; un nom vide, trop long ou déjà pris est le refus du site (`validation_required`, `validation_max_text_constraint`, `validation_not_unique`, avec le champ « nom »). Un nom identique à l'actuel ne change rien (« Rien à changer : … »). Aucune confirmation (§ 6.13) : le nouveau nom remplace l'ancien.
+- Le `summary` ne devine aucun genre : « Le coureur « Alice » est renommé « Alice Martin ». ».
 
 **`passkeys`** (Réglages → « Mes clés d'accès » ; Membres → « Clés d'accès » pour un admin)
 
@@ -710,17 +714,33 @@ Le fichier lui-même n'est pas transformé, sauf ce que le site fait aussi (ci-d
 - `delete` : les siennes, ou n'importe lesquelles pour un admin ; **toujours une confirmation** (« La clé « iPhone » ne pourra plus te connecter. »).
 - **Créer une clé** n'est pas possible : il faut l'appareil (WebAuthn), dans le navigateur (§ 10).
 
+Ce que l'outil fait de plus que le site, et pourquoi :
+
+- **Les champs.** Chaque requête demande les champs que la page des Réglages montre et pas un de plus : `list` lit `passkeys?filter=(user='<compte>')&fields=id,name,created,last_used_at&sort=-created`, un `rename` ou un `delete` lit la clé avec `id,name,created,last_used_at,updated,user`. Ni `credential` ni `credential_id` ne sont demandés, et la réponse est faite de champs typés : le compte (`user`) est lu pour savoir à qui est la clé, jamais dit. Le compte de `list` vient du coureur (`runner`), dont le site donne le compte à tous (`has_account`).
+- **`list` d'un autre coureur.** La règle du site donne à un membre une liste vide pour le compte d'un autre, ce qui dirait « aucune clé » : l'outil annonce le refus, sans rien envoyer, que le coureur ait des clés ou non : « Les clés d'accès de Bob ne se voient que depuis son propre compte, ou par un admin. » Un coureur sans compte : « Sam n'a pas de compte, donc pas de clé d'accès. » La réponse est `{ "done", "summary", "runner", "passkeys" }` (la liste est là, vide, quand il n'y a pas de clé).
+- **`rename` et `delete` désignent une clé par `passkey_id`.** `runner` est refusé (« runner ne sert qu'à l'action list ») : un coureur qui ne serait pas le propriétaire de la clé serait pris pour lui. Un identifiant qui n'en est pas un, ou absent, est annoncé. Une clé que la règle de lecture ne montre pas à l'appelant (celle d'un autre compte, pour un membre) est « introuvable, ou pas à toi », comme une clé qui n'existe pas : la réponse ne dit pas lesquelles existent.
+- **`rename` d'un admin sur la clé d'un autre : annoncé.** La règle de modification est `user = @request.auth.id` : un admin lit toutes les clés, il ne renomme que les siennes. « La clé d'accès « Pixel » est celle de Bob : une clé d'accès ne se renomme que depuis son propre compte, même pour un admin. » Un nom identique ne change rien.
+- **`delete`, toujours une confirmation.** Elle dit quelle clé (nom, dernière utilisation à Paris ou « jamais utilisée »), de quel compte, et ce que cela change : « La clé d'accès « iPhone » (dernière utilisation : 2026-04-02) ne pourra plus te connecter. » ; pour un autre compte, comme la page Membres : « Bob ne pourra plus se connecter avec la clé d'accès « Pixel » (jamais utilisée). » **Quand c'est la seule clé du compte**, elle le dit : « C'est ta seule clé d'accès : sans elle, tu ne pourras plus te connecter qu'avec ton mot de passe (une nouvelle clé se crée depuis les Réglages du site, sur l'appareil). » ; pour un autre : « C'est la seule clé d'accès de Bob : sans elle, Bob ne pourra plus se connecter qu'avec son mot de passe. » Le nombre de clés est relu (`passkeys?filter=(user='<compte>')&fields=id`) ; l'état de la confirmation est la date `updated` de la clé et les lignes montrées : une clé qui a servi, ou une autre qui arrive, entre les deux appels, fait refuser le jeton (§ 6.13), et la nouvelle confirmation dit ce qui a changé. Le nom d'une clé est un texte de membre : il est cité entre « » sans pouvoir les fermer (`quote`).
+
 **`calendar_link`** (Réglages → « Agenda »)
 
 | Entrée | Type | Obligatoire | Sens |
 |---|---|---|---|
 | `action` | `show` \| `create` \| `renew` \| `delete` | oui | |
-| `lang` | `fr` \| `en` | non | la langue des textes du flux, à la création (`fr` par défaut) |
+| `lang` | `fr` \| `en` | non | la langue des textes du flux, à la création et au renouvellement (`fr` par défaut ; le site envoie la langue de l'interface dans les deux cas) |
 | `confirmation` | texte | non | § 6.13 |
 
 - `show` → `{ "exists", "url" }`, comme `GET /api/app/calendar` ; `url` est vide pour un lien d'avant la v3.1. **Le site montre ce lien à son propriétaire** (« Afficher le lien ») : l'outil le donne à l'assistant de son propriétaire, et à personne d'autre (la route ne connaît que celui de l'appelant).
 - `create` : sans lien ; avec un lien, « Tu as déjà un lien : renew le remplace. ».
 - `renew` (« Nouveau lien ») et `delete` (« Supprimer le lien ») : **toujours une confirmation** (« L'ancien lien cessera de marcher : les agendas abonnés ne recevront plus tes courses. »).
+
+Ce que l'outil fait de plus que le site :
+
+- **L'adresse est un secret, et ne va qu'à son propriétaire.** Elle n'est que dans la réponse de l'appel qui la montre (`show`) ou la fait (`create`, `renew`), qui est celle de la personne au nom de qui l'assistant agit : la route ne connaît que le lien de l'appelant. Le `summary` le rappelle : « Ce lien est secret : quiconque l'a peut lire tes courses et leurs dates limites d'inscription. Ne le partage pas, et ne le colle que dans l'agenda qui s'y abonne. » L'adresse n'est ni dans une confirmation, ni dans un message d'erreur, ni dans le journal des requêtes (`TestTools_CalendarLink_IsNotLogged`, au niveau Debug) : le serveur ne la garde nulle part.
+- **La réponse** est `{ "done", "summary", "exists", "url" }` ; `exists` manque quand rien n'a été fait faute d'accord (un lien qui existe ne serait pas dit absent). `url` manque sans lien, et pour un lien d'avant la v3.1 : « … fait avant que le site en garde l'adresse : il marche, mais on ne peut plus l'afficher. L'action renew en fait un nouveau. »
+- **`renew` envoie `lang`** comme `create` (le site envoie la langue de l'interface dans les deux cas) ; la langue du lien actuel n'est pas lisible, et `fr` est celle par défaut : le `summary` dit la langue du nouveau lien.
+- **Sans lien** : `renew` est annoncé (« Tu n'as pas encore de lien d'agenda : l'action create en fait un. ») ; `delete` ne fait rien (« Rien à changer : tu n'as pas de lien d'agenda. »), comme la route.
+- **L'état de la confirmation** garde le SHA-256 de l'adresse (jamais l'adresse) : un lien refait entre les deux appels, depuis le site ou par un autre assistant, fait refuser le jeton, et la nouvelle confirmation décrit la situation d'aujourd'hui.
 
 **`mcp_tokens`** (Réglages → « Assistant IA (MCP) »)
 
@@ -732,7 +752,14 @@ Le fichier lui-même n'est pas transformé, sauf ce que le site fait aussi (ci-d
 
 - `list` → `[{ "id", "name", "created", "last_used_at", "current" }]` : jamais un secret ni une empreinte ; `current` marque le jeton qui fait l'appel.
 - `revoke` : **toujours une confirmation**. Révoquer le jeton qui fait l'appel est permis : la réponse dit que c'est le dernier appel.
-- **Créer un jeton** n'a pas d'outil : un jeton ne doit pas en fabriquer un autre, dont le secret passerait par l'assistant (§ 10).
+- **Créer un jeton** n'a pas d'outil : un jeton ne doit pas en fabriquer un autre, dont le secret passerait par l'assistant (§ 10). La liste des routes que l'API en processus envoie (§ 5.1) n'a pas `POST /api/app/mcp-tokens`, et un test (`TestInner_CannotCreateAToken`) le garde ; elle n'a de la table `mcp_tokens` que les deux routes du site (`GET /api/app/mcp-tokens`, `DELETE /api/app/mcp-tokens/{id}`), jamais ses enregistrements.
+
+Ce que l'outil fait de plus que le site :
+
+- **La réponse** de `list` est `{ "done", "summary", "tokens" }` (`last_used_at` manque pour un jeton jamais utilisé), celle de `revoke` `{ "done", "summary", "revoked": { "id", "name", "current" } }`. Aucun champ ne peut porter un secret ou une empreinte : la route n'en lit pas, et les types de l'outil n'en ont pas.
+- **`revoke`** lit la liste de l'appelant : un jeton qui n'y est pas, celui d'un autre comme un jeton qui n'existe pas, est « Introuvable : aucun de tes jetons n'a cet identifiant ; l'action list donne les tiens. (not_found) », comme le 404 de la route, qui ne dit pas quels identifiants existent.
+- **La confirmation** nomme le jeton (son nom, cité sans pouvoir fermer les « », et sa dernière utilisation à Paris ou « jamais utilisé ») : « Révoquer le jeton « Claude Desktop » (dernière utilisation : 2026-04-20) : l'assistant qui l'utilise n'aura plus accès au site. » Pour le jeton de l'appel : « C'est le jeton de l'assistant qui fait cette demande : il n'aura plus accès au site dès que ce sera fait, et cet appel sera son dernier. » (sa dernière utilisation n'est pas dite : chaque requête de l'assistant la note, et elle aurait changé entre les deux appels.) L'état de la confirmation est la date de création du jeton, qui ne change pas, et jamais sa dernière utilisation, pour la même raison.
+- **Après la révocation du jeton de l'appel**, le `summary` dit que c'était le dernier appel, que les suivants seront refusés (401), et que la personne en crée un autre dans les Réglages du site.
 
 ### 6.11 Les outils d'admin
 
@@ -842,9 +869,9 @@ Une demande qui supprimerait ou effacerait ce qu'une personne a saisi, ou qui to
 | `offer_place` | libérer une place | qui perd sa place, dans quelle offre |
 | `set_photo` | une photo existe (remplacée ou retirée) ; ou c'est la photo d'un autre coureur | la photo actuelle (son adresse) et le coureur |
 | `set_track` | une trace existe (remplacée ou retirée) | la trace actuelle (son adresse) et l'épreuve |
-| `passkeys` | `delete` | la clé (nom, dernière utilisation) et le compte |
-| `calendar_link` | `renew`, `delete` | que l'ancien lien cessera de marcher |
-| `mcp_tokens` | `revoke` | le jeton (nom, dernière utilisation) ; si c'est celui de l'appel |
+| `passkeys` | `delete` | la clé (nom, dernière utilisation) et le compte ; ce que cela change pour se connecter, et, si c'est la seule clé du compte, qu'il ne restera que le mot de passe |
+| `calendar_link` | `renew`, `delete` | que l'ancien lien cessera de marcher (jamais son adresse) |
+| `mcp_tokens` | `revoke` | le jeton (nom, dernière utilisation) ; si c'est celui de l'appel, que l'assistant perd l'accès et que cet appel est son dernier |
 | `admin_delete_runner` | toujours | le coureur (le site refuse s'il a des participations ou un compte : c'est alors un refus, annoncé sans confirmation) |
 | `admin_create_link` | une réinitialisation, toujours ; une invitation qui remplacerait un lien en attente, ou qui donnerait le rôle admin | à qui le lien donne accès et à quoi ; le lien en attente qui cesserait de marcher (et sa date d'expiration) ; le rôle donné |
 | `admin_revoke_link` | toujours | le lien qui cesserait de marcher, pour qui, et sa date d'expiration |
