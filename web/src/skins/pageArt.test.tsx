@@ -216,14 +216,23 @@ function textOnPaper(): HTMLElement[] {
   });
 }
 
-for (const [path, width, empty] of [
-  ["/", 375, false],
-  ["/", 1280, false],
-  ["/", 375, true],
-  ["/liste", 375, false],
-  ["/liste", 1280, false],
-  ["/agenda", 1280, false],
-  ["/agenda", 375, false],
+// The pages with words straight on the paper, and how many at least (a page whose
+// words are all in cards or on its hero has none: the event page).
+for (const [path, width, empty, least] of [
+  ["/", 375, false, 3],
+  ["/", 1280, false, 3],
+  ["/", 375, true, 2],
+  ["/liste", 375, false, 2],
+  ["/liste", 1280, false, 2],
+  ["/agenda", 1280, false, 2],
+  ["/agenda", 375, false, 2],
+  ["/evenements/event", 375, false, 0],
+  ["/evenements/event", 1280, false, 0],
+  ["/coureurs/aliceRunner0000", 375, false, 3],
+  ["/coureurs/aliceRunner0000", 1280, false, 3],
+  ["/stats", 1280, false, 2],
+  ["/profil", 375, false, 3],
+  ["/profil/reglages", 1280, false, 1],
 ] as const) {
   test(`PageArt — Carnet, ${path} à ${width} px${empty ? ", sans événement" : ""} : les mots sur le papier gardent 4,5:1 sur les points`, async () => {
     lists.events = empty ? [] : events;
@@ -241,7 +250,7 @@ for (const [path, width, empty] of [
 
     const words = textOnPaper();
     // Not an empty search: the title, and what is under it.
-    expect(words.length).toBeGreaterThanOrEqual(2);
+    expect(words.length, "the words on the paper").toBeGreaterThanOrEqual(least);
     const weak = words.flatMap((element) => {
       const hex = hexOf(getComputedStyle(element).color);
       // On the paper, and on a dot of the sheet (the darker of the two grounds).
