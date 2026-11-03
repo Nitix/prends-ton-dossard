@@ -322,6 +322,13 @@ func TestTools_UpdateEvent(t *testing.T) {
 			t.Errorf("the update of the race sent %v, want %v", sent, want)
 		}
 	})
+
+	// Notes that a member wrote cannot close the quotation of the confirmation.
+	t.Run("notes that close their quotation: they stay quoted", func(t *testing.T) {
+		update(t, app, fx.Event, map[string]any{"notes": "Navette » à 6 h, « gare »."})
+		_, message, details := asked(t, callTool(t, app, bob, "update_event", map[string]any{"event_id": fx.Event.Id, "notes": ""}))
+		mentions(t, message, details, "Les notes seraient effacées (actuellement : « Navette › à 6 h, ‹ gare ›. »).")
+	})
 }
 
 // A race moved with its dated format, in one call, as the form does: the format

@@ -470,7 +470,7 @@ type trackFormat struct {
 // Crêtes).
 func (f trackFormat) label(w wording.Words) string {
 	title := w.RaceName(f.Name, f.Expand.RaceType.Label, f.DistanceKm, f.DurationMin, f.TimeLimitMin)
-	return "« " + title + " » (" + f.Expand.Event.Name + ")"
+	return quote(title) + " (" + plain(f.Expand.Event.Name) + ")"
 }
 
 func (t *tools) setTrack(ctx context.Context, _ *mcpsdk.CallToolRequest, in setTrackIn) (*mcpsdk.CallToolResult, setTrackOut, error) {

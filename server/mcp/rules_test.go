@@ -425,6 +425,8 @@ func offerToolRows() []ruleRow {
 	place("free", placeCase{"the place of Bob, in the ride of Alice", "Alice", "Bob", true, map[string]bool{"Alice": true, "Bob": true, "Admin": true}})
 	place("free", placeCase{"the place of Sam, in the ride of Alice", "Alice", "Sam", true, map[string]bool{"Alice": true, "Bob": false, "Admin": true}})
 	place("free", placeCase{"the place of Sam, in the ride of Bob", "Bob", "Sam", true, map[string]bool{"Alice": false, "Bob": true, "Admin": true}})
+	// A runner who has an account: neither the caller nor the owner.
+	place("free", placeCase{"the place of Bob, in the ride of Sam", "Sam", "Bob", true, map[string]bool{"Alice": false, "Bob": true, "Admin": true}})
 	return rows
 }
 

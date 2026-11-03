@@ -508,7 +508,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		if draft.Notes == "" {
 			verb = "effacées"
 		}
-		r.Details = append(r.Details, "Les notes seraient "+verb+" (actuellement : « "+event.Notes+" »).")
+		r.Details = append(r.Details, "Les notes seraient "+verb+" (actuellement : "+quote(event.Notes)+").")
 		eventShown = true
 	}
 	if shortens(event.StartDate, event.EndDate, draft.EndDate) {
@@ -536,7 +536,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			was, now bool
 			value    string
 		}{
-			{"name", was.Name != "", now.Name != "", "« " + was.Name + " »"},
+			{"name", was.Name != "", now.Name != "", quote(was.Name)},
 			{"distance_km", was.DistanceKm != 0, now.DistanceKm != 0, number(was.DistanceKm) + " km"},
 			{"elevation_gain_m", was.ElevationGainM != 0, now.ElevationGainM != 0, strconv.Itoa(was.ElevationGainM) + " m"},
 			{"duration_min", was.DurationMin != 0, now.DurationMin != 0, strconv.Itoa(was.DurationMin) + " min"},
@@ -562,6 +562,6 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	if len(r.Details) == 0 {
 		return nil
 	}
-	r.Message = "Cette modification de « " + event.Name + " » efface ou change ce que des personnes ont saisi : " + strings.Join(r.Details, " ")
+	r.Message = "Cette modification de " + quote(event.Name) + " efface ou change ce que des personnes ont saisi : " + strings.Join(r.Details, " ")
 	return &r
 }

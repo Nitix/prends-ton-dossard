@@ -678,3 +678,21 @@ func TestTools_ParticipationDescriptions(t *testing.T) {
 		contains(name+": confirmation", describedAt(t, tools[name].InputSchema, "confirmation"), "jeton")
 	}
 }
+
+// « de » before a name, elided before a vowel or a mute h, as French writes it.
+func TestOfName(t *testing.T) {
+	for name, want := range map[string]string{
+		"Alice":  "d'Alice",
+		"Élise":  "d'Élise",
+		"Yves":   "d'Yves",
+		"Hélène": "d'Hélène",
+		"Henri":  "d'Henri",
+		"hugo":   "d'hugo",
+		"Bob":    "de Bob",
+		"Sam":    "de Sam",
+	} {
+		if got := mcp.OfName(name); got != want {
+			t.Errorf("ofName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}

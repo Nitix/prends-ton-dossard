@@ -13,6 +13,8 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"courses/server/apperr"
 )
 
 // This file has the tools of the cars and the lodgings (spec § 6.8): add_offer,
@@ -112,9 +114,9 @@ func offerPath(id string) string {
 func offerLabel(o offerRecord) string {
 	owner := ofName(o.Expand.Owner.Name)
 	if o.Kind == offerLodging {
-		return "le logement " + owner + " (« " + o.Place + " »)"
+		return "le logement " + owner + " (" + quote(o.Place) + ")"
 	}
-	return "la voiture " + owner + " (départ de " + o.Place + ")"
+	return "la voiture " + owner + " (départ de " + plain(o.Place) + ")"
 }
 
 // proposes reports whether the offer is the caller's own: its owner is the runner of
@@ -180,29 +182,52 @@ func (t *tools) offerEvent(o offerRecord) *eventRef {
 	return &event
 }
 
-// droppedWarnings say what the site did not keep of an offer, among the fields that
-// only one kind has (the hooks of the offers package empty them for the other kind):
-// the time of a lodging, the day of departure and the link of a car. A value that
-// was given, and that the offer that the site answered does not have.
-func droppedWarnings(got offerRecord, at, endDate, link string) []string {
+// hasField reports whether an offer of that kind has the field: a lodging has no
+// time, a car no day of departure and no link (the hooks of the offers package
+// empty them for the other kind).
+func hasField(kind, field string) bool {
+	if kind == offerLodging {
+		return field != "time"
+	}
+	return field != "end_date" && field != "url"
+}
+
+// droppedWarnings say what the site does not keep of an offer of that kind: the
+// values given for the fields that the kind does not have.
+func droppedWarnings(kind, at, endDate, link string) []string {
 	var dropped []string
-	if at != "" && got.Time == "" {
-		dropped = append(dropped, "l'heure (time)")
-	}
-	if endDate != "" && got.EndDate == "" {
-		dropped = append(dropped, "le jour de départ (end_date)")
-	}
-	if link != "" && got.URL == "" {
-		dropped = append(dropped, "le lien (url)")
+	for _, given := range []struct{ field, value, name string }{
+		{"time", at, "l'heure (time)"},
+		{"end_date", endDate, "le jour de départ (end_date)"},
+		{"url", link, "le lien (url)"},
+	} {
+		if given.value != "" && !hasField(kind, given.field) {
+			dropped = append(dropped, given.name)
+		}
 	}
 	if len(dropped) == 0 {
 		return nil
 	}
-	kind := "une voiture"
-	if got.Kind == offerLodging {
-		kind = "un logement"
+	which := "une voiture"
+	if kind == offerLodging {
+		which = "un logement"
 	}
-	return []string{"Pour " + kind + ", le site ne garde pas : " + strings.Join(dropped, ", ") + "."}
+	return []string{"Pour " + which + ", le site ne garde pas : " + strings.Join(dropped, ", ") + "."}
+}
+
+// offerFieldNames are the names of the fields of an offer of that kind, as its
+// form names them, for the refusals of the site: an offer has a « jour du départ »
+// or a « jour d'arrivée », not the « date de l'épreuve » of a format.
+func offerFieldNames(kind string) map[string]string {
+	names := map[string]string{}
+	for _, field := range []string{"place", "seats", "date", "time", "end_date", "url", "notes"} {
+		name := offerFieldOf(kind, field).name
+		for _, article := range []string{"le ", "la ", "les ", "l'"} {
+			name = strings.TrimPrefix(name, article)
+		}
+		names[field] = name
+	}
+	return names
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +261,7 @@ func addAddOffer(s *mcpsdk.Server, t *tools) {
 
 func (t *tools) addOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in addOfferIn) (*mcpsdk.CallToolResult, offerWriteOut, error) {
 	fail := func(err error) (*mcpsdk.CallToolResult, offerWriteOut, error) {
-		return nil, offerWriteOut{}, describe(t.app, err, nil)
+		return nil, offerWriteOut{}, describeNamed(t.app, err, nil, offerFieldNames(in.Kind))
 	}
 	id, err := eventIDOf(in.EventID)
 	if err != nil {
@@ -270,7 +295,7 @@ func (t *tools) addOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in addO
 	out := newOfferOut(created, nil)
 	ref := t.eventRefOf(event)
 	return nil, offerWriteOut{
-		writeStatus: writeStatus{Done: true, Summary: offerSummary(created, event.Name), Warnings: droppedWarnings(created, at, endDate, link)},
+		writeStatus: writeStatus{Done: true, Summary: offerSummary(created, event.Name), Warnings: droppedWarnings(created.Kind, at, endDate, link)},
 		Offer:       &out,
 		Event:       &ref,
 	}, nil
@@ -298,9 +323,9 @@ func offerSummary(o offerRecord, event string) string {
 	}
 	head := "Voiture proposée au départ de " + o.Place
 	if o.Kind == offerLodging {
-		head = "Logement « " + o.Place + " » proposé"
+		head = "Logement " + quote(o.Place) + " proposé"
 	}
-	return head + " pour « " + event + " » : " + strings.Join(parts, ", ") + "."
+	return head + " pour " + quote(event) + " : " + strings.Join(parts, ", ") + "."
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +352,8 @@ func addUpdateOffer(s *mcpsdk.Server, t *tools) {
 		Description: "Change une offre, comme son bouton « Modifier » : un champ absent ne change pas, un champ vide l'efface. La course, la sorte et la personne qui propose ne changent jamais. " +
 			"Les droits sont ceux du site : la personne qui propose l'offre et les admins ; le refus de tout autre est annoncé. " +
 			"Rien n'est fait au premier appel, qui donne un jeton de confirmation, quand un champ rempli serait effacé, que des notes seraient remplacées ou que l'offre est celle d'un autre (un admin). " +
+			"Le lieu ne s'efface pas, ni les places d'une voiture : c'est refusé aussitôt. " +
+			"Ce que la sorte d'offre n'a pas (l'heure d'un logement, le jour de départ et le lien d'une voiture) n'est pas gardé : la réponse le dit dans warnings. " +
 			offersAreData + "Rien n'est écrit quand rien ne change.",
 		InputSchema:  inputSchema[updateOfferIn](nil),
 		OutputSchema: offerWriteSchema(),
@@ -365,8 +392,10 @@ func offerFieldOf(kind, field string) offerField {
 }
 
 func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in updateOfferIn) (*mcpsdk.CallToolResult, offerWriteOut, error) {
+	// The fields are named as the form of the offer names them, once it is read.
+	var named map[string]string
 	fail := func(err error) (*mcpsdk.CallToolResult, offerWriteOut, error) {
-		return nil, offerWriteOut{}, describe(t.app, err, nil)
+		return nil, offerWriteOut{}, describeNamed(t.app, err, nil, named)
 	}
 	refuse := func(err error) (*mcpsdk.CallToolResult, offerWriteOut, error) {
 		return nil, offerWriteOut{}, err
@@ -386,6 +415,7 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	if err := offerRefusal(c, o, "la modifier"); err != nil {
 		return refuse(err)
 	}
+	named = offerFieldNames(o.Kind)
 
 	// What is asked, as texts (the seats too, 0 being « none »), against what is
 	// stored: only what differs is written.
@@ -406,6 +436,17 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	if in.Seats != nil {
 		wantSeats = seatText(*in.Seats)
 	}
+
+	// What the form refuses is refused before anything is asked, in the site's
+	// words, whatever else the call changes: the place cleared (it is required),
+	// a car without seats (it has from 1 to 8).
+	if place != nil && *place == "" {
+		return refuse(errors.New(namedFieldText(named["place"], "place", "validation_required")))
+	}
+	if in.Seats != nil && *in.Seats == 0 && o.Kind != offerLodging {
+		return refuse(errors.New(namedFieldText(named["seats"], "seats", apperr.CodeOfferSeatsRequired)))
+	}
+
 	type change struct {
 		field    string
 		set      bool
@@ -420,10 +461,13 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 		{"url", link != nil, o.URL, text(link)},
 		{"notes", notes != nil, o.Notes, text(notes)},
 	}
+	// A field that the kind does not have is not kept by the site: it is no change,
+	// and the answer says that it was left out.
+	warnings := droppedWarnings(o.Kind, text(at), text(endDate), text(link))
 	body := map[string]any{}
 	var changed []change
 	for _, ch := range all {
-		if !ch.set || ch.now == ch.was {
+		if !ch.set || ch.now == ch.was || !hasField(o.Kind, ch.field) {
 			continue
 		}
 		changed = append(changed, ch)
@@ -437,21 +481,20 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	if len(changed) == 0 {
 		out := newOfferOut(o, places)
 		return nil, offerWriteOut{
-			writeStatus: writeStatus{Done: true, Summary: "Rien à changer : " + offerLabel(o) + " est déjà ainsi."},
+			writeStatus: writeStatus{Done: true, Summary: "Rien à changer : " + offerLabel(o) + " est déjà ainsi.", Warnings: warnings},
 			Offer:       &out,
 			Event:       event,
 		}, nil
 	}
 
 	// The risk: the offer of somebody else, a filled field that is cleared, notes
-	// that are replaced. The place is required, and the seats of a car too: the site
-	// refuses to clear them, and says so, with no confirmation first.
+	// that are replaced.
 	var details []string
 	if !c.proposes(o) {
-		details = append(details, "C'est l'offre d'un autre coureur : "+offerLabel(o)+", pour « "+o.Expand.Event.Name+" ».")
+		details = append(details, "C'est l'offre d'un autre coureur : "+o.Expand.Owner.Name+".")
 	}
 	for _, ch := range changed {
-		if ch.field == "place" || (ch.field == "seats" && o.Kind != offerLodging) || ch.was == "" {
+		if ch.was == "" {
 			continue
 		}
 		if ch.now != "" && ch.field != "notes" {
@@ -465,7 +508,7 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 			if ch.now != "" {
 				verb = "seraient remplacées"
 			}
-			line = upperFirst(field.name) + " " + verb + " (actuellement : « " + ch.was + " »)."
+			line = upperFirst(field.name) + " " + verb + " (actuellement : " + quote(ch.was) + ")."
 		case ch.field == "seats":
 			line += " Le logement serait sans limite."
 		}
@@ -474,7 +517,7 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	var r *risk
 	if len(details) > 0 {
 		r = &risk{
-			Message: "Cette modification de " + offerLabel(o) + ", pour « " + o.Expand.Event.Name + " », touche ce qu'une personne a saisi : " + strings.Join(details, " "),
+			Message: "Modifier " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + ", touche ce qu'une personne a saisi : " + strings.Join(details, " "),
 			Details: details,
 			Records: []stamp{{Collection: "offers", ID: o.ID, Updated: o.Updated}},
 		}
@@ -496,16 +539,16 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	if err := t.inner.send(ctx, http.MethodPatch, offerPath(id), body, &updated); err != nil {
 		return fail(err)
 	}
-	names := make([]string, len(changed))
+	fields := make([]string, len(changed))
 	for i, ch := range changed {
-		names[i] = offerFieldOf(updated.Kind, ch.field).name
+		fields[i] = offerFieldOf(updated.Kind, ch.field).name
 	}
 	shown := newOfferOut(updated, places)
 	return nil, offerWriteOut{
 		writeStatus: writeStatus{
 			Done:     true,
-			Summary:  "Offre modifiée : " + offerLabel(updated) + ", pour « " + o.Expand.Event.Name + " » (" + strings.Join(names, ", ") + ").",
-			Warnings: droppedWarnings(updated, text(at), text(endDate), text(link)),
+			Summary:  "Offre modifiée : " + offerLabel(updated) + ", pour " + quote(o.Expand.Event.Name) + " (" + strings.Join(fields, ", ") + ").",
+			Warnings: warnings,
 		},
 		Offer: &shown,
 		Event: event,
@@ -572,7 +615,7 @@ func (t *tools) deleteOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 	default:
 		who = joinNames(names) + " perdront leur place."
 	}
-	r.Message = "Supprimer " + offerLabel(o) + ", pour « " + o.Expand.Event.Name + " » : " + who
+	r.Message = "Supprimer " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + " : " + who
 
 	proceed, out, notice, err := t.guard(ctx, "delete_offer", struct{ Offer string }{id}, r, strings.TrimSpace(in.Confirmation))
 	if err != nil {
@@ -586,7 +629,7 @@ func (t *tools) deleteOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 	}
 
 	removed := newOfferOut(o, places)
-	summary := "Offre supprimée : " + offerLabel(o) + ", pour « " + o.Expand.Event.Name + " »."
+	summary := "Offre supprimée : " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + "."
 	switch len(names) {
 	case 0:
 	case 1:
@@ -683,9 +726,9 @@ func (t *tools) offerPlace(ctx context.Context, _ *mcpsdk.CallToolRequest, in of
 	var r *risk
 	if action == "free" {
 		place := places[index]
-		line := placeLine(place) + " dans " + offerLabel(o) + ", pour « " + o.Expand.Event.Name + " »."
+		line := placeLine(place) + " dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + "."
 		r = &risk{
-			Message: "Libérer cette place : " + runner.Name + " perdrait sa place dans " + offerLabel(o) + ", pour « " + o.Expand.Event.Name + " ».",
+			Message: "Libérer cette place : " + runner.Name + " perdrait sa place dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + ".",
 			Details: []string{line},
 			Records: []stamp{{Collection: "offer_members", ID: place.ID, Updated: place.Updated}, {Collection: "offers", ID: o.ID, Updated: o.Updated}},
 		}

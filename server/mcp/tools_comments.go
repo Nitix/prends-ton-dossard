@@ -139,7 +139,7 @@ func (t *tools) addComment(ctx context.Context, _ *mcpsdk.CallToolRequest, in ad
 		Done:    true,
 		Comment: newCommentOut(created, created.Expand.Author.ref()),
 		Event:   t.eventRefOf(event),
-		Summary: fmt.Sprintf("Commentaire %s ajouté à « %s ».", ofName(created.Expand.Author.Name), event.Name),
+		Summary: fmt.Sprintf("Commentaire %s ajouté à %s.", ofName(created.Expand.Author.Name), quote(event.Name)),
 	}, nil
 }
 
@@ -193,7 +193,7 @@ func (t *tools) updateComment(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 			Done:    true,
 			Comment: newCommentOut(comment, author.ref()),
 			Event:   event,
-			Summary: fmt.Sprintf("Rien à changer : le commentaire %s sur « %s » est déjà ainsi.", ofName(author.Name), event.Name),
+			Summary: fmt.Sprintf("Rien à changer : le commentaire %s sur %s est déjà ainsi.", ofName(author.Name), quote(event.Name)),
 		}, nil
 	}
 
@@ -205,7 +205,7 @@ func (t *tools) updateComment(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 		Done:    true,
 		Comment: newCommentOut(updated, updated.Expand.Author.ref()),
 		Event:   event,
-		Summary: fmt.Sprintf("Le commentaire %s sur « %s » est modifié.", ofName(author.Name), event.Name),
+		Summary: fmt.Sprintf("Le commentaire %s sur %s est modifié.", ofName(author.Name), quote(event.Name)),
 	}, nil
 }
 
@@ -269,7 +269,7 @@ func (t *tools) deleteComment(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 	// Always asked: what the person wrote goes, for the whole group.
 	author := comment.Expand.Author
 	start := excerpt(comment.Body, excerptLength)
-	line := fmt.Sprintf("Commentaire %s sur « %s » : « %s ».", ofName(author.Name), comment.Expand.Event.Name, start)
+	line := fmt.Sprintf("Commentaire %s sur %s : %s.", ofName(author.Name), quote(comment.Expand.Event.Name), quote(start))
 	r := &risk{
 		Message: "Supprimer ce commentaire le retire pour tout le groupe. " + line,
 		Details: []string{line},
@@ -286,7 +286,7 @@ func (t *tools) deleteComment(ctx context.Context, _ *mcpsdk.CallToolRequest, in
 		return fail(err)
 	}
 	return nil, deleteCommentOut{
-		writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("Le commentaire %s sur « %s » est supprimé.", ofName(author.Name), comment.Expand.Event.Name)},
+		writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("Le commentaire %s sur %s est supprimé.", ofName(author.Name), quote(comment.Expand.Event.Name))},
 		Removed:     &removedComment{ID: comment.ID, Author: author.ref(), Excerpt: start},
 	}, nil
 }

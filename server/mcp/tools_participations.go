@@ -114,15 +114,17 @@ func confirmedRefusal(c *caller, r participationRow, what string) error {
 // alone.
 func placeOf(w wording.Words, r participationRow) string {
 	if r.Participation.Format == "" {
-		return "« " + r.Event.Name + " » (course seule)"
+		return quote(r.Event.Name) + " (course seule)"
 	}
-	return "« " + r.formatTitle(w) + " » (" + r.Event.Name + ")"
+	return quote(r.formatTitle(w)) + " (" + plain(r.Event.Name) + ")"
 }
 
-// ofName writes de before a name, elided before a vowel: « de Bob », « d'Alice ».
+// ofName writes de before a name, elided before a vowel or a mute h: « de Bob »,
+// « d'Alice », « d'Hélène ». An aspirated h is not told from a mute one: « d'Hugo »
+// is what most write.
 func ofName(name string) string {
 	r, _ := utf8.DecodeRuneInString(name)
-	if strings.ContainsRune("aeiouyàâäéèêëîïôöùûü", unicode.ToLower(r)) {
+	if strings.ContainsRune("aeiouyhàâäéèêëîïôöùûü", unicode.ToLower(r)) {
 		return "d'" + name
 	}
 	return "de " + name
@@ -323,9 +325,9 @@ func (t *tools) addParticipation(ctx context.Context, _ *mcpsdk.CallToolRequest,
 		}
 	}
 	if existing != nil {
-		target := "la course seule « " + view.record.Name + " »"
+		target := "la course seule " + quote(view.record.Name)
 		if formatID != "" {
-			target = "« " + title + " »"
+			target = quote(title)
 		}
 		return refuse(fmt.Errorf("%s a déjà une participation à %s (%s, id %s) : change-la avec update_participation.",
 			runner.Name, target, w.Status(existing.Status), existing.ID))
@@ -341,13 +343,13 @@ func (t *tools) addParticipation(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	// event alone. For somebody else, that is somebody else's choice.
 	var r *risk
 	if formatID != "" && replaced != nil && runner.ID != me {
-		detail := participantLabel(w, *replaced) + " : participation à la course seule « " + view.record.Name + " »"
+		detail := participantLabel(w, *replaced) + " : participation à la course seule " + quote(view.record.Name)
 		if by := replaced.Expand.AddedBy.Name; by != "" {
 			detail += ", ajoutée par " + by
 		}
-		detail += ", remplacée par une participation à « " + title + " » (" + w.Status(status) + ")."
+		detail += ", remplacée par une participation à " + quote(title) + " (" + w.Status(status) + ")."
 		r = &risk{
-			Message: fmt.Sprintf("Ajouter %s à « %s » remplace sa participation à la course seule. %s", runner.Name, title, detail),
+			Message: fmt.Sprintf("Ajouter %s à %s remplace sa participation à la course seule. %s", runner.Name, quote(title), detail),
 			Details: []string{detail},
 			Records: stampsOf([]participationRecord{*replaced}),
 		}
@@ -377,7 +379,7 @@ func (t *tools) addParticipation(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	head := fmt.Sprintf("Participation %s ajoutée à %s, statut %s", ofName(row.Runner.Name), placeOf(w, row), w.Status(row.Participation.Status))
 	replacement := ""
 	if replaced != nil {
-		replacement = "sa participation à la course seule « " + view.record.Name + " » (" + w.Status(replaced.Status) + ") est remplacée"
+		replacement = "sa participation à la course seule " + quote(view.record.Name) + " (" + w.Status(replaced.Status) + ") est remplacée"
 	}
 	summary := sentence(head, replacement, confirmationNote(row.Runner, row.Participation.Confirmed))
 	return nil, t.participationAnswer(w, row, summary), nil
@@ -501,9 +503,9 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	if moved.ID != "" {
 		movedTitle := formatView{record: moved, raceType: moved.Expand.RaceType}.title(w)
 		if p.Format == "" {
-			details = append(details, fmt.Sprintf("La participation passerait de la course seule à l'épreuve « %s ».", movedTitle))
+			details = append(details, fmt.Sprintf("La participation passerait de la course seule à l'épreuve %s.", quote(movedTitle)))
 		} else {
-			details = append(details, fmt.Sprintf("L'épreuve passerait de « %s » à « %s ».", row.formatTitle(w), movedTitle))
+			details = append(details, fmt.Sprintf("L'épreuve passerait de %s à %s.", quote(row.formatTitle(w)), quote(movedTitle)))
 		}
 		records = append(records, stamp{Collection: "formats", ID: moved.ID, Updated: moved.Updated})
 	}

@@ -185,7 +185,7 @@ func (t *tools) duplicateRisk(w wording.Words, duplicates []eventView) *risk {
 	var r risk
 	for _, v := range duplicates {
 		s := v.summary(t.cfg, w, "")
-		r.Details = append(r.Details, fmt.Sprintf("« %s » (%s, %s, %s, id %s)", s.Name, days(s.StartDate, s.EndDate), s.Location,
+		r.Details = append(r.Details, fmt.Sprintf("%s (%s, %s, %s, id %s)", quote(s.Name), days(s.StartDate, s.EndDate), s.Location,
 			plural(s.Participants, "participant", "participants"), s.ID))
 		r.Records = append(r.Records, stamp{Collection: "events", ID: v.record.ID, Updated: v.record.Updated})
 	}
@@ -385,7 +385,7 @@ func (t *tools) deleteEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 	event := view.record
 	r := risk{Records: []stamp{{Collection: "events", ID: event.ID, Updated: event.Updated}}}
 	for _, f := range view.formats {
-		line := "Épreuve « " + f.title(w) + " »"
+		line := "Épreuve " + quote(f.title(w))
 		if len(f.participations) > 0 {
 			line += " : " + participantLabels(w, f.participations)
 		} else {
@@ -410,8 +410,8 @@ func (t *tools) deleteEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 	if offers > 0 {
 		r.Details = append(r.Details, upperFirst(plural(offers, "offre", "offres"))+" de covoiturage ou de logement, avec leurs places.")
 	}
-	r.Message = fmt.Sprintf("Supprimer la course « %s » (%s, %s) supprime aussi tout ce qu'elle contient : %s, %s, %s et %s de covoiturage ou de logement. %s",
-		event.Name, days(event.StartDate, event.EndDate), event.Location,
+	r.Message = fmt.Sprintf("Supprimer la course %s (%s, %s) supprime aussi tout ce qu'elle contient : %s, %s, %s et %s de covoiturage ou de logement. %s",
+		quote(event.Name), days(event.StartDate, event.EndDate), event.Location,
 		plural(len(view.formats), "épreuve", "épreuves"), plural(len(view.participations()), "participation", "participations"),
 		plural(comments, "commentaire", "commentaires"), plural(offers, "offre", "offres"), who)
 

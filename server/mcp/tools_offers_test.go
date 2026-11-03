@@ -218,17 +218,28 @@ func TestTools_AddOffer(t *testing.T) {
 			}
 			return args
 		}
+		// The fields are named as the form of an offer of that kind names them: an
+		// offer has no « date de l'épreuve ».
 		refused(t, app, bob, "add_offer", base(map[string]any{"date": "2026-09-06", "end_date": "2026-09-05"}),
-			"date de fin : la date de fin est avant la date de début. (end_before_start)")
+			"jour du départ : la date de fin est avant la date de début. (end_before_start)")
 		refused(t, app, bob, "add_offer", map[string]any{"event_id": event.Id, "kind": "ride", "place": "Lyon", "seats": 2, "time": "7h"},
-			"heure : l'heure doit être de la forme 06:30. (time_invalid)")
-		refused(t, app, bob, "add_offer", base(map[string]any{"date": "2026-13-45"}), "(date_invalid)")
+			"heure de départ : l'heure doit être de la forme 06:30. (time_invalid)")
+		refused(t, app, bob, "add_offer", base(map[string]any{"date": "2026-13-45"}), "jour d'arrivée : cette date n'est pas valide. (date_invalid)")
+		refused(t, app, bob, "add_offer", map[string]any{"event_id": event.Id, "kind": "ride", "place": "Lyon", "seats": 2, "date": "2026-13-45"},
+			"jour du départ : cette date n'est pas valide. (date_invalid)")
 		refused(t, app, bob, "add_offer", base(map[string]any{"url": "pas une adresse"}),
-			"lien : cette adresse web n'est pas valide. (validation_invalid_url)")
+			"lien de l'annonce : cette adresse web n'est pas valide. (validation_invalid_url)")
 		refused(t, app, bob, "add_offer", base(map[string]any{"notes": strings.Repeat("n", 1001)}),
 			"notes : ce texte est trop long. (validation_max_text_constraint)")
 		refused(t, app, bob, "add_offer", base(map[string]any{"place": "  "}), "lieu : ce champ est obligatoire. (validation_required)")
-		refused(t, app, bob, "add_offer", base(map[string]any{"seats": 31}), "validation_max_number_constraint")
+		// The site's most for a lodging, said in words.
+		refused(t, app, bob, "add_offer", base(map[string]any{"seats": 31}), "places : 30 au plus. (validation_max_number_constraint)")
+		for _, kind := range []string{"ride", "lodging"} {
+			result := callTool(t, app, bob, "add_offer", map[string]any{"event_id": event.Id, "kind": kind, "place": "Lyon", "seats": 2, "date": "2026-13-45"})
+			if strings.Contains(result.Text, "épreuve") {
+				t.Errorf("the refusal of the day of a %s speaks of a race: %q", kind, result.Text)
+			}
+		}
 	})
 
 	t.Run("a race that is not there, or that is not an id", func(t *testing.T) {
@@ -297,6 +308,21 @@ func TestTools_OfferPlace(t *testing.T) {
 			"Seule la personne qui propose cette offre, Alice, ou un admin peut y placer quelqu'un d'autre.")
 		if got := len(seatsOf(t, app, ride)); got != 0 {
 			t.Errorf("%d places taken", got)
+		}
+	})
+
+	// A runner who has an account, and is neither the caller nor the owner: the
+	// refusal is announced, for taking a place as for freeing one.
+	t.Run("Bob places Alice in the ride of the admin, or frees her place there: refused, and announced", func(t *testing.T) {
+		event, _ := newRace(t, app, fx, fx.AliceRunner, "Course de covoiturage de l'admin", "2026-09-05")
+		ride := rideOf(t, app, event, fx.AdminRunner)
+		announced(t, app, bob, "offer_place", map[string]any{"offer_id": ride.Id, "action": "take", "runner": "Alice"},
+			"Seule la personne qui propose cette offre, Admin, ou un admin peut y placer quelqu'un d'autre.")
+		seatFor(t, app, ride, fx.AliceRunner, fx.AdminRunner)
+		announced(t, app, bob, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Alice"},
+			"Seule la personne qui propose cette offre, Admin, ou un admin peut en retirer quelqu'un d'autre.")
+		if seatOf(t, app, ride, fx.AliceRunner) == nil {
+			t.Error("Alice lost her place")
 		}
 	})
 
@@ -518,9 +544,83 @@ func TestTools_UpdateOffer(t *testing.T) {
 
 	t.Run("the end before the start, a link that is not one: the site's words", func(t *testing.T) {
 		lodging := lodgingOf(t, app, race(), fx.AliceRunner)
-		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "end_date": "2026-09-04"}, "date de fin : la date de fin est avant la date de début. (end_before_start)")
-		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "url": "nope"}, "lien : cette adresse web n'est pas valide. (validation_invalid_url)")
-		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "place": ""}, "lieu : ce champ est obligatoire. (validation_required)")
+		// The fields are named as the form of an offer names them.
+		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "end_date": "2026-09-04"}, "jour du départ : la date de fin est avant la date de début. (end_before_start)")
+		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "date": "2026-13-45"}, "jour d'arrivée : cette date n'est pas valide. (date_invalid)")
+		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "url": "nope"}, "lien de l'annonce : cette adresse web n'est pas valide. (validation_invalid_url)")
+		refused(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "seats": 31}, "places : 30 au plus. (validation_max_number_constraint)")
+		announced(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "place": ""}, "lieu : ce champ est obligatoire. (validation_required)")
+		ride := rideOf(t, app, race(), fx.AliceRunner)
+		refused(t, app, alice, "update_offer", map[string]any{"offer_id": ride.Id, "date": "2026-13-45"}, "jour du départ : cette date n'est pas valide. (date_invalid)")
+	})
+
+	// What the form refuses is refused before anything is asked, even with a field
+	// that would ask for a confirmation: the place cleared, a car without seats.
+	t.Run("a required field cleared with a risky one: refused at once, nothing asked", func(t *testing.T) {
+		ride := rideOf(t, app, race(), fx.AliceRunner)
+		announced(t, app, alice, "update_offer", map[string]any{"offer_id": ride.Id, "place": "", "notes": ""}, "lieu : ce champ est obligatoire. (validation_required)")
+		announced(t, app, alice, "update_offer", map[string]any{"offer_id": ride.Id, "seats": 0, "time": ""}, "places : indique le nombre de places, de 1 à 8. (offer_seats_required)")
+		lodging := lodgingOf(t, app, race(), fx.AliceRunner)
+		announced(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "place": " ", "url": ""}, "lieu : ce champ est obligatoire. (validation_required)")
+	})
+
+	// What a kind of offer does not have is not kept by the site: it is no change,
+	// and the answer says that it was left out.
+	t.Run("a field that the kind does not have: nothing to change, and said", func(t *testing.T) {
+		lodging := lodgingOf(t, app, race(), fx.AliceRunner)
+		writesNothing(t, app, func() {
+			result := isDone(t, callTool(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "time": "07:00"}))
+			if got := summaryOfResult(result); got != "Rien à changer : le logement d'Alice (« Gîte des Lacs ») est déjà ainsi." {
+				t.Errorf("the summary is %q", got)
+			}
+			assertJSON(t, result.Structured["warnings"], []string{"Pour un logement, le site ne garde pas : l'heure (time)."})
+		})
+		ride := rideOf(t, app, race(), fx.AliceRunner)
+		writesNothing(t, app, func() {
+			result := isDone(t, callTool(t, app, alice, "update_offer", map[string]any{"offer_id": ride.Id, "end_date": "2026-09-07", "url": "https://example.org"}))
+			assertJSON(t, result.Structured["warnings"], []string{"Pour une voiture, le site ne garde pas : le jour de départ (end_date), le lien (url)."})
+		})
+		// With a change besides: written, and the field left out is said.
+		result := isDone(t, callTool(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "time": "07:00", "seats": 5}))
+		if got := summaryOfResult(result); got != "Offre modifiée : le logement d'Alice (« Gîte des Lacs »), pour « "+storedRecord(t, app, "events", lodging.GetString("event")).GetString("name")+" » (les places)." {
+			t.Errorf("the summary is %q", got)
+		}
+		assertJSON(t, result.Structured["warnings"], []string{"Pour un logement, le site ne garde pas : l'heure (time)."})
+		if got := storedRecord(t, app, "offers", lodging.Id).GetInt("seats"); got != 5 {
+			t.Errorf("the seats are %d, want 5", got)
+		}
+	})
+
+	// The message of a confirmation is a sentence to show the person, for a car
+	// and for a lodging.
+	t.Run("the message of a confirmation, whole", func(t *testing.T) {
+		event := race()
+		name := event.GetString("name")
+		ride := rideOf(t, app, event, fx.AliceRunner)
+		token, message, _ := asked(t, callTool(t, app, alice, "update_offer", map[string]any{"offer_id": ride.Id, "notes": ""}))
+		if want := "Rien n'a été fait. Modifier la voiture d'Alice (départ de Lyon), pour « " + name + " », touche ce qu'une personne a saisi : " +
+			"Les notes seraient effacées (actuellement : « Départ devant la gare. »). Demande son accord à la personne ; si elle accepte, " +
+			`rappelle update_offer avec les mêmes arguments et confirmation: "` + token + `" (valable 10 minutes, une seule fois).`; message != want {
+			t.Errorf("the message is\n%s\nwant\n%s", redact(message), redact(want))
+		}
+
+		lodging := lodgingOf(t, app, event, fx.BobRunner)
+		token, message, _ = asked(t, callTool(t, app, admin, "update_offer", map[string]any{"offer_id": lodging.Id, "place": "Chalet"}))
+		if want := "Rien n'a été fait. Modifier le logement de Bob (« Gîte des Lacs »), pour « " + name + " », touche ce qu'une personne a saisi : " +
+			"C'est l'offre d'un autre coureur : Bob. Demande son accord à la personne ; si elle accepte, " +
+			`rappelle update_offer avec les mêmes arguments et confirmation: "` + token + `" (valable 10 minutes, une seule fois).`; message != want {
+			t.Errorf("the message is\n%s\nwant\n%s", redact(message), redact(want))
+		}
+	})
+
+	t.Run("notes that close their quotation: they stay quoted", func(t *testing.T) {
+		lodging := create(t, app, "offers", map[string]any{"event": race().Id, "kind": "lodging", "owner": fx.AliceRunner.Id, "place": "Gîte « du » lac", "notes": "Draps » fournis"})
+		_, message, details := asked(t, callTool(t, app, alice, "update_offer", map[string]any{"offer_id": lodging.Id, "notes": ""}))
+		mentions(t, message, details, "le logement d'Alice (« Gîte ‹ du › lac »)", "Les notes seraient effacées (actuellement : « Draps › fournis »).")
+		// The place of a car is not quoted: its marks are made single all the same.
+		ride := create(t, app, "offers", map[string]any{"event": race().Id, "kind": "ride", "owner": fx.AliceRunner.Id, "place": "Lyon » gare", "seats": 2})
+		_, message, details = asked(t, callTool(t, app, alice, "delete_offer", map[string]any{"offer_id": ride.Id}))
+		mentions(t, message, details, "la voiture d'Alice (départ de Lyon › gare)")
 	})
 
 	t.Run("a filled field cleared: a confirmation that names it, then it is cleared", func(t *testing.T) {

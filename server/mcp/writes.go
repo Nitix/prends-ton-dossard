@@ -102,6 +102,24 @@ func number(v float64) string {
 	return strings.ReplaceAll(strconv.FormatFloat(v, 'f', -1, 64), ".", ",")
 }
 
+// quote puts a text that a member wrote between « », which the text cannot
+// close: a « or a » in it becomes ‹ or ›. The message of a confirmation is what
+// the assistant reads when it decides what to say to the person: nothing that a
+// member wrote may read there as the message's own words.
+func quote(text string) string {
+	return "« " + guillemets.Replace(text) + " »"
+}
+
+// plain writes a text that a member wrote, which a message shows outside « »
+// (the race of a format, between parentheses): its « and » become ‹ and ›, so
+// that it opens or closes no quotation of the message either.
+func plain(text string) string {
+	return guillemets.Replace(text)
+}
+
+// guillemets turns the French quotation marks of a text into single ones.
+var guillemets = strings.NewReplacer("«", "‹", "»", "›")
+
 // upperFirst writes the first letter of s in upper case: a phrase that starts a
 // sentence.
 func upperFirst(s string) string {

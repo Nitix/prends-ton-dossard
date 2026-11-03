@@ -77,6 +77,12 @@ var fieldMessages = map[string]map[string]string{
 		"validation_invalid_mime_type": "Ce fichier n'est pas une trace GPX.",
 		"validation_file_size_limit":   "La trace est trop lourde : 10 Mo maximum.",
 	},
+	// The seats of an offer: the bound of the field (offers.seats, 9d_offers.go),
+	// which the site has no words for. A car's own bound, 1 to 8, is a code of its
+	// hooks (offer_seats_required).
+	"seats": {
+		"validation_max_number_constraint": "30 au plus.",
+	},
 }
 
 // fieldNames are the French names of the fields of the site's collections.
@@ -142,6 +148,13 @@ const (
 // (apiError.Request): the tool builds it from its operations ("Épreuve 2
 // (« Trail 15 km »)"); nil for a single request.
 func describe(app core.App, err error, subject func(request int) string) error {
+	return describeNamed(app, err, subject, nil)
+}
+
+// describeNamed is describe, for a record whose fields have names of their own,
+// by field (an offer has a « jour du départ », not a « date de l'épreuve »): a
+// field that names does not have is named as fieldNames names it.
+func describeNamed(app core.App, err error, subject func(request int) string, names map[string]string) error {
 	// A read that stopped at its bound: said as it is, with the collection in the
 	// log.
 	var many *tooManyError
@@ -169,21 +182,26 @@ func describe(app core.App, err error, subject func(request int) string) error {
 		return errors.New(msgSiteError)
 	}
 
-	text := refused.text()
+	text := refused.text(names)
 	if subject != nil && refused.Request >= 0 {
 		text = subject(refused.Request) + ", " + lowerFirst(text)
 	}
 	return errors.New(text)
 }
 
-// text is the message of a refusal (a 4xx).
-func (e *apiError) text() string {
+// text is the message of a refusal (a 4xx), with these names for the fields
+// (nil: fieldNames).
+func (e *apiError) text(names map[string]string) string {
 	switch {
 	case e.Status == http.StatusTooManyRequests:
 		return msgTooMany
 	case len(e.Fields) > 0:
 		parts := make([]string, 0, len(e.Fields))
 		for _, field := range slices.Sorted(maps.Keys(e.Fields)) {
+			if name, ok := names[field]; ok {
+				parts = append(parts, namedFieldText(name, field, e.Fields[field]))
+				continue
+			}
 			parts = append(parts, fieldText(field, e.Fields[field]))
 		}
 		return strings.Join(parts, " ; ")
@@ -217,6 +235,11 @@ func fieldText(field, code string) string {
 	if !ok {
 		name = field
 	}
+	return namedFieldText(name, field, code)
+}
+
+// namedFieldText is fieldText, with that name for the field.
+func namedFieldText(name, field, code string) string {
 	message, ok := fieldMessages[field][code]
 	if !ok {
 		message, ok = messages[code]

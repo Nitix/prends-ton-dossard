@@ -368,3 +368,6 @@ func (u *uploads) Bytes() int {
 	defer u.mu.Unlock()
 	return u.bytes
 }
+
+// OfName is ofName: « de » before a name, elided as French does.
+func OfName(name string) string { return ofName(name) }
