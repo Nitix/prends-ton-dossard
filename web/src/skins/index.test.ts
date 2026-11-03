@@ -414,6 +414,60 @@ test("chooseSkin — un look dont les feuilles ne sont pas dans la page est un c
   expect(stored.get(SKIN_KEY)).toBe(skin.id);
 });
 
+test("showKeptSkin — le même thème redemandé pendant l'attente (la synchronisation du compte, après la session) : si son look échoue, c'est Crête pour cette page, pas le thème sur une page à moitié", async () => {
+  const page = await freshPage();
+  stored.set(SKIN_KEY, "_example");
+  const open = hold("_example");
+  looks.failing.add("_example");
+
+  const showing = page.showKeptSkin();
+  // What `syncAccountSkin` does once the session is restored, with the account's skin
+  // being the one of the device: it asks for the same look, and shares its load.
+  const choosing = page.chooseSkin("_example");
+  expect(root.dataset.skin, "worn at once, before its look is there").toBe("_example");
+  open();
+  await showing;
+
+  await expect(choosing).resolves.toBe("failed");
+  expect(root.dataset.skin).toBeUndefined();
+  expect(bar.content).toBe("#5e4ae3");
+  expect(page.currentSkin().id).toBe("crete");
+  // The device keeps the choice: the next start tries again.
+  expect(stored.get(SKIN_KEY)).toBe("_example");
+});
+
+test("showKeptSkin — le thème gardé qui échoue ne défait pas un choix fait pendant l'attente : la page retombe sur Crête, puis prend le choix", async () => {
+  const page = await freshPage();
+  const [kept, other] = OTHERS;
+  if (kept === undefined || other === undefined) throw new Error("two skins besides Crête");
+  stored.set(SKIN_KEY, kept.id);
+  looks.failing.add(kept.id);
+  const open = hold(kept.id);
+
+  const showing = page.showKeptSkin();
+  // Somebody chooses another skin while the kept one is awaited.
+  const choosing = page.chooseSkin(other.id);
+  open();
+  await showing;
+
+  await expect(choosing).resolves.toBe("chosen");
+  expect(root.dataset.skin).toBe(other.id);
+  expect(stored.get(SKIN_KEY)).toBe(other.id);
+});
+
+test("chooseSkin — un thème qui échoue ne défait pas celui qui est sur la page, chargé : seul un thème porté sans son look retombe sur Crête", async () => {
+  const page = await freshPage();
+  const [first, second] = OTHERS;
+  if (first === undefined || second === undefined) throw new Error("two skins besides Crête");
+  await expect(page.chooseSkin(first.id)).resolves.toBe("chosen");
+  looks.failing.add(second.id);
+
+  await expect(page.chooseSkin(second.id)).resolves.toBe("failed");
+
+  expect(root.dataset.skin).toBe(first.id);
+  expect(stored.get(SKIN_KEY)).toBe(first.id);
+});
+
 test("showKeptSkin — un skin gardé dont la feuille ne s'est pas chargée : Crête en entier pour cette page, et le choix reste sur l'appareil", async () => {
   const page = await freshPage();
   stored.set(SKIN_KEY, "_example");

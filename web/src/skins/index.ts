@@ -157,7 +157,11 @@ let asked = 0;
  */
 export function applySkin(id: string): void {
   asked++;
-  const skin = byId(id) ?? DEFAULT;
+  put(byId(id) ?? DEFAULT);
+}
+
+/** What `applySkin` puts on the page, without counting as a choice. */
+function put(skin: Skin): void {
   shown = skin;
   const root = document.documentElement;
   if (skin === DEFAULT) delete root.dataset.skin;
@@ -176,6 +180,18 @@ function keepSkin(skin: Skin): void {
   } catch {
     // Not kept, but the page has it (`shown`) until it is closed.
   }
+}
+
+/**
+ * A skin whose look could not be loaded cannot be the page's. The kept skin is
+ * on the page before its look is there (index.html and `showKeptSkin` put it
+ * on, for the no-flash): if the look fails, the page is Crête, whoever asked for
+ * it. It does not rest on which ask failed: the account's sync asks again for
+ * the same look while the start waits for it, and shares the load.
+ */
+function dropUnloaded(skin: Skin): void {
+  // Not a choice: it must not cancel one that is on its way.
+  if (skin !== DEFAULT && shown === skin && !loaded.has(skin.id)) put(DEFAULT);
 }
 
 /**
@@ -198,7 +214,9 @@ async function showLoaded(id: string, before: (skin: Skin) => void = () => {}): 
     skin = await loadSkin(id);
   } catch {
     // A look that fails after another skin was asked for is of no concern.
-    return ask === asked ? "failed" : "replaced";
+    const result = ask === asked ? "failed" : "replaced";
+    dropUnloaded(byId(id) ?? DEFAULT);
+    return result;
   }
   if (ask !== asked) return "replaced";
   before(skin);
@@ -229,11 +247,10 @@ export function chooseSkin(id: string): Promise<Choice> {
 export async function showKeptSkin(): Promise<void> {
   const id = readSkin();
   applySkin(id);
-  const ask = asked;
   try {
     await loadSkin(id);
   } catch {
-    if (ask === asked) applySkin(DEFAULT.id);
+    dropUnloaded(byId(id) ?? DEFAULT);
   }
 }
 
