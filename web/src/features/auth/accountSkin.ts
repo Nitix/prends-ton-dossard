@@ -112,12 +112,18 @@ export async function chooseSkinOnAccount(id: string, userId: string): Promise<C
 /**
  * Puts the skin of the account and the device's in agreement, when somebody
  * signs in or the app restores their session. It never throws.
+ *
+ * It settles once the skin is on the page (the app is first drawn in it: no
+ * flash), and does not wait for a save: what the account lacks is sent in the
+ * background (the chain of saves keeps the order, `whenSaved` says when it is
+ * done). A slow update, or one that the server drops (the demo's account keeps
+ * no skin), must not hold the app back at every cold start.
  */
 export async function syncAccountSkin(user: UserRecord): Promise<void> {
   const unsaved = unsavedFor();
   if (unsaved === user.id) {
     // A choice made here that the account never got: it is the person's last one.
-    await save(user.id, readSkin());
+    void save(user.id, readSkin());
     return;
   }
   // The choice of somebody else that the device kept, which is not this one's to send.
@@ -126,7 +132,7 @@ export async function syncAccountSkin(user: UserRecord): Promise<void> {
   const account = user.skin ?? "";
   if (account === "") {
     const device = readSkin();
-    if (device !== DEFAULT_SKIN) await save(user.id, device);
+    if (device !== DEFAULT_SKIN) void save(user.id, device);
     return;
   }
   // The skin of the account, put on the page and kept on the device. One that

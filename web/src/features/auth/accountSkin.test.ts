@@ -263,15 +263,25 @@ test("compte — un envoi coupé en route : à la reprise, le choix de l'apparei
   server.update.mockResolvedValue({});
   // The account still has the older skin.
   await next.syncAccountSkin(user("u1", B));
+  await next.whenSaved();
 
   expect(device()).toBe(A);
   expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: A });
 });
 
+/**
+ * Signs in, and waits for what went to the account in the background: the start
+ * does not wait for it (see the tests of that), the tests of what was sent do.
+ */
+async function synced(account: UserRecord): Promise<void> {
+  await syncAccountSkin(account);
+  await whenSaved();
+}
+
 // Signing in, restoring a session
 
 test("compte — à la connexion, le thème du compte, s'il est connu de cette version, est mis sur la page et gardé sur l'appareil", async () => {
-  await syncAccountSkin(user("u1", A));
+  await synced(user("u1", A));
   expect(root.dataset.skin).toBe(A);
   expect(readSkin()).toBe(A);
   // Nothing is sent, and nothing else is kept: the mode (Clair, Sombre) stays the device's.
@@ -281,10 +291,10 @@ test("compte — à la connexion, le thème du compte, s'il est connu de cette v
 
 test("compte — le thème du compte l'emporte sur celui de l'appareil, Crête y comprise", async () => {
   await chooseSkin(A);
-  await syncAccountSkin(user("u1", B));
+  await synced(user("u1", B));
   expect(device()).toBe(B);
 
-  await syncAccountSkin(user("u1", "crete"));
+  await synced(user("u1", "crete"));
   expect(device()).toBe("crete");
   expect(root.dataset.skin).toBeUndefined();
   expect(server.update).not.toHaveBeenCalled();
@@ -292,7 +302,7 @@ test("compte — le thème du compte l'emporte sur celui de l'appareil, Crête y
 
 test("compte — un compte sans thème reçoit celui de l'appareil, s'il n'est pas Crête", async () => {
   await chooseSkin(A);
-  await syncAccountSkin(user("u1"));
+  await synced(user("u1"));
   expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: A });
   // The device keeps what it had.
   expect(device()).toBe(A);
@@ -300,7 +310,7 @@ test("compte — un compte sans thème reçoit celui de l'appareil, s'il n'est p
 });
 
 test("compte — un compte sans thème et un appareil sur Crête : rien n'est envoyé, Crête est le thème par défaut", async () => {
-  await syncAccountSkin(user("u1"));
+  await synced(user("u1"));
   expect(server.update).not.toHaveBeenCalled();
   expect(device()).toBe("crete");
 });
@@ -309,7 +319,7 @@ test("compte — un thème que cette version ne connaît pas : Crête sur l'appa
   await chooseSkin(A);
   for (const unknown of ["soleil-levant", "_example2", "CRETE", "constructor"]) {
     await chooseSkin(A);
-    await syncAccountSkin(user("u1", unknown));
+    await synced(user("u1", unknown));
     expect(device(), `the account has ${unknown}`).toBe("crete");
     expect(root.dataset.skin, `the account has ${unknown}`).toBeUndefined();
   }
@@ -319,7 +329,7 @@ test("compte — un thème que cette version ne connaît pas : Crête sur l'appa
 test("compte — le look du thème du compte ne se charge pas (hors ligne) : l'appareil garde le sien, sans erreur, rien n'est envoyé", async () => {
   await chooseSkin(A);
   looks.failing.add(C);
-  await expect(syncAccountSkin(user("u1", C))).resolves.toBeUndefined();
+  await expect(synced(user("u1", C))).resolves.toBeUndefined();
   expect(device()).toBe(A);
   expect(root.dataset.skin).toBe(A);
   expect(server.update).not.toHaveBeenCalled();
@@ -332,7 +342,7 @@ test("compte — un choix que le compte n'a pas reçu (hors ligne) passe avant l
   server.update.mockClear();
 
   // Back online, at the next sign-in or session restore: the account still has B.
-  await syncAccountSkin(user("u1", B));
+  await synced(user("u1", B));
   expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: A });
   expect(device()).toBe(A);
   expect(root.dataset.skin).toBe(A);
@@ -342,7 +352,7 @@ test("compte — un choix que le compte n'a pas reçu (hors ligne) passe avant l
 test("compte — un choix non reçu qui échoue encore reste à envoyer", async () => {
   server.update.mockRejectedValue(new TypeError("Failed to fetch"));
   await chooseSkinOnAccount(A, "u1");
-  await syncAccountSkin(user("u1", B));
+  await synced(user("u1", B));
   expect(device()).toBe(A);
   expect(stored.get(UNSAVED_KEY)).toBe("u1");
 });
@@ -352,7 +362,7 @@ test("compte — le choix non reçu d'une personne ne passe pas devant le thème
   await chooseSkinOnAccount(A, "u1");
   server.update.mockClear();
 
-  await syncAccountSkin(user("u2", B));
+  await synced(user("u2", B));
   expect(device()).toBe(B);
   expect(server.update).not.toHaveBeenCalled();
   expect(stored.has(UNSAVED_KEY)).toBe(false);
@@ -361,7 +371,49 @@ test("compte — le choix non reçu d'une personne ne passe pas devant le thème
 test("compte — le thème de l'appareil envoyé à un compte sans thème qui n'arrive pas : il reste à envoyer", async () => {
   await chooseSkin(A);
   server.update.mockRejectedValueOnce(new TypeError("Failed to fetch"));
-  await syncAccountSkin(user("u1"));
+  await synced(user("u1"));
   expect(device()).toBe(A);
   expect(stored.get(UNSAVED_KEY)).toBe("u1");
+});
+
+// The first render waits for the skin of the account to be on the page (no
+// flash), not for a save: a PATCH that is slow, or one that the server drops
+// (the demo's account keeps no skin, so every cold start of a demo visitor
+// would pay a round trip for nothing) must not hold the app back.
+test("compte — le démarrage n'attend pas l'envoi du thème de l'appareil à un compte qui n'en a pas : il part en arrière-plan", async () => {
+  await chooseSkin(A);
+  const gate = holdUpdate();
+
+  const winner = await Promise.race([
+    syncAccountSkin(user("u1")).then(() => "synced"),
+    new Promise((resolve) => setTimeout(() => resolve("waiting for the save"), 300)),
+  ]);
+
+  expect(winner).toBe("synced");
+  // The save is on its way all the same, and the device has marked it.
+  await vi.waitFor(() => {
+    expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: A });
+  });
+  expect(stored.get(UNSAVED_KEY)).toBe("u1");
+  gate.resolve();
+  await whenSaved();
+  expect(stored.has(UNSAVED_KEY)).toBe(false);
+});
+
+test("compte — le démarrage n'attend pas non plus l'envoi d'un choix que le compte n'a pas reçu", async () => {
+  server.update.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  await chooseSkinOnAccount(A, "u1");
+  server.update.mockClear();
+  const gate = holdUpdate();
+
+  const winner = await Promise.race([
+    syncAccountSkin(user("u1", B)).then(() => "synced"),
+    new Promise((resolve) => setTimeout(() => resolve("waiting for the save"), 300)),
+  ]);
+
+  expect(winner).toBe("synced");
+  expect(device()).toBe(A);
+  gate.resolve();
+  await whenSaved();
+  expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: A });
 });
