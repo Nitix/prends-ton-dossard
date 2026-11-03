@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, posix } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { compile } from "tailwindcss";
@@ -179,18 +180,191 @@ test("plugin — styles.css ne lit pas les dossiers des autres skins : chacun a 
   expect(missing).toEqual([]);
 });
 
-/** The class strings of the motifs of a folder: `className="…"`, the strings of a `className={…}`, a default `className = "…"`. */
-function classStrings(source: string): string[] {
-  const found: string[] = [];
-  for (const [, quoted = ""] of source.matchAll(/className(?:=|\s*=\s*)"([^"]*)"/g))
-    found.push(quoted);
-  for (const [, expression = ""] of source.matchAll(/className=\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g)) {
-    for (const [, part = ""] of expression.matchAll(/"([^"]*)"|`([^`]*)`/g)) found.push(part);
-    for (const [, , template = ""] of expression.matchAll(/"([^"]*)"|`([^`]*)`/g)) {
-      found.push(template.replace(/\$\{[^}]*\}/g, " "));
+/** The index after the string literal that starts at `start` (`"…"`, `'…'`, a template with its `${…}`). */
+function afterString(source: string, start: number): number {
+  const quote = source[start];
+  let index = start + 1;
+  while (index < source.length) {
+    const char = source[index];
+    if (char === "\\") index += 2;
+    else if (quote === "`" && char === "$" && source[index + 1] === "{") {
+      index = closing(source, index + 1) + 1;
+    } else if (char === quote) return index + 1;
+    else index++;
+  }
+  return source.length;
+}
+
+/** The index of the `}` that closes the `{` at `open`, over strings and nested braces. */
+function closing(source: string, open: number): number {
+  let depth = 0;
+  let index = open;
+  while (index < source.length) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === "`") {
+      index = afterString(source, index);
+      continue;
     }
+    if (char === "{") depth++;
+    if (char === "}" && --depth === 0) return index;
+    index++;
+  }
+  return source.length;
+}
+
+/** The text of the string literals of an expression, the text of a template without its `${…}` and the literals inside those. */
+function literals(expression: string): string[] {
+  const found: string[] = [];
+  let index = 0;
+  while (index < expression.length) {
+    const char = expression[index];
+    if (char === '"' || char === "'") {
+      const end = afterString(expression, index);
+      found.push(expression.slice(index + 1, end - 1));
+      index = end;
+    } else if (char === "`") {
+      let text = "";
+      let at = index + 1;
+      while (at < expression.length && expression[at] !== "`") {
+        if (expression[at] === "\\") at += 2;
+        else if (expression[at] === "$" && expression[at + 1] === "{") {
+          const end = closing(expression, at + 1);
+          found.push(...literals(expression.slice(at + 2, end)));
+          text += " ";
+          at = end + 1;
+        } else text += expression[at++];
+      }
+      found.push(text);
+      index = at + 1;
+    } else index++;
   }
   return found;
+}
+
+/**
+ * The class strings of the motifs of a folder: `className="…"`, a default
+ * `className = "…"`, and every string of a `className={…}`, with those of the
+ * `${…}` of its templates. Only what is held in a variable outside a
+ * `className` is not seen (build.test.ts, and the shots, are what see it).
+ */
+function classStrings(source: string): string[] {
+  const found: string[] = [];
+  for (const match of source.matchAll(/className\s*=\s*/g)) {
+    const start = match.index + match[0].length;
+    if (source[start] === '"') found.push(source.slice(start + 1, source.indexOf('"', start + 1)));
+    else if (source[start] === "{")
+      found.push(...literals(source.slice(start + 1, closing(source, start))));
+  }
+  return found;
+}
+
+const nodeRequire = createRequire(import.meta.url);
+
+/**
+ * Loads a stylesheet that an `@import` of Tailwind names, as the build does:
+ * one of Tailwind's own (`tailwindcss/theme.css`), or a file beside the one
+ * that imports it (`../../theme.css`).
+ */
+function loadStylesheet(id: string, base: string) {
+  const path = id.startsWith(".") ? join(base, id) : nodeRequire.resolve(id);
+  return Promise.resolve({ path, base: dirname(path), content: readFileSync(path, "utf8") });
+}
+
+/** A Tailwind that has the app's theme, as styles.css has it (Tailwind's theme, then theme.css). */
+const APP_UTILITIES = `@import "tailwindcss/theme.css" layer(theme);
+@import "./theme.css";
+@tailwind utilities;`;
+
+/** `CSS.escape`, which Node does not have: how Tailwind writes a class name in a selector. */
+function cssEscape(value: string): string {
+  return Array.from(value)
+    .map((char, index) => {
+      const code = char.codePointAt(0) ?? 0;
+      const digit = char >= "0" && char <= "9";
+      if (code === 0) return "�";
+      if (
+        (code >= 1 && code <= 31) ||
+        code === 127 ||
+        (index === 0 && digit) ||
+        (index === 1 && digit && value.startsWith("-"))
+      ) {
+        return `\\${code.toString(16)} `;
+      }
+      if (index === 0 && char === "-" && value.length === 1) return `\\${char}`;
+      if (code >= 128 || char === "-" || char === "_" || /[0-9A-Za-z]/.test(char)) return char;
+      return `\\${char}`;
+    })
+    .join("");
+}
+
+/**
+ * Which of the class names make a rule in the CSS that Tailwind built from
+ * them: the ones whose selector (`.size-12`, `.md\:w-56`) is there.
+ */
+function madeBy(css: string, tokens: readonly string[]): string[] {
+  return tokens.filter((token) => {
+    const selector = cssEscape(token).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\.${selector}(?![A-Za-z0-9_-])`).test(css);
+  });
+}
+
+/** The class names that a source writes (`className` strings), once each, split on spaces. */
+function classNames(source: string): string[] {
+  return [
+    ...new Set(
+      classStrings(source)
+        .flatMap((text) => text.split(/\s+/))
+        .filter((token) => token !== ""),
+    ),
+  ];
+}
+
+/**
+ * The class names of a source that are utilities of Tailwind, with the app's
+ * theme, and do not carry `<folder>:`. One compile for all of them, and the
+ * output says which made a rule: `build()` keeps what it has built before, so
+ * a compiler asked one token after another would report every token after the
+ * first that was real. Without the theme, `size-12`, `md:w-56`,
+ * `fill-peach-400`, `font-bold` and `gap-3` make nothing at all.
+ */
+async function unprefixed(folder: string, source: string): Promise<string[]> {
+  const tokens = classNames(source).filter((token) => !token.startsWith(`${folder}:`));
+  const compiler = await compile(APP_UTILITIES, {
+    base: join(dir, ".."),
+    loadStylesheet,
+  });
+  return madeBy(compiler.build(tokens), tokens);
+}
+
+/**
+ * The class names of a source that carry `<folder>:` and make nothing in the
+ * folder's own sheet of utilities (utilities.css, with its prefix): a typo, a
+ * hook that was prefixed by mistake, a class that Tailwind does not know.
+ */
+async function prefixedButUnmade(folder: string, source: string): Promise<string[]> {
+  const tokens = classNames(source).filter((token) => token.startsWith(`${folder}:`));
+  const sheet = join(dir, folder, "utilities.css");
+  const compiler = await compile(readFileSync(sheet, "utf8"), {
+    base: dirname(sheet),
+    loadStylesheet,
+  });
+  const made = new Set(madeBy(compiler.build(tokens), tokens));
+  return tokens.filter((token) => !made.has(token));
+}
+
+/** The folders of the skins that draw with classes (their motifs are `.tsx`), with those files. */
+function motifFiles(): { folder: string; file: string; source: string }[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== "crete" && !entry.name.startsWith("_"))
+    .flatMap((entry) =>
+      readdirSync(join(dir, entry.name))
+        .filter((file) => file.endsWith(".tsx"))
+        .map((file) => ({
+          folder: entry.name,
+          file,
+          source: readFileSync(join(dir, entry.name, file), "utf8"),
+        })),
+    );
 }
 
 test("plugin — dans le dossier d'un skin, chaque utilitaire de Tailwind porte le préfixe du dossier", async () => {
@@ -198,29 +372,77 @@ test("plugin — dans le dossier d'un skin, chaque utilitaire de Tailwind porte 
   // of a folder makes only the utilities with its prefix (`nuit:size-12`):
   // an utility without it would make nothing, and draw the motif unstyled.
   // A class that is not one of Tailwind (`route-dots`, of styles.css; a hook)
-  // keeps its name.
-  const tailwind = await compile("@tailwind utilities;");
-  const folders = readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== "crete" && !entry.name.startsWith("_"))
-    .map((entry) => entry.name);
-  const bare = folders.flatMap((folder) =>
-    readdirSync(join(dir, folder))
-      .filter((file) => file.endsWith(".tsx"))
-      .flatMap((file) => {
-        const tokens = classStrings(readFileSync(join(dir, folder, file), "utf8"))
-          .flatMap((text) => text.split(/\s+/))
-          .filter((token) => token !== "" && !token.startsWith(`${folder}:`));
-        return [...new Set(tokens)]
-          .filter((token) => tailwind.build([token]).includes("{"))
-          .map((token) => `skins/${folder}/${file}: ${token}`);
-      }),
-  );
+  // keeps its name. The guard compiles with the app's theme: without it, it
+  // would see only the utilities that need none (`absolute`, `flex`).
+  const files = motifFiles();
+  const bare = (
+    await Promise.all(
+      files.map(async ({ folder, file, source }) =>
+        (await unprefixed(folder, source)).map((token) => `skins/${folder}/${file}: ${token}`),
+      ),
+    )
+  ).flat();
   expect(bare).toEqual([]);
   // Not an empty search: the motifs draw with prefixed utilities.
-  const nuit = readdirSync(join(dir, "nuit")).filter((file) => file.endsWith(".tsx"));
   expect(
-    nuit.flatMap((file) => classStrings(readFileSync(join(dir, "nuit", file), "utf8"))).join(" "),
+    files
+      .filter(({ folder }) => folder === "nuit")
+      .flatMap(({ source }) => classStrings(source))
+      .join(" "),
   ).toMatch(/(^|\s)nuit:[a-z]/);
+});
+
+test("plugin — le garde des préfixes voit ce qu'il doit voir : un utilitaire sans préfixe qui a besoin du thème, et lui seul, est refusé", async () => {
+  // The guard above must not pass for lack of eyes. A fake motif, in a fake
+  // folder: the utilities that read the theme (sizes, colours, spacing, fonts),
+  // the ones that do not, a prefixed one, and classes that are not Tailwind's.
+  const motif = `<g className="fake:absolute size-12 md:w-56 fill-peach-400 text-white font-bold gap-3 opacity-90 absolute" />
+    <path className={clsx("hidden", cond ? "md:size-20" : "fake:flex", \`w-40 \${size}\`)} />
+    <g className="route-dots header-sun hero-art fake:size-12" />`;
+
+  const found = await unprefixed("fake", motif);
+
+  expect(found.toSorted()).toEqual(
+    [
+      "absolute",
+      "fill-peach-400",
+      "font-bold",
+      "gap-3",
+      "hidden",
+      "md:size-20",
+      "md:w-56",
+      "opacity-90",
+      "size-12",
+      "text-white",
+      "w-40",
+    ].toSorted(),
+  );
+  // Not cumulative: a clean file after a dirty one reports nothing.
+  expect(
+    await unprefixed("fake", '<g className="fake:absolute fake:size-12 route-dots" />'),
+  ).toEqual([]);
+});
+
+test("plugin — chaque classe préfixée d'un dossier fait un utilitaire dans la feuille du dossier", async () => {
+  // The reverse of the guard above: a class with the prefix that makes nothing
+  // (`nuit:size-1x`, or a hook that was prefixed by mistake) draws unstyled too.
+  const unmade = (
+    await Promise.all(
+      motifFiles().map(async ({ folder, file, source }) =>
+        (await prefixedButUnmade(folder, source)).map(
+          (token) => `skins/${folder}/${file}: ${token}`,
+        ),
+      ),
+    )
+  ).flat();
+  expect(unmade).toEqual([]);
+  // It sees them: a fake class beside real ones.
+  expect(
+    await prefixedButUnmade(
+      "nuit",
+      '<g className="nuit:absolute nuit:size-12 nuit:md:w-56 nuit:no-such-utility nuit:header-sun" />',
+    ),
+  ).toEqual(["nuit:no-such-utility", "nuit:header-sun"]);
 });
 
 test("plugin — theme-vars.css : chaque couleur, rayon et police du thème, lue sur la page là où elle sert", () => {
