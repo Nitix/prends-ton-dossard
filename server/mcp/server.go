@@ -71,6 +71,10 @@ var (
 		addAddFormat,
 		addUpdateFormat,
 		addDeleteFormat,
+		addAddParticipation,
+		addUpdateParticipation,
+		addRemoveParticipation,
+		addSetResult,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

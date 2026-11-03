@@ -290,3 +290,6 @@ func Duplicates(ctx context.Context, app core.App, inner *InnerAPI, name, start,
 	}
 	return ids, nil
 }
+
+// ParseFinishTime is parseFinishTime: a time of a result, "h:mm:ss", in seconds.
+func ParseFinishTime(s string) (int, error) { return parseFinishTime(s) }

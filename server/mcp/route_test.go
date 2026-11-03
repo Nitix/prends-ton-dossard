@@ -30,6 +30,7 @@ var (
 	wantMemberTools = []string{
 		"whoami", "list_runners", "list_race_types", "search_events", "get_event", "home", "get_runner", "get_stats",
 		"create_event", "update_event", "delete_event", "add_format", "update_format", "delete_format",
+		"add_participation", "update_participation", "remove_participation", "set_result",
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
@@ -62,6 +63,11 @@ var wantHints = map[string]hints{
 	"add_format":      {destructive: true},
 	"update_format":   {destructive: true, idempotent: true},
 	"delete_format":   {destructive: true},
+	// add_participation can ask to replace the choice of another runner.
+	"add_participation":    {destructive: true},
+	"update_participation": {destructive: true, idempotent: true},
+	"remove_participation": {destructive: true},
+	"set_result":           {destructive: true, idempotent: true},
 }
 
 // realm is the challenge of a refused token.

@@ -534,11 +534,11 @@ Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'e
 | `status` | un des six codes | oui | pas de valeur par défaut : « inscrire » est ambigu (Intéressé ou Inscrit ?), l'assistant choisit |
 | `confirmation` | texte | non | § 6.13 |
 
-- Avec `format_id` et `event_id`, l'épreuve doit être de cette course (`format_other_event`).
+- Avec `format_id` et `event_id`, l'épreuve doit être de cette course (`format_other_event`, que l'outil annonce avec les mots du site, sans rien écrire). Sans l'un ni l'autre : « Il manque la course : donne event_id, ou format_id. »
 - Sans épreuve, `interested` ou `supporter` seulement (`format_required`, serveur). Sur une course qui n'a **qu'une épreuve**, `interested` sans épreuve est refusé par l'outil (le site ne le propose pas) : « Cette course n'a qu'une épreuve (« Trail 42 km », id …) : ajoute le coureur à cette épreuve. »
 - Déjà une participation à cette épreuve (ou à la course seule) : « Bob a déjà une participation à « Trail 42 km » (Intéressé, id …) : change-la avec update_participation. »
 - Une participation à une épreuve **remplace** la participation à la course seule du même coureur (conversion du serveur). Pour un autre coureur que soi, c'est une confirmation ; pour soi, le `summary` le dit.
-- → `{ "done", "participation": PARTICIPATION, "event": { "id", "name", "url" }, "format_title", "summary" }`. Le `summary` dit « non confirmé : Bob le verra dans « À confirmer » » quand c'est le cas.
+- → `{ "done", "participation": PARTICIPATION, "event": { "id", "name", "url" }, "format_title", "summary" }`. Le `summary` dit « non confirmé : Bob le verra dans « À confirmer » » quand c'est le cas, « Sam n'a pas de compte : sa participation reste non confirmée » quand le coureur n'en a pas, et que la participation à la course seule est remplacée quand il y en avait une. Il ne parle jamais d'une personne au masculin ou au féminin : « Participation d'Alice ajoutée à « Trail 42 km » (Trail des Crêtes), statut Intéressé ; … ».
 
 **`update_participation`** (le menu d'une participation)
 
@@ -553,10 +553,11 @@ Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'e
 - Toute modification par le coureur lui-même confirme sa participation (règle du site).
 - Changer la participation **d'un autre coureur**, ou un statut qui **effacerait un résultat** (temps, classement, note : le hook les efface quand le statut ne va plus avec), demande une confirmation.
 - Refus du site sur une participation confirmée d'un autre : « Bob a confirmé cette participation : seuls Bob et les admins peuvent la changer. » (annoncé, § 5.3).
-- `finished` et `dnf` avant le jour de la course : `status_before_race`.
+- `finished` et `dnf` avant le jour de la course : `status_before_race` (le site).
+- Une épreuve d'une autre course : `format_other_event`, annoncé. Seules les différences sont écrites : un statut et une épreuve qui sont déjà ceux de la participation, d'un coureur qui n'a rien à confirmer, ne font rien d'écrit — `done: true`, « Rien à changer ».
 - → comme `add_participation`.
 
-**`remove_participation`** (« Retirer ») — `participation_id` (obligatoire), `confirmation`. Supprime la participation : c'est la désinscription du site. **Toujours une confirmation**, qui dit le coureur, l'épreuve, le statut et le résultat perdu s'il y en a un. La description conseille plutôt `dns` (Non partant) pour quelqu'un qui ne prend pas le départ d'une course où il était inscrit. Mêmes droits que le site : un admin, le coureur lui-même, ou n'importe qui tant que le coureur n'a pas confirmé. → `{ "done", "removed": PARTICIPATION, "event": { "id", "name", "url" }, "summary" }`.
+**`remove_participation`** (« Retirer ») — `participation_id` (obligatoire), `confirmation`. Supprime la participation : c'est la désinscription du site. **Toujours une confirmation**, qui dit le coureur, l'épreuve, le statut et le résultat perdu s'il y en a un. La description conseille plutôt `dns` (Non partant) pour quelqu'un qui ne prend pas le départ d'une course où il était inscrit. Mêmes droits que le site : un admin, le coureur lui-même, ou n'importe qui tant que le coureur n'a pas confirmé ; le refus est annoncé : « Bob a confirmé cette participation : seuls Bob et les admins peuvent la retirer. » → `{ "done", "removed": PARTICIPATION, "event": { "id", "name", "url" }, "summary" }`.
 
 **`set_result`** (« Saisir le résultat », « J'ai fini », « Abandon » des « Résultats à saisir »)
 
@@ -569,9 +570,9 @@ Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'e
 | `note` | texte, 200 au plus | non | « 3e V1H », « abandon au km 30 » |
 | `confirmation` | texte | non | § 6.13 |
 
-- Une seule écriture (`PATCH` de la participation), avec les mêmes droits qu'`update_participation` ; le hook garde ce qui va avec le statut (temps et classement pour Terminé, note pour les deux).
+- Une seule écriture (`PATCH` de la participation), avec les mêmes droits qu'`update_participation` ; le hook garde ce qui va avec le statut (temps et classement pour Terminé, note pour les deux). Le résultat est écrit **en entier**, comme le formulaire du site : ce qui n'est pas donné est effacé. Le `summary` dit ce que le site a gardé : un abandon donné avec un temps ne le garde pas, et il le dit.
 - Avant le jour de la course : `status_before_race`. Une participation sans épreuve : « Choisis d'abord l'épreuve. »
-- Confirmation quand le résultat **remplace** un résultat existant (temps, classement ou note déjà saisis), ou que la participation est celle d'un autre coureur.
+- Confirmation quand le résultat **remplace** un résultat existant (un temps, un classement ou une note déjà saisis qui ne seraient plus les mêmes : compléter ce qui est vide n'en demande pas), ou que la participation est celle d'un autre coureur. Un résultat qui est déjà celui demandé n'écrit rien (« Rien à changer »).
 - → comme `add_participation`, avec le résultat écrit (« Terminé · 4h 12min 30s · 12e sur 340 », écrit comme le site : style court, sans espace entre le nombre et l'unité).
 
 ### 6.7 Commentaires
@@ -823,7 +824,7 @@ Une demande qui supprimerait ou effacerait ce qu'une personne a saisi, ou qui to
 | `add_participation` | la participation remplacerait la participation à la course seule (« Intéressé, format à choisir » ou « Supporteur ») d'un autre coureur que soi | la participation remplacée, et qui l'avait ajoutée |
 | `update_participation` | c'est la participation d'un autre coureur (statut ou épreuve) ; ou le nouveau statut effacerait un résultat (temps, classement, note) | la participation, ce qui change, le résultat perdu |
 | `remove_participation` | toujours | la participation : coureur, épreuve, statut, confirmée ou non, résultat |
-| `set_result` | un résultat existant serait remplacé ; ou c'est la participation d'un autre coureur | l'ancien résultat et le nouveau |
+| `set_result` | un résultat existant serait remplacé (un temps, un classement ou une note saisis qui changeraient ou s'effaceraient) ; ou c'est la participation d'un autre coureur | l'ancien résultat et le nouveau |
 | `delete_comment` | toujours | le début du texte et son auteur |
 | `update_offer` | un champ rempli serait vidé ; des notes non vides remplacées ; l'offre est celle d'un autre | ce qui change, l'offre et son propriétaire |
 | `delete_offer` | toujours | l'offre et les personnes qui perdent leur place |

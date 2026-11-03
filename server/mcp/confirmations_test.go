@@ -126,6 +126,13 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	ultra := create(t, app, "events", map[string]any{"name": "Ultra des Lacs", "location": "Annecy", "start_date": "2026-03-01", "end_date": "2026-03-03", "created_by": fx.AliceRunner.Id})
 	fLast := create(t, app, "formats", map[string]any{"event": ultra.Id, "race_type": fx.Trail.Id, "distance_km": 100, "date": "2026-03-03"})
 	create(t, app, "formats", map[string]any{"event": ultra.Id, "race_type": fx.Trail.Id, "distance_km": 30})
+	// What the participation tools are asked about: the runner of the admin on a
+	// race that has one format, alone (the event, and no format), and a race that
+	// Alice finished, with her result.
+	joinedEvent(t, app, fx.AdminRunner, fx.Event2, "interested", false, fx.AliceRunner)
+	_, crossFormat := newRace(t, app, fx, fx.AliceRunner, "Cross des Lacs", "2026-03-08")
+	finished := joined(t, app, fx.AliceRunner, crossFormat, "finished", true, fx.AliceRunner)
+	update(t, app, finished, map[string]any{"finish_time_s": 5025, "rank": 3, "rank_of": 90})
 
 	for _, row := range []struct {
 		name string
@@ -181,6 +188,36 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			"delete_format", "delete_format",
 			map[string]any{"format_id": fx.F42.Id},
 			[]string{"« Trail 42 km » (Trail des Crêtes)", "2 participations", "Alice (Inscrit)", "Bob (Intéressé, non confirmé)"},
+		},
+		{
+			"add_participation: it replaces another runner's choice", "add_participation",
+			map[string]any{"runner": "Admin", "format_id": fx.FLyon.Id, "status": "interested"},
+			[]string{"Admin (Intéressé, non confirmé)", "course seule « 10 km de Lyon »", "ajoutée par Alice", "« Route 10 km »"},
+		},
+		{
+			"update_participation: somebody else's", "update_participation",
+			map[string]any{"participation_id": fx.P2.Id, "status": "registered"},
+			[]string{"Bob (Intéressé, non confirmé)", "« Trail 42 km »", "d'un autre coureur", "de Intéressé à Inscrit"},
+		},
+		{
+			"update_participation: a status that erases a result", "update_participation",
+			map[string]any{"participation_id": finished.Id, "status": "dns"},
+			[]string{"Le résultat serait effacé", "1h 23min 45s", "3e sur 90"},
+		},
+		{
+			"remove_participation", "remove_participation",
+			map[string]any{"participation_id": fx.P3.Id},
+			[]string{"Sam (Intéressé, non confirmé)", "« Trail 15 km » (Trail des Crêtes)", "ajoutée par Alice"},
+		},
+		{
+			"set_result: it replaces a result", "set_result",
+			map[string]any{"participation_id": finished.Id, "status": "finished", "finish_time": "1:20:00", "rank": 3, "rank_of": 90},
+			[]string{"1h 23min 45s", "1h 20min", "3e sur 90"},
+		},
+		{
+			"set_result: somebody else's", "set_result",
+			map[string]any{"participation_id": fx.P2.Id, "status": "finished", "finish_time": "5:00:00"},
+			[]string{"Bob (Intéressé, non confirmé)", "d'un autre coureur"},
 		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
@@ -301,6 +338,67 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	}
 }
 
+// « bob » and the id of Bob are the same request: the arguments of a
+// confirmation are normalized (the runner, the race that its format gives, the
+// time written with a leading zero).
+func TestTools_Confirmation_NamesOrIds(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+
+	t.Run("a runner by name, then by id, with the race given another way", func(t *testing.T) {
+		replaced := joinedEvent(t, app, fx.BobRunner, fx.Event2, "interested", false, fx.AliceRunner)
+		byName := map[string]any{"runner": "bob", "format_id": fx.FLyon.Id, "status": "registered"}
+		byID := map[string]any{"runner": fx.BobRunner.Id, "event_id": fx.Event2.Id, "format_id": fx.FLyon.Id, "status": "registered"}
+
+		token, _, _ := asked(t, callTool(t, app, alice, "add_participation", byName))
+		done := succeeded(t, callTool(t, app, alice, "add_participation", with(byID, token)))
+		if d, _ := done.Structured["done"].(bool); !d {
+			t.Fatalf("the call with the id is not done: %.300s", redact(done.Text))
+		}
+		if storedRecord(t, app, "participations", replaced.Id) != nil {
+			t.Error("the participation to the event alone is still there")
+		}
+		if participationOf(t, app, fx.BobRunner, fx.FLyon) == nil {
+			t.Error("Bob is not on the race")
+		}
+	})
+
+	t.Run("a time written two ways", func(t *testing.T) {
+		update(t, app, fx.P1, map[string]any{"status": "finished", "finish_time_s": 15150, "rank": 12, "rank_of": 340})
+		args := map[string]any{"participation_id": fx.P1.Id, "status": "finished", "finish_time": "4:10:00", "rank": 12, "rank_of": 340}
+		again := map[string]any{"participation_id": " " + fx.P1.Id + " ", "status": "finished", "finish_time": "04:10:00", "rank": 12, "rank_of": 340}
+
+		token, _, _ := asked(t, callTool(t, app, alice, "set_result", args))
+		done := succeeded(t, callTool(t, app, alice, "set_result", with(again, token)))
+		if d, _ := done.Structured["done"].(bool); !d {
+			t.Fatalf("the call with the other time is not done: %.300s", redact(done.Text))
+		}
+		if got := storedRecord(t, app, "participations", fx.P1.Id).GetInt("finish_time_s"); got != 15000 {
+			t.Errorf("the time is %d s, want 15000", got)
+		}
+	})
+
+	t.Run("another runner is another request", func(t *testing.T) {
+		event, format := newRace(t, app, fx, fx.AliceRunner, "Foulées de test", "2026-09-05")
+		joinedEvent(t, app, fx.BobRunner, event, "supporter", false, fx.AliceRunner)
+		joinedEvent(t, app, fx.AdminRunner, event, "supporter", false, fx.AliceRunner)
+		forBob := map[string]any{"runner": "Bob", "format_id": format.Id, "status": "interested"}
+		forAdmin := map[string]any{"runner": "Admin", "format_id": format.Id, "status": "interested"}
+
+		token, _, _ := asked(t, callTool(t, app, alice, "add_participation", forBob))
+		writesNothing(t, app, func() {
+			again := callTool(t, app, alice, "add_participation", with(forAdmin, token))
+			asked(t, again)
+			if summary := summaryOfResult(again); !strings.Contains(summary, "Confirmation refusée : elle ne correspond pas à cette demande.") {
+				t.Errorf("the summary is %q", summary)
+			}
+		})
+	})
+}
+
 // What the person agreed to is not what would be done any more: the token is
 // refused, and the new confirmation says what is there now.
 func TestTools_Confirmation_StateChanged(t *testing.T) {
@@ -350,6 +448,33 @@ func TestTools_Confirmation_StateChanged(t *testing.T) {
 	}
 }
 
+// / The participation that was asked about changed in the meantime: the token is
+// refused, and the new confirmation says how it is now.
+func TestTools_Confirmation_StateChangedForAParticipation(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	args := map[string]any{"participation_id": fx.P3.Id}
+
+	token, _, _ := asked(t, callTool(t, app, alice, "remove_participation", args))
+	update(t, app, fx.P3, map[string]any{"status": "registered"})
+
+	writesNothing(t, app, func() {
+		again := callTool(t, app, alice, "remove_participation", with(args, token))
+		_, message, details := asked(t, again)
+		const want = "Confirmation refusée : la situation a changé depuis. Nouveau : « Sam (Inscrit, non confirmé)"
+		if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+			t.Errorf("the summary is %q, want it to start with %q", summary, want)
+		}
+		mentions(t, message, details, "Sam (Inscrit, non confirmé)")
+	})
+	if storedRecord(t, app, "participations", fx.P3.Id) == nil {
+		t.Error("the participation is gone")
+	}
+}
+
 // A confirmation that a call presents is taken, whatever happens (spec § 6.13):
 // a call that the tool refuses before it asks anything uses it up too.
 func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
@@ -359,6 +484,8 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
 	alice := newToken(t, app, fx.Alice)
 	bob := newToken(t, app, fx.Bob)
+	// Bob confirmed his participation: a member may not remove it.
+	update(t, app, fx.P2, map[string]any{"confirmed": true})
 
 	for _, row := range []struct {
 		name string
@@ -374,6 +501,7 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 		{"a race that is not there", "delete_event", map[string]any{"event_id": fx.Event.Id}, alice, "delete_event", map[string]any{"event_id": "aaaaaaaaaaaaaaa"}},
 		{"the refusal of the author", "delete_format", map[string]any{"format_id": fx.F42.Id}, bob, "delete_format", map[string]any{"format_id": fx.F15.Id}},
 		{"a format without a measure", "update_format", map[string]any{"format_id": fx.F42.Id, "elevation_gain_m": 0}, alice, "update_format", map[string]any{"format_id": fx.F42.Id, "distance_km": 0}},
+		{"the refusal of a participation that its runner confirmed", "remove_participation", map[string]any{"participation_id": fx.P3.Id}, alice, "remove_participation", map[string]any{"participation_id": fx.P2.Id}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.tool, row.args))
