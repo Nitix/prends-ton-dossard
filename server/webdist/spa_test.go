@@ -353,6 +353,60 @@ func TestSPA_AssetsCacheHeader(t *testing.T) {
 	}
 }
 
+// An MCP client that receives a 401 looks for OAuth metadata under
+// /.well-known/; one that opens a stream asks GET /mcp. Neither must get the
+// HTML of the app with a 200: a 404 in JSON. The demo has no /mcp route, and
+// this test registers none, as the demo.
+func TestSPA_WellKnownAndMcpAreNotTheApp(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html": {Data: []byte(`<div id="root"></div>`)},
+	}
+
+	var scenarios []tests.ApiScenario
+	for _, url := range []string{
+		"/.well-known/oauth-protected-resource",
+		"/.well-known/oauth-authorization-server",
+		"/.well-known",
+		"/mcp",
+		"/mcp/anything",
+	} {
+		scenarios = append(scenarios, tests.ApiScenario{
+			Name:               url + " is a 404 in JSON, not index.html",
+			Method:             http.MethodGet,
+			URL:                url,
+			ExpectedStatus:     http.StatusNotFound,
+			ExpectedContent:    []string{`"status":404`},
+			NotExpectedContent: []string{`id="root"`},
+			AfterTestFunc: func(tb testing.TB, _ *tests.TestApp, res *http.Response) {
+				if got := res.Header.Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+					tb.Errorf("Content-Type = %q, want application/json", got)
+				}
+			},
+		})
+	}
+	// Only the directory is reserved: a client route that starts like it is
+	// still a route.
+	scenarios = append(scenarios, tests.ApiScenario{
+		Name:            "a client route that starts with mcp falls back to index.html",
+		Method:          http.MethodGet,
+		URL:             "/mcp-de-course",
+		ExpectedStatus:  http.StatusOK,
+		ExpectedContent: []string{`id="root"`},
+	})
+
+	for _, scenario := range scenarios {
+		scenario.TestAppFactory = func(tb testing.TB) *tests.TestApp {
+			app, err := tests.NewTestApp(tb.TempDir())
+			if err != nil {
+				tb.Fatalf("creating the test app: %v", err)
+			}
+			webdist.Register(app, fsys)
+			return app
+		}
+		scenario.Test(t)
+	}
+}
+
 func TestDist(t *testing.T) {
 	// The embedded directory always holds at least the .gitkeep placeholder,
 	// so that go:embed compiles on a fresh checkout. Dist must be rooted at
