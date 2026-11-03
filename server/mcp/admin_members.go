@@ -46,6 +46,22 @@ func requireAdmin(ctx context.Context, tool string) error {
 	return &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: fmt.Sprintf("unknown tool %q", tool)}
 }
 
+// adminWrite is the handler of an admin tool that takes a confirmation: the role
+// first (requireAdmin), then the tool through usesUpConfirmation. The call of
+// somebody who is not an admin, which only a wiring mistake would let through, is
+// answered as a tool that does not exist, and leaves the token that it presents
+// as it was, as the SDK leaves it for a tool that it does not have.
+func adminWrite[In confirmable, Out any](t *tools, tool string, handler mcpsdk.ToolHandlerFor[In, Out]) mcpsdk.ToolHandlerFor[In, Out] {
+	written := usesUpConfirmation(t, handler)
+	return func(ctx context.Context, req *mcpsdk.CallToolRequest, in In) (*mcpsdk.CallToolResult, Out, error) {
+		if err := requireAdmin(ctx, tool); err != nil {
+			var none Out
+			return nil, none, err
+		}
+		return written(ctx, req, in)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // What the admin tools read
 
@@ -340,40 +356,29 @@ func (t *tools) adminListMembers(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	if err != nil {
 		return fail(err)
 	}
-	// The passkeys and the participations are counted: only who they are of is
-	// asked for. A sort keeps the pages from reading one twice.
-	passkeys, err := listAll[struct {
-		User string `json:"user"`
-	}](ctx, t.inner, "passkeys", url.Values{"fields": {"id,user"}, "sort": {"created"}}, 500)
-	if err != nil {
-		return fail(err)
-	}
-	participations, err := listAll[struct {
-		Runner string `json:"runner"`
-	}](ctx, t.inner, "participations", url.Values{"fields": {"runner"}, "sort": {"created"}}, 500)
-	if err != nil {
-		return fail(err)
-	}
-	keysOf, participationsOf := map[string]int{}, map[string]int{}
-	for _, key := range passkeys {
-		keysOf[key.User]++
-	}
-	for _, p := range participations {
-		participationsOf[p.Runner]++
-	}
-
 	query := wording.Fold(in.Query)
 	out := listMembersOut{Members: []memberOut{}}
 	for _, m := range toMembers(runners, links, now()) {
 		if !strings.Contains(wording.Fold(m.runner.Name), query) {
 			continue
 		}
+		// The participations and the passkeys are counted, a request of one record
+		// each, with its total: never read, so that years of races do not reach the
+		// bound of a read.
+		participations, err := t.countWhere(ctx, "participations", "runner", m.runner.ID)
+		if err != nil {
+			return fail(err)
+		}
 		member := memberOut{
 			Runner: m.runner.ref(), State: m.state, StateLabel: stateLabels[m.state],
-			Participations: participationsOf[m.runner.ID],
+			Participations: participations,
 		}
 		if m.user != nil {
-			member.Role, member.Passkeys = m.user.Role, ptr(keysOf[m.user.ID])
+			passkeys, err := t.countWhere(ctx, "passkeys", "user", m.user.ID)
+			if err != nil {
+				return fail(err)
+			}
+			member.Role, member.Passkeys = m.user.Role, ptr(passkeys)
 		}
 		if m.invitation != nil {
 			member.Invitation = &pendingLinkOut{ID: m.invitation.ID, ExpiresAt: expiryDay(m.invitation.ExpiresAt), Role: m.invitation.Role}
@@ -459,7 +464,7 @@ func addAdminDeleteRunner(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[deleteRunnerIn](nil),
 		OutputSchema: deleteRunnerSchema(),
 		Annotations:  writeAnnotations(true, false),
-	}, usesUpConfirmation(t, t.adminDeleteRunner))
+	}, adminWrite(t, "admin_delete_runner", t.adminDeleteRunner))
 }
 
 func (t *tools) adminDeleteRunner(ctx context.Context, _ *mcpsdk.CallToolRequest, in deleteRunnerIn) (*mcpsdk.CallToolResult, deleteRunnerOut, error) {
@@ -483,10 +488,14 @@ func (t *tools) adminDeleteRunner(ctx context.Context, _ *mcpsdk.CallToolRequest
 	if !isID(runner.ID) {
 		return fail(errors.New("mcp: a runner id that is not an id"))
 	}
-	// The refusals of the site (the hooks of the runners): an account, which is
-	// turned off rather than deleted, decides first; then the participations.
+	// The refusals of the site (the hooks of the runners). The site looks at the
+	// participations first, and would say runner_has_participations to a runner
+	// who has both; the tool names the account first, because it is the refusal
+	// that decides (a runner with an account is never deleted, participations or
+	// not: it is turned off), as the members page, which offers no « Supprimer » to
+	// a runner with an account.
 	if runner.User != "" {
-		return refuse(fmt.Errorf("%s a un compte : désactive-le plutôt (admin_set_disabled). (runner_has_account)", runner.Name))
+		return refuse(fmt.Errorf("%s a un compte : désactive-le plutôt (admin_set_disabled). (runner_has_account)", plain(runner.Name)))
 	}
 	n, err := t.countWhere(ctx, "participations", "runner", runner.ID)
 	if err != nil {
@@ -497,12 +506,24 @@ func (t *tools) adminDeleteRunner(ctx context.Context, _ *mcpsdk.CallToolRequest
 		if n == 1 {
 			them = "retire-la"
 		}
-		return refuse(fmt.Errorf("%s a %s : %s d'abord. (runner_has_participations)", runner.Name, plural(n, "participation", "participations"), them))
+		return refuse(fmt.Errorf("%s a %s : %s d'abord. (runner_has_participations)", plain(runner.Name), plural(n, "participation", "participations"), them))
 	}
 
-	// Always asked: the runner is gone from the group.
-	line := fmt.Sprintf("Le coureur %s (sans compte, sans participation) sera supprimé : il ne sera plus proposé quand on inscrit quelqu'un à une course.", quote(runner.Name))
-	r := &risk{Message: line, Details: []string{line}, Records: []stamp{{Collection: "runners", ID: runner.ID, Updated: runner.Updated}}}
+	// The links that wait for the runner go with it (the site deletes them with
+	// it).
+	waiting, err := t.waitingLinks(ctx, runner.ID)
+	if err != nil {
+		return fail(err)
+	}
+
+	// Always asked: the runner is gone from the group, with its links.
+	lines := []string{fmt.Sprintf("Le coureur %s (sans compte, sans participation) sera supprimé : il ne sera plus proposé quand on inscrit quelqu'un à une course.", quote(runner.Name))}
+	records := []stamp{{Collection: "runners", ID: runner.ID, Updated: runner.Updated}}
+	for _, link := range waiting {
+		lines = append(lines, waitingLine(link, runner))
+		records = append(records, stamp{Collection: "invitations", ID: link.ID, Updated: link.Updated})
+	}
+	r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: records}
 	proceed, out, notice, err := t.guard(ctx, "admin_delete_runner", struct{ Runner string }{runner.ID}, r, strings.TrimSpace(in.Confirmation))
 	if err != nil {
 		return fail(err)
@@ -535,7 +556,7 @@ func (t *tools) accountNamed(ctx context.Context, input string) (memberRunner, *
 	}
 	account := runner.account()
 	if account == nil {
-		return memberRunner{}, nil, fmt.Errorf("%s n'a pas de compte. Pour lui en créer un : admin_create_link (kind: invite), dont la personne ouvre elle-même le lien.", runner.Name)
+		return memberRunner{}, nil, fmt.Errorf("%s n'a pas de compte. Pour lui en créer un : admin_create_link (kind: invite), dont la personne ouvre elle-même le lien.", plain(runner.Name))
 	}
 	if !isID(account.ID) {
 		return memberRunner{}, nil, describe(t.app, errors.New("mcp: an account id that is not an id"), nil)
@@ -580,7 +601,7 @@ func addAdminSetRole(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[setRoleIn](map[string][]string{"role": {accountMember, accountAdmin}}),
 		OutputSchema: setRoleSchema(),
 		Annotations:  writeAnnotations(true, true),
-	}, usesUpConfirmation(t, t.adminSetRole))
+	}, adminWrite(t, "admin_set_role", t.adminSetRole))
 }
 
 func (t *tools) adminSetRole(ctx context.Context, _ *mcpsdk.CallToolRequest, in setRoleIn) (*mcpsdk.CallToolResult, setRoleOut, error) {
@@ -603,7 +624,7 @@ func (t *tools) adminSetRole(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 		return nil, setRoleOut{}, err
 	}
 	own := account.ID == c.user.Id
-	who := "Le compte de " + runner.Name
+	who := "Le compte de " + plain(runner.Name)
 	if own {
 		who = "Ton compte"
 	}
@@ -617,7 +638,8 @@ func (t *tools) adminSetRole(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	// Always asked: the rights of an account change.
 	lines := []string{fmt.Sprintf("%s passerait %s à %s.", who, ofName(roleWords[account.Role]), roleWords[role])}
 	if role == accountAdmin {
-		lines = append(lines, "Ce compte pourrait alors "+adminPowers+".")
+		lines = append(lines, "Ce compte pourrait alors "+adminPowers+".",
+			"Les assistants qui ont un jeton de ce compte auraient aussi les outils admin_… dès leur requête suivante.")
 		if account.Disabled {
 			lines = append(lines, "Ce compte est désactivé : ce rôle ne servira qu'une fois le compte réactivé.")
 		}
@@ -674,7 +696,7 @@ func addAdminSetDisabled(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[setDisabledIn](nil),
 		OutputSchema: setDisabledSchema(),
 		Annotations:  writeAnnotations(true, true),
-	}, usesUpConfirmation(t, t.adminSetDisabled))
+	}, adminWrite(t, "admin_set_disabled", t.adminSetDisabled))
 }
 
 func (t *tools) adminSetDisabled(ctx context.Context, _ *mcpsdk.CallToolRequest, in setDisabledIn) (*mcpsdk.CallToolResult, setDisabledOut, error) {
@@ -698,7 +720,7 @@ func (t *tools) adminSetDisabled(ctx context.Context, _ *mcpsdk.CallToolRequest,
 		if account.Disabled {
 			state = "désactivé"
 		}
-		whose := "le compte de " + runner.Name
+		whose := "le compte de " + plain(runner.Name)
 		if own {
 			whose = "ton compte"
 		}
@@ -720,7 +742,7 @@ func (t *tools) adminSetDisabled(ctx context.Context, _ *mcpsdk.CallToolRequest,
 			}
 		} else {
 			lines = []string{fmt.Sprintf("Le compte de %s serait désactivé : %s ne pourrait plus se connecter, ses sessions ouvertes seraient fermées tout de suite et ses jetons d'assistant (MCP) supprimés. "+
-				"Tu pourras réactiver le compte, mais pas ces jetons.", runner.Name, runner.Name)}
+				"Tu pourras réactiver le compte, mais pas ces jetons.", plain(runner.Name), plain(runner.Name))}
 		}
 		r = &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{{Collection: "users", ID: account.ID, Updated: account.Updated}}}
 	}
@@ -744,9 +766,9 @@ func (t *tools) adminSetDisabled(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	case updated.Disabled && own:
 		summary = "Ton compte est désactivé : ce jeton ne marche plus, et cet appel était le dernier de cet assistant. Un autre admin peut réactiver le compte."
 	case updated.Disabled:
-		summary = fmt.Sprintf("Le compte de %s est désactivé : ses sessions sont fermées et ses jetons d'assistant (MCP) supprimés. admin_set_disabled (disabled: false) le réactive.", runner.Name)
+		summary = fmt.Sprintf("Le compte de %s est désactivé : ses sessions sont fermées et ses jetons d'assistant (MCP) supprimés. admin_set_disabled (disabled: false) le réactive.", plain(runner.Name))
 	default:
-		summary = fmt.Sprintf("Le compte de %s est réactivé : %s peut se connecter de nouveau. Ses anciens jetons d'assistant ne reviennent pas : un nouveau se crée dans les Réglages du site.", runner.Name, runner.Name)
+		summary = fmt.Sprintf("Le compte de %s est réactivé : %s peut se connecter de nouveau. Ses anciens jetons d'assistant ne reviennent pas : un nouveau se crée dans les Réglages du site.", plain(runner.Name), plain(runner.Name))
 	}
 	return nil, setDisabledOut{writeStatus: writeStatus{Done: true, Summary: summary}, Runner: ptr(runner.ref()), Disabled: ptr(updated.Disabled)}, nil
 }

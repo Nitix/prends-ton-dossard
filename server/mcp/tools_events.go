@@ -170,7 +170,7 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 	summary := fmt.Sprintf("La course %s est créée (%s, %s), avec %s.", quote(draft.Name), days(draft.StartDate, draft.EndDate), plain(draft.Location),
 		plural(len(draft.Formats), "épreuve", "épreuves"))
 	if draft.Join != nil {
-		summary += fmt.Sprintf(" %s participe à %s (%s).", me.Name, quote(titleOf(w, draft.Formats[draft.Join.FormatIndex], labels)), w.Status(draft.Join.Status))
+		summary += fmt.Sprintf(" %s participe à %s (%s).", plain(me.Name), quote(titleOf(w, draft.Formats[draft.Join.FormatIndex], labels)), w.Status(draft.Join.Status))
 	}
 	answer, err := t.written(ctx, eventID, summary, draft)
 	return nil, answer, err

@@ -441,7 +441,7 @@ func authorRefusal(c *caller, view eventView, what string) error {
 	if author.ID == "" {
 		return errors.New("Seul un admin peut " + what + " : la course n'a plus d'auteur.")
 	}
-	return errors.New("Seule la personne qui a créé la course, " + author.Name + ", ou un admin peut " + what + ".")
+	return errors.New("Seule la personne qui a créé la course, " + plain(author.Name) + ", ou un admin peut " + what + ".")
 }
 
 // shortenedLine says that a race would be shortened, from its stored days to

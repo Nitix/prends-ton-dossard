@@ -154,6 +154,60 @@ func TestMCP_MemberDoesNotSeeTheAdminTools(t *testing.T) {
 	}
 }
 
+// A wiring mistake that put the admin tools on the server of the members opens
+// nothing either: each admin tool checks the role itself, before it takes the
+// confirmation that a call presents. A member's call is answered as a tool that
+// does not exist, writes nothing, and leaves the member's token as it was, as the
+// SDK does for a tool it does not have.
+func TestMCP_AWiringMistakeOpensNothing(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	alice := newToken(t, app, fx.Alice)
+	linkWaiting(t, app, fx.SamRunner, "invite", "member")
+	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
+
+	mcp.WireAdminToolsForMembers(t)
+	if !hasAdminTools(t, app, alice) {
+		t.Fatal("the mistake is not made: Alice does not list the admin tools")
+	}
+	_, unknown := rpc(t, app, bearer(alice), http.StatusOK, "tools/call", map[string]any{"name": "no_such_tool", "arguments": map[string]any{}})
+
+	// The admin tools that take a confirmation.
+	confirmable := map[string]bool{
+		"admin_delete_runner": true, "admin_create_link": true, "admin_revoke_link": true, "admin_set_role": true,
+		"admin_set_disabled": true, "admin_delete_race_type": true, "admin_merge": true,
+	}
+	calls := adminCalls(fx)
+	for _, name := range wantAdminTools {
+		t.Run(name, func(t *testing.T) {
+			// A confirmation of Alice's own, which her call of the admin tool presents.
+			comment := commentOn(t, app, lake, fx.AliceRunner, "À moi.")
+			deletion := map[string]any{"comment_id": comment.Id}
+			token, _, _ := asked(t, callTool(t, app, alice, "delete_comment", deletion))
+			args := calls[name]
+			if confirmable[name] {
+				args = with(args, token)
+			}
+
+			before := dbState(t, app)
+			counted := mcp.CountInnerRequests(t)
+			_, body := rpc(t, app, bearer(alice), http.StatusOK, "tools/call", map[string]any{"name": name, "arguments": args})
+			if got := strings.ReplaceAll(body, name, "no_such_tool"); got != unknown {
+				t.Errorf("the answer to %s is\n%s\nwant, but for the name,\n%s", name, redact(body), redact(unknown))
+			}
+			if got := counted.Total(); got != 0 {
+				t.Errorf("%d inner requests, want none", got)
+			}
+			if after := dbState(t, app); after != before {
+				t.Errorf("the database changed:\nbefore\n%s\nafter\n%s", before, after)
+			}
+			// Her token is still good for what it was given for.
+			isDone(t, callTool(t, app, alice, "delete_comment", with(deletion, token)))
+		})
+	}
+}
+
 // The role is read on the account at each request: an admin set to member loses
 // the admin tools at the next request of the same token, and gets them back when
 // set back; a member made an admin gets them at the next one.

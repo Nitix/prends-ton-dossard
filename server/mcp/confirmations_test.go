@@ -310,12 +310,12 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 		{
 			"calendar_link: renewed", "calendar_link",
 			map[string]any{"action": "renew"},
-			[]string{"L'ancien lien cessera de marcher", "ne recevront plus tes courses"},
+			[]string{"L'ancien lien cessera de marcher", "ne recevront plus tes courses", "Les textes du nouveau lien seront en français : la langue de l'ancien ne peut pas être lue"},
 		},
 		{
 			"calendar_link: deleted", "calendar_link",
 			map[string]any{"action": "delete"},
-			[]string{"Le lien cessera de marcher", "ne recevront plus tes courses"},
+			[]string{"Le lien cessera de marcher", "ne recevront plus tes courses", "Un nouveau lien aurait une autre adresse"},
 		},
 		{
 			"mcp_tokens: another token revoked", "mcp_tokens",
@@ -668,6 +668,12 @@ func TestTools_Confirmation_NamesOrIds(t *testing.T) {
 		png := testutil.PNG(t, 20, 20)
 		token, _, _ := asked(t, callTool(t, app, alice, "set_photo", map[string]any{"upload_id": uploaded(t, app, alice, "photo", png)}))
 		isDone(t, callTool(t, app, alice, "set_photo", map[string]any{"runner": "alice", "content_base64": b64(png), "confirmation": token}))
+	})
+
+	t.Run("a calendar link renewed without a language, then in French", func(t *testing.T) {
+		linkFor(t, app, fx.Alice)
+		token, _, _ := asked(t, callTool(t, app, alice, "calendar_link", map[string]any{"action": "renew"}))
+		isDone(t, callTool(t, app, alice, "calendar_link", map[string]any{"action": "renew", "lang": "fr", "confirmation": token}))
 	})
 
 	t.Run("another runner is another request", func(t *testing.T) {
@@ -1071,20 +1077,26 @@ func TestTools_Confirmation_MemberTextStaysQuoted(t *testing.T) {
 	})
 }
 
-// Every sentence that a write tool builds with what a member wrote (the name, the
-// place and the notes of a race, the name of a format, a comment, the place and the
-// notes of an offer, the note of a result) keeps that text from opening or closing
-// a quotation: its « » become ‹ ›, in the confirmations, the summaries, the
-// warnings and the refusals, a call that changes nothing included, as far as the
-// calls below reach. (The names of the runners are not swept: see the report.)
+// Every sentence that a tool builds with what a member wrote (the name, the place
+// and the notes of a race, the name of a format, a comment, the place and the
+// notes of an offer, the note of a result, and the name of a runner, which its
+// member writes) keeps that text from opening or closing a quotation: its « »
+// become ‹ ›, in the confirmations, the summaries, the warnings and the refusals,
+// a call that changes nothing included, of the member tools and of the admin
+// tools, as far as the calls below reach.
 func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
 	writeFast(app)
 	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
-	alice := newToken(t, app, fx.Alice)
+	alice, bob, admin := newToken(t, app, fx.Alice), newToken(t, app, fx.Bob), newToken(t, app, fx.Admin)
 	const mark, escaped = "»!«", "›!‹"
 
+	// Each member wrote a « » in their name: « Alice »!« A ».
+	for _, runner := range []*core.Record{fx.AliceRunner, fx.BobRunner, fx.SamRunner} {
+		name := runner.GetString("name")
+		update(t, app, runner, map[string]any{"name": name + " " + mark + " " + name[:1]})
+	}
 	event := create(t, app, "events", map[string]any{
 		"name": "Trail " + mark + " des Crêtes", "location": "Annecy " + mark + " centre", "start_date": "2026-09-05",
 		"notes": "Navette " + mark + " gare", "created_by": fx.AliceRunner.Id,
@@ -1117,30 +1129,41 @@ func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 			said = append(said, asList(c["details"])...)
 		}
 	}
-	// run calls a tool, and again with the token when it asks for a confirmation;
-	// the call must succeed.
-	run := func(tool string, args map[string]any) toolResult {
+	// runAs calls a tool with a token, and again with the confirmation when it asks
+	// for one; the call must succeed.
+	runAs := func(token, tool string, args map[string]any) toolResult {
 		t.Helper()
-		result := callTool(t, app, alice, tool, args)
+		result := callTool(t, app, token, tool, args)
 		if result.IsError {
-			t.Fatalf("%s failed: %s", tool, result.Text)
+			t.Fatalf("%s failed: %s", tool, redact(result.Text))
 		}
 		say(result)
 		if c, _ := result.Structured["confirmation"].(map[string]any); c != nil {
-			result = callTool(t, app, alice, tool, with(args, c["token"].(string)))
+			result = callTool(t, app, token, tool, with(args, c["token"].(string)))
+			if result.IsError {
+				t.Fatalf("%s, confirmed, failed: %s", tool, redact(result.Text))
+			}
 			say(result)
 		}
 		return result
 	}
-	// refusal calls a tool that the tool or the site refuses, with what a member wrote
-	// in the refusal.
-	refusal := func(tool string, args map[string]any) {
+	run := func(tool string, args map[string]any) toolResult {
 		t.Helper()
-		result := callTool(t, app, alice, tool, args)
+		return runAs(alice, tool, args)
+	}
+	// refusalAs calls a tool that the tool or the site refuses, with what a member
+	// wrote in the refusal.
+	refusalAs := func(token, tool string, args map[string]any) {
+		t.Helper()
+		result := callTool(t, app, token, tool, args)
 		if !result.IsError {
 			t.Fatalf("%s was not refused: %.300s", tool, redact(result.Text))
 		}
 		say(result)
+	}
+	refusal := func(tool string, args map[string]any) {
+		t.Helper()
+		refusalAs(alice, tool, args)
 	}
 
 	run("create_event", map[string]any{"name": "Trail " + mark + " des Crêtes", "location": "Annecy " + mark + " haut", "start_date": "2026-09-06",
@@ -1160,42 +1183,102 @@ func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 	run("update_format", map[string]any{"format_id": north.Id, "name": ""})
 	update(t, app, north, map[string]any{"name": "Boucle " + mark + " nord"})
 	run("add_format", map[string]any{"event_id": event.Id, "race_type": "Trail", "distance_km": 5, "name": "Boucle " + mark + " ouest"})
-	run("add_participation", map[string]any{"runner": "Bob", "format_id": south.Id, "status": "interested"})
+	// The author of a race, named to somebody else; the runners, named when the one
+	// asked for is not one of them.
+	refusalAs(bob, "delete_format", map[string]any{"format_id": south.Id})
+	refusal("add_participation", map[string]any{"runner": "Zoé", "format_id": south.Id, "status": "interested"})
+	// Bob's choice to come, which Alice's participation for him replaces.
+	joinedEvent(t, app, fx.BobRunner, event, "interested", true, fx.BobRunner)
+	run("add_participation", map[string]any{"runner": fx.BobRunner.Id, "format_id": south.Id, "status": "interested"})
 	run("update_participation", map[string]any{"participation_id": sam.Id, "status": "registered"})
+	refusalAs(bob, "update_participation", map[string]any{"participation_id": sam.Id, "confirmed": true})
 	run("set_result", map[string]any{"participation_id": mine.Id, "status": "finished", "finish_time": "0:39:00", "note": "Encore " + mark + " mieux"})
 	run("set_result", map[string]any{"participation_id": mine.Id, "status": "finished", "finish_time": "0:39:00", "note": "Encore " + mark + " mieux"})
 	// A race of one format: a participation without it is refused, and the format named.
-	refusal("add_participation", map[string]any{"runner": "Bob", "event_id": past.Id, "status": "interested"})
+	refusal("add_participation", map[string]any{"runner": fx.BobRunner.Id, "event_id": past.Id, "status": "interested"})
 	run("remove_participation", map[string]any{"participation_id": mine.Id})
 	run("remove_participation", map[string]any{"participation_id": sam.Id})
 	comment := run("add_comment", map[string]any{"event_id": event.Id, "body": "Salut " + mark + " tous"})
 	commentID := comment.Structured["comment"].(map[string]any)["id"].(string)
 	run("update_comment", map[string]any{"comment_id": commentID, "body": "Salut " + mark + " à tous"})
+	refusalAs(bob, "delete_comment", map[string]any{"comment_id": commentID})
 	run("delete_comment", map[string]any{"comment_id": commentID})
 	ride := run("add_offer", map[string]any{"event_id": event.Id, "kind": "ride", "place": "Lyon " + mark + " gare", "seats": 3, "notes": "Départ " + mark + " 7 h"})
 	rideID := ride.Structured["offer"].(map[string]any)["id"].(string)
 	run("add_offer", map[string]any{"event_id": event.Id, "kind": "lodging", "place": "Gîte " + mark + " lac", "time": "07:00"})
 	run("update_offer", map[string]any{"offer_id": rideID, "notes": ""})
-	run("offer_place", map[string]any{"offer_id": rideID, "action": "take", "runner": "Bob"})
-	run("offer_place", map[string]any{"offer_id": rideID, "action": "free", "runner": "Bob"})
+	run("offer_place", map[string]any{"offer_id": rideID, "action": "take", "runner": fx.BobRunner.Id})
+	refusal("offer_place", map[string]any{"offer_id": rideID, "action": "take", "runner": fx.BobRunner.Id})
+	refusal("offer_place", map[string]any{"offer_id": rideID, "action": "free", "runner": fx.SamRunner.Id})
+	runAs(admin, "update_offer", map[string]any{"offer_id": rideID, "place": "Lyon " + mark + " Perrache"})
+	run("offer_place", map[string]any{"offer_id": rideID, "action": "free", "runner": fx.BobRunner.Id})
+	run("offer_place", map[string]any{"offer_id": rideID, "action": "take", "runner": fx.SamRunner.Id})
 	run("delete_offer", map[string]any{"offer_id": rideID})
 	run("set_track", map[string]any{"format_id": south.Id, "content_base64": b64(testutil.GPX(t, 3))})
 	run("set_track", map[string]any{"format_id": south.Id, "content_base64": b64(testutil.GPX(t, 4))})
+	// The photo, the name and the passkeys of a runner: one's own, and somebody else's.
+	png := testutil.PNG(t, 16, 16)
+	refusal("set_photo", map[string]any{"runner": fx.BobRunner.Id, "content_base64": b64(png)})
+	runAs(admin, "set_photo", map[string]any{"runner": fx.BobRunner.Id, "content_base64": b64(png)})
+	runAs(admin, "set_photo", map[string]any{"runner": fx.BobRunner.Id, "remove": true})
+	runAs(admin, "set_photo", map[string]any{"runner": fx.BobRunner.Id, "remove": true})
+	refusal("rename_runner", map[string]any{"runner": fx.BobRunner.Id, "name": "Robert"})
+	refusal("rename_runner", map[string]any{"runner": fx.SamRunner.Id, "name": "Samuel"})
+	pixel := passkeyFor(t, app, fx.Bob, "Pixel")
+	refusal("passkeys", map[string]any{"action": "list", "runner": fx.BobRunner.Id})
+	refusal("passkeys", map[string]any{"action": "list", "runner": fx.SamRunner.Id})
+	refusalAs(admin, "passkeys", map[string]any{"action": "rename", "passkey_id": pixel.Id, "name": "Pixel 7"})
+	runAs(admin, "passkeys", map[string]any{"action": "list", "runner": fx.BobRunner.Id})
+	runAs(admin, "passkeys", map[string]any{"action": "delete", "passkey_id": pixel.Id})
 	run("delete_format", map[string]any{"format_id": north.Id})
 	run("delete_event", map[string]any{"event_id": event.Id})
+
+	// The admin tools, with the admin's token.
+	julie := runAs(admin, "admin_create_runner", map[string]any{"name": "Julie " + mark + " J"})
+	julieID := julie.Structured["runner"].(map[string]any)["id"].(string)
+	refusalAs(admin, "admin_delete_runner", map[string]any{"runner": fx.BobRunner.Id})
+	refusalAs(admin, "admin_delete_runner", map[string]any{"runner": fx.SamRunner.Id})
+	refusalAs(admin, "admin_create_link", map[string]any{"runner": fx.BobRunner.Id, "kind": "invite"})
+	refusalAs(admin, "admin_create_link", map[string]any{"runner": julieID, "kind": "reset"})
+	runAs(admin, "admin_create_link", map[string]any{"runner": julieID, "kind": "invite"})
+	runAs(admin, "admin_create_link", map[string]any{"runner": julieID, "kind": "invite", "role": "admin"})
+	runAs(admin, "admin_revoke_link", map[string]any{"runner": julieID, "kind": "invite"})
+	refusalAs(admin, "admin_revoke_link", map[string]any{"runner": julieID, "kind": "invite"})
+	runAs(admin, "admin_create_link", map[string]any{"runner": fx.BobRunner.Id, "kind": "reset"})
+	runAs(admin, "admin_delete_runner", map[string]any{"runner": julieID})
+	refusalAs(admin, "admin_set_role", map[string]any{"runner": fx.SamRunner.Id, "role": "admin"})
+	runAs(admin, "admin_set_role", map[string]any{"runner": fx.BobRunner.Id, "role": "admin"})
+	runAs(admin, "admin_set_role", map[string]any{"runner": fx.BobRunner.Id, "role": "admin"})
+	runAs(admin, "admin_set_role", map[string]any{"runner": fx.BobRunner.Id, "role": "member"})
+	refusalAs(admin, "admin_set_disabled", map[string]any{"runner": fx.SamRunner.Id, "disabled": true})
+	runAs(admin, "admin_set_disabled", map[string]any{"runner": fx.BobRunner.Id, "disabled": true})
+	runAs(admin, "admin_set_disabled", map[string]any{"runner": fx.BobRunner.Id, "disabled": true})
+	runAs(admin, "admin_set_disabled", map[string]any{"runner": fx.BobRunner.Id, "disabled": false})
+	rando := runAs(admin, "admin_create_race_type", map[string]any{"label": "Rando " + mark + " douce", "measures": []any{"distance"}})
+	randoID := rando.Structured["race_type"].(map[string]any)["id"].(string)
+	runAs(admin, "admin_update_race_type", map[string]any{"race_type": randoID, "label": "Rando " + mark + " vive", "measures": []any{"duration"}})
+	runAs(admin, "admin_update_race_type", map[string]any{"race_type": randoID, "label": "Rando " + mark + " vive"})
+	runAs(admin, "admin_delete_race_type", map[string]any{"race_type": randoID})
+	runAs(admin, "admin_update_race_type", map[string]any{"race_type": fx.Cross.Id, "label": "Cross " + mark + " court"})
+	refusalAs(admin, "admin_delete_race_type", map[string]any{"race_type": fx.Cross.Id})
+	twin := create(t, app, "events", map[string]any{"name": "Cross " + mark + " ouest bis", "location": "Lyon " + mark + " sud", "start_date": "2026-03-07", "created_by": fx.BobRunner.Id})
+	twinFormat := create(t, app, "formats", map[string]any{"event": twin.Id, "race_type": fx.Cross.Id, "distance_km": 8, "name": "Cross " + mark + " long"})
+	refusalAs(admin, "admin_merge", map[string]any{"kind": "formats", "keep_id": twinFormat.Id, "merge_id": twinFormat.Id})
+	runAs(admin, "admin_merge", map[string]any{"kind": "events", "keep_id": past.Id, "merge_id": twin.Id})
+	runAs(admin, "admin_merge", map[string]any{"kind": "formats", "keep_id": cross.Id, "merge_id": twinFormat.Id})
 
 	quoted := 0
 	for _, text := range said {
 		if strings.Contains(text, mark) {
-			t.Errorf("a member's « » are left as they are in %q", text)
+			t.Errorf("a member's « » are left as they are in %q", redact(text))
 		}
 		if strings.Contains(text, escaped) {
 			quoted++
 		}
 	}
 	// Without them, the check above would pass on sentences that hold no text of a member.
-	if quoted < 30 {
-		t.Errorf("%d sentences hold a member's text, want the sweep to see at least 30", quoted)
+	if quoted < 80 {
+		t.Errorf("%d sentences hold a member's text, want the sweep to see at least 80", quoted)
 	}
 }
 

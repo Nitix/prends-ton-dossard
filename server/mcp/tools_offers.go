@@ -136,7 +136,7 @@ func offerRefusal(c *caller, o offerRecord, what string) error {
 	}
 	who := "la personne qui propose cette offre"
 	if name := o.Expand.Owner.Name; name != "" {
-		who += ", " + name + ","
+		who += ", " + plain(name) + ","
 	}
 	return fmt.Errorf("Seule %s ou un admin peut %s.", who, what)
 }
@@ -170,7 +170,7 @@ func byPlaceRunner(a, b offerMemberRecord) int {
 // Alice) ». The participle agrees with the place.
 func placeLine(p offerMemberRecord) string {
 	line := "Place " + ofName(p.Expand.Runner.Name)
-	if by := p.Expand.AddedBy.Name; by != "" {
+	if by := plain(p.Expand.AddedBy.Name); by != "" {
 		line += " (ajoutée par " + by + ")"
 	}
 	return line
@@ -491,7 +491,7 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	// that are replaced.
 	var details []string
 	if !c.proposes(o) {
-		details = append(details, "C'est l'offre d'un autre coureur : "+o.Expand.Owner.Name+".")
+		details = append(details, "C'est l'offre d'un autre coureur : "+plain(o.Expand.Owner.Name)+".")
 	}
 	for _, ch := range changed {
 		if ch.was == "" {
@@ -603,7 +603,7 @@ func (t *tools) deleteOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 	names := make([]string, len(sorted))
 	r := &risk{Records: []stamp{{Collection: "offers", ID: o.ID, Updated: o.Updated}}}
 	for i, p := range sorted {
-		names[i] = p.Expand.Runner.Name
+		names[i] = plain(p.Expand.Runner.Name)
 		r.Details = append(r.Details, placeLine(p)+".")
 		r.Records = append(r.Records, stamp{Collection: "offer_members", ID: p.ID, Updated: p.Updated})
 	}
@@ -716,10 +716,10 @@ func (t *tools) offerPlace(ctx context.Context, _ *mcpsdk.CallToolRequest, in of
 	}
 	index := slices.IndexFunc(places, func(p offerMemberRecord) bool { return p.Runner == runner.ID })
 	if action == "take" && index >= 0 {
-		return refuse(fmt.Errorf("%s a déjà une place dans cette offre.", runner.Name))
+		return refuse(fmt.Errorf("%s a déjà une place dans cette offre.", plain(runner.Name)))
 	}
 	if action == "free" && index < 0 {
-		return refuse(fmt.Errorf("%s n'a pas de place dans cette offre.", runner.Name))
+		return refuse(fmt.Errorf("%s n'a pas de place dans cette offre.", plain(runner.Name)))
 	}
 
 	// Taking a place asks nothing; freeing one is always asked.
@@ -728,7 +728,7 @@ func (t *tools) offerPlace(ctx context.Context, _ *mcpsdk.CallToolRequest, in of
 		place := places[index]
 		line := placeLine(place) + " dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + "."
 		r = &risk{
-			Message: "Libérer cette place : " + runner.Name + " perdrait sa place dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + ".",
+			Message: "Libérer cette place : " + plain(runner.Name) + " perdrait sa place dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + ".",
 			Details: []string{line},
 			Records: []stamp{{Collection: "offer_members", ID: place.ID, Updated: place.Updated}, {Collection: "offers", ID: o.ID, Updated: o.Updated}},
 		}
@@ -756,9 +756,9 @@ func (t *tools) offerPlace(ctx context.Context, _ *mcpsdk.CallToolRequest, in of
 		return fail(err)
 	}
 	shown := newOfferOut(o, after)
-	head := runner.Name + " a maintenant une place dans "
+	head := plain(runner.Name) + " a maintenant une place dans "
 	if action == "free" {
-		head = runner.Name + " n'a plus de place dans "
+		head = plain(runner.Name) + " n'a plus de place dans "
 	}
 	return nil, offerWriteOut{
 		writeStatus: writeStatus{Done: true, Summary: head + offerLabel(o) + " : " + takenText(len(after), o.Seats) + "."},

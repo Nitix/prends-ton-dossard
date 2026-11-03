@@ -285,7 +285,7 @@ func (t *tools) setPhoto(ctx context.Context, _ *mcpsdk.CallToolRequest, in setP
 	}
 	if in.Remove && runner.Avatar == "" {
 		return nil, setPhotoOut{
-			writeStatus: writeStatus{Done: true, Summary: "Rien à changer : " + runner.Name + " n'a pas de photo."},
+			writeStatus: writeStatus{Done: true, Summary: "Rien à changer : " + plain(runner.Name) + " n'a pas de photo."},
 			Runner:      &photoRunnerOut{ID: runner.ID, Name: runner.Name},
 		}, nil
 	}
@@ -368,7 +368,7 @@ func photoRefusal(c *caller, runner runnerRecord) error {
 	case c.role == roleAdmin || (runner.User != "" && runner.User == c.user.Id):
 		return nil
 	case runner.User == "":
-		return fmt.Errorf("La photo %s ne peut être changée que par un admin : %s n'a pas de compte.", ofName(runner.Name), runner.Name)
+		return fmt.Errorf("La photo %s ne peut être changée que par un admin : %s n'a pas de compte.", ofName(runner.Name), plain(runner.Name))
 	}
 	return fmt.Errorf("La photo %s ne peut être changée que depuis son propre compte, ou par un admin.", ofName(runner.Name))
 }
@@ -386,7 +386,7 @@ func (t *tools) photoRisk(c *caller, runner runnerRecord, remove bool, until tim
 		lines = append(lines, fmt.Sprintf("La photo actuelle %s serait %s (%s).", ofName(runner.Name), what, photoURL(t.cfg, runner)))
 	}
 	if runner.User == "" || runner.User != c.user.Id {
-		lines = append(lines, runner.Name+" n'est pas ton coureur : c'est la photo d'un autre coureur que toi que tu changerais.")
+		lines = append(lines, plain(runner.Name)+" n'est pas ton coureur : c'est la photo d'un autre coureur que toi que tu changerais.")
 	}
 	if len(lines) == 0 {
 		return nil

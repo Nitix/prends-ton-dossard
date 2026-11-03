@@ -81,7 +81,7 @@ func commentRefusal(c *caller, comment commentRecord, what string, admins bool) 
 	}
 	who := "la personne qui a écrit ce commentaire"
 	if name := comment.Expand.Author.Name; name != "" {
-		who += ", " + name + ","
+		who += ", " + plain(name) + ","
 	}
 	if admins {
 		return fmt.Errorf("Seule %s ou un admin peut %s.", who, what)

@@ -202,9 +202,33 @@ func confirmAndCall(t *testing.T, app *tests.TestApp, token, name string, args m
 // slot in a text.
 var tokenInText = regexp.MustCompile(`\b(ptd|cfm|ptu)_[A-Za-z0-9_-]+`)
 
-// redact cuts the tokens of a text to what a test may print of them.
+// secretOfLink is the secret of a link in a text: the token of the feed of a
+// calendar (/api/app/calendar/<token>.ics), or of an invitation (/invitation#<token>).
+var secretOfLink = regexp.MustCompile(`(/api/app/calendar/|/invitation#)([A-Za-z0-9_-]+)`)
+
+// redact cuts the tokens of a text, and the secrets of its links, to what a test
+// may print of them.
 func redact(text string) string {
-	return tokenInText.ReplaceAllStringFunc(text, prefix)
+	text = tokenInText.ReplaceAllStringFunc(text, prefix)
+	return secretOfLink.ReplaceAllStringFunc(text, func(link string) string {
+		m := secretOfLink.FindStringSubmatch(link)
+		return m[1] + prefix(m[2])
+	})
+}
+
+// What a test prints of a secret: at most its first 8 characters.
+func TestRedact(t *testing.T) {
+	for _, row := range []struct{ text, want string }{
+		{"jeton ptd_abcdefghijk_secretsecret", "jeton ptd_abcd..."},
+		{"cfm_ABCDEFGHIJKLMNOPQRSTUVWXYZ.", "cfm_ABCD...."},
+		{"http://localhost:5173/api/app/calendar/0123456789abcdefghij.ics", "http://localhost:5173/api/app/calendar/01234567....ics"},
+		{"http://localhost:5173/invitation#AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_xyz", "http://localhost:5173/invitation#AbCdEfGh..."},
+		{"rien de secret", "rien de secret"},
+	} {
+		if got := redact(row.text); got != row.want {
+			t.Errorf("redact(%q) = %q, want %q", row.text, got, row.want)
+		}
+	}
 }
 
 // prefix is what a test may print of a token: its first 8 characters.

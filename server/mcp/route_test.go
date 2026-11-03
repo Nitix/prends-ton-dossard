@@ -281,15 +281,7 @@ func TestMCP_Initialize(t *testing.T) {
 // lines quoted for every token, then the line of an admin.
 func specInstructions(t *testing.T) (member, admin string) {
 	t.Helper()
-	_, here, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot tell where this test file is")
-	}
-	spec, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "docs", "superpowers", "specs", "2026-11-03-courses-mcp-design.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, section, ok := strings.Cut(string(spec), "### 6.2 Instructions du serveur")
+	_, section, ok := strings.Cut(specText(t), "### 6.2 Instructions du serveur")
 	if !ok {
 		t.Fatal("no § 6.2 in the spec")
 	}
@@ -315,6 +307,43 @@ func specInstructions(t *testing.T) (member, admin string) {
 	return strings.Join(quotes[0], "\n"), strings.Join(quotes[1], "\n")
 }
 
+// specText is the text of the spec of the MCP server.
+func specText(t *testing.T) string {
+	t.Helper()
+	_, here, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot tell where this test file is")
+	}
+	spec, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "docs", "superpowers", "specs", "2026-11-03-courses-mcp-design.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(spec)
+}
+
+// specTitles are the titles of the tools in the tables of spec § 6.3, by tool:
+// the cell after the one that names the tool.
+func specTitles(t *testing.T) map[string]string {
+	t.Helper()
+	_, section, ok := strings.Cut(specText(t), "### 6.3 Les outils, et qui les voit")
+	if !ok {
+		t.Fatal("no § 6.3 in the spec")
+	}
+	section, _, _ = strings.Cut(section, "\n### ")
+	titles := map[string]string{}
+	for line := range strings.Lines(section) {
+		cells := strings.Split(strings.TrimSpace(line), "|")
+		for i := 1; i+1 < len(cells); i++ {
+			name := strings.TrimSpace(cells[i])
+			if len(name) > 2 && strings.HasPrefix(name, "`") && strings.HasSuffix(name, "`") && !strings.Contains(name, " ") {
+				titles[strings.Trim(name, "`")] = strings.TrimSpace(cells[i+1])
+				break
+			}
+		}
+	}
+	return titles
+}
+
 func TestMCP_ToolsList(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
@@ -332,6 +361,11 @@ func TestMCP_ToolsList(t *testing.T) {
 	}
 	if len(wantHints) != len(wantMemberTools)+len(wantAdminTools) {
 		t.Errorf("wantHints has %d rows for %d tools", len(wantHints), len(wantMemberTools)+len(wantAdminTools))
+	}
+	// The titles are the ones of the tables of spec § 6.3.
+	titles := specTitles(t)
+	if len(titles) != len(wantMemberTools)+len(wantAdminTools) {
+		t.Errorf("§ 6.3 has the titles of %d tools, want %d", len(titles), len(wantMemberTools)+len(wantAdminTools))
 	}
 
 	for _, row := range []struct {
@@ -365,6 +399,9 @@ func TestMCP_ToolsList(t *testing.T) {
 
 				if tool.Title == "" || tool.Title == tool.Name {
 					t.Errorf("%s: the title is %q, want a French one", tool.Name, tool.Title)
+				}
+				if want := titles[tool.Name]; tool.Title != want {
+					t.Errorf("%s: the title is %q, want the one of spec § 6.3, %q", tool.Name, tool.Title, want)
 				}
 				if len(tool.Description) < 20 {
 					t.Errorf("%s: the description is %q, want a French one", tool.Name, tool.Description)

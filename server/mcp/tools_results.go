@@ -157,7 +157,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 	var details []string
 	if !own {
 		line := "C'est la participation d'un autre coureur : " + participantLabel(w, p) + ", à " + placeOf(w, row)
-		if by := p.Expand.AddedBy.Name; by != "" {
+		if by := plain(p.Expand.AddedBy.Name); by != "" {
 			line += ", ajoutée par " + by
 		}
 		details = append(details, line+".")

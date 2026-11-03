@@ -108,7 +108,7 @@ func addAdminMerge(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[mergeIn](map[string][]string{"kind": {"events", "formats"}}),
 		OutputSchema: mergeSchema(),
 		Annotations:  writeAnnotations(true, false),
-	}, usesUpConfirmation(t, t.adminMerge))
+	}, adminWrite(t, "admin_merge", t.adminMerge))
 }
 
 // mergeSide is one of the two records of a merge, as the confirmation names it.

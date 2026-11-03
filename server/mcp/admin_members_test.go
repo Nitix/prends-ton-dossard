@@ -254,6 +254,22 @@ func TestAdmin_ListMembers(t *testing.T) {
 			t.Errorf("Bob is %v, want disabled", members)
 		}
 	})
+
+	// The participations and the passkeys are counted, not read: years of races
+	// do not make the list fail at the bound of a read.
+	t.Run("more participations than a read takes", func(t *testing.T) {
+		for i := range 6 {
+			format := create(t, app, "formats", map[string]any{"event": fx.Event.Id, "race_type": fx.Trail.Id, "distance_km": 20 + i})
+			joined(t, app, fx.SamRunner, format, "interested", false, fx.AliceRunner)
+		}
+		// The runners (5) and the links (2) fit; the participations (9) do not.
+		mcp.SetMaxRecords(t, 6)
+		result := read(t, callTool(t, app, admin, "admin_list_members", map[string]any{"query": "Sam"}))
+		members, _ := result.Structured["members"].([]any)
+		if len(members) != 1 || members[0].(map[string]any)["participations"] != float64(7) {
+			t.Errorf("Sam is %v, want 7 participations", members)
+		}
+	})
 }
 
 func TestAdmin_Runners(t *testing.T) {
@@ -279,12 +295,15 @@ func TestAdmin_Runners(t *testing.T) {
 	})
 
 	t.Run("a runner without an account or a participation is deleted, once the person agrees", func(t *testing.T) {
+		// The invitation that waits for Julie goes with her.
+		waiting := linkWaiting(t, app, storedRecord(t, app, "runners", julie), "invite", "member")
 		var message string
 		var details []string
 		writesNothing(t, app, func() {
 			_, message, details = asked(t, callTool(t, app, admin, "admin_delete_runner", map[string]any{"runner": "Julie"}))
 		})
-		mentions(t, message, details, "Le coureur « Julie » (sans compte, sans participation) sera supprimé")
+		mentions(t, message, details, "Le coureur « Julie » (sans compte, sans participation) sera supprimé",
+			"Le lien d'invitation en attente pour Julie (valable jusqu'au "+parisDayOf(t, waiting, "expires_at")+") cessera de marcher")
 		result := confirmAndCall(t, app, admin, "admin_delete_runner", map[string]any{"runner": "Julie"})
 		assertJSON(t, result.Structured["removed"], map[string]any{"id": julie, "name": "Julie"})
 		if storedRecord(t, app, "runners", julie) != nil {
@@ -333,7 +352,8 @@ func TestAdmin_SetRole(t *testing.T) {
 		writesNothing(t, app, func() {
 			_, message, details = asked(t, callTool(t, app, admin, "admin_set_role", args))
 		})
-		mentions(t, message, details, "Le compte de Bob passerait de membre à admin", "gérer les membres")
+		mentions(t, message, details, "Le compte de Bob passerait de membre à admin", "gérer les membres",
+			"Les assistants qui ont un jeton de ce compte auraient aussi les outils admin_… dès leur requête suivante.")
 		updates := accountUpdates(t, app)
 		result := confirmAndCall(t, app, admin, "admin_set_role", args)
 		if got := role(fx.Bob); got != "admin" {

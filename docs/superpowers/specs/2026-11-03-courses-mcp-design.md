@@ -270,9 +270,9 @@ La colonne « Ce que le site permet » vient des règles d'accès (`4_rules.go`,
 | Domaine | Outil | Titre | Action du site | Ce que le site permet (et donc l'outil) | Confirmation (§ 6.13) |
 |---|---|---|---|---|---|
 | Lire | `whoami` | Qui suis-je ? | le profil | lire son coureur : tout connecté | — |
-| Lire | `home` | Mon accueil | l'accueil : « À confirmer », « Inscriptions à faire », « Résultats à saisir », « Mes prochaines courses », « Bientôt dans le groupe », « Derniers commentaires » | `participations`, `events`, `comments` : `list` pour tout connecté | — |
+| Lire | `home` | Accueil | l'accueil : « À confirmer », « Inscriptions à faire », « Résultats à saisir », « Mes prochaines courses », « Bientôt dans le groupe », « Derniers commentaires » | `participations`, `events`, `comments` : `list` pour tout connecté | — |
 | Lire | `list_runners` | Coureurs du groupe | les coureurs des formulaires et des filtres | `runners.list` : tout connecté | — |
-| Lire | `get_runner` | Voir un coureur | la page d'un coureur, le profil | `runners.view`, `participations.list` : tout connecté | — |
+| Lire | `get_runner` | Page d'un coureur | la page d'un coureur, le profil | `runners.view`, `participations.list` : tout connecté | — |
 | Lire | `get_stats` | Statistiques | Statistiques d'une année | `participations.list` : tout connecté | — |
 | Lire | `list_race_types` | Types de course | le choix du type d'une épreuve | `race_types.list` : tout connecté | — |
 | Lire | `search_events` | Chercher des courses | Liste, Agenda, filtres | `events`, `formats`, `participations` : `list` pour tout connecté | — |
@@ -283,24 +283,24 @@ La colonne « Ce que le site permet » vient des règles d'accès (`4_rules.go`,
 | Courses | `add_format` | Ajouter une épreuve | « Ajouter une épreuve » du formulaire | `formats.create` : tout connecté | course raccourcie (sa fin ne venait d'aucune épreuve) |
 | Courses | `update_format` | Modifier une épreuve | une épreuve du formulaire | `formats.update` : tout connecté | champ vidé, jour changé pour des participants |
 | Courses | `delete_format` | Supprimer une épreuve | « Retirer » d'une épreuve du formulaire | `formats.delete` : **l'auteur de la course ou un admin** | toujours |
-| Participations | `add_participation` | Ajouter un coureur à une course | « J'y vais », « Ajouter quelqu'un », « Je viens encourager » | `participations.create` : tout connecté, pour n'importe quel coureur ; non confirmée si ce n'est pas son propre coureur | remplace la participation « à la course seule » d'un autre |
-| Participations | `update_participation` | Changer une participation | le menu d'une participation, « Choisir l'épreuve », « Confirmer », « Je suis inscrit » | `participations.update` : un admin, le coureur lui-même, ou tout connecté tant qu'elle n'est pas confirmée | participation d'un autre, ou résultat effacé |
-| Participations | `remove_participation` | Retirer un coureur d'une course | « Retirer » | `participations.delete` : même règle | toujours |
+| Participations | `add_participation` | Ajouter une participation | « J'y vais », « Ajouter quelqu'un », « Je viens encourager » | `participations.create` : tout connecté, pour n'importe quel coureur ; non confirmée si ce n'est pas son propre coureur | remplace la participation « à la course seule » d'un autre |
+| Participations | `update_participation` | Modifier une participation | le menu d'une participation, « Choisir l'épreuve », « Confirmer », « Je suis inscrit » | `participations.update` : un admin, le coureur lui-même, ou tout connecté tant qu'elle n'est pas confirmée | participation d'un autre, ou résultat effacé |
+| Participations | `remove_participation` | Retirer une participation | « Retirer » | `participations.delete` : même règle | toujours |
 | Participations | `set_result` | Saisir un résultat | « Saisir le résultat », « J'ai fini », « Abandon » | `participations.update` : même règle ; `status_before_race`, `rank_above_total` | résultat remplacé, ou participation d'un autre |
-| Commentaires | `add_comment` | Écrire un commentaire | « Envoyer » des commentaires | `comments.create` : tout connecté ; `author` posé par le hook | — |
+| Commentaires | `add_comment` | Commenter une course | « Envoyer » des commentaires | `comments.create` : tout connecté ; `author` posé par le hook | — |
 | Commentaires | `update_comment` | Modifier un commentaire | « Modifier » d'un commentaire | `comments.update` : **son auteur seulement** (même pas un admin) | — |
 | Commentaires | `delete_comment` | Supprimer un commentaire | « Supprimer » d'un commentaire | `comments.delete` : son auteur ou un admin | toujours |
 | Covoiturage et logement | `add_offer` | Proposer une voiture ou un logement | « Proposer une voiture », « Proposer un logement » | `offers.create` : tout connecté ; `owner` posé par le hook ; une de chaque sorte par coureur et par course | — |
-| Covoiturage et logement | `update_offer` | Modifier une offre | « Modifier » d'une offre | `offers.update` : son propriétaire ou un admin | champ vidé, notes remplacées, offre d'un autre |
-| Covoiturage et logement | `delete_offer` | Supprimer une offre | « Supprimer » d'une offre | `offers.delete` : son propriétaire ou un admin ; les places partent avec | toujours |
-| Covoiturage et logement | `offer_place` | Prendre ou libérer une place | « Je monte », « J'y dors », « Je descends », « Je n'y dors plus », « Ajouter quelqu'un », « Retirer » d'une offre | `offer_members.create`/`.delete` : pour soi, le propriétaire de l'offre pour n'importe qui, ou un admin ; places, offre pleine, propriétaire passager | libérer : toujours |
+| Covoiturage et logement | `update_offer` | Modifier une voiture ou un logement | « Modifier » d'une offre | `offers.update` : son propriétaire ou un admin | champ vidé, notes remplacées, offre d'un autre |
+| Covoiturage et logement | `delete_offer` | Supprimer une voiture ou un logement | « Supprimer » d'une offre | `offers.delete` : son propriétaire ou un admin ; les places partent avec | toujours |
+| Covoiturage et logement | `offer_place` | Prendre ou libérer une place d'une voiture ou d'un logement | « Je monte », « J'y dors », « Je descends », « Je n'y dors plus », « Ajouter quelqu'un », « Retirer » d'une offre | `offer_members.create`/`.delete` : pour soi, le propriétaire de l'offre pour n'importe qui, ou un admin ; places, offre pleine, propriétaire passager | libérer : toujours |
 | Fichiers | `start_upload` | Préparer l'envoi d'un fichier | le champ fichier d'une photo ou d'une trace | — (un emplacement en mémoire, § 6.9) | — |
 | Fichiers | `set_photo` | Changer ou retirer une photo | « Changer la photo », « Retirer la photo » (Réglages ; Membres pour un admin) | `runners.update` (`avatar`) : son propre coureur, ou un admin pour tous ; JPEG, PNG ou WebP, 5 Mo | photo remplacée ou retirée, photo d'un autre |
 | Fichiers | `set_track` | Changer ou retirer une trace GPX | « Trace GPX », « Retirer la trace », « Reprendre ces valeurs » du formulaire | `formats.update` (`gpx`) : tout connecté ; 10 Mo, GPX | trace remplacée ou retirée |
-| Profil et réglages | `rename_runner` | Changer de nom | Réglages → « Nom » (Membres → « Renommer » pour un admin) | `runners.update` (`name`) : son propre coureur, ou un admin pour tous | — |
-| Profil et réglages | `passkeys` | Mes clés d'accès | Réglages → « Mes clés d'accès » : la liste, « Renommer », « Supprimer » (Membres → « Clés d'accès » pour un admin) | `passkeys.list`/`.delete` : les siennes, ou un admin pour toutes ; `.update` (nom) : les siennes seulement | supprimer : toujours |
-| Profil et réglages | `calendar_link` | Mon lien d'agenda | Réglages → « Agenda » : « Créer mon lien d'agenda », « Afficher le lien », « Nouveau lien », « Supprimer le lien » | `GET`/`POST`/`DELETE /api/app/calendar` : le sien | remplacer ou supprimer : toujours |
-| Profil et réglages | `mcp_tokens` | Mes jetons d'assistant | Réglages → « Assistant IA (MCP) » : la liste, « Révoquer » | `GET`/`DELETE /api/app/mcp-tokens` : les siens | révoquer : toujours |
+| Profil et réglages | `rename_runner` | Renommer un coureur | Réglages → « Nom » (Membres → « Renommer » pour un admin) | `runners.update` (`name`) : son propre coureur, ou un admin pour tous | — |
+| Profil et réglages | `passkeys` | Clés d'accès | Réglages → « Mes clés d'accès » : la liste, « Renommer », « Supprimer » (Membres → « Clés d'accès » pour un admin) | `passkeys.list`/`.delete` : les siennes, ou un admin pour toutes ; `.update` (nom) : les siennes seulement | supprimer : toujours |
+| Profil et réglages | `calendar_link` | Lien d'agenda | Réglages → « Agenda » : « Créer mon lien d'agenda », « Afficher le lien », « Nouveau lien », « Supprimer le lien » | `GET`/`POST`/`DELETE /api/app/calendar` : le sien | remplacer ou supprimer : toujours |
+| Profil et réglages | `mcp_tokens` | Jetons d'assistant | Réglages → « Assistant IA (MCP) » : la liste, « Révoquer » | `GET`/`DELETE /api/app/mcp-tokens` : les siens | révoquer : toujours |
 
 Aucun outil de membre n'est hors de portée d'un membre : chacun sert au moins sur certains enregistrements (ses propres courses, participations, commentaires, offres, photo, clés). Les refus restent ceux de l'API, enregistrement par enregistrement, traduits en français (§ 6.12).
 
@@ -327,7 +327,7 @@ Aucun outil de membre n'est hors de portée d'un membre : chacun sert au moins s
 - Le rôle est **relu sur le compte à chaque requête** (`role = "admin"` et compte non désactivé, le test de `accounts.RequireAdmin`) : un admin rétrogradé perd les outils d'admin à la requête suivante, sans toucher à son jeton ; un membre promu les a à la suivante.
 - Il y a **deux serveurs MCP** (deux `*mcp.Server` du SDK), faits une fois : celui des membres a les trente-deux outils de membre, celui des admins les quarante-trois. Le `StreamableHTTPHandler` choisit, pour chaque requête (`getServer`), celui du rôle du compte, que la route a mis dans le contexte.
 - `tools/list` d'un membre ne contient donc aucun outil d'admin, et **un appel par leur nom reçoit la réponse de n'importe quel outil inconnu**, puisque pour ce serveur-là il n'existe pas : l'erreur JSON-RPC `-32602` (paramètres invalides), message `unknown tool "admin_merge"`. Rien ne dit que l'outil existe ailleurs.
-- **En plus**, chaque outil d'admin vérifie le rôle du compte avant d'agir, et répond la même erreur `unknown tool` sinon : une erreur de câblage ne suffirait pas à l'ouvrir. Et l'API garde ses propres contrôles derrière.
+- **En plus**, chaque outil d'admin vérifie le rôle du compte avant d'agir, et répond la même erreur `unknown tool` sinon : une erreur de câblage ne suffirait pas à l'ouvrir. Il le vérifie avant même de prendre la confirmation que l'appel présente (§ 6.13) : comme pour un outil que le SDK n'a pas, le jeton d'un membre reste tel qu'il était. Et l'API garde ses propres contrôles derrière.
 
 ### 6.4 Lectures
 
@@ -733,13 +733,13 @@ Ce que l'outil fait de plus que le site, et pourquoi :
 
 - `show` → `{ "exists", "url" }`, comme `GET /api/app/calendar` ; `url` est vide pour un lien d'avant la v3.1. **Le site montre ce lien à son propriétaire** (« Afficher le lien ») : l'outil le donne à l'assistant de son propriétaire, et à personne d'autre (la route ne connaît que celui de l'appelant).
 - `create` : sans lien ; avec un lien, « Tu as déjà un lien : renew le remplace. ».
-- `renew` (« Nouveau lien ») et `delete` (« Supprimer le lien ») : **toujours une confirmation** (« L'ancien lien cessera de marcher : les agendas abonnés ne recevront plus tes courses. »).
+- `renew` (« Nouveau lien ») et `delete` (« Supprimer le lien ») : **toujours une confirmation** (« L'ancien lien cessera de marcher : les agendas abonnés ne recevront plus tes courses. » ; pour `delete`, « Un nouveau lien aurait une autre adresse, à ajouter de nouveau dans chaque agenda abonné. »).
 
 Ce que l'outil fait de plus que le site :
 
 - **L'adresse est un secret, et ne va qu'à son propriétaire.** Elle n'est que dans la réponse de l'appel qui la montre (`show`) ou la fait (`create`, `renew`), qui est celle de la personne au nom de qui l'assistant agit : la route ne connaît que le lien de l'appelant. Le `summary` le rappelle : « Ce lien est secret : quiconque l'a peut lire tes courses et leurs dates limites d'inscription. Ne le partage pas, et ne le colle que dans l'agenda qui s'y abonne. » L'adresse n'est ni dans une confirmation, ni dans un message d'erreur, ni dans le journal des requêtes (`TestTools_CalendarLink_IsNotLogged`, au niveau Debug) : le serveur ne la garde nulle part.
 - **La réponse** est `{ "done", "summary", "exists", "url" }` ; `exists` manque quand rien n'a été fait faute d'accord (un lien qui existe ne serait pas dit absent). `url` manque sans lien, et pour un lien d'avant la v3.1 : « … fait avant que le site en garde l'adresse : il marche, mais on ne peut plus l'afficher. L'action renew en fait un nouveau. »
-- **`renew` envoie `lang`** comme `create` (le site envoie la langue de l'interface dans les deux cas) ; la langue du lien actuel n'est pas lisible, et `fr` est celle par défaut : le `summary` dit la langue du nouveau lien.
+- **`renew` envoie `lang`** comme `create` (le site envoie la langue de l'interface dans les deux cas) ; la langue du lien actuel n'est pas lisible, et `fr` est celle par défaut : la confirmation le dit avant le renouvellement (« Les textes du nouveau lien seront en français : la langue de l'ancien ne peut pas être lue, et lang: "en" les met en anglais. »), et le `summary` redit la langue du nouveau lien. La ligne ne dépend que de la langue : `renew` sans `lang` et avec `lang: "fr"` sont la même demande.
 - **Sans lien** : `renew` est annoncé (« Tu n'as pas encore de lien d'agenda : l'action create en fait un. ») ; `delete` ne fait rien (« Rien à changer : tu n'as pas de lien d'agenda. »), comme la route.
 - **L'état de la confirmation** garde le SHA-256 de l'adresse (jamais l'adresse) : un lien refait entre les deux appels, depuis le site ou par un autre assistant, fait refuser le jeton, et la nouvelle confirmation décrit la situation d'aujourd'hui.
 
@@ -764,7 +764,9 @@ Ce que l'outil fait de plus que le site :
 
 ### 6.11 Les outils d'admin
 
-Ils reprennent les trois pages Admin du site (`web/src/features/admin`, `web/src/routes/admin`) : Membres, Types, Doublons. Chacun passe par la même requête que la page (`features/admin/api.ts`) et répond une erreur `unknown tool` à un compte qui n'est pas admin (§ 6.3). Un coureur se donne par son id ou son nom, comme ailleurs ; un compte se désigne par son coureur (le site n'en montre pas d'autre).
+Ils reprennent les trois pages Admin du site (`web/src/features/admin`, `web/src/routes/admin`) : Membres, Types, Doublons. Chacun passe par la même requête que la page (`features/admin/api.ts`) et répond une erreur `unknown tool` à un compte qui n'est pas admin (§ 6.3). Un coureur se donne par son id ou son nom, comme ailleurs ; un compte se désigne par son coureur (le site n'en montre pas d'autre). Un compte se lit sans son email : les requêtes demandent son rôle et s'il est désactivé, rien d'autre (`fields`), et une modification n'envoie que `{role}` ou `{disabled}`.
+
+Comme les autres outils d'écriture (§ 6.5), un appel qui ne changerait rien n'écrit rien et ne demande rien : « Rien à changer : … » (un rôle déjà le bon, un compte déjà dans cet état, un type déjà ainsi), avec `done: true`.
 
 **`admin_list_members`** (Membres) — `query` facultatif (un nom). → `{ "members": [MEMBER] }`, par nom :
 
@@ -772,17 +774,17 @@ Ils reprennent les trois pages Admin du site (`web/src/features/admin`, `web/src
 { "runner": { "id": "…", "name": "Bob" },
   "state": "active", "state_label": "Actif",
   "role": "member", "participations": 4, "passkeys": 2,
-  "invitation": { "id": "…", "expires_at": "2026-11-09" },
+  "invitation": { "id": "…", "expires_at": "2026-11-09", "role": "member" },
   "reset": { "id": "…", "expires_at": "2026-11-09" } }
 ```
 
 - `state` : `no_account` (« Sans compte »), `invited` (« Invitation en attente »), `active` (« Actif »), `disabled` (« Désactivé »), calculés comme `memberState` du front, qui compte une invitation comme en attente tant qu'elle n'est ni utilisée ni expirée.
-- `invitation`, `reset` : le lien en attente, s'il y en a un (jamais son jeton : le site ne garde que son empreinte) ; `role`, `passkeys` (leur nombre ; le détail par `passkeys`, § 6.10) : seulement pour un coureur qui a un compte ; `participations` : leur nombre, qui dit si le coureur peut être supprimé.
+- `invitation`, `reset` : le lien en attente, s'il y en a un (jamais son jeton : le site ne garde que son empreinte), avec le jour où il expire, à Paris ; l'invitation dit aussi le rôle du compte qu'elle crée (`role`), pour qu'une invitation qui fait un admin se voie ; `role`, `passkeys` (leur nombre ; le détail par `passkeys`, § 6.10) : seulement pour un coureur qui a un compte ; `participations` : leur nombre, qui dit si le coureur peut être supprimé. Les participations et les clés sont comptées (une requête d'un enregistrement par coureur, qui donne le total), jamais lues : des années de courses n'atteignent pas la borne d'une lecture.
 - **Pas d'email.** La page Membres montre l'email des comptes à un admin ; l'outil ne le donne pas : aucune action n'en a besoin, et il partirait chez le fournisseur de l'assistant (§ 11.2).
 
-**`admin_create_runner`** (« Ajouter un coureur ») — `name` (1 à 50 caractères, unique sans tenir compte de la casse : `validation_not_unique`). → le coureur. Pour lui créer un compte : `admin_create_link`.
+**`admin_create_runner`** (« Ajouter un coureur ») — `name` (1 à 50 caractères, unique sans tenir compte de la casse : `validation_not_unique`). → `{ "done", "runner", "summary" }`, le coureur comme `list_runners` le donne. Pour lui créer un compte : `admin_create_link`.
 
-**`admin_delete_runner`** (« Supprimer ») — `runner`, `confirmation`. Le site ne supprime qu'un coureur sans compte et sans participation (`runner_has_account`, `runner_has_participations`) : l'outil l'annonce sans demander de confirmation (« Bob a un compte : désactive-le plutôt. », « Sam a 3 participations : retire-les d'abord. »). Sinon, une confirmation. → `{ "done", "removed": { "id", "name" }, "summary" }`.
+**`admin_delete_runner`** (« Supprimer ») — `runner`, `confirmation`. Le site ne supprime qu'un coureur sans compte et sans participation (`runner_has_account`, `runner_has_participations`) : l'outil l'annonce sans demander de confirmation (« Bob a un compte : désactive-le plutôt (admin_set_disabled). », « Sam a 3 participations : retire-les d'abord. »). Le compte est annoncé d'abord : c'est lui qui décide, un coureur qui a un compte ne se supprime jamais, même sans participation (les hooks du site regardent les participations d'abord, et diraient `runner_has_participations` à un coureur qui a les deux). Sinon, une confirmation. → `{ "done", "removed": { "id", "name" }, "summary" }`.
 
 **`admin_create_link`** (« Inviter », « Régénérer l'invitation », « Lien de réinitialisation ») — c'est ainsi qu'un compte se crée, comme sur le site.
 
@@ -796,19 +798,21 @@ Ils reprennent les trois pages Admin du site (`web/src/features/admin`, `web/src
 - → `{ "done", "url": "https://…/invitation#…", "expires_at": "…", "summary" }` : **ce que la page montre à l'admin**, le lien à envoyer et sa date d'expiration (7 jours). Un nouveau lien remplace celui qui attendait, du même genre, pour ce coureur (le site le fait).
 - Le `summary` dit à l'assistant que le lien donne l'accès au compte, qu'il ne le transmet qu'à la personne, et qu'il ne l'écrit nulle part ailleurs.
 - Le lien voyage dans la réponse de l'outil, donc chez l'assistant, comme il s'affiche à l'admin sur le site. Le serveur ne le garde pas et ne le journalise pas (le jeton est dans le fragment de l'URL, et la route ne l'écrit nulle part).
-- Refus du site : `invitation_kind_mismatch` (une invitation pour un coureur qui a déjà un compte, une réinitialisation pour un coureur qui n'en a pas), avec son message.
+- Refus du site : `invitation_kind_mismatch` (une invitation pour un coureur qui a déjà un compte, une réinitialisation pour un coureur qui n'en a pas), annoncé dans les mots d'un admin (« Bob a déjà un compte : une invitation sert à en créer un. Pour un nouveau mot de passe, c'est kind: reset ; … (invitation_kind_mismatch) »).
+- `role` avec `reset` est refusé (« role ne sert qu'à une invitation (kind: invite) : un lien de réinitialisation garde le rôle du compte (admin_set_role le change). ») plutôt qu'ignoré : un assistant ne croit pas faire un admin par une réinitialisation. Sans `role`, une invitation est `member`, et c'est la même demande qu'avec `role: "member"`.
+- Un lien en attente est un lien ni utilisé ni expiré, comme pour `memberState` : un lien expiré qu'une invitation remplace ne demande rien.
 
-**`admin_revoke_link`** (« Révoquer l'invitation », « Révoquer le lien ») — `runner`, `kind`, `confirmation`. Révoque le lien en attente de ce genre pour ce coureur (`DELETE /api/app/invitations/{id}`) ; aucun en attente : « Aucun lien en attente pour Sam. »
+**`admin_revoke_link`** (« Révoquer l'invitation », « Révoquer le lien ») — `runner`, `kind`, `confirmation`. Révoque le lien en attente de ce genre pour ce coureur (`DELETE /api/app/invitations/{id}`), celui qui vaut le plus longtemps, que la page montre ; aucun en attente (ni utilisé ni expiré) : « Aucun lien en attente pour Sam : … ». → `{ "done", "revoked": { "id", "kind", "expires_at" }, "summary" }` (`expires_at` : le jour où il aurait expiré, à Paris).
 
-**`admin_set_role`** (« Passer admin », « Retirer admin ») — `runner`, `role` (`member` | `admin`), `confirmation`. Un coureur sans compte : « Sam n'a pas de compte. » Le dernier admin actif ne perd pas son rôle (`last_admin`, message du site). Retirer son propre rôle d'admin est permis par le site (s'il en reste un autre) : les outils d'admin disparaissent à la requête suivante.
+**`admin_set_role`** (« Passer admin », « Retirer admin ») — `runner`, `role` (`member` | `admin`), `confirmation`. Un coureur sans compte : « Sam n'a pas de compte. » Le dernier admin actif ne perd pas son rôle (`last_admin`, message du site) : l'outil ne l'annonce pas, il demande la confirmation et le site refuse. Retirer son propre rôle d'admin est permis par le site (s'il en reste un autre) : les outils d'admin disparaissent à la requête suivante. → `{ "done", "runner", "role", "summary" }` (`runner` et `role` manquent quand rien n'a été fait faute d'accord).
 
-**`admin_set_disabled`** (« Désactiver », « Réactiver ») — `runner`, `disabled` (booléen), `confirmation`. Désactiver ferme les sessions du compte et supprime ses jetons MCP (§ 4.6) ; le dernier admin actif ne se désactive pas (`last_admin`). Désactiver son propre compte (s'il reste un admin) coupe aussi le jeton qui fait la demande : la réponse le dit, et c'est la dernière.
+**`admin_set_disabled`** (« Désactiver », « Réactiver ») — `runner`, `disabled` (booléen), `confirmation`. Désactiver ferme les sessions du compte et supprime ses jetons MCP (§ 4.6) ; le dernier admin actif ne se désactive pas (`last_admin`). Désactiver son propre compte (s'il reste un admin) coupe aussi le jeton qui fait la demande : la réponse le dit, et c'est la dernière. → `{ "done", "runner", "disabled", "summary" }` (`disabled` manque quand rien n'a été fait faute d'accord).
 
-**`admin_create_race_type`** (Types → « Ajouter ») — `label` (unique sans tenir compte de la casse), `measures` facultatif (une liste de `distance`, `elevation`, `duration`, `time_limit` ; vide : les quatre). → le type.
+**`admin_create_race_type`** (Types → « Ajouter ») — `label` (unique sans tenir compte de la casse), `measures` facultatif (une liste de `distance`, `elevation`, `duration`, `time_limit` ; vide : les quatre ; gardées une fois chacune, dans l'ordre du formulaire). → `{ "done", "race_type", "summary" }`, le type comme `list_race_types` le donne.
 
-**`admin_update_race_type`** (Types → « Renommer », « Mesures ») — `race_type` (id ou nom), `label` et `measures` facultatifs. Un nouveau nom change ce que toutes les courses affichent pour leurs épreuves de ce type : le `summary` le dit. → le type.
+**`admin_update_race_type`** (Types → « Renommer », « Mesures ») — `race_type` (id ou nom), `label` et `measures` facultatifs, l'un des deux au moins. Seul ce qui change est envoyé. `measures` vide est refusé, comme la fenêtre « Mesures » du site (« garde au moins une mesure »). Un nouveau nom change ce que toutes les courses affichent pour leurs épreuves de ce type : le `summary` le dit. → `{ "done", "race_type", "summary" }`.
 
-**`admin_delete_race_type`** (Types → « Supprimer ») — `race_type`, `confirmation`. Un type utilisé par au moins une épreuve est refusé par le site (`race_type_in_use`) : l'outil l'annonce sans confirmation, avec le nombre d'épreuves (« 12 épreuves sont de type « Ultra-trail » : change leur type ou fusionne-les d'abord. »).
+**`admin_delete_race_type`** (Types → « Supprimer ») — `race_type`, `confirmation`. Un type utilisé par au moins une épreuve est refusé par le site (`race_type_in_use`) : l'outil l'annonce sans confirmation, avec le nombre d'épreuves (« 12 épreuves sont de type « Ultra-trail » : change leur type ou fusionne-les d'abord. »). → `{ "done", "removed": { "id", "label" }, "summary" }`.
 
 **`admin_merge`** (Doublons)
 
@@ -822,7 +826,7 @@ Ils reprennent les trois pages Admin du site (`web/src/features/admin`, `web/src
 - **Le premier appel est l'aperçu du site** : la même route avec `dryRun: true`, qui ne change rien. La confirmation en donne les chiffres (`MergeResult` : épreuves, participations, commentaires et offres déplacés, participations supprimées, dates d'épreuve effacées) et nomme les deux courses ou épreuves.
 - **L'empreinte de l'état** (§ 6.13) comprend ces chiffres : si une participation arrive entre les deux appels, l'aperçu change, le jeton est refusé et un nouvel aperçu est donné.
 - Le second appel fait la fusion (`dryRun: false`), dans la transaction du site. Refus du site : `merge_same_record`, `merge_formats_different_events`.
-- → `{ "done", "result": MergeResult, "kept": { "id", "name" }, "summary" }`.
+- → `{ "done", "result": MergeResult, "kept": { "id", "name" }, "summary" }` : `result` tel que la route le répond, avec ses noms (`movedFormats`, `movedParticipations`, `droppedParticipations`, `clearedFormatDates`, `movedComments`, `movedOffers`) ; `kept.name` est le nom de la course, ou le titre de l'épreuve comme le site l'écrit.
 
 ### 6.12 Erreurs
 
@@ -871,12 +875,12 @@ Une demande qui supprimerait ou effacerait ce qu'une personne a saisi, ou qui to
 | `set_photo` | une photo existe (remplacée ou retirée) ; ou c'est la photo d'un autre coureur | la photo actuelle (son adresse) et le coureur |
 | `set_track` | une trace existe (remplacée ou retirée) | la trace actuelle (son adresse) et l'épreuve |
 | `passkeys` | `delete` | la clé (nom, dernière utilisation) et le compte ; ce que cela change pour se connecter, et, si c'est la seule clé du compte, qu'il ne restera que le mot de passe |
-| `calendar_link` | `renew`, `delete` | que l'ancien lien cessera de marcher (jamais son adresse) |
+| `calendar_link` | `renew`, `delete` | que l'ancien lien cessera de marcher (jamais son adresse) ; pour `renew`, la langue des textes du nouveau |
 | `mcp_tokens` | `revoke` | le jeton (nom, dernière utilisation) ; si c'est celui de l'appel, que l'assistant perd l'accès et que cet appel est son dernier |
-| `admin_delete_runner` | toujours | le coureur (le site refuse s'il a des participations ou un compte : c'est alors un refus, annoncé sans confirmation) |
-| `admin_create_link` | une réinitialisation, toujours ; une invitation qui remplacerait un lien en attente, ou qui donnerait le rôle admin | à qui le lien donne accès et à quoi ; le lien en attente qui cesserait de marcher (et sa date d'expiration) ; le rôle donné |
+| `admin_delete_runner` | toujours | le coureur, et le lien qui l'attend, qui part avec lui (et sa date d'expiration) ; le site refuse s'il a des participations ou un compte : c'est alors un refus, annoncé sans confirmation |
+| `admin_create_link` | une réinitialisation, toujours ; une invitation qui remplacerait un lien en attente, ou qui donnerait le rôle admin | à qui le lien donne accès et à quoi ; le lien en attente qui cesserait de marcher (et sa date d'expiration) ; le rôle donné ; pour la réinitialisation d'un compte désactivé, que le lien ne servira qu'une fois le compte réactivé (le site le fait, puis le refuse à la personne, `account_disabled`) |
 | `admin_revoke_link` | toujours | le lien qui cesserait de marcher, pour qui, et sa date d'expiration |
-| `admin_set_role` | toujours | le compte, son rôle actuel et le nouveau ; ce qu'un admin peut faire de plus |
+| `admin_set_role` | toujours, quand le rôle change (un rôle déjà le bon : « Rien à changer ») | le compte, son rôle actuel et le nouveau ; ce qu'un admin peut faire de plus ; pour une promotion, que les assistants qui ont un jeton de ce compte ont aussi les outils `admin_…` dès leur requête suivante |
 | `admin_set_disabled` | désactiver | le compte ; ses sessions fermées, ses jetons MCP supprimés ; il ne pourra plus se connecter. Réactiver ne demande rien |
 | `admin_delete_race_type` | toujours (un type utilisé par une épreuve est refusé par le site, `race_type_in_use` : refus, sans confirmation) | le type et ses mesures |
 | `admin_merge` | toujours | l'aperçu du site (`dryRun`) : ce qui reste, ce qui part, les épreuves, participations, commentaires et offres déplacés, les participations supprimées, les dates d'épreuve effacées |
@@ -895,7 +899,7 @@ L'outil lit ce qu'il faut, vérifie ce qu'il peut sans rien écrire (les refus d
     "details": [ "…une ligne par élément perdu ou touché…" ] } }
 ```
 
-Le `message` est en français, prêt à être montré à la personne. Un fichier envoyé (`upload_id`) n'est pas pris par le premier appel : il attend le second. Une confirmation ne dure pas plus que lui : quand l'emplacement expire avant les 10 minutes, la confirmation expire avec lui, et son message le dit (« valable 3 minutes, le temps que le fichier envoyé reste gardé, une seule fois »).
+Le `message` est en français, prêt à être montré à la personne. Ce qu'un membre a écrit n'y ouvre ni n'y ferme de citation, ni dans aucune phrase d'un outil (confirmation, `summary`, avertissement, refus, outils d'admin compris) : le nom d'une course, d'une épreuve ou d'un type, un lieu, des notes, un commentaire, et le nom d'un coureur, que son membre écrit lui-même ; ses « » y deviennent ‹ ›. Un fichier envoyé (`upload_id`) n'est pas pris par le premier appel : il attend le second. Une confirmation ne dure pas plus que lui : quand l'emplacement expire avant les 10 minutes, la confirmation expire avec lui, et son message le dit (« valable 3 minutes, le temps que le fichier envoyé reste gardé, une seule fois »).
 
 #### Le jeton de confirmation
 

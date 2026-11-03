@@ -98,11 +98,13 @@ func feedToken(address string) string {
 }
 
 // holdsNone checks that an answer holds none of the words: what no tool may say.
+// A word may be a secret: a failure prints its first 8 characters, and the
+// answer with the word cut to them.
 func holdsNone(t testing.TB, result toolResult, words ...string) {
 	t.Helper()
 	for _, word := range words {
 		if strings.Contains(result.Text, word) {
-			t.Errorf("the answer holds %q: %.400s", word, redact(result.Text))
+			t.Errorf("the answer holds %q: %.400s", prefix(word), redact(strings.ReplaceAll(result.Text, word, prefix(word))))
 		}
 	}
 }
@@ -639,7 +641,7 @@ func TestTools_CalendarLink(t *testing.T) {
 		args := map[string]any{"action": "renew", "lang": "en"}
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, call(alice, args))
-			mentions(t, message, details, "L'ancien lien cessera de marcher", "ne recevront plus tes courses")
+			mentions(t, message, details, "L'ancien lien cessera de marcher", "ne recevront plus tes courses", "Les textes du nouveau lien seront en anglais")
 			// The confirmation is shown to the person, and says nothing of the address.
 			holdsNone(t, toolResult{Text: message + strings.Join(details, "")}, feedToken(first), "/api/app/calendar/", ".ics")
 		})
@@ -672,7 +674,10 @@ func TestTools_CalendarLink(t *testing.T) {
 		args := map[string]any{"action": "delete"}
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, call(alice, args))
-			mentions(t, message, details, "ne recevront plus tes courses")
+			mentions(t, message, details, "ne recevront plus tes courses", "Un nouveau lien aurait une autre adresse, à ajouter de nouveau dans chaque agenda abonné")
+			if all := message + strings.Join(details, ""); strings.Contains(all, "tant que") {
+				t.Errorf("the confirmation says that a new link would bring the courses back: %s", redact(all))
+			}
 		})
 		counted := mcp.CountInnerRequests(t)
 		result := confirmAndCall(t, app, alice, "calendar_link", args)

@@ -241,7 +241,7 @@ func addAdminDeleteRaceType(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[deleteRaceTypeIn](nil),
 		OutputSchema: deleteRaceTypeSchema(),
 		Annotations:  writeAnnotations(true, false),
-	}, usesUpConfirmation(t, t.adminDeleteRaceType))
+	}, adminWrite(t, "admin_delete_race_type", t.adminDeleteRaceType))
 }
 
 func (t *tools) adminDeleteRaceType(ctx context.Context, _ *mcpsdk.CallToolRequest, in deleteRaceTypeIn) (*mcpsdk.CallToolResult, deleteRaceTypeOut, error) {

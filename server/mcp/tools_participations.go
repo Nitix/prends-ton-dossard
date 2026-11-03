@@ -106,7 +106,7 @@ func confirmedRefusal(c *caller, r participationRow, what string) error {
 	if c.role == roleAdmin || c.owns(r) || !r.Participation.Confirmed {
 		return nil
 	}
-	name := r.Runner.Name
+	name := plain(r.Runner.Name)
 	return fmt.Errorf("%s a confirmé cette participation : elle ne peut plus être %s que par %s ou par un admin.", name, what, name)
 }
 
@@ -121,13 +121,14 @@ func placeOf(w wording.Words, r participationRow) string {
 
 // ofName writes de before a name, elided before a vowel or a mute h: « de Bob »,
 // « d'Alice », « d'Hélène ». An aspirated h is not told from a mute one: « d'Hugo »
-// is what most write.
+// is what most write. The name is one that a member wrote (a runner's, their
+// own): it is written plain, so that it opens or closes no quotation.
 func ofName(name string) string {
 	r, _ := utf8.DecodeRuneInString(name)
 	if strings.ContainsRune("aeiouyhàâäéèêëîïôöùûü", unicode.ToLower(r)) {
-		return "d'" + name
+		return "d'" + plain(name)
 	}
-	return "de " + name
+	return "de " + plain(name)
 }
 
 // confirmationNote says what the site does of a participation that its runner has
@@ -138,9 +139,9 @@ func confirmationNote(runner runnerRecord, confirmed bool) string {
 	case confirmed:
 		return ""
 	case runner.User != "":
-		return "non confirmé : " + runner.Name + " le verra dans « À confirmer »"
+		return "non confirmé : " + plain(runner.Name) + " le verra dans « À confirmer »"
 	}
-	return runner.Name + " n'a pas de compte : sa participation reste non confirmée"
+	return plain(runner.Name) + " n'a pas de compte : sa participation reste non confirmée"
 }
 
 // sentence joins a head and what goes with it as a sentence: « head ; a ; b. ».
@@ -330,7 +331,7 @@ func (t *tools) addParticipation(ctx context.Context, _ *mcpsdk.CallToolRequest,
 			target = quote(title)
 		}
 		return refuse(fmt.Errorf("%s a déjà une participation à %s (%s, id %s) : change-la avec update_participation.",
-			runner.Name, target, w.Status(existing.Status), existing.ID))
+			plain(runner.Name), target, w.Status(existing.Status), existing.ID))
 	}
 	// The site does not offer « Intéressé, format à choisir » for a race that has
 	// one format only: there is nothing to choose.
@@ -344,12 +345,12 @@ func (t *tools) addParticipation(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	var r *risk
 	if formatID != "" && replaced != nil && runner.ID != me {
 		detail := participantLabel(w, *replaced) + " : participation à la course seule " + quote(view.record.Name)
-		if by := replaced.Expand.AddedBy.Name; by != "" {
+		if by := plain(replaced.Expand.AddedBy.Name); by != "" {
 			detail += ", ajoutée par " + by
 		}
 		detail += ", remplacée par une participation à " + quote(title) + " (" + w.Status(status) + ")."
 		r = &risk{
-			Message: fmt.Sprintf("Ajouter %s à %s remplace sa participation à la course seule. %s", runner.Name, quote(title), detail),
+			Message: fmt.Sprintf("Ajouter %s à %s remplace sa participation à la course seule. %s", plain(runner.Name), quote(title), detail),
 			Details: []string{detail},
 			Records: stampsOf([]participationRecord{*replaced}),
 		}
@@ -450,7 +451,7 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	// only its runner gives.
 	confirming := status == "" && formatID == ""
 	if confirming && !own {
-		return refuse(fmt.Errorf("Seule la personne concernée, %s, peut confirmer sa participation.", row.Runner.Name))
+		return refuse(fmt.Errorf("Seule la personne concernée, %s, peut confirmer sa participation.", plain(row.Runner.Name)))
 	}
 	if err := confirmedRefusal(c, row, "changée"); err != nil {
 		return refuse(err)
@@ -492,7 +493,7 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	records := []stamp{{Collection: "participations", ID: p.ID, Updated: p.Updated}}
 	if !own {
 		line := "C'est la participation d'un autre coureur : " + participantLabel(w, p) + ", à " + placeOf(w, row)
-		if by := p.Expand.AddedBy.Name; by != "" {
+		if by := plain(p.Expand.AddedBy.Name); by != "" {
 			line += ", ajoutée par " + by
 		}
 		details = append(details, line+".")
@@ -591,7 +592,7 @@ func (t *tools) removeParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	w := wording.Of("fr")
 	p := row.Participation
 	line := participantLabel(w, p) + ", à " + placeOf(w, row)
-	if by := p.Expand.AddedBy.Name; by != "" {
+	if by := plain(p.Expand.AddedBy.Name); by != "" {
 		line += ", ajoutée par " + by
 	}
 	r := &risk{Details: []string{line + "."}, Records: []stamp{{Collection: "participations", ID: p.ID, Updated: p.Updated}}}

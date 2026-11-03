@@ -27,10 +27,9 @@ import (
 // linkNouns are the links as a sentence names them, by kind.
 var linkNouns = map[string]string{linkInvite: "lien d'invitation", linkReset: "lien de réinitialisation"}
 
-// pendingLinks are the links of that kind that wait for a runner, the one that is
-// valid the longest first: there is one, as the site replaces the one that waits
-// when it makes another.
-func (t *tools) pendingLinks(ctx context.Context, runnerID, kind string) ([]invitationRecord, error) {
+// waitingLinks are the links that wait for a runner, of either kind: not used and
+// not expired. The one that is valid the longest comes first.
+func (t *tools) waitingLinks(ctx context.Context, runnerID string) ([]invitationRecord, error) {
 	// The id is the only thing of the filter: one that is not an id is not sent.
 	if !isID(runnerID) {
 		return nil, errors.New("mcp: the links of a runner id that is not an id")
@@ -44,7 +43,7 @@ func (t *tools) pendingLinks(ctx context.Context, runnerID, kind string) ([]invi
 	}
 	at := now()
 	links = slices.DeleteFunc(links, func(link invitationRecord) bool {
-		return link.Runner != runnerID || link.Kind != kind || !isPending(link, at)
+		return link.Runner != runnerID || !isPending(link, at)
 	})
 	slices.SortFunc(links, func(a, b invitationRecord) int {
 		x, _ := instantOf(a.ExpiresAt)
@@ -52,6 +51,22 @@ func (t *tools) pendingLinks(ctx context.Context, runnerID, kind string) ([]invi
 		return y.Compare(x)
 	})
 	return links, nil
+}
+
+// pendingLinks are the links of that kind that wait for a runner, the one that is
+// valid the longest first: there is one, as the site replaces the one that waits
+// when it makes another.
+func (t *tools) pendingLinks(ctx context.Context, runnerID, kind string) ([]invitationRecord, error) {
+	links, err := t.waitingLinks(ctx, runnerID)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(links, func(link invitationRecord) bool { return link.Kind != kind }), nil
+}
+
+// waitingLine says that a link that waits for a runner would stop working.
+func waitingLine(link invitationRecord, runner runnerRecord) string {
+	return fmt.Sprintf("Le %s en attente pour %s (valable jusqu'au %s) cessera de marcher.", linkNouns[link.Kind], plain(runner.Name), expiryDay(link.ExpiresAt))
 }
 
 // linkKindOf is the kind of a link that a tool is given, or the refusal.
@@ -95,7 +110,7 @@ func addAdminCreateLink(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[createLinkIn](map[string][]string{"kind": {linkInvite, linkReset}, "role": {accountMember, accountAdmin}}),
 		OutputSchema: createLinkSchema(),
 		Annotations:  writeAnnotations(true, false),
-	}, usesUpConfirmation(t, t.adminCreateLink))
+	}, adminWrite(t, "admin_create_link", t.adminCreateLink))
 }
 
 func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, in createLinkIn) (*mcpsdk.CallToolResult, createLinkOut, error) {
@@ -122,11 +137,13 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 		return refuse(errors.New("role est member ou admin."))
 	}
 
-	runners, err := t.runners(ctx)
+	// The runners with their account: a reset of a disabled one is said to wait for
+	// its reactivation.
+	runners, err := t.memberRunners(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	runner, err := runnerNamed(runners, in.Runner)
+	runner, err := memberNamed(runners, in.Runner)
 	if err != nil {
 		return refuse(err)
 	}
@@ -137,9 +154,9 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	// account, a reset changes the password of one.
 	switch {
 	case kind == linkInvite && runner.User != "":
-		return refuse(fmt.Errorf("%s a déjà un compte : une invitation sert à en créer un. Pour un nouveau mot de passe, c'est kind: reset ; pour un autre rôle, admin_set_role. (invitation_kind_mismatch)", runner.Name))
+		return refuse(fmt.Errorf("%s a déjà un compte : une invitation sert à en créer un. Pour un nouveau mot de passe, c'est kind: reset ; pour un autre rôle, admin_set_role. (invitation_kind_mismatch)", plain(runner.Name)))
 	case kind == linkReset && runner.User == "":
-		return refuse(fmt.Errorf("%s n'a pas de compte : un lien de réinitialisation sert à un compte qui existe. Pour lui en créer un, c'est kind: invite. (invitation_kind_mismatch)", runner.Name))
+		return refuse(fmt.Errorf("%s n'a pas de compte : un lien de réinitialisation sert à un compte qui existe. Pour lui en créer un, c'est kind: invite. (invitation_kind_mismatch)", plain(runner.Name)))
 	}
 	waiting, err := t.pendingLinks(ctx, runner.ID, kind)
 	if err != nil {
@@ -151,17 +168,25 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	var lines []string
 	if kind == linkReset {
 		lines = append(lines, fmt.Sprintf("Ce lien permet à qui l'ouvre de choisir un nouveau mot de passe pour le compte de %s, donc de se connecter en tant que %s : ne le donne qu'à %s. "+
-			"Les sessions ouvertes de ce compte seront fermées dès qu'il servira.", runner.Name, runner.Name, runner.Name))
+			"Les sessions ouvertes de ce compte seront fermées dès qu'il servira.", plain(runner.Name), plain(runner.Name), plain(runner.Name)))
 	} else if len(waiting) > 0 || role == accountAdmin {
-		line := fmt.Sprintf("Ce lien permet à qui l'ouvre de créer le compte de %s, avec le rôle %s", runner.Name, roleWords[role])
+		line := fmt.Sprintf("Ce lien permet à qui l'ouvre de créer le compte de %s, avec le rôle %s", plain(runner.Name), roleWords[role])
 		if role == accountAdmin {
 			line += " : ce compte pourra " + adminPowers
 		}
 		lines = append(lines, line+".")
 	}
 	records := []stamp{{Collection: "runners", ID: runner.ID, Updated: runner.Updated}}
+	// The site makes the reset of a disabled account, and refuses it to the person
+	// (account_disabled) until the account is enabled again.
+	if account := runner.account(); kind == linkReset && account != nil {
+		if account.Disabled {
+			lines = append(lines, fmt.Sprintf("Le compte de %s est désactivé : ce lien ne servira qu'une fois le compte réactivé (admin_set_disabled).", plain(runner.Name)))
+		}
+		records = append(records, stamp{Collection: "users", ID: account.ID, Updated: account.Updated})
+	}
 	for _, link := range waiting {
-		lines = append(lines, fmt.Sprintf("Le %s en attente pour %s (valable jusqu'au %s) cessera de marcher.", linkNouns[kind], runner.Name, expiryDay(link.ExpiresAt)))
+		lines = append(lines, waitingLine(link, runner.runnerRecord))
 		records = append(records, stamp{Collection: "invitations", ID: link.ID, Updated: link.Updated})
 	}
 	var r *risk
@@ -189,12 +214,12 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 		return fail(err)
 	}
 
-	what := fmt.Sprintf("%s crée son compte (rôle %s) en l'ouvrant", runner.Name, roleWords[role])
+	what := fmt.Sprintf("%s crée son compte (rôle %s) en l'ouvrant", plain(runner.Name), roleWords[role])
 	if kind == linkReset {
-		what = fmt.Sprintf("%s choisit un nouveau mot de passe en l'ouvrant, et ses sessions ouvertes sont alors fermées", runner.Name)
+		what = fmt.Sprintf("%s choisit un nouveau mot de passe en l'ouvrant, et ses sessions ouvertes sont alors fermées", plain(runner.Name))
 	}
 	summary := fmt.Sprintf("%s pour %s, valable jusqu'au %s : %s. Ce lien donne l'accès au compte : ne le transmets qu'à %s, et ne l'écris nulle part ailleurs.",
-		upperFirst(linkNouns[kind]), runner.Name, expiryDay(made.ExpiresAt), what, runner.Name)
+		upperFirst(linkNouns[kind]), plain(runner.Name), expiryDay(made.ExpiresAt), what, plain(runner.Name))
 	if len(waiting) > 0 {
 		summary += " L'ancien lien ne fonctionne plus."
 	}
@@ -235,7 +260,7 @@ func addAdminRevokeLink(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[revokeLinkIn](map[string][]string{"kind": {linkInvite, linkReset}}),
 		OutputSchema: revokeLinkSchema(),
 		Annotations:  writeAnnotations(true, false),
-	}, usesUpConfirmation(t, t.adminRevokeLink))
+	}, adminWrite(t, "admin_revoke_link", t.adminRevokeLink))
 }
 
 func (t *tools) adminRevokeLink(ctx context.Context, _ *mcpsdk.CallToolRequest, in revokeLinkIn) (*mcpsdk.CallToolResult, revokeLinkOut, error) {
@@ -268,7 +293,7 @@ func (t *tools) adminRevokeLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 		return fail(err)
 	}
 	if len(waiting) == 0 {
-		return refuse(fmt.Errorf("Aucun lien en attente pour %s : pas de %s qui marche encore à révoquer.", runner.Name, linkNouns[kind]))
+		return refuse(fmt.Errorf("Aucun lien en attente pour %s : pas de %s qui marche encore à révoquer.", plain(runner.Name), linkNouns[kind]))
 	}
 	// The one that the page shows: the one valid the longest.
 	link := waiting[0]

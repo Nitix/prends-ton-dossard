@@ -176,6 +176,15 @@ func TestAdmin_CreateLink_Reset(t *testing.T) {
 		t.Errorf("Bob's links: %v, want a reset", links)
 	}
 
+	// A reset for an account that is disabled: the site makes it, and refuses it to
+	// the person until the account is enabled again.
+	update(t, app, fx.Bob, map[string]any{"disabled": true})
+	writesNothing(t, app, func() {
+		_, message, details = asked(t, callTool(t, app, admin, "admin_create_link", args))
+	})
+	mentions(t, message, details, "Le compte de Bob est désactivé : ce lien ne servira qu'une fois le compte réactivé (admin_set_disabled).")
+	update(t, app, fx.Bob, map[string]any{"disabled": false})
+
 	announced(t, app, admin, "admin_create_link", map[string]any{"runner": "Bob", "kind": "invite"}, "Bob a déjà un compte")
 	announced(t, app, admin, "admin_create_link", map[string]any{"runner": "Bob", "kind": "invite"}, "(invitation_kind_mismatch)")
 	announced(t, app, admin, "admin_create_link", map[string]any{"runner": "Sam", "kind": "reset"}, "Sam n'a pas de compte")

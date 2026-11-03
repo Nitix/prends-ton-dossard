@@ -74,9 +74,9 @@ func resolveRunner(all []runnerRecord, idOrName, me string) (runnerRecord, error
 	case 0:
 		names := make([]string, len(all))
 		for i, r := range all {
-			names[i] = r.Name
+			names[i] = plain(r.Name)
 		}
-		return runnerRecord{}, fmt.Errorf("Coureur inconnu : « %s ». Les coureurs du groupe : %s.", input, listNames(names, "list_runners"))
+		return runnerRecord{}, fmt.Errorf("Coureur inconnu : %s. Les coureurs du groupe : %s.", quote(input), listNames(names, "list_runners"))
 	}
 	// What the site shows of a runner besides the name tells them apart: a photo,
 	// and an account behind (has_account of list_runners).
@@ -85,7 +85,7 @@ func resolveRunner(all []runnerRecord, idOrName, me string) (runnerRecord, error
 		candidates[i] = r.ID + " (" + switchText(r.User != "", "avec un compte", "sans compte") + ", " +
 			switchText(r.Avatar != "", "avec une photo", "sans photo") + ")"
 	}
-	return runnerRecord{}, fmt.Errorf("Plusieurs coureurs s'appellent « %s » : %s : %s.", input, askWhich, strings.Join(candidates, ", "))
+	return runnerRecord{}, fmt.Errorf("Plusieurs coureurs s'appellent %s : %s : %s.", quote(input), askWhich, strings.Join(candidates, ", "))
 }
 
 // askWhich is what an assistant does when two runners or two race types are
@@ -112,16 +112,16 @@ func resolveRaceType(all []raceTypeRecord, idOrName string) (raceTypeRecord, err
 	case 0:
 		labels := make([]string, len(all))
 		for i, r := range all {
-			labels[i] = r.Label
+			labels[i] = plain(r.Label)
 		}
-		return raceTypeRecord{}, fmt.Errorf("Type de course inconnu : « %s ». Les types de course : %s.", input, listNames(labels, "list_race_types"))
+		return raceTypeRecord{}, fmt.Errorf("Type de course inconnu : %s. Les types de course : %s.", quote(input), listNames(labels, "list_race_types"))
 	}
 	// The measures that the form shows for each are all that tells two types apart.
 	candidates := make([]string, len(found))
 	for i, r := range found {
 		candidates[i] = r.ID + " (mesures : " + strings.Join(measuresOf(r), ", ") + ")"
 	}
-	return raceTypeRecord{}, fmt.Errorf("Plusieurs types de course s'appellent « %s » : %s : %s.", input, askWhich, strings.Join(candidates, ", "))
+	return raceTypeRecord{}, fmt.Errorf("Plusieurs types de course s'appellent %s : %s : %s.", quote(input), askWhich, strings.Join(candidates, ", "))
 }
 
 // runnerOfAccount is the id of the runner whose account is userID, "" when the

@@ -158,6 +158,15 @@ func AddMemberTool(t testing.TB, name string, handler func()) {
 	t.Cleanup(func() { memberTools = previous })
 }
 
+// WireAdminToolsForMembers puts the admin tools on the server of the members too,
+// until the test ends: the wiring mistake that requireAdmin is there for.
+func WireAdminToolsForMembers(t testing.TB) {
+	t.Helper()
+	previous := memberTools
+	memberTools = append(slices.Clone(memberTools), adminTools...)
+	t.Cleanup(func() { memberTools = previous })
+}
+
 // NoteCalls notes the calls of these tools in a caller, and returns the tools
 // that its request log names, and how many more it was called.
 func NoteCalls(names ...string) (logged []string, more int) {

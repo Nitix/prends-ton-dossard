@@ -150,7 +150,7 @@ func nameRefusal(c *caller, runner runnerRecord) error {
 	case c.role == roleAdmin || (runner.User != "" && runner.User == c.user.Id):
 		return nil
 	case runner.User == "":
-		return fmt.Errorf("Le nom %s ne peut être changé que par un admin : %s n'a pas de compte.", ofName(runner.Name), runner.Name)
+		return fmt.Errorf("Le nom %s ne peut être changé que par un admin : %s n'a pas de compte.", ofName(runner.Name), plain(runner.Name))
 	}
 	return fmt.Errorf("Le nom %s ne peut être changé que depuis son propre compte, ou par un admin.", ofName(runner.Name))
 }
@@ -259,7 +259,7 @@ func (t *tools) listPasskeys(ctx context.Context, c *caller, in passkeysIn) (*mc
 	}
 	switch {
 	case runner.User == "":
-		return refuse(fmt.Errorf("%s n'a pas de compte, donc pas de clé d'accès.", runner.Name))
+		return refuse(fmt.Errorf("%s n'a pas de compte, donc pas de clé d'accès.", plain(runner.Name)))
 	case runner.User != c.user.Id && c.role != roleAdmin:
 		return refuse(fmt.Errorf("Les clés d'accès %s ne se voient que depuis son propre compte, ou par un admin.", ofName(runner.Name)))
 	case !isID(runner.User):
@@ -280,9 +280,9 @@ func (t *tools) listPasskeys(ctx context.Context, c *caller, in passkeysIn) (*mc
 	for i, key := range keys {
 		out.Passkeys[i] = key.out()
 	}
-	out.Done, out.Summary = true, "Aucune clé d'accès pour "+runner.Name+"."
+	out.Done, out.Summary = true, "Aucune clé d'accès pour "+plain(runner.Name)+"."
 	if len(keys) > 0 {
-		out.Summary = plural(len(keys), "clé d'accès", "clés d'accès") + " pour " + runner.Name + "."
+		out.Summary = plural(len(keys), "clé d'accès", "clés d'accès") + " pour " + plain(runner.Name) + "."
 	}
 	return nil, out, nil
 }
@@ -310,12 +310,13 @@ func (t *tools) passkeyForWrite(ctx context.Context, c *caller, in passkeysIn) (
 	return key, nil
 }
 
-// passkeyOwner is the name of the runner whose account holds a passkey: « Bob »,
-// or what stands for the account of a person that has no runner.
+// passkeyOwner is the name of the runner whose account holds a passkey, as a
+// sentence writes the name that its member wrote (plain): « Bob », or what stands
+// for the account of a person that has no runner.
 func passkeyOwner(runners []runnerRecord, key passkeyRecord) string {
 	for _, r := range runners {
 		if r.User == key.User {
-			return r.Name
+			return plain(r.Name)
 		}
 	}
 	return "un autre compte"
@@ -460,12 +461,13 @@ func (t *tools) deletePasskey(ctx context.Context, c *caller, in passkeysIn) (*m
 	}, nil
 }
 
-// ofOwner is « de Bob » for the owner of a key (« d'un autre compte » as it is).
+// ofOwner is « de Bob », « d'Alice » for the owner of a key (« d'un autre compte »
+// as it is).
 func ofOwner(owner string) string {
 	if owner == "un autre compte" {
 		return "d'un autre compte"
 	}
-	return "de " + owner
+	return ofName(owner)
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +479,15 @@ const calendarSecret = "Ce lien est secret : quiconque l'a peut lire tes courses
 
 // calendarLangs are the languages of the texts of a feed, as the site names them.
 var calendarLangs = map[string]string{"fr": "français", "en": "anglais"}
+
+// renewLangLines say, before a renewal, in which language the new feed will be:
+// the language of the old one cannot be read, and a renewal without lang is in
+// French. The line depends on the language only, so that a renewal without lang
+// and one with lang: "fr" are the same request.
+var renewLangLines = map[string]string{
+	"fr": `Les textes du nouveau lien seront en français : la langue de l'ancien ne peut pas être lue, et lang: "en" les met en anglais.`,
+	"en": `Les textes du nouveau lien seront en anglais : la langue de l'ancien ne peut pas être lue, et lang: "fr" les met en français.`,
+}
 
 type calendarLinkIn struct {
 	Action       string `json:"action" jsonschema:"show pour voir le lien, create pour en faire un quand il n'y en a pas, renew pour le remplacer par un nouveau, delete pour le supprimer"`
@@ -588,6 +599,7 @@ func (t *tools) calendarLink(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 		lines := []string{
 			"L'ancien lien cessera de marcher : les agendas abonnés ne recevront plus tes courses.",
 			"Un nouveau lien le remplace : il faudra l'ajouter dans chaque agenda abonné.",
+			renewLangLines[lang],
 		}
 		r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{{Collection: "calendar_feeds", ID: "link", Updated: linkMark(status)}}}
 		proceed, out, notice, err := t.guard(ctx, "calendar_link", struct{ Action, Lang string }{"renew", lang}, r, given)
@@ -609,7 +621,8 @@ func (t *tools) calendarLink(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	if !status.Exists {
 		return nil, answer("Rien à changer : tu n'as pas de lien d'agenda."), nil
 	}
-	lines := []string{"Le lien cessera de marcher : les agendas abonnés ne recevront plus tes courses, tant que tu n'en crées pas un autre."}
+	lines := []string{"Le lien cessera de marcher : les agendas abonnés ne recevront plus tes courses. " +
+		"Un nouveau lien aurait une autre adresse, à ajouter de nouveau dans chaque agenda abonné."}
 	r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{{Collection: "calendar_feeds", ID: "link", Updated: linkMark(status)}}}
 	proceed, out, notice, err := t.guard(ctx, "calendar_link", struct{ Action, Lang string }{"delete", lang}, r, given)
 	if err != nil {
