@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -71,15 +72,16 @@ const trackType = "application/gpx+xml"
 // sniff is the type of a file for that purpose, told from what it holds, as the
 // field of the site will tell it: the signature of an image (photoTypes), or a
 // GPX file that parseGpx reads, whose numbers it gives too (a track is read once,
-// here). errUploadInvalid when it is not one.
-func sniff(p uploadPurpose, data []byte) (string, *gpxStats, error) {
+// here, when a place to read it comes before the request ends: ctx).
+// errUploadInvalid when it is not one, or when the request ended first.
+func sniff(ctx context.Context, p uploadPurpose, data []byte) (string, *gpxStats, error) {
 	switch p {
 	case purposePhoto:
 		if contentType := http.DetectContentType(data); slices.Contains(photoTypes, contentType) {
 			return contentType, nil, nil
 		}
 	case purposeTrack:
-		if stats, err := readTrack(data); err == nil {
+		if stats, err := readTrack(ctx, data); err == nil {
 			return trackType, &stats, nil
 		}
 	}
@@ -204,8 +206,9 @@ func (u *uploads) open(userID, tokenID string, p uploadPurpose) (id, secret stri
 // file over its size is errUploadTooLarge, one too slow errUploadTooSlow, one of
 // the wrong type errUploadInvalid, and the slot is gone; a slot that a PUT reads
 // already, or that is filled, is errUploadInvalid. Its file is told by what it
-// holds (sniff), a track read then, once; it is kept as it came.
-func (u *uploads) put(id, secret string, size int64, body io.Reader) error {
+// holds (sniff), a track read then, once, if a place to read it comes before the
+// request ends (ctx); it is kept as it came.
+func (u *uploads) put(ctx context.Context, id, secret string, size int64, body io.Reader) error {
 	slot, held, start, err := u.receive(id, secret, size)
 	if err != nil {
 		return err
@@ -231,7 +234,7 @@ func (u *uploads) put(id, secret string, size int64, body io.Reader) error {
 		track       *gpxStats
 	)
 	if err == nil {
-		contentType, track, err = sniff(slot.purpose, data)
+		contentType, track, err = sniff(ctx, slot.purpose, data)
 	}
 
 	u.mu.Lock()
@@ -450,7 +453,7 @@ func uploadRoute(store *uploads) func(*core.RequestEvent) error {
 		// The most that a slot takes: the slot's own size is checked by put. Over
 		// it, the server stops reading the request.
 		body := http.MaxBytesReader(e.Response, e.Request.Body, trackMaxBytes)
-		err := store.put(e.Request.PathValue("id"), e.Request.Header.Get(secretHeader), e.Request.ContentLength, body)
+		err := store.put(e.Request.Context(), e.Request.PathValue("id"), e.Request.Header.Get(secretHeader), e.Request.ContentLength, body)
 		switch {
 		case err == nil:
 			return e.NoContent(http.StatusNoContent)

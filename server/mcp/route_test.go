@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -199,6 +201,69 @@ func TestMCP_RateLimitPerToken(t *testing.T) {
 		rpc(t, app, bearer(alice), http.StatusOK, "ping", nil)
 	}
 	rpc(t, app, bearer(alice), http.StatusTooManyRequests, "ping", nil)
+}
+
+// A token has 4 requests under way at most: the limit of the arrivals does not
+// bound the work in flight, and a request that turns out slow (a parse that waits,
+// say) would pile up. A fifth while four run is a 429 that says so in French, with
+// Retry-After; another token is not held back, and the place comes back with the
+// answer.
+func TestMCP_RequestsUnderWayPerToken(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	entered := make(chan struct{}, 8)
+	gate := make(chan struct{})
+	var once sync.Once
+	open := func() { once.Do(func() { close(gate) }) }
+	t.Cleanup(open)
+	mcp.AddMemberTool(t, "hold", func() {
+		entered <- struct{}{}
+		<-gate
+	})
+	mux := serveMux(t, app)
+	alice, aliceAgain := newToken(t, app, fx.Alice), newToken(t, app, fx.Alice)
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	statuses := make(chan int, mcp.MaxInFlight)
+	for range mcp.MaxInFlight {
+		wg.Go(func() {
+			statuses <- postTo(ctx, t, mux, alice, "tools/call", map[string]any{"name": "hold", "arguments": map[string]any{}}).Code
+		})
+	}
+	for range mcp.MaxInFlight {
+		select {
+		case <-entered:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the %d calls that hold the token did not start", mcp.MaxInFlight)
+		}
+	}
+
+	refused := postTo(ctx, t, mux, alice, "ping", nil)
+	if refused.Code != http.StatusTooManyRequests {
+		t.Errorf("a fifth request under way: %d, want 429", refused.Code)
+	}
+	if got := refused.Header().Get("Retry-After"); got != "1" {
+		t.Errorf("Retry-After = %q, want 1", got)
+	}
+	if body := refused.Body.String(); !strings.Contains(body, "demandes en cours") {
+		t.Errorf("the 429 says %.200s, want the French message", body)
+	}
+	if got := postTo(ctx, t, mux, aliceAgain, "ping", nil).Code; got != http.StatusOK {
+		t.Errorf("another token of the same person: %d, want 200", got)
+	}
+
+	open()
+	wg.Wait()
+	close(statuses)
+	for status := range statuses {
+		if status != http.StatusOK {
+			t.Errorf("a call that held the token answered %d, want 200", status)
+		}
+	}
+	if got := postTo(ctx, t, mux, alice, "ping", nil).Code; got != http.StatusOK {
+		t.Errorf("once the calls are answered: %d, want 200", got)
+	}
 }
 
 // The server opens no stream: GET and DELETE answer 405, once the token is

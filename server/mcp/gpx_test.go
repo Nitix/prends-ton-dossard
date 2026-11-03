@@ -2,8 +2,11 @@ package mcp_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -631,7 +634,7 @@ func TestReadTrack_BoundsTheParsesThatRunAtOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
-			if stats, err := mcp.ReadTrack(big); err != nil || stats.Points != 2 {
+			if stats, err := mcp.ReadTrack(context.Background(), big); err != nil || stats.Points != 2 {
 				t.Errorf("readTrack: %+v, %v", stats, err)
 			}
 		})
@@ -639,6 +642,227 @@ func TestReadTrack_BoundsTheParsesThatRunAtOnce(t *testing.T) {
 	wg.Wait()
 	if got := most.Load(); got < 1 || got > 2 {
 		t.Errorf("%d parses of a large track ran at once, want 2 at most", got)
+	}
+}
+
+// bigTrack is a track of two points that is large enough to wait for a place
+// (over 64 Ko), and small enough to go in base64 (512 Ko).
+func bigTrack(t testing.TB) []byte {
+	return append(testutil.GPX(t, 2), bytes.Repeat([]byte(" "), 100<<10)...)
+}
+
+// holdTheParses takes both places of the large tracks with two parses of
+// bigTrack that wait in the hook, and returns what lets them go (which the end of
+// the test does too). Another file is parsed as usual.
+func holdTheParses(t *testing.T) (release func()) {
+	t.Helper()
+	entered := make(chan struct{}, 2)
+	gate := make(chan struct{})
+	held := len(bigTrack(t))
+	mcp.SetTrackParseHook(t, func(size int) {
+		if size != held {
+			return
+		}
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		<-gate
+	})
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Go(func() { _, _ = mcp.ReadTrack(context.Background(), bigTrack(t)) })
+	}
+	for range 2 {
+		select {
+		case <-entered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the two parses that hold the places did not start")
+		}
+	}
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			close(gate)
+			wg.Wait()
+		})
+	}
+	t.Cleanup(release)
+	return release
+}
+
+// A parse that waits for its place gives up when its request ends: a call or an
+// upload whose client went away keeps no file in memory while the others read.
+func TestReadTrack_LAttenteDUnePlaceSuitLaRequete(t *testing.T) {
+	release := holdTheParses(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := mcp.ReadTrack(ctx, bigTrack(t))
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("a third large track was read with both places taken (%v)", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("the wait of a request that ended: %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("a parse whose request ended still waits for a place")
+	}
+
+	// A small track never waits; once the places are free, a large one is read.
+	if stats, err := mcp.ReadTrack(ctx, testutil.GPX(t, 3)); err != nil || stats.Points != 3 {
+		t.Errorf("a small track, both places taken: %+v, %v", stats, err)
+	}
+	release()
+	if stats, err := mcp.ReadTrack(context.Background(), bigTrack(t)); err != nil || stats.Points != 2 {
+		t.Errorf("a large track, the places free: %+v, %v", stats, err)
+	}
+}
+
+// A point that opens inside another point is never a real track: GPX has none, and
+// such a file gave every open point the altitude of the others, the text copied as
+// many times. It is refused, whatever the kinds and wherever the inner one is.
+func TestParseGpx_UnPointDansUnPointEstRefuse(t *testing.T) {
+	for _, row := range []struct {
+		name, xml string
+	}{
+		{"a trkpt in a trkpt", `<gpx><trk><trkseg><trkpt lat="45" lon="6"><trkpt lat="46" lon="6"/></trkpt></trkseg></trk></gpx>`},
+		{"an rtept in a trkpt", `<gpx><trk><trkseg><trkpt lat="45" lon="6"><rtept lat="46" lon="6"/></trkpt></trkseg></trk></gpx>`},
+		{"a trkpt in an rtept", `<gpx><rte><rtept lat="45" lon="6"><trkpt lat="46" lon="6"/></rtept></rte></gpx>`},
+		{"an rtept in an rtept", `<gpx><rte><rtept lat="45" lon="6"><rtept lat="46" lon="6"/></rtept></rte></gpx>`},
+		{"a point in the altitude of a point", `<gpx><trk><trkseg><trkpt lat="45" lon="6"><ele>1<trkpt lat="46" lon="6"/></ele></trkpt></trkseg></trk></gpx>`},
+		{"a point in the extensions of a point", `<gpx><trk><trkseg><trkpt lat="45" lon="6"><extensions><x><trkpt lat="46" lon="6"/></x></extensions></trkpt></trkseg></trk></gpx>`},
+		{"a point in a point without a usable position", `<gpx><trk><trkseg><trkpt lat="abc" lon="6"><trkpt lat="46" lon="6"/></trkpt></trkseg></trk></gpx>`},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if points, err := mcp.ParseGpx([]byte(row.xml)); err == nil {
+				t.Errorf("read as %+v, want a refusal", points)
+			}
+		})
+	}
+
+	// Points one after the other stay read, the track and the route of a file too.
+	points := mustParse(t, []byte(`<gpx><rte><rtept lat="1" lon="1"/></rte><trk><trkseg>`+
+		`<trkpt lat="45" lon="6"><ele>1</ele></trkpt><trkpt lat="46" lon="6"><extensions><x/></extensions></trkpt>`+
+		`</trkseg></trk></gpx>`))
+	sameFloats(t, "the latitudes", lats(points), []float64{45, 46})
+}
+
+// The number of an altitude, or of a position, is read from 64 characters at most,
+// the blanks around it apart: no plausible one needs more, and a longer text is
+// not one (the site would read a number written with a hundred zeros; the server
+// does not). A blank inside is no number, for the site either.
+func TestParseGpx_UnNombreDePlusDe64CaracteresNEnEstPasUn(t *testing.T) {
+	sixtyFour := strings.Repeat("0", 61) + "450"
+	sixtyFive := "0" + sixtyFour
+	blanks := strings.Repeat(" \n\t", 400)
+	points := mustParse(t, gpxDoc(`
+      <trkpt lat="45.00" lon="6"><ele>`+sixtyFour+`</ele></trkpt>
+      <trkpt lat="45.01" lon="6"><ele>`+sixtyFive+`</ele></trkpt>
+      <trkpt lat="45.02" lon="6"><ele>`+blanks+`451`+blanks+`</ele></trkpt>
+      <trkpt lat="45.03" lon="6"><ele>45 2</ele></trkpt>
+      <trkpt lat="45.04" lon="6"><ele>4<!-- un commentaire -->5<![CDATA[3]]></ele></trkpt>
+      <trkpt lat="45.05" lon="6"><ele>`+sixtyFour+`<x>1</x></ele></trkpt>`))
+	var got []string
+	for _, p := range points {
+		if p.HasEle {
+			got = append(got, fmt.Sprint(p.Ele))
+		} else {
+			got = append(got, "undefined")
+		}
+	}
+	if want := "[450 undefined 451 undefined 453 undefined]"; fmt.Sprint(got) != want {
+		t.Errorf("the altitudes are %v, want %s", got, want)
+	}
+
+	for _, row := range []struct {
+		lat  string
+		read bool
+	}{
+		{strings.Repeat("0", 62) + "45", true},
+		{strings.Repeat("0", 63) + "45", false},
+		{blanks + "45" + blanks, true},
+	} {
+		points, err := mcp.ParseGpx(gpxDoc(`<trkpt lat="` + row.lat + `" lon="6"/><trkpt lat="1" lon="1"/>`))
+		if err != nil {
+			t.Fatalf("lat of %d characters: %v", len(row.lat), err)
+		}
+		if read := len(points) == 2; read != row.read {
+			t.Errorf("lat of %d characters: read %v, want %v", len(row.lat), read, row.read)
+		}
+	}
+}
+
+// What a crafted file costs stays bound: points nested 62 deep around 10 Mo of
+// digits (which took 48 s and 1.3 Go when each open point took the text of the
+// altitude), the same in 512 Ko (the most of a call in base64), and 10 Mo of
+// digits as the altitude or the latitude of one point. Each is read, or refused,
+// in under a second, with a few times the file in memory at most.
+func TestReadTrack_UnFichierFabriqueResteBorne(t *testing.T) {
+	// fill is what pads a file to size bytes: digits.
+	fill := func(size int, around ...string) string {
+		used := 0
+		for _, part := range around {
+			used += len(part)
+		}
+		return strings.Repeat("1", size-used)
+	}
+	nested := func(size int) []byte {
+		open := `<?xml version="1.0"?><gpx>` + strings.Repeat(`<trkpt lat="1" lon="1">`, 62) + `<ele>`
+		end := `</ele>` + strings.Repeat(`</trkpt>`, 62) + `</gpx>`
+		return []byte(open + fill(size, open, end) + end)
+	}
+	oneAltitude := func(size int) []byte {
+		open, end := `<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="1" lon="1"><ele>`, `</ele></trkpt></trkseg></trk></gpx>`
+		return []byte(open + fill(size, open, end) + end)
+	}
+	oneLatitude := func(size int) []byte {
+		open, end := `<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="`, `" lon="1"/></trkseg></trk></gpx>`
+		return []byte(open + fill(size, open, end) + end)
+	}
+
+	for _, row := range []struct {
+		name   string
+		data   []byte
+		points int // 0 for a file that is refused
+	}{
+		{"62 points nested around 10 Mo of digits", nested(mcp.TrackMaxBytes), 0},
+		{"62 points nested around 512 Ko of digits", nested(mcp.InlineMaxBytes), 0},
+		{"10 Mo of digits as an altitude", oneAltitude(mcp.TrackMaxBytes), 1},
+		{"10 Mo of digits as a latitude", oneLatitude(mcp.TrackMaxBytes), 0},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			runtime.GC()
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			start := time.Now()
+			stats, err := mcp.ReadTrack(context.Background(), row.data)
+			took := time.Since(start)
+			runtime.ReadMemStats(&after)
+			t.Logf("a file of %d Ko: %v, %d Ko allocated", len(row.data)>>10, took, (after.TotalAlloc-before.TotalAlloc)>>10)
+
+			switch {
+			case row.points == 0 && err == nil:
+				t.Errorf("read as a track of %d points, want a refusal", stats.Points)
+			case row.points > 0 && (err != nil || stats.Points != row.points || stats.HasElevation):
+				t.Errorf("read as %+v, %v; want %d points without an altitude", stats, err, row.points)
+			}
+			if took > time.Second {
+				t.Errorf("a file of %d Ko took %v, want under a second", len(row.data)>>10, took)
+			}
+			if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 8*uint64(len(row.data)) {
+				t.Errorf("a file of %d Ko took %d Ko of memory, want 8 times the file at most", len(row.data)>>10, allocated>>10)
+			}
+		})
 	}
 }
 

@@ -52,7 +52,8 @@ Conception : `docs/superpowers/specs/2026-11-03-courses-mcp-design.md` ; plan : 
 ### 9. Les fichiers
 
 - **Décision :** en deux temps (`start_upload` donne une commande `curl`, le secret voyage dans un en-tête, jamais dans l'adresse) ou en base64 jusqu'à 512 Ko. Photo : JPEG, PNG ou WebP, 5 Mo ; trace : GPX, 10 Mo, lue une seule fois à l'envoi, refusée si elle n'a aucun point. Les métadonnées d'une photo (position GPS comprise) sont retirées sans réencoder ; elle n'est pas réduite comme le fait le navigateur. Le serveur ne va chercher aucun fichier à une adresse web.
-- **Bornes :** un emplacement dure 10 minutes, sert une fois, à un seul jeton ; deux par jeton, 20 Mo par compte en vol.
+- **Plus strict que le site pour une trace (revue finale) :** un point dans un point est refusé (GPX n'en a jamais : 62 points imbriqués autour de 10 Mo de chiffres coûtaient 48 s et 1,3 Go à lire, et la trace était gardée, que chaque membre aurait relue dans son navigateur) ; un nombre de plus de 64 caractères n'en est pas un (une altitude ainsi écrite est ignorée, là où le site la lirait). La lecture du site dans le navigateur ne change pas.
+- **Bornes :** un emplacement dure 10 minutes, sert une fois, à un seul jeton ; deux par jeton, 20 Mo par compte en vol. Deux grandes traces au plus sont lues à la fois, et une lecture qui attend sa place s'arrête quand le client part (pour une trace en base64 aussi : le SDK ne propage pas cette fin à l'outil, le serveur la suit lui-même). En plus de la limite par minute, un jeton a 4 requêtes en cours au plus (429 au-delà) : une lenteur imprévue ralentit ce jeton, pas le site.
 
 ### 10. Ce que le serveur dit de ce qu'il a fait
 

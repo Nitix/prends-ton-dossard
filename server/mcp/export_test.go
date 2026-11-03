@@ -357,7 +357,12 @@ func (u *uploads) Open(userID, tokenID, purpose string) (id, secret string, expi
 }
 
 func (u *uploads) Put(id, secret string, size int64, body io.Reader) error {
-	return u.put(id, secret, size, body)
+	return u.put(context.Background(), id, secret, size, body)
+}
+
+// PutContext is Put for a request whose context is ctx.
+func (u *uploads) PutContext(ctx context.Context, id, secret string, size int64, body io.Reader) error {
+	return u.put(ctx, id, secret, size, body)
 }
 
 func (u *uploads) Peek(id, tokenID, purpose string) ([]byte, string, error) {
@@ -483,7 +488,7 @@ type MergeResult = mergeResult
 func DescribeMerge(r MergeResult) []string { return describeMerge(r) }
 
 // ReadTrack is readTrack: the numbers of a track, its parse bounded.
-func ReadTrack(data []byte) (GpxStats, error) { return readTrack(data) }
+func ReadTrack(ctx context.Context, data []byte) (GpxStats, error) { return readTrack(ctx, data) }
 
 // SetTrackParseHook makes each parse of a track call hook with its size, until the
 // test ends.
@@ -512,6 +517,9 @@ var (
 )
 
 const PutTimeout = putTimeout
+
+// MaxInFlight is how many requests a token has under way at most.
+const MaxInFlight = maxInFlight
 
 // UploadRoute is the handler of PUT /api/app/mcp-uploads/{id}, for a store.
 func UploadRoute(u *Uploads) func(*core.RequestEvent) error { return uploadRoute(u) }

@@ -531,8 +531,18 @@ func (t *tools) setTrack(ctx context.Context, _ *mcpsdk.CallToolRequest, in setT
 		}
 		if file.track != nil {
 			stats = *file.track
-		} else if stats, err = readTrack(file.data); err != nil {
-			return refuse(errors.New(notATrack))
+		} else {
+			// The wait for a place ends with the request: nobody reads the answer.
+			waiting, stop := untilGone(ctx)
+			stats, err = readTrack(waiting, file.data)
+			gone := waiting.Err()
+			stop()
+			switch {
+			case err != nil && gone != nil:
+				return refuse(gone)
+			case err != nil:
+				return refuse(errors.New(notATrack))
+			}
 		}
 		hash, until = fileHash(file.data), file.expires
 	}

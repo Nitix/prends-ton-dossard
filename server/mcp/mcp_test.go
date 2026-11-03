@@ -1,14 +1,18 @@
 package mcp_test
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/apis"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
 
@@ -82,6 +86,50 @@ func send(t *testing.T, app *tests.TestApp, method, authorization string, extra 
 		},
 	}).Test(t)
 	return header, text
+}
+
+// serveMux is the router of the app once its OnServe hooks ran, as the program
+// serves it. tests.ApiScenario makes one for each request; this one serves
+// several at once, as the program does.
+func serveMux(t *testing.T, app *tests.TestApp) http.Handler {
+	t.Helper()
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mux http.Handler
+	err = app.OnServe().Trigger(&core.ServeEvent{App: app, Router: router}, func(e *core.ServeEvent) error {
+		built, err := e.Router.BuildMux()
+		mux = built
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mux
+}
+
+// postTo sends a JSON-RPC request, method with params, to the MCP server of mux,
+// with token, as a client of the version of the protocol does, for a request whose
+// context is ctx; and returns the answer.
+func postTo(ctx context.Context, t testing.TB, mux http.Handler, token, method string, params any) *httptest.ResponseRecorder {
+	t.Helper()
+	message := map[string]any{"jsonrpc": "2.0", "id": 1, "method": method}
+	if params != nil {
+		message["params"] = params
+	}
+	body, err := json.Marshal(message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("MCP-Protocol-Version", protocolVersion)
+	request.Header.Set("Authorization", bearer(token))
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, request)
+	return recorder
 }
 
 // rpc sends one JSON-RPC request, method with params (none when nil), as an

@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"image"
 	"image/color"
@@ -549,6 +550,44 @@ func TestTools_SetTrack_ReadsATrackOnce(t *testing.T) {
 		t.Errorf("the track was parsed %d times in all, want once", got)
 	}
 	assertJSON(t, result.Structured["track"], trackNumbers(t, gpx))
+}
+
+// A track in base64 that waits for a place to be read waits as long as its
+// request: a call whose client went away keeps neither its body nor its file.
+func TestTools_SetTrack_WaitsForAPlaceAsLongAsItsRequest(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mux := serveMux(t, app)
+	bob := newToken(t, app, fx.Bob)
+	release := holdTheParses(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		postTo(ctx, t, mux, bob, "tools/call", map[string]any{"name": "set_track",
+			"arguments": map[string]any{"format_id": fx.F42.Id, "content_base64": b64(bigTrack(t))}})
+	}()
+	// The time for the call to read its format and to come to the wait.
+	select {
+	case <-done:
+		t.Fatal("a large track in base64 was answered with both places taken")
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Error("the call of a request that ended still waits for a place")
+	}
+	release()
+	<-done
+	if format, err := app.FindRecordById("formats", fx.F42.Id); err != nil || format.GetString("gpx") != "" {
+		t.Errorf("the format after a call whose request ended: %v, %v; want no track", format, err)
+	}
 }
 
 // A confirmation is good as long as the file it was asked for: when the file of

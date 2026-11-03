@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -63,6 +64,47 @@ func (l *tokenLimiter) allow(tokenID string) bool {
 	}
 	b.left--
 	return true
+}
+
+// maxInFlight is how many requests of a token may be under way at once. The
+// bucket bounds the arrivals, not the work in flight: a request that turns out
+// slow (a parse that waits for its place, say) would pile up behind the others,
+// each with its body in memory. A client of today sends one at a time; beyond,
+// 429.
+const maxInFlight = 4
+
+// msgTooManyUnderWay is the refusal of a request beyond maxInFlight.
+var msgTooManyUnderWay = fmt.Sprintf("Ce jeton a déjà %d demandes en cours : attends la réponse de l'une d'elles avant d'en envoyer une autre.", maxInFlight)
+
+// inFlight counts the requests under way of each MCP token, keyed by token id.
+type inFlight struct {
+	mu      sync.Mutex
+	running map[string]int
+}
+
+func newInFlight() *inFlight {
+	return &inFlight{running: map[string]int{}}
+}
+
+// enter takes a place for a request of the token, and says whether there was one.
+// A request that enters leaves (leave), whatever comes of it.
+func (f *inFlight) enter(tokenID string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.running[tokenID] >= maxInFlight {
+		return false
+	}
+	f.running[tokenID]++
+	return true
+}
+
+// leave gives back the place of a request of the token.
+func (f *inFlight) leave(tokenID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.running[tokenID]--; f.running[tokenID] <= 0 {
+		delete(f.running, tokenID)
+	}
 }
 
 // sweep drops the buckets that have been idle for idleTimeout, at most once a

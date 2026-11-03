@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -561,6 +562,50 @@ func TestUploads_Store(t *testing.T) {
 			t.Errorf("%d slots and %d bytes left, want none", u.Len(), u.Bytes())
 		}
 	})
+}
+
+// The PUT of a large track waits for a place to read it, as long as its request
+// lasts: a client that goes away leaves no file waiting in memory. Its slot is
+// used, as for any file that came.
+func TestUploads_ATrackWaitsForAPlaceAsLongAsItsRequest(t *testing.T) {
+	u := mcp.NewUploads(newClock().now)
+	release := holdTheParses(t)
+	id, secret, _ := u.Open("alice", "token-a", "track")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		track := bigTrack(t)
+		done <- u.PutContext(ctx, id, secret, int64(len(track)), bytes.NewReader(track))
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("a large track was read with both places taken (%v)", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, mcp.ErrUploadInvalid) {
+			t.Errorf("the PUT of a request that ended: %v, want upload_invalid", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the PUT of a request that ended still waits for a place")
+	}
+	if u.Len() != 0 || u.Bytes() != 0 {
+		t.Errorf("then %d slots and %d bytes, want none", u.Len(), u.Bytes())
+	}
+
+	// Once the places are free, the PUT of another slot reads its track.
+	release()
+	id, secret, _ = u.Open("alice", "token-a", "track")
+	if err := put(u, id, secret, bigTrack(t)); err != nil {
+		t.Errorf("a large track, the places free: %v", err)
+	}
+	if stats, err := u.PeekTrack(id, "token-a"); err != nil || stats.Points != 2 {
+		t.Errorf("what the PUT read: %+v, %v", stats, err)
+	}
 }
 
 type readerFunc func([]byte) (int, error)

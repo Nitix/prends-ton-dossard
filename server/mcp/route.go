@@ -13,8 +13,9 @@
 //
 // # A request
 //
-// Each POST /mcp carries its token (mcpauth), is counted against the limit of
-// the token (limit.go), and is served by one of two servers of the official SDK,
+// Each POST /mcp carries its token (mcpauth), is counted against the limits of
+// the token (limit.go: the requests of a minute, and those under way), and is
+// served by one of two servers of the official SDK,
 // the one of the role of the account, read again at each request: a member's has
 // no admin tool at all. The server keeps no session (stateless) and answers in
 // JSON: every request stands alone, and holds one message (no JSON-RPC batch,
@@ -76,6 +77,7 @@ func Register(app core.App, cfg config.Config) {
 		return
 	}
 	limiter := newTokenLimiter(func() time.Time { return now() })
+	running := newInFlight()
 	confirms := newConfirmations(func() time.Time { return now() })
 	files := newUploads(func() time.Time { return now() })
 	schemas := mcpsdk.NewSchemaCache()
@@ -123,6 +125,11 @@ func Register(app core.App, cfg config.Config) {
 			if !limiter.allow(token.Id) {
 				return e.TooManyRequestsError("", nil)
 			}
+			if !running.enter(token.Id) {
+				e.Response.Header().Set("Retry-After", "1")
+				return e.TooManyRequestsError(msgTooManyUnderWay, nil)
+			}
+			defer running.leave(token.Id)
 			if err := mcpauth.Touch(e.App, token); err != nil {
 				e.App.Logger().Warn("mcp: recording the use of a token", "token", token.Id, "error", err)
 			}
@@ -136,6 +143,7 @@ func Register(app core.App, cfg config.Config) {
 				host:       e.Request.Host,
 				remoteAddr: e.Request.RemoteAddr,
 				forwarded:  trustedHeaders(e),
+				request:    e.Request.Context(),
 			}
 			defer func() { e.Set(apis.RequestEventKeyLogMeta, c.logMeta()) }()
 
@@ -231,6 +239,11 @@ type caller struct {
 	host, remoteAddr string
 	// forwarded are the headers of Settings.TrustedProxy.Headers.
 	forwarded http.Header
+	// request is the context of the HTTP request, which ends when its client goes
+	// away (nil outside a request). The SDK gives a tool a context of its own,
+	// which outlives the request: it propagates no cancellation before the
+	// protocol of 2026-07-28 (untilGone).
+	request context.Context
 
 	mu sync.Mutex
 	// calls are the tools called, for the request log: maxLoggedCalls at most,
@@ -328,4 +341,20 @@ func callerOf(ctx context.Context) (*caller, error) {
 		return nil, errNoCaller
 	}
 	return c, nil
+}
+
+// untilGone is ctx, which ends too when the HTTP request of the call ends (its
+// client went away): what a tool waits for, it waits for as long as somebody
+// waits for its answer. The function it returns lets go of the request.
+func untilGone(ctx context.Context) (context.Context, context.CancelFunc) {
+	c, err := callerOf(ctx)
+	if err != nil || c.request == nil {
+		return ctx, func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(c.request, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
 }

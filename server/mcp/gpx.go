@@ -2,12 +2,12 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"io"
 	"math"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -22,7 +22,8 @@ import (
 // The site reads a file that its member chose; the server reads one that an
 // assistant sent. So the port reads no more than a track can weigh, expands no
 // entity (encoding/xml knows none but XML's own, fetches nothing, and refuses an
-// entity that a DTD would declare), and nests elements to a bound.
+// entity that a DTD would declare), nests elements to a bound, refuses a point
+// inside a point, and reads a number from 64 characters at most.
 
 // trackPoint is a point of a track: its position, and its altitude when the
 // file gives one (HasEle). TrackPoint of the site, without km, which statsOf
@@ -44,6 +45,13 @@ const maxElevationM = 100_000
 // seven or eight (gpx, trk, trkseg, trkpt, extensions, and those of an app).
 const maxGpxDepth = 64
 
+// maxNumberText is how long the text of a number may be, its blanks around it
+// apart: an altitude, a latitude or a longitude needs twenty characters or so. A
+// longer one is read as no number, where the site would read it (a number written
+// with a hundred zeros): the text of an altitude is not kept past it, whatever its
+// length in the file.
+const maxNumberText = 64
+
 const (
 	// byteOrderMark is the mark that some editors put at the start of a UTF-8
 	// file (U+FEFF).
@@ -64,7 +72,9 @@ const (
 // The site reads the file as UTF-8 text (File.text()), whatever encoding it
 // declares, and parses that text: so does the port. A file that is not XML, or
 // has no point, is errNotGpx; so is one over trackMaxBytes, nested deeper than
-// maxGpxDepth, or with an entity of a DTD.
+// maxGpxDepth, with an entity of a DTD, or with a point inside a point (which
+// GPX never has: the site would give the inner point's altitude to every point
+// around it).
 func parseGpx(data []byte) ([]trackPoint, error) {
 	if onTrackParse != nil {
 		onTrackParse(len(data))
@@ -125,12 +135,13 @@ type gpxReader struct {
 	// How many trkpt elements there are, usable or not: a file with one is a
 	// track, whose route is not read (elements.length === 0 of the site).
 	trkptElements int
-	// open are the points whose element is open, with the depth of their
-	// element (nil for a point without a usable position).
-	open []pointAt
-	// reading are the points whose altitude is being read, with the depth of
-	// their ele element.
-	reading []pointAt
+	// open is the point whose element is open, with the depth of its element
+	// (point nil for a point without a usable position): one at most, since a
+	// point inside a point is refused.
+	open *pointAt
+	// reading is the point whose altitude is being read, with the depth of its
+	// ele element (point nil when none is).
+	reading pointAt
 	// scopes are the namespaces that each open element declares (xmlns, xmlns:p),
 	// from the root: a prefix that none of them declares is not XML. live counts
 	// the declarations of each namespace in them, so that a name is checked by a
@@ -152,18 +163,54 @@ type pointAt struct {
 type rawPoint struct {
 	lat, lon float64
 	hasEle   bool
-	eleText  strings.Builder
+	eleText  numberText
 }
 
 // point is the point, with its altitude when it is a plausible number.
 func (p *rawPoint) point() trackPoint {
 	out := trackPoint{Lat: p.lat, Lon: p.lon}
 	if p.hasEle {
-		if ele, ok := jsNumber(p.eleText.String()); ok && math.Abs(ele) <= maxElevationM {
+		if ele, ok := p.eleText.number(); ok && math.Abs(ele) <= maxElevationM {
 			out.Ele, out.HasEle = ele, true
 		}
 	}
 	return out
+}
+
+// numberText is the text of an element as Number() reads it (textContent):
+// blanks, a number, blanks. It keeps the number, maxNumberText bytes of it at
+// most, and reads nothing past what makes it no number: a text longer than that,
+// or a blank inside it (which Number() does not read either).
+type numberText struct {
+	text []byte
+	// ended: a blank came after the number. over: the text is no number.
+	ended, over bool
+}
+
+// write adds a piece of the text (the text of an element is in pieces around its
+// comments and the elements inside it). A piece is whole characters: encoding/xml
+// cuts the text only at markup.
+func (n *numberText) write(piece []byte) {
+	for len(piece) > 0 && !n.over {
+		r, size := utf8.DecodeRune(piece)
+		switch {
+		case isJSSpace(r):
+			n.ended = len(n.text) > 0
+		case n.ended || len(n.text)+size > maxNumberText:
+			n.over, n.text = true, nil
+		default:
+			n.text = append(n.text, piece[:size]...)
+		}
+		piece = piece[size:]
+	}
+}
+
+// number is the number of the text, as jsNumber reads it.
+func (n *numberText) number() (float64, bool) {
+	if n.over {
+		return 0, false
+	}
+	return jsNumber(string(n.text))
 }
 
 func (r *gpxReader) read(token xml.Token, first bool) error {
@@ -180,40 +227,42 @@ func (r *gpxReader) read(token xml.Token, first bool) error {
 			return err
 		}
 		switch t.Name.Local {
-		case "trkpt":
-			r.trkptElements++
-			p := newRawPoint(t)
-			if p != nil {
-				r.trkpt = append(r.trkpt, p)
+		case "trkpt", "rtept":
+			// A point inside a point.
+			if r.open != nil {
+				return errNotGpx
 			}
-			r.open = append(r.open, pointAt{p, r.depth})
-		case "rtept":
 			p := newRawPoint(t)
-			if p != nil {
+			if t.Name.Local == "trkpt" {
+				r.trkptElements++
+				if p != nil {
+					r.trkpt = append(r.trkpt, p)
+				}
+			} else if p != nil {
 				r.rtept = append(r.rtept, p)
 			}
-			r.open = append(r.open, pointAt{p, r.depth})
+			r.open = &pointAt{p, r.depth}
 		case "ele":
-			// The first ele inside each point that is open and has none yet
+			// The first ele inside the point, when it is open and has none yet
 			// (getElementsByTagNameNS("*", "ele")[0]): its text, the text of
 			// the elements inside it included (textContent).
-			for _, o := range r.open {
-				if o.point != nil && !o.point.hasEle {
-					o.point.hasEle = true
-					r.reading = append(r.reading, pointAt{o.point, r.depth})
-				}
+			if r.open != nil && r.open.point != nil && !r.open.point.hasEle {
+				r.open.point.hasEle = true
+				r.reading = pointAt{r.open.point, r.depth}
 			}
 		}
 	case xml.EndElement:
 		r.closeScope()
-		r.reading = slices.DeleteFunc(r.reading, func(p pointAt) bool { return p.depth == r.depth })
-		if n := len(r.open); n > 0 && r.open[n-1].depth == r.depth {
-			r.open = r.open[:n-1]
+		if r.reading.point != nil && r.reading.depth == r.depth {
+			r.reading = pointAt{}
+		}
+		if r.open != nil && r.open.depth == r.depth {
+			r.open = nil
 		}
 		r.depth--
 	case xml.CharData:
-		for _, p := range r.reading {
-			p.point.eleText.Write(t)
+		if r.reading.point != nil {
+			r.reading.point.eleText.write(t)
 		}
 		if r.depth == 0 && len(bytes.Trim(t, " \t\r\n")) > 0 {
 			// Text out of the element of the document.
@@ -268,11 +317,12 @@ var (
 )
 
 // jsNumber is numberOf of the site: the number that text holds, as Number()
-// reads it, when it is a finite one; a blank is not a 0.
+// reads it, when it is a finite one; a blank is not a 0. A text of more than
+// maxNumberText characters, its blanks around it apart, is not one either.
 func jsNumber(text string) (float64, bool) {
 	text = strings.TrimFunc(text, isJSSpace)
 	switch {
-	case text == "":
+	case text == "", len(text) > maxNumberText:
 		return 0, false
 	case jsDecimal.MatchString(text):
 		v, err := strconv.ParseFloat(text, 64)
@@ -515,10 +565,16 @@ var trackParses = make(chan struct{}, maxTrackParses)
 var onTrackParse func(size int)
 
 // readTrack is what the site reads of a track (parseGpx, then gpxStats), the parse
-// of a large one waiting for its place.
-func readTrack(data []byte) (gpxStats, error) {
+// of a large one waiting for its place. The wait ends with the request (ctx): a
+// call or a PUT whose client went away does not keep its file in memory for a
+// place it no longer needs, and the error is then the one of ctx.
+func readTrack(ctx context.Context, data []byte) (gpxStats, error) {
 	if len(data) > boundedParseBytes {
-		trackParses <- struct{}{}
+		select {
+		case trackParses <- struct{}{}:
+		case <-ctx.Done():
+			return gpxStats{}, ctx.Err()
+		}
 		defer func() { <-trackParses }()
 	}
 	points, err := parseGpx(data)
