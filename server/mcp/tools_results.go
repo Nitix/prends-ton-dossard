@@ -149,7 +149,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 	old := resultOfRecord(p)
 	if p.Status == status && old == stored && (!own || p.Confirmed) {
 		return nil, t.participationAnswer(w, row, fmt.Sprintf("Rien à changer : le résultat %s à %s est déjà ainsi (%s).",
-			ofName(row.Runner.Name), placeOf(w, row), resultText(w, p))), nil
+			ofName(row.Runner.Name), placeOf(w, row), plain(resultText(w, p)))), nil
 	}
 
 	// The risk: the result of somebody else's participation, and a result that is

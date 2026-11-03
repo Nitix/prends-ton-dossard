@@ -390,7 +390,7 @@ func (t *tools) changeEvent(ctx context.Context, tool string, view eventView, la
 
 	ops, eventID, _ := planBatch(draft, stored, "")
 	if len(ops) == 0 {
-		return t.written(ctx, eventID, "Rien à changer : « "+draft.Name+" » est déjà ainsi.", draft)
+		return t.written(ctx, eventID, "Rien à changer : "+quote(draft.Name)+" est déjà ainsi.", draft)
 	}
 	removed := map[string]string{}
 	for _, f := range view.formats {

@@ -1074,8 +1074,9 @@ func TestTools_Confirmation_MemberTextStaysQuoted(t *testing.T) {
 // Every sentence that a write tool builds with what a member wrote (the name, the
 // place and the notes of a race, the name of a format, a comment, the place and the
 // notes of an offer, the note of a result) keeps that text from opening or closing
-// a quotation: its « » become ‹ ›, in the confirmations, the summaries and the
-// warnings. (The names of the runners are not swept: see the report.)
+// a quotation: its « » become ‹ ›, in the confirmations, the summaries, the
+// warnings and the refusals, a call that changes nothing included, as far as the
+// calls below reach. (The names of the runners are not swept: see the report.)
 func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
@@ -1100,7 +1101,8 @@ func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 	say := func(result toolResult) {
 		t.Helper()
 		if result.IsError {
-			t.Fatalf("the call failed: %s", result.Text)
+			said = append(said, result.Text)
+			return
 		}
 		s := result.Structured
 		if summary, _ := s["summary"].(string); summary != "" {
@@ -1115,10 +1117,14 @@ func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 			said = append(said, asList(c["details"])...)
 		}
 	}
-	// run calls a tool, and again with the token when it asks for a confirmation.
+	// run calls a tool, and again with the token when it asks for a confirmation;
+	// the call must succeed.
 	run := func(tool string, args map[string]any) toolResult {
 		t.Helper()
 		result := callTool(t, app, alice, tool, args)
+		if result.IsError {
+			t.Fatalf("%s failed: %s", tool, result.Text)
+		}
 		say(result)
 		if c, _ := result.Structured["confirmation"].(map[string]any); c != nil {
 			result = callTool(t, app, alice, tool, with(args, c["token"].(string)))
@@ -1126,18 +1132,40 @@ func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
 		}
 		return result
 	}
+	// refusal calls a tool that the tool or the site refuses, with what a member wrote
+	// in the refusal.
+	refusal := func(tool string, args map[string]any) {
+		t.Helper()
+		result := callTool(t, app, alice, tool, args)
+		if !result.IsError {
+			t.Fatalf("%s was not refused: %.300s", tool, redact(result.Text))
+		}
+		say(result)
+	}
 
 	run("create_event", map[string]any{"name": "Trail " + mark + " des Crêtes", "location": "Annecy " + mark + " haut", "start_date": "2026-09-06",
 		"formats": []any{map[string]any{"race_type": "Trail", "distance_km": 30, "name": "Boucle " + mark + " est"}},
 		"join":    map[string]any{"format_index": 0, "status": "interested"}})
 	run("update_event", map[string]any{"event_id": event.Id, "notes": ""})
 	run("update_event", map[string]any{"event_id": event.Id, "start_date": "2026-09-04"})
+	// A call that changes nothing says so.
+	run("update_event", map[string]any{"event_id": event.Id, "location": "Annecy " + mark + " centre"})
+	// The refusals that name a race or a format: a format of another race, a
+	// format left without a measure, a day that is not one, a price that the site
+	// refuses.
+	refusal("update_event", map[string]any{"event_id": event.Id, "formats": []any{map[string]any{"format_id": cross.Id, "distance_km": 9}}})
+	refusal("update_format", map[string]any{"format_id": north.Id, "distance_km": 0})
+	refusal("update_format", map[string]any{"format_id": north.Id, "date": "pas un jour"})
+	refusal("update_format", map[string]any{"format_id": south.Id, "price_eur": 1.005})
 	run("update_format", map[string]any{"format_id": north.Id, "name": ""})
 	update(t, app, north, map[string]any{"name": "Boucle " + mark + " nord"})
 	run("add_format", map[string]any{"event_id": event.Id, "race_type": "Trail", "distance_km": 5, "name": "Boucle " + mark + " ouest"})
 	run("add_participation", map[string]any{"runner": "Bob", "format_id": south.Id, "status": "interested"})
 	run("update_participation", map[string]any{"participation_id": sam.Id, "status": "registered"})
 	run("set_result", map[string]any{"participation_id": mine.Id, "status": "finished", "finish_time": "0:39:00", "note": "Encore " + mark + " mieux"})
+	run("set_result", map[string]any{"participation_id": mine.Id, "status": "finished", "finish_time": "0:39:00", "note": "Encore " + mark + " mieux"})
+	// A race of one format: a participation without it is refused, and the format named.
+	refusal("add_participation", map[string]any{"runner": "Bob", "event_id": past.Id, "status": "interested"})
 	run("remove_participation", map[string]any{"participation_id": mine.Id})
 	run("remove_participation", map[string]any{"participation_id": sam.Id})
 	comment := run("add_comment", map[string]any{"event_id": event.Id, "body": "Salut " + mark + " tous"})

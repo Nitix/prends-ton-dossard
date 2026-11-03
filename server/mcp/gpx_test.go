@@ -581,6 +581,37 @@ func manyAttributes(n int) string {
 	return b.String()
 }
 
+// The namespaces of a file are checked in the time of a lookup: a file of 60
+// levels that each declare 64 namespaces, and then hundreds of thousands of
+// prefixed elements, is read about as fast as a plain track of its size (it took
+// some forty times longer when each name went through every declaration).
+func TestParseGpx_DesEspacesDeNomsSansFinNeCoutentRien(t *testing.T) {
+	var b strings.Builder
+	for level := range 60 {
+		b.WriteString("<l")
+		for k := range 64 {
+			fmt.Fprintf(&b, ` xmlns:p%d="urn:%d:%d"`, k, level, k)
+		}
+		b.WriteString(">")
+	}
+	b.WriteString(`<trk><trkseg><trkpt lat="45" lon="6"/></trkseg></trk>`)
+	b.WriteString(strings.Repeat("<p63:x/>", 300_000))
+	for range 60 {
+		b.WriteString("</l>")
+	}
+	crafted := []byte(b.String())
+
+	start := time.Now()
+	points, err := mcp.ParseGpx(crafted)
+	took := time.Since(start)
+	if err != nil || len(points) != 1 {
+		t.Fatalf("the crafted file: %d points, %v", len(points), err)
+	}
+	if took > time.Second {
+		t.Errorf("a file of %d Ko with 3 840 namespaces took %v, want about the time of a plain one", len(crafted)>>10, took)
+	}
+}
+
 // A large track is read by two parses at most at once: a parse costs several times
 // the file in memory. A small one is not held back.
 func TestReadTrack_BoundsTheParsesThatRunAtOnce(t *testing.T) {

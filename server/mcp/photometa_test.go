@@ -128,6 +128,45 @@ func TestStripPhotoMetadata_JPEG(t *testing.T) {
 	}
 }
 
+// The orientation stays whatever the order of the segments: an ICC profile (kept)
+// before the Exif, or JFIF after it.
+func TestStripPhotoMetadata_JPEGOrientationWhateverTheOrder(t *testing.T) {
+	photo := jpegWithGPS(t) // SOI, Exif, XMP, IPTC, a comment, the image
+	exif := segment(0xE1, exifWithGPS())
+	icc := segment(0xE2, []byte("ICC_PROFILE\x00\x01\x01profil"))
+	jfif := segment(0xE0, []byte("JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"))
+	rest := photo[2+len(exif):]
+
+	for _, row := range []struct {
+		name  string
+		order [][]byte
+		want  [][]byte
+	}{
+		{"ICC, then Exif", [][]byte{icc, exif}, [][]byte{segment(0xE1, minimalOrientation), icc}},
+		{"JFIF, then Exif", [][]byte{jfif, exif}, [][]byte{jfif, segment(0xE1, minimalOrientation)}},
+		{"Exif, then JFIF", [][]byte{exif, jfif}, [][]byte{jfif, segment(0xE1, minimalOrientation)}},
+		{"JFIF, ICC, then Exif", [][]byte{jfif, icc, exif}, [][]byte{jfif, segment(0xE1, minimalOrientation), icc}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			original := append([]byte{0xFF, 0xD8}, bytes.Join(row.order, nil)...)
+			original = append(original, rest...)
+			stripped, err := mcp.StripPhotoMetadata("image/jpeg", original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The segments kept come first, in that order, the orientation after
+			// JFIF and before the rest.
+			want := append([]byte{0xFF, 0xD8}, bytes.Join(row.want, nil)...)
+			if !bytes.HasPrefix(stripped, want) {
+				t.Errorf("the photo sent starts with\n%q\nwant\n%q", stripped[:min(len(stripped), len(want))], want)
+			}
+			if bytes.Contains(stripped, []byte(gpsDay)) {
+				t.Error("the photo sent still holds the GPS day")
+			}
+		})
+	}
+}
+
 // chunk is a PNG chunk: its length, its type, its data and its CRC.
 func chunk(kind string, data []byte) []byte {
 	out := binary.BigEndian.AppendUint32(nil, uint32(len(data)))

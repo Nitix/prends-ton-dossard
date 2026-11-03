@@ -43,14 +43,16 @@ func stripPhotoMetadata(contentType string, data []byte) ([]byte, error) {
 // APP segment (Exif and XMP in APP1, the pictures of MPF in APP2, IPTC in APP13,
 // the makers' own) and the comments, and whatever follows the end of the image
 // (the second pictures of a phone). The orientation of the Exif, when it is not
-// the upright one, goes in an Exif of its own, with nothing else.
+// the upright one, goes in an Exif of its own, with nothing else, right after
+// JFIF and before every other segment kept, wherever the Exif was (it is read
+// first: jpegOrientation).
 func stripJPEG(data []byte) ([]byte, error) {
 	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {
 		return nil, errUnreadablePhoto
 	}
 	out := make([]byte, 0, len(data))
 	out = append(out, 0xFF, 0xD8)
-	orientation, placed := 0, false
+	orientation, placed := jpegOrientation(data), false
 	for i := 2; ; {
 		// A marker: 0xFF, the fill bytes that may follow it, and its code.
 		if i >= len(data) || data[i] != 0xFF {
@@ -116,6 +118,41 @@ func stripJPEG(data []byte) ([]byte, error) {
 			out = append(out, data[start:i]...)
 		}
 	}
+}
+
+// jpegOrientation is the orientation of the Exif of a JPEG, read in the segments
+// before its first scan (0 when it has none, or one that cannot be read): the
+// stripper places it before the segments it keeps, whatever their order. It reads
+// as stripJPEG does, and leaves the refusals of a broken file to it.
+func jpegOrientation(data []byte) int {
+	for i := 2; i < len(data) && data[i] == 0xFF; {
+		for i < len(data) && data[i] == 0xFF {
+			i++
+		}
+		if i+3 > len(data) {
+			return 0
+		}
+		marker := data[i]
+		if marker == 0xD9 || marker == 0xDA {
+			return 0
+		}
+		if marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7) {
+			i++
+			continue
+		}
+		length := int(binary.BigEndian.Uint16(data[i+1:]))
+		if length < 2 || i+1+length > len(data) {
+			return 0
+		}
+		payload := data[i+3 : i+1+length]
+		if marker == 0xE1 && bytes.HasPrefix(payload, []byte("Exif\x00\x00")) {
+			if o := exifOrientation(payload[6:]); o > 1 {
+				return o
+			}
+		}
+		i += 1 + length
+	}
+	return 0
 }
 
 // keptSegment reports whether a segment of a JPEG is one that the decoding needs:

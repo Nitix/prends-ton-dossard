@@ -132,8 +132,11 @@ type gpxReader struct {
 	// their ele element.
 	reading []pointAt
 	// scopes are the namespaces that each open element declares (xmlns, xmlns:p),
-	// from the root: a prefix that none of them declares is not XML.
+	// from the root: a prefix that none of them declares is not XML. live counts
+	// the declarations of each namespace in them, so that a name is checked by a
+	// lookup, whatever the number of declarations.
 	scopes [][]string
+	live   map[string]int
 	// doctypes is how many DOCTYPEs the file has: one at most, before its root.
 	doctypes int
 }
@@ -202,7 +205,7 @@ func (r *gpxReader) read(token xml.Token, first bool) error {
 			}
 		}
 	case xml.EndElement:
-		r.scopes = r.scopes[:len(r.scopes)-1]
+		r.closeScope()
 		r.reading = slices.DeleteFunc(r.reading, func(p pointAt) bool { return p.depth == r.depth })
 		if n := len(r.open); n > 0 && r.open[n-1].depth == r.depth {
 			r.open = r.open[:n-1]
@@ -454,6 +457,12 @@ func (r *gpxReader) checkNames(e xml.StartElement) error {
 		}
 	}
 	r.scopes = append(r.scopes, declared)
+	if r.live == nil {
+		r.live = map[string]int{}
+	}
+	for _, space := range declared {
+		r.live[space]++
+	}
 
 	if !r.declares(e.Name.Space) {
 		return errNotGpx
@@ -472,12 +481,18 @@ func (r *gpxReader) declares(space string) bool {
 	if space == "" || space == xmlNamespace {
 		return true
 	}
-	for _, scope := range r.scopes {
-		if slices.Contains(scope, space) {
-			return true
+	return r.live[space] > 0
+}
+
+// closeScope closes the namespaces that the element being closed declared.
+func (r *gpxReader) closeScope() {
+	last := len(r.scopes) - 1
+	for _, space := range r.scopes[last] {
+		if r.live[space]--; r.live[space] == 0 {
+			delete(r.live, space)
 		}
 	}
-	return false
+	r.scopes = r.scopes[:last]
 }
 
 // ---------------------------------------------------------------------------
