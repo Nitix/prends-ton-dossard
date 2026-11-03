@@ -227,7 +227,7 @@ Les connecteurs distants de Claude Desktop ne prennent pas d'en-tête fixe : ils
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote@0.16.0",
+        "mcp-remote@0.15.2",
         "https://courses.example.fr/mcp",
         "--header",
         "Authorization:${PTD_AUTH}"
@@ -241,7 +241,7 @@ Les connecteurs distants de Claude Desktop ne prennent pas d'en-tête fixe : ils
 ```
 
 - Le jeton est dans `env` et non dans `args`, que tout utilisateur de la machine peut lire dans la liste des processus. L'en-tête s'écrit `Authorization:${PTD_AUTH}`, sans espace après les deux-points : Claude Desktop sur Windows abîme les espaces des `args`, et celui de `Bearer ptd_…` est dans la variable (le conseil du pont lui-même).
-- `0.16.0` est la dernière version de `mcp-remote` au 3 novembre 2026. Le pont tourne avec ton jeton : ne pas le laisser changer sans que tu le saches. Pour une version plus récente : `npm view mcp-remote version`, lire son README, puis changer le numéro.
+- `0.15.2` date du 20 octobre 2026 : au 3 novembre, une version qui a deux semaines de recul (la `0.16.0`, la dernière à cette date, n'en avait qu'un jour). Le pont tourne avec ton jeton : ne pas le laisser changer sans que tu le saches. Pour une version plus récente : `npm view mcp-remote version time`, lire son README, puis changer le numéro, de préférence pour une version publiée depuis au moins deux semaines.
 - Quitter complètement Claude Desktop et le relancer : les outils de `prends-ton-dossard` apparaissent dans ses connecteurs. S'ils manquent, `mcp.log` et `mcp-server-prends-ton-dossard.log` disent pourquoi (macOS : `~/Library/Logs/Claude`, Windows : `%APPDATA%\Claude\logs`).
 - Claude Desktop n'a pas de terminal par défaut : sans lui, la commande `curl` de `start_upload` ne se lance pas, et les fichiers passent en base64 (512 Ko au plus, voir « Les fichiers »).
 
