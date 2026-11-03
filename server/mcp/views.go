@@ -54,9 +54,12 @@ type eventRecord struct {
 	RegistrationDeadline string `json:"registration_deadline"`
 	Notes                string `json:"notes"`
 	CreatedBy            string `json:"created_by"`
+	Updated              string `json:"updated"`
 	Expand               struct {
 		Formats        []formatRecord        `json:"formats_via_event"`
 		Participations []participationRecord `json:"participations_via_event"`
+		// CreatedBy is asked by the tools that write a race (eventForWrite).
+		CreatedBy runnerRecord `json:"created_by"`
 	} `json:"expand"`
 }
 
@@ -73,6 +76,8 @@ type formatRecord struct {
 	GPX            string  `json:"gpx"`
 	RouteURL       string  `json:"route_url"`
 	Date           string  `json:"date"`
+	Event          string  `json:"event"`
+	Updated        string  `json:"updated"`
 	Expand         struct {
 		RaceType raceTypeRecord `json:"race_type"`
 	} `json:"expand"`
@@ -93,6 +98,7 @@ type participationRecord struct {
 	Rank        int    `json:"rank"`
 	RankOf      int    `json:"rank_of"`
 	ResultNote  string `json:"result_note"`
+	Updated     string `json:"updated"`
 	Expand      struct {
 		Runner  runnerRecord `json:"runner"`
 		AddedBy runnerRecord `json:"added_by"`

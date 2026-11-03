@@ -68,16 +68,18 @@ var now = time.Now
 //
 // What must outlive a request is made here, once for the app, and not in the
 // OnServe closure: a request of tests.ApiScenario triggers OnServe again, and a
-// limiter born there would forget the calls made before it.
+// limiter born there would forget the calls made before it, a store of
+// confirmations the confirmations it gave.
 func Register(app core.App, cfg config.Config) {
 	if cfg.Demo() {
 		return
 	}
 	limiter := newTokenLimiter(func() time.Time { return now() })
+	confirms := newConfirmations(func() time.Time { return now() })
 	schemas := mcpsdk.NewSchemaCache()
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
-		d := &deps{app: se.App, cfg: cfg, inner: &innerAPI{router: se.Router}, schemas: schemas}
+		d := &deps{app: se.App, cfg: cfg, inner: &innerAPI{router: se.Router}, schemas: schemas, confirms: confirms}
 		servers := map[role]*mcpsdk.Server{
 			roleMember: newServer(d, roleMember),
 			roleAdmin:  newServer(d, roleAdmin),
@@ -232,9 +234,12 @@ type caller struct {
 	more  int
 }
 
-// toolCall is a tool that a request called, as the request log names it.
+// toolCall is a tool that a request called, as the request log names it, and
+// whether the call asked for a confirmation ("asked") or was given one that fits
+// ("confirmed"; spec § 6.13).
 type toolCall struct {
-	Tool string `json:"tool"`
+	Tool         string `json:"tool"`
+	Confirmation string `json:"confirmation,omitempty"`
 }
 
 // The names of the tools in the request log. The name is what the assistant
@@ -260,6 +265,17 @@ func (c *caller) called(tool string) {
 		return
 	}
 	c.calls = append(c.calls, toolCall{Tool: tool})
+}
+
+// noteConfirmation notes what became of the confirmation of the call being
+// made: a request holds one call, the last noted (none when it went beyond
+// maxLoggedCalls, which a request of one call never does).
+func (c *caller) noteConfirmation(state string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.calls) > 0 && c.more == 0 {
+		c.calls[len(c.calls)-1].Confirmation = state
+	}
 }
 
 // loggedCalls are the tools called, for the meta of the request log.

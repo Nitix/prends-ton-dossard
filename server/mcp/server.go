@@ -42,6 +42,9 @@ type deps struct {
 	// schemas keeps the schemas of the tools, which the SDK infers from their
 	// types: made once in Register, for the servers that each OnServe makes.
 	schemas *mcpsdk.SchemaCache
+	// confirms keeps the confirmations that wait for their second call (spec
+	// § 6.13): made once in Register too.
+	confirms *confirmations
 }
 
 // tools holds the handlers of the tools.
@@ -62,6 +65,12 @@ var (
 		addHome,
 		addGetRunner,
 		addGetStats,
+		addCreateEvent,
+		addUpdateEvent,
+		addDeleteEvent,
+		addAddFormat,
+		addUpdateFormat,
+		addDeleteFormat,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

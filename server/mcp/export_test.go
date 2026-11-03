@@ -237,3 +237,56 @@ func ByYear(rows []ResultRow) []YearTotals               { return byYear(rows) }
 // NewResultRow is toResultRow of the site: a participation of the answer to a
 // request made with the expand of the statistics.
 func NewResultRow(record ParticipationRecord) (ResultRow, error) { return newResultRow(record) }
+
+// The store of the confirmations, with the binding of a confirmation spelled out.
+type Confirmations = confirmations
+
+func NewConfirmations(now func() time.Time) *Confirmations { return newConfirmations(now) }
+
+func (s *confirmations) Put(userID, tokenID, tool, args, state string) (string, time.Time) {
+	return s.put(pendingConfirmation{userID: userID, tokenID: tokenID, tool: tool, args: args, state: state})
+}
+
+func (s *confirmations) Take(token, userID, tokenID, tool, args, state string) string {
+	return s.take(token, pendingConfirmation{userID: userID, tokenID: tokenID, tool: tool, args: args, state: state})
+}
+
+// Len is the number of confirmations that wait.
+func (s *confirmations) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.entries)
+}
+
+// The form of the site, in Go (plan.go), and the words of a likely duplicate.
+type (
+	EventDraft  = eventDraft
+	FormatDraft = formatDraft
+	JoinDraft   = joinDraft
+	StoredEvent = storedEvent
+	BatchOp     = batchOp
+)
+
+func PlanBatch(draft EventDraft, stored *StoredEvent, myRunnerID string) ([]BatchOp, string, []string) {
+	return planBatch(draft, stored, myRunnerID)
+}
+func EventEndDate(start string, formatDates []string) string { return eventEndDate(start, formatDates) }
+func IsLongEvent(start, end string) bool                     { return isLongEvent(start, end) }
+func Shortens(storedStart, storedEnd, end string) bool       { return shortens(storedStart, storedEnd, end) }
+func HasMeasure(f FormatDraft) bool                          { return hasMeasure(f) }
+func SignificantWords(name string) []string                  { return significantWords(name) }
+
+// Duplicates are the ids of the likely duplicates of a race, as create_event
+// looks for them, for the caller of ctx.
+func Duplicates(ctx context.Context, app core.App, inner *InnerAPI, name, start, exceptID string) ([]string, error) {
+	t := &tools{deps: &deps{app: app, inner: inner}}
+	found, err := t.duplicates(ctx, name, start, exceptID)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for _, event := range found {
+		ids = append(ids, event.ID)
+	}
+	return ids, nil
+}

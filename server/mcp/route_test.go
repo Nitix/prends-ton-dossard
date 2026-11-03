@@ -27,7 +27,10 @@ import (
 // row to wantHints.
 var (
 	// wantMemberTools are the tools that every token sees.
-	wantMemberTools = []string{"whoami", "list_runners", "list_race_types", "search_events", "get_event", "home", "get_runner", "get_stats"}
+	wantMemberTools = []string{
+		"whoami", "list_runners", "list_race_types", "search_events", "get_event", "home", "get_runner", "get_stats",
+		"create_event", "update_event", "delete_event", "add_format", "update_format", "delete_format",
+	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
 	wantAdminTools = []string{}
@@ -53,6 +56,12 @@ var wantHints = map[string]hints{
 	"home":            {readOnly: true},
 	"get_runner":      {readOnly: true},
 	"get_stats":       {readOnly: true},
+	"create_event":    {destructive: true},
+	"update_event":    {destructive: true, idempotent: true},
+	"delete_event":    {destructive: true},
+	"add_format":      {},
+	"update_format":   {destructive: true, idempotent: true},
+	"delete_format":   {destructive: true},
 }
 
 // realm is the challenge of a refused token.
