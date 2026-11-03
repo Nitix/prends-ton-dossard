@@ -45,6 +45,9 @@ type deps struct {
 	// confirms keeps the confirmations that wait for their second call (spec
 	// § 6.13): made once in Register too.
 	confirms *confirmations
+	// uploads keeps the upload slots (spec § 6.9), which the route fills and the
+	// tools take: made once in Register too.
+	uploads *uploads
 }
 
 // tools holds the handlers of the tools.
@@ -82,6 +85,9 @@ var (
 		addUpdateOffer,
 		addDeleteOffer,
 		addOfferPlace,
+		addStartUpload,
+		addSetPhoto,
+		addSetTrack,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

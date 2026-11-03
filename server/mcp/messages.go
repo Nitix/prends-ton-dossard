@@ -50,6 +50,8 @@ var messages = map[string]string{
 	"invitation_kind_mismatch":       "Ce lien ne permet pas cette opération. Demande-en un nouveau à l'admin.",
 	"merge_same_record":              "Choisis deux éléments différents.",
 	"merge_formats_different_events": "Ces deux épreuves ne sont pas du même événement.",
+	// The files of the MCP server.
+	"upload_invalid": "Cet envoi n'est pas valide, ou il a expiré.",
 	// Any request.
 	"not_found": "Introuvable : il a peut-être été supprimé.",
 	"forbidden": "Tu n'as pas le droit de faire ça.",

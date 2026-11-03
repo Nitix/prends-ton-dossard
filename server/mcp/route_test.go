@@ -32,6 +32,7 @@ var (
 		"create_event", "update_event", "delete_event", "add_format", "update_format", "delete_format",
 		"add_participation", "update_participation", "remove_participation", "set_result",
 		"add_comment", "update_comment", "delete_comment", "add_offer", "update_offer", "delete_offer", "offer_place",
+		"start_upload", "set_photo", "set_track",
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
@@ -78,6 +79,12 @@ var wantHints = map[string]hints{
 	"update_offer":   {destructive: true, idempotent: true},
 	"delete_offer":   {destructive: true},
 	"offer_place":    {destructive: true},
+	// start_upload writes nothing on the site, but keeps a slot, and may drop the
+	// oldest of the token: not a read. A photo or a track is only replaced or
+	// removed with a confirmation.
+	"start_upload": {},
+	"set_photo":    {destructive: true},
+	"set_track":    {destructive: true},
 }
 
 // realm is the challenge of a refused token.

@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"maps"
 	"net/http"
@@ -77,13 +78,13 @@ func summaryOfResult(result toolResult) string {
 	return summary
 }
 
-// dbState is what the races hold, for a test to see that nothing was written:
-// each record of the collections that the tools of the races write, with the
-// moment it was last changed.
+// dbState is what the races and the runners hold, for a test to see that
+// nothing was written: each record of the collections that the tools write, with
+// the moment it was last changed.
 func dbState(t testing.TB, app core.App) string {
 	t.Helper()
 	var lines []string
-	for _, collection := range []string{"events", "formats", "participations", "comments", "offers", "offer_members"} {
+	for _, collection := range []string{"events", "formats", "participations", "comments", "offers", "offer_members", "runners"} {
 		records, err := app.FindAllRecords(collection)
 		if err != nil {
 			t.Fatal(err)
@@ -142,6 +143,13 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
 	seatFor(t, app, ride, fx.SamRunner, fx.AliceRunner)
 	lodging := lodgingOf(t, app, lake, fx.BobRunner)
+	// What the file tools are asked about: Alice's photo and F42's track, and a file
+	// of each kind that Alice sent.
+	png, gpx := testutil.PNG(t, 16, 16), testutil.GPX(t, 10)
+	photo := withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", png)
+	trace := withFile(t, app, fx.F42, "gpx", "trace.gpx", gpx)
+	photoSlot := uploaded(t, app, alice, "photo", png)
+	trackSlot := uploaded(t, app, alice, "track", gpx)
 
 	for _, row := range []struct {
 		name string
@@ -258,6 +266,26 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"},
 			[]string{"Bob perdrait sa place", "la voiture d'Alice (départ de Lyon)", "« Foulées du lac »", "ajoutée par Bob"},
 		},
+		{
+			"set_photo: a photo exists", "set_photo",
+			map[string]any{"upload_id": photoSlot},
+			[]string{"La photo actuelle d'Alice serait remplacée", fileURL("runners", fx.AliceRunner.Id, photo)},
+		},
+		{
+			"set_photo: the photo removed", "set_photo",
+			map[string]any{"remove": true},
+			[]string{"La photo actuelle d'Alice serait retirée", fileURL("runners", fx.AliceRunner.Id, photo)},
+		},
+		{
+			"set_track: a track exists", "set_track",
+			map[string]any{"format_id": fx.F42.Id, "upload_id": trackSlot},
+			[]string{"La trace actuelle de « Trail 42 km » (Trail des Crêtes) serait remplacée", fileURL("formats", fx.F42.Id, trace)},
+		},
+		{
+			"set_track: the track removed", "set_track",
+			map[string]any{"format_id": fx.F42.Id, "remove": true},
+			[]string{"La trace actuelle de « Trail 42 km » (Trail des Crêtes) serait retirée", fileURL("formats", fx.F42.Id, trace)},
+		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			writesNothing(t, app, func() {
@@ -274,6 +302,62 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			mentions(t, message, details, "d'un autre coureur", "le logement de Bob (« Gîte des Lacs »)")
 		})
 	})
+
+	// An admin changes the photo of somebody else, who has none: the confirmation
+	// says whose it is.
+	t.Run("set_photo: the photo of somebody else, by the admin", func(t *testing.T) {
+		writesNothing(t, app, func() {
+			_, message, details := asked(t, callTool(t, app, admin, "set_photo", map[string]any{"runner": "Bob", "content_base64": b64(png)}))
+			mentions(t, message, details, "Bob n'est pas ton coureur")
+		})
+	})
+
+	// The first calls only looked at the files that Alice sent: they wait for the
+	// second call, which another first call finds there again.
+	t.Run("the files wait for the second call", func(t *testing.T) {
+		writesNothing(t, app, func() {
+			asked(t, callTool(t, app, alice, "set_photo", map[string]any{"upload_id": photoSlot}))
+			asked(t, callTool(t, app, alice, "set_track", map[string]any{"format_id": fx.F42.Id, "upload_id": trackSlot}))
+		})
+	})
+}
+
+// A file sent with start_upload is not taken by the first call, which asks for a
+// confirmation: the second call takes it, and writes it; it does not serve again.
+func TestTools_Confirmation_TheFileWaitsForTheSecondCall(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", testutil.PNG(t, 16, 16))
+	withFile(t, app, fx.F42, "gpx", "trace.gpx", testutil.GPX(t, 10))
+
+	for _, row := range []struct {
+		tool, purpose, collection, id, field string
+		args                                 map[string]any
+		data                                 []byte
+	}{
+		{"set_photo", "photo", "runners", fx.AliceRunner.Id, "avatar", map[string]any{}, testutil.PNG(t, 24, 24)},
+		{"set_track", "track", "formats", fx.F42.Id, "gpx", map[string]any{"format_id": fx.F42.Id}, testutil.GPX(t, 30)},
+	} {
+		t.Run(row.tool, func(t *testing.T) {
+			args := maps.Clone(row.args)
+			args["upload_id"] = uploaded(t, app, alice, row.purpose, row.data)
+
+			var token string
+			writesNothing(t, app, func() {
+				token, _, _ = asked(t, callTool(t, app, alice, row.tool, args))
+			})
+			isDone(t, callTool(t, app, alice, row.tool, with(args, token)))
+			name := storedRecord(t, app, row.collection, row.id).GetString(row.field)
+			if got := served(t, app, pathOf(fileURL(row.collection, row.id, name)), ""); !bytes.Equal(got, row.data) {
+				t.Errorf("the file kept is %d bytes, not the %d sent", len(got), len(row.data))
+			}
+			// The second call took it.
+			announced(t, app, alice, row.tool, args, "(upload_invalid)")
+		})
+	}
 }
 
 // The confirmed call writes, once; the same token again is refused, and a new
@@ -360,6 +444,10 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	ride := rideOf(t, app, lake, fx.AliceRunner)
 	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
 	seatFor(t, app, ride, fx.SamRunner, fx.AliceRunner)
+	// Alice's photo, and two photos that she sent to replace it.
+	withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", testutil.PNG(t, 16, 16))
+	onePhoto := uploaded(t, app, alice, "photo", testutil.PNG(t, 20, 20))
+	otherPhoto := uploaded(t, app, alice, "photo", testutil.PNG(t, 21, 21))
 
 	const other = "Confirmation refusée : elle ne correspond pas à cette demande."
 	for _, row := range []struct {
@@ -379,6 +467,7 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 		{"update_offer with other notes", "update_offer", map[string]any{"offer_id": ride.Id, "notes": "Départ à 7 h."}, alice, "update_offer", map[string]any{"offer_id": ride.Id, "notes": "Départ à 8 h."}},
 		{"offer_place for Bob, on Sam", "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"}, alice, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Sam"}},
 		{"the delete_offer of Alice, by the admin", "delete_offer", map[string]any{"offer_id": ride.Id}, admin, "delete_offer", map[string]any{"offer_id": ride.Id}},
+		{"set_photo with another file", "set_photo", map[string]any{"upload_id": onePhoto}, alice, "set_photo", map[string]any{"upload_id": otherPhoto}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.firstTool, row.firstArgs))
@@ -434,6 +523,13 @@ func TestTools_Confirmation_NamesOrIds(t *testing.T) {
 		if got := storedRecord(t, app, "participations", fx.P1.Id).GetInt("finish_time_s"); got != 15000 {
 			t.Errorf("the time is %d s, want 15000", got)
 		}
+	})
+
+	t.Run("a file sent to a slot, then the same in base64", func(t *testing.T) {
+		withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", testutil.PNG(t, 16, 16))
+		png := testutil.PNG(t, 20, 20)
+		token, _, _ := asked(t, callTool(t, app, alice, "set_photo", map[string]any{"upload_id": uploaded(t, app, alice, "photo", png)}))
+		isDone(t, callTool(t, app, alice, "set_photo", map[string]any{"runner": "alice", "content_base64": b64(png), "confirmation": token}))
 	})
 
 	t.Run("another runner is another request", func(t *testing.T) {
@@ -547,6 +643,10 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 	hers := commentOn(t, app, lake, fx.AliceRunner, "À moi.")
 	ride := rideOf(t, app, lake, fx.AliceRunner)
 	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
+	// Alice's photo, and a photo that she sent to replace it.
+	png := testutil.PNG(t, 16, 16)
+	withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", png)
+	photoSlot := uploaded(t, app, alice, "photo", png)
 
 	for _, row := range []struct {
 		name string
@@ -566,6 +666,7 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 		{"the refusal of a comment that is somebody else's", "delete_comment", map[string]any{"comment_id": hers.Id}, bob, "delete_comment", map[string]any{"comment_id": hers.Id}},
 		{"the refusal of an offer that is somebody else's", "delete_offer", map[string]any{"offer_id": ride.Id}, bob, "delete_offer", map[string]any{"offer_id": ride.Id}},
 		{"the refusal of a place that is not there", "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"}, alice, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Sam"}},
+		{"the refusal of a photo that is somebody else's", "set_photo", map[string]any{"upload_id": photoSlot}, bob, "set_photo", map[string]any{"runner": "Alice", "remove": true}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.tool, row.args))

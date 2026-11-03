@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"io"
 	"maps"
 	"net/http"
 	"slices"
@@ -307,3 +308,63 @@ func Duplicates(ctx context.Context, app core.App, inner *InnerAPI, name, start,
 
 // ParseFinishTime is parseFinishTime: a time of a result, "h:mm:ss", in seconds.
 func ParseFinishTime(s string) (int, error) { return parseFinishTime(s) }
+
+// The reading of a GPX track (gpx.go).
+type (
+	TrackPoint = trackPoint
+	GpxStats   = gpxStats
+)
+
+const HysteresisM = hysteresisM
+
+func ParseGpx(xml []byte) ([]TrackPoint, error) { return parseGpx(xml) }
+func StatsOf(points []TrackPoint) GpxStats      { return statsOf(points) }
+func WithXmlDeclaration(data []byte) []byte     { return withXmlDeclaration(data) }
+
+// The store of the upload slots (uploads.go), with the purpose spelled out.
+type Uploads = uploads
+
+const (
+	UploadTotal    = uploadTotal
+	PhotoMaxBytes  = photoMaxBytes
+	TrackMaxBytes  = trackMaxBytes
+	InlineMaxBytes = inlineMaxBytes
+)
+
+var (
+	ErrUploadInvalid  = errUploadInvalid
+	ErrUploadEmpty    = errUploadEmpty
+	ErrUploadTooLarge = errUploadTooLarge
+)
+
+func NewUploads(now func() time.Time) *Uploads { return newUploads(now) }
+
+func (u *uploads) Open(userID, tokenID, purpose string) (id, secret string, expires time.Time) {
+	return u.open(userID, tokenID, uploadPurpose(purpose))
+}
+
+func (u *uploads) Put(id, secret string, size int64, body io.Reader) error {
+	return u.put(id, secret, size, body)
+}
+
+func (u *uploads) Peek(id, tokenID, purpose string) ([]byte, string, error) {
+	return u.peek(id, tokenID, uploadPurpose(purpose))
+}
+
+func (u *uploads) Take(id, tokenID, purpose string) ([]byte, string, error) {
+	return u.take(id, tokenID, uploadPurpose(purpose))
+}
+
+// Len is the number of slots that the store keeps.
+func (u *uploads) Len() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return len(u.slots)
+}
+
+// Bytes is the number of bytes that the store keeps, or keeps room for.
+func (u *uploads) Bytes() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.bytes
+}

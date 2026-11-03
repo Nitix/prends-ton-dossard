@@ -33,6 +33,8 @@ type runnerRecord struct {
 	Name   string `json:"name"`
 	User   string `json:"user"`
 	Avatar string `json:"avatar"`
+	// Updated is read by set_photo, for the state of its confirmation.
+	Updated string `json:"updated"`
 }
 
 // raceTypeRecord is a type of race, with the measures that the form of a format
@@ -327,6 +329,15 @@ func photoURL(cfg config.Config, r runnerRecord) string {
 	return cfg.AppURL + "/api/files/runners/" + r.ID + "/" + url.PathEscape(r.Avatar)
 }
 
+// trackURL is the address of the GPX track of a format: the file is not
+// protected, as on the site. "" for a format that has none.
+func trackURL(cfg config.Config, f formatRecord) string {
+	if f.GPX == "" {
+		return ""
+	}
+	return cfg.AppURL + "/api/files/formats/" + f.ID + "/" + url.PathEscape(f.GPX)
+}
+
 // ref is a runner in an answer. A runner that the API did not send (a
 // participation that nobody added, a creator who is gone) is the zero value,
 // which an answer leaves out.
@@ -605,10 +616,7 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 			RouteURL:     f.record.RouteURL,
 			Participants: participationsOut(f.participations, w),
 		}
-		// The file of the track is not protected, as on the site.
-		if f.record.GPX != "" {
-			detail.TrackURL = cfg.AppURL + "/api/files/formats/" + f.record.ID + "/" + url.PathEscape(f.record.GPX)
-		}
+		detail.TrackURL = trackURL(cfg, f.record)
 		out.Formats = append(out.Formats, detail)
 	}
 	return out

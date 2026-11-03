@@ -46,6 +46,7 @@ export const ERROR_CODES: readonly string[] = [
   "account_disabled",
   "token_invalid",
   "token_limit",
+  "upload_invalid",
   "validation_required",
   "validation_not_unique",
   "validation_invalid_email",

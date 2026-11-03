@@ -63,23 +63,28 @@ const maxBodyBytes = 1 << 20
 // tests replace.
 var now = time.Now
 
-// Register adds GET, POST and DELETE /mcp to app; nothing on the demo, whose
-// account everybody shares (spec § 8.1).
+// Register adds GET, POST and DELETE /mcp, and PUT /api/app/mcp-uploads/{id}
+// (uploads.go), to app; nothing on the demo, whose account everybody shares
+// (spec § 8.1).
 //
 // What must outlive a request is made here, once for the app, and not in the
 // OnServe closure: a request of tests.ApiScenario triggers OnServe again, and a
 // limiter born there would forget the calls made before it, a store of
-// confirmations the confirmations it gave.
+// confirmations the confirmations it gave, a store of uploads its slots.
 func Register(app core.App, cfg config.Config) {
 	if cfg.Demo() {
 		return
 	}
 	limiter := newTokenLimiter(func() time.Time { return now() })
 	confirms := newConfirmations(func() time.Time { return now() })
+	files := newUploads(func() time.Time { return now() })
 	schemas := mcpsdk.NewSchemaCache()
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
-		d := &deps{app: se.App, cfg: cfg, inner: &innerAPI{router: se.Router}, schemas: schemas, confirms: confirms}
+		// The file of an upload slot: no session, its secret in a header.
+		se.Router.PUT(uploadsPath+"/{id}", uploadRoute(files))
+
+		d := &deps{app: se.App, cfg: cfg, inner: &innerAPI{router: se.Router}, schemas: schemas, confirms: confirms, uploads: files}
 		servers := map[role]*mcpsdk.Server{
 			roleMember: newServer(d, roleMember),
 			roleAdmin:  newServer(d, roleAdmin),

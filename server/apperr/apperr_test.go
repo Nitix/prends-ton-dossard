@@ -76,7 +76,7 @@ func TestCodes_FrontEndContract(t *testing.T) {
 		"passkey_failed", "passkey_session_expired", "password_mismatch", "password_too_short", "price_invalid",
 		"race_type_in_use", "rank_above_total", "registration_deadline_after_start", "runner_has_account",
 		"runner_has_participations", "status_before_race", "supporter_with_format", "time_invalid",
-		"token_invalid", "token_limit", "wrong_password",
+		"token_invalid", "token_limit", "upload_invalid", "wrong_password",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("codes in codes.go:\n got %v\nwant %v", got, want)

@@ -198,8 +198,9 @@ func confirmAndCall(t *testing.T, app *tests.TestApp, token, name string, args m
 	return second
 }
 
-// tokenInText is an MCP or a confirmation token in a text.
-var tokenInText = regexp.MustCompile(`\b(ptd|cfm)_[A-Za-z0-9_-]+`)
+// tokenInText is an MCP token, a confirmation token or the secret of an upload
+// slot in a text.
+var tokenInText = regexp.MustCompile(`\b(ptd|cfm|ptu)_[A-Za-z0-9_-]+`)
 
 // redact cuts the tokens of a text to what a test may print of them.
 func redact(text string) string {

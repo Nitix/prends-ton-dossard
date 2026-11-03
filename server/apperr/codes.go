@@ -42,4 +42,5 @@ const (
 	CodeAccountDisabled                = "account_disabled"
 	CodeTokenInvalid                   = "token_invalid"
 	CodeTokenLimit                     = "token_limit"
+	CodeUploadInvalid                  = "upload_invalid"
 )
