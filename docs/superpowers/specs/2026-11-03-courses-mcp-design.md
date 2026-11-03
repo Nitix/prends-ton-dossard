@@ -280,7 +280,7 @@ La colonne « Ce que le site permet » vient des règles d'accès (`4_rules.go`,
 | Courses | `create_event` | Créer une course | « + », formulaire de création, « Je participe » | `events.create`, `formats.create`, `participations.create` : tout connecté ; `created_by` posé par le hook | doublon probable |
 | Courses | `update_event` | Modifier une course | « Modifier » (formulaire) | `events.update` : tout connecté, pas seulement l'auteur ; ses épreuves avec (`formats.update`) ; `created_by` gardé par le hook | champ vidé, notes remplacées, course raccourcie, jour changé pour des participants |
 | Courses | `delete_event` | Supprimer une course | « Supprimer » de la fiche | `events.delete` : **l'auteur de la course ou un admin** ; épreuves, participations, commentaires et offres partent avec | toujours |
-| Courses | `add_format` | Ajouter une épreuve | « Ajouter une épreuve » du formulaire | `formats.create` : tout connecté | — |
+| Courses | `add_format` | Ajouter une épreuve | « Ajouter une épreuve » du formulaire | `formats.create` : tout connecté | course raccourcie (sa fin ne venait d'aucune épreuve) |
 | Courses | `update_format` | Modifier une épreuve | une épreuve du formulaire | `formats.update` : tout connecté | champ vidé, jour changé pour des participants |
 | Courses | `delete_format` | Supprimer une épreuve | « Retirer » d'une épreuve du formulaire | `formats.delete` : **l'auteur de la course ou un admin** | toujours |
 | Participations | `add_participation` | Ajouter un coureur à une course | « J'y vais », « Ajouter quelqu'un », « Je viens encourager » | `participations.create` : tout connecté, pour n'importe quel coureur ; non confirmée si ce n'est pas son propre coureur | remplace la participation « à la course seule » d'un autre |
@@ -473,7 +473,9 @@ Au moins un de `distance_km`, `duration_min`, `time_limit_min` (`format_measure_
 
 Une épreuve déplacée après la fin actuelle de la course, ou une course déplacée avec ses épreuves (`update_event` et son argument `formats`), passe donc en un seul appel, sans état intermédiaire refusé, comme dans le formulaire.
 
-Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'est pas envoyée** (le formulaire renvoie toutes ses épreuves). Le formulaire montre l'état qu'il enverra ; un outil, lui, lit la course puis écrit, et renvoyer telles quelles des épreuves qu'il ne touche pas écraserait ce qu'une autre personne vient d'y changer.
+Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'est pas envoyée** (le formulaire renvoie toutes ses épreuves), **et la course n'est envoyée qu'avec ses champs qui changent**, ou pas du tout quand aucun ne change. Le formulaire montre l'état qu'il enverra ; un outil, lui, lit la course puis écrit, et renvoyer telles quelles des valeurs qu'il ne touche pas écraserait ce qu'une autre personne vient d'y changer. Une demande qui ne change rien n'écrit rien (« Rien à changer : … »).
+
+**Ce que le formulaire refuse avant d'envoyer, l'outil le refuse aussi, avant toute confirmation** : une épreuve sans mesure (`format_measure_required`), et une épreuve datée avant le premier jour de la course (`format_date_out_of_range` : le champ de date d'une épreuve a `start_date` pour minimum). C'est le cas d'une course déplacée par son seul `start_date` alors qu'une de ses épreuves est datée : la réponse dit de donner leur nouveau jour aux épreuves datées dans `formats`. `start_date` ne s'efface pas.
 
 **Avertissements** (`warnings`, des phrases en français, qui ne bloquent pas) : la course dure plus de deux semaines : « Plus de deux semaines : vérifie les dates des épreuves. » (comme le formulaire). Raccourcir une course est une confirmation (§ 6.13).
 
@@ -506,7 +508,7 @@ Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'e
 **`delete_event`** (« Supprimer » de la fiche) — `event_id` (obligatoire), `confirmation`.
 
 - **Toujours une confirmation** : elle nomme la course, ses épreuves, et ce qui part avec elle par la cascade du site : les participations (avec les noms et les statuts), les commentaires et les offres (leur nombre), comme la fenêtre de confirmation du site qui liste les participants.
-- Le site ne laisse supprimer une course qu'à son auteur et aux admins : « Seule Alice, qui a créé la course, ou un admin peut la supprimer. » (annoncé avant la confirmation, § 5.3, et refusé par l'API sinon).
+- Le site ne laisse supprimer une course qu'à son auteur et aux admins : « Seule la personne qui a créé la course, Alice, ou un admin peut la supprimer. » (annoncé avant la confirmation, § 5.3, et refusé par l'API sinon). Le message ne devine jamais, d'après un nom, comment on parle d'une personne.
 - → `{ "done", "removed": { "id", "name", "start_date" }, "summary" }`.
 
 **`add_format`** — `event_id` (obligatoire) et une épreuve. → la course, `done`, `summary`, `warnings`.
@@ -517,7 +519,7 @@ Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'e
 
 - **Toujours une confirmation** : elle nomme l'épreuve et, s'il y en a, ses participants avec leur statut, dont les participations partent avec elle (« Supprimer « Trail 42 km » supprime aussi 3 participations : Alice (Inscrit), Bob (Intéressé, non confirmé), Sam (Non partant). »), et sa trace s'il y en a une.
 - Refusé si c'est **la seule épreuve** de la course : « Une course garde au moins une épreuve. » (le formulaire ne permet pas de retirer la dernière).
-- Le site ne laisse supprimer une épreuve qu'à l'auteur de la course et aux admins : « Seule Alice, qui a créé la course, ou un admin peut supprimer une de ses épreuves. » (annoncé, § 5.3).
+- Le site ne laisse supprimer une épreuve qu'à l'auteur de la course et aux admins : « Seule la personne qui a créé la course, Alice, ou un admin peut supprimer une de ses épreuves. » (annoncé, § 5.3).
 - → la course, `done`, `summary`, `warnings`.
 
 ### 6.6 Participations et résultats
@@ -816,6 +818,7 @@ Une demande qui supprimerait ou effacerait ce qu'une personne a saisi, ou qui to
 | `update_event` | un champ rempli serait vidé (`registration_url`, `registration_deadline`, `notes`, ou un champ d'une épreuve de `formats`) ; des notes non vides seraient remplacées ; la course serait raccourcie (sa date de fin recule ou disparaît) ; le jour d'une épreuve qui a des participants changerait (sa date, ou le début de la course pour une épreuve sans date) | chaque champ vidé et sa valeur actuelle ; les notes actuelles ; les jours avant et après ; chaque épreuve dont le jour change, avec ses participants |
 | `delete_event` | toujours | la course, ses épreuves, ses participants (nom, statut), le nombre de commentaires et d'offres : tout part avec elle |
 | `update_format` | un champ rempli serait vidé ; le jour d'une épreuve qui a des participants changerait | idem |
+| `add_format` | la course serait raccourcie (une course dont la fin ne venait d'aucune épreuve, comme en v4) | les jours avant et après, et comment les garder |
 | `delete_format` | toujours | l'épreuve, sa trace, et ses participants (nom, statut, résultat) : leurs participations partent avec elle |
 | `add_participation` | la participation remplacerait la participation à la course seule (« Intéressé, format à choisir » ou « Supporteur ») d'un autre coureur que soi | la participation remplacée, et qui l'avait ajoutée |
 | `update_participation` | c'est la participation d'un autre coureur (statut ou épreuve) ; ou le nouveau statut effacerait un résultat (temps, classement, note) | la participation, ce qui change, le résultat perdu |
@@ -872,11 +875,11 @@ Le `message` est en français, prêt à être montré à la personne. Un fichier
 Le même outil, les mêmes arguments, et `confirmation`. L'outil relit tout, recalcule les deux empreintes, prend le jeton et le compare :
 
 - **tout correspond** (même compte, même jeton MCP, même outil, mêmes arguments, même état, pas expiré, pas déjà utilisé) : l'outil écrit, une fois, et répond `done: true` ;
-- **sinon** : rien n'est écrit, et la réponse (`done: false`) dit pourquoi : « Confirmation refusée : elle a expiré. » / « … elle a déjà servi. » / « … elle ne correspond pas à cette demande. » / « … elle est inconnue (le site a peut-être redémarré). » / « … la situation a changé depuis : … » (par exemple : un nouvel inscrit). Puis :
+- **sinon** : rien n'est écrit, et la réponse (`done: false`) dit pourquoi : « Confirmation refusée : elle a expiré. » / « … elle a déjà servi. » / « … elle ne correspond pas à cette demande. » / « … elle est inconnue (le site a peut-être redémarré). » / « … la situation a changé depuis. » suivi de ce qui a changé dans ce qui était montré (« Nouveau : « Sam (Intéressé, non confirmé) ». », « Plus d'actualité : … ») quand une ligne a changé. Puis :
   - si la demande doit toujours être confirmée : **une nouvelle confirmation**, qui décrit la situation d'aujourd'hui, avec un nouveau jeton ;
   - sinon : « Cette demande n'a plus besoin de confirmation : rappelle-la sans confirmation. »
 
-Une `confirmation` présentée est toujours prise et vérifiée : un assistant ne peut pas la réutiliser pour autre chose, ni la glisser dans une demande pour voir. Entre la seconde vérification et l'écriture, une autre personne peut encore changer la course : la fenêtre est de quelques millisecondes, comme entre deux onglets du site (§ 8.5).
+Une `confirmation` présentée est toujours prise et vérifiée, même quand l'outil refuse la demande avant d'en arriver à la confirmation (un identifiant qui n'en est pas un, une course introuvable, un refus annoncé) : un assistant ne peut pas la réutiliser pour autre chose, ni la glisser dans une demande pour voir. Entre la seconde vérification et l'écriture, une autre personne peut encore changer la course : la fenêtre est de quelques millisecondes, comme entre deux onglets du site (§ 8.5).
 
 ## 7. Réglages : la section « Assistant IA »
 

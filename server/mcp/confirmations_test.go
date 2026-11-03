@@ -315,20 +315,79 @@ func TestTools_Confirmation_StateChanged(t *testing.T) {
 	if strings.Contains(message+strings.Join(details, ""), "Sam") {
 		t.Fatal("the first confirmation names Sam, who is not on F42 yet")
 	}
+	// Meanwhile, Sam is added to F42, and Bob registers.
 	create(t, app, "participations", map[string]any{
 		"runner": fx.SamRunner.Id, "format": fx.F42.Id, "status": "interested", "confirmed": false, "added_by": fx.AliceRunner.Id,
 	})
+	update(t, app, fx.P2, map[string]any{"status": "registered"})
 
 	writesNothing(t, app, func() {
 		again := callTool(t, app, alice, "delete_format", with(args, token))
 		_, message, details := asked(t, again)
-		if summary := summaryOfResult(again); !strings.Contains(summary, "Confirmation refusée : la situation a changé depuis.") {
-			t.Errorf("the summary is %q, want the token refused as stale", summary)
+		// What changed is said: the lines that are new, and the ones that are
+		// not true any more.
+		const want = "Confirmation refusée : la situation a changé depuis. " +
+			"Nouveau : « Bob (Inscrit, non confirmé) », « Sam (Intéressé, non confirmé) ». " +
+			"Plus d'actualité : « Bob (Intéressé, non confirmé) »."
+		if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+			t.Errorf("the summary is %q, want it to start with %q", summary, want)
 		}
 		mentions(t, message, details, "Sam (Intéressé, non confirmé)", "3 participations")
 	})
 	if _, err := app.FindRecordById("formats", fx.F42.Id); err != nil {
 		t.Errorf("F42 is gone: %v", err)
+	}
+
+	// A change that no line shows (the D+ of F42, whose record the confirmation
+	// was read from) is only said to be a change.
+	token, _, _ = asked(t, callTool(t, app, alice, "delete_format", args))
+	update(t, app, fx.F42, map[string]any{"elevation_gain_m": 2500})
+	again := callTool(t, app, alice, "delete_format", with(args, token))
+	asked(t, again)
+	const changed = "Confirmation refusée : la situation a changé depuis. Rien n'a été fait"
+	if summary := summaryOfResult(again); !strings.HasPrefix(summary, changed) {
+		t.Errorf("the summary is %q, want it to start with %q", summary, changed)
+	}
+}
+
+// A confirmation that a call presents is taken, whatever happens (spec § 6.13):
+// a call that the tool refuses before it asks anything uses it up too.
+func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	bob := newToken(t, app, fx.Bob)
+
+	for _, row := range []struct {
+		name string
+		tool string
+		args map[string]any
+		// early is the call, refused before the confirmation, that presents
+		// the token.
+		token     string
+		earlyTool string
+		early     map[string]any
+	}{
+		{"an id that is not one", "delete_format", map[string]any{"format_id": fx.F42.Id}, alice, "delete_format", map[string]any{"format_id": "nope"}},
+		{"a race that is not there", "delete_event", map[string]any{"event_id": fx.Event.Id}, alice, "delete_event", map[string]any{"event_id": "aaaaaaaaaaaaaaa"}},
+		{"the refusal of the author", "delete_format", map[string]any{"format_id": fx.F42.Id}, bob, "delete_format", map[string]any{"format_id": fx.F15.Id}},
+		{"a format without a measure", "update_format", map[string]any{"format_id": fx.F42.Id, "elevation_gain_m": 0}, alice, "update_format", map[string]any{"format_id": fx.F42.Id, "distance_km": 0}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			token, _, _ := asked(t, callTool(t, app, alice, row.tool, row.args))
+			writesNothing(t, app, func() {
+				if early := callTool(t, app, row.token, row.earlyTool, with(row.early, token)); !early.IsError {
+					t.Fatalf("the early call answered %.200s, want a refusal", redact(early.Text))
+				}
+				again := callTool(t, app, alice, row.tool, with(row.args, token))
+				asked(t, again)
+				if summary := summaryOfResult(again); !strings.Contains(summary, "Confirmation refusée : elle a déjà servi.") {
+					t.Errorf("the summary is %q, want the token used up", summary)
+				}
+			})
+		})
 	}
 }
 

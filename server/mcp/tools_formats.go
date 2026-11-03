@@ -25,7 +25,7 @@ import (
 type addFormatIn struct {
 	EventID string `json:"event_id" jsonschema:"l'identifiant de la course, tel que search_events le donne"`
 	formatIn
-	Confirmation string `json:"confirmation,omitempty" jsonschema:"le jeton d'une confirmation : add_format n'en demande pas"`
+	Confirmation string `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
 
 var addFormatSchema = sync.OnceValue(func() *jsonschema.Schema {
@@ -38,11 +38,13 @@ func addAddFormat(s *mcpsdk.Server, t *tools) {
 		Title: "Ajouter une épreuve",
 		Description: "Ajoute une épreuve à une course, comme « Ajouter une épreuve » du formulaire (tout membre le peut). " +
 			"Elle a au moins une mesure, distance_km, duration_min ou time_limit_min : de préférence celles de son type (list_race_types). " +
-			"Une épreuve datée après la fin de la course l'allonge, dans la même écriture. Donne la course comme get_event.",
+			"La fin de la course vient de ses épreuves : une épreuve datée après la fin l'allonge, dans la même écriture. " +
+			"Une course dont le dernier jour ne vient d'aucune épreuve serait raccourcie : rien n'est fait au premier appel, " +
+			"qui le dit et donne un jeton de confirmation. Donne la course comme get_event.",
 		InputSchema:  addFormatSchema(),
 		OutputSchema: eventWriteSchema(),
-		Annotations:  writeAnnotations(false, false),
-	}, t.addFormat)
+		Annotations:  writeAnnotations(true, false),
+	}, usesUpConfirmation(t, t.addFormat))
 }
 
 func (t *tools) addFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in addFormatIn) (*mcpsdk.CallToolResult, eventWriteOut, error) {
@@ -100,7 +102,7 @@ func addUpdateFormat(s *mcpsdk.Server, t *tools) {
 		InputSchema:  updateFormatSchema(),
 		OutputSchema: eventWriteSchema(),
 		Annotations:  writeAnnotations(true, true),
-	}, t.updateFormat)
+	}, usesUpConfirmation(t, t.updateFormat))
 }
 
 func (t *tools) updateFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in updateFormatIn) (*mcpsdk.CallToolResult, eventWriteOut, error) {
@@ -153,7 +155,7 @@ func addDeleteFormat(s *mcpsdk.Server, t *tools) {
 		InputSchema:  inputSchema[deleteFormatIn](nil),
 		OutputSchema: eventWriteSchema(),
 		Annotations:  writeAnnotations(true, false),
-	}, t.deleteFormat)
+	}, usesUpConfirmation(t, t.deleteFormat))
 }
 
 func (t *tools) deleteFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in deleteFormatIn) (*mcpsdk.CallToolResult, eventWriteOut, error) {
@@ -210,7 +212,7 @@ func (t *tools) deleteFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	draft := draftOf(view)
 	change(&draft)
 	if end := eventEndDate(draft.StartDate, datesOf(draft)); shortens(event.StartDate, event.EndDate, end) {
-		line := "La course serait raccourcie : avant, " + period(event.StartDate, event.EndDate) + " ; après, " + period(event.StartDate, end) + "."
+		line := shortenedLine(event.StartDate, event.EndDate, event.StartDate, end)
 		r.Message += " " + line
 		r.Details = append(r.Details, line)
 		r.Records = append(r.Records, stamp{Collection: "events", ID: event.ID, Updated: event.Updated})
@@ -224,3 +226,7 @@ func (t *tools) deleteFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 		strings.TrimSpace(in.Confirmation), change, &r, summary)
 	return nil, answer, err
 }
+
+func (in addFormatIn) confirmationGiven() string    { return in.Confirmation }
+func (in updateFormatIn) confirmationGiven() string { return in.Confirmation }
+func (in deleteFormatIn) confirmationGiven() string { return in.Confirmation }

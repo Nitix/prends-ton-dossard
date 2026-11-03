@@ -59,7 +59,7 @@ var wantHints = map[string]hints{
 	"create_event":    {destructive: true},
 	"update_event":    {destructive: true, idempotent: true},
 	"delete_event":    {destructive: true},
-	"add_format":      {},
+	"add_format":      {destructive: true},
 	"update_format":   {destructive: true, idempotent: true},
 	"delete_format":   {destructive: true},
 }

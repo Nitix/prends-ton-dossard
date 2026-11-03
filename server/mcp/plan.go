@@ -37,10 +37,11 @@ type joinDraft struct {
 	Status      string
 }
 
-// storedEvent is a race as it is stored: its days and its formats.
+// storedEvent is a race as it is stored: its fields and its formats.
 type storedEvent struct {
-	ID, StartDate, EndDate string
-	Formats                []formatDraft
+	ID, StartDate, EndDate                                       string
+	Name, Location, RegistrationURL, RegistrationDeadline, Notes string
+	Formats                                                      []formatDraft
 }
 
 // The targets of the operations of a batch, which say what a refused request
@@ -93,6 +94,29 @@ func formatBody(f formatDraft) map[string]any {
 	}
 }
 
+// changedEventBody is the part of eventBody(draft) that differs from the stored
+// event: an update sends nothing else (nil when nothing differs).
+func changedEventBody(draft eventDraft, stored *storedEvent) map[string]any {
+	body := map[string]any{}
+	for _, field := range []struct{ name, now, was string }{
+		{"name", draft.Name, stored.Name},
+		{"location", draft.Location, stored.Location},
+		{"start_date", draft.StartDate, stored.StartDate},
+		{"end_date", draft.EndDate, stored.EndDate},
+		{"registration_url", draft.RegistrationURL, stored.RegistrationURL},
+		{"registration_deadline", draft.RegistrationDeadline, stored.RegistrationDeadline},
+		{"notes", draft.Notes, stored.Notes},
+	} {
+		if field.now != field.was {
+			body[field.name] = field.now
+		}
+	}
+	if len(body) == 0 {
+		return nil
+	}
+	return body
+}
+
 // isInRangeOf is isInRangeOf of saveEvent.ts: whether a day is in the days that
 // the stored event has. An empty day is.
 func isInRangeOf(stored *storedEvent, day string) bool {
@@ -103,12 +127,16 @@ func isInRangeOf(stored *storedEvent, day string) bool {
 // the stored event has that day), update the event, then the late dates and the new formats,
 // then the participation of Join. New ids come from core.GenerateDefaultRandomId().
 // One difference: a kept format whose fields are all unchanged gets no op, so that a tool
-// never writes back stale values over another person's change (spec § 6.5).
+// never writes back stale values over another person's change (spec § 6.5). The
+// same goes for the event: its update sends the fields that change, and there is
+// none when nothing does. Nothing to write is no op at all.
 //
 // The server checks the date of a format against the event, and the dates of an
 // event against its formats, as they are when each request runs: whatever the
 // final state, if it is valid, no request of the batch fails on the way (see
-// buildBatch). A format is never sent with its event once it exists.
+// buildBatch). Without an update of the event, its days do not change, and no
+// format waits for them: a draft dated within them is valid as it is stored. A
+// format is never sent with its event once it exists.
 //
 // draft.Join, when set, names a format of draft.Formats, and myRunnerID is the
 // runner of the owner of the token: the tool checks both first.
@@ -129,11 +157,13 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 		}
 	}
 
-	eventOp := batchOp{Method: http.MethodPost, URL: recordsOf + "events/records", Body: eventBody(draft), Target: targetEvent, Format: -1}
-	if stored != nil {
-		eventOp.Method, eventOp.URL = http.MethodPatch, recordsOf+"events/records/"+eventID
-	} else {
-		eventOp.Body["id"] = eventID
+	var eventOps []batchOp
+	if stored == nil {
+		body := eventBody(draft)
+		body["id"] = eventID
+		eventOps = append(eventOps, batchOp{Method: http.MethodPost, URL: recordsOf + "events/records", Body: body, Target: targetEvent, Format: -1})
+	} else if body := changedEventBody(draft, stored); body != nil {
+		eventOps = append(eventOps, batchOp{Method: http.MethodPatch, URL: recordsOf + "events/records/" + eventID, Body: body, Target: targetEvent, Format: -1})
 	}
 
 	var keptOps, lateOps []batchOp
@@ -188,7 +218,7 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 		})
 	}
 
-	ops = slices.Concat(deleteOps, keptOps, []batchOp{eventOp}, lateOps, joinOps)
+	ops = slices.Concat(deleteOps, keptOps, eventOps, lateOps, joinOps)
 	return ops, eventID, formatIDs
 }
 

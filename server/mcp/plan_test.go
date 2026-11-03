@@ -50,9 +50,13 @@ func draftF15() mcp.FormatDraft {
 	return mcp.FormatDraft{ID: "f15", RaceType: trailType, DistanceKm: 15, ElevationGainM: 700}
 }
 
-// existing is the event of the fixture as it is stored: 13-14 June, F42 and F15.
+// existing is the event of the fixture as it is stored: « Trail des Crêtes »,
+// in Annecy, 13-14 June, F42 and F15.
 func existing() *mcp.StoredEvent {
-	return &mcp.StoredEvent{ID: "event", StartDate: "2026-06-13", EndDate: "2026-06-14", Formats: []mcp.FormatDraft{draftF42(), draftF15()}}
+	return &mcp.StoredEvent{
+		ID: "event", Name: "Trail des Crêtes", Location: "Annecy", StartDate: "2026-06-13", EndDate: "2026-06-14",
+		Formats: []mcp.FormatDraft{draftF42(), draftF15()},
+	}
 }
 
 // datedExisting is the event of the fixture with F15 dated on the first day too.
@@ -276,10 +280,12 @@ func TestPlan_Creation_TargetsOfTheOperations(t *testing.T) {
 // ---------------------------------------------------------------------------
 // buildBatch, modification
 
-// The TS test sends the formats that stay as they are; here they change (a
-// price each), and the next test is the one where they do not.
+// The TS test sends the formats that stay as they are, and the event as it is;
+// here they change (a price each, and the name of the event), and
+// TestPlan_UnchangedFormatsAreNotSent is the one where they do not.
 func TestPlan_Modification_UpdatesKeptFormatsThenTheEvent(t *testing.T) {
 	draft := editDraft(func(d *mcp.EventDraft) {
+		d.Name = "Trail des Crêtes 2026"
 		d.Formats[0].PriceEur = 65
 		d.Formats[1].PriceEur = 25
 	})
@@ -307,6 +313,8 @@ func TestPlan_Modification_UpdatesKeptFormatsThenTheEvent(t *testing.T) {
 	if ops[2].URL != "/api/collections/events/records/event" {
 		t.Errorf("the event is updated at %s", ops[2].URL)
 	}
+	// The event is sent with what changes, and nothing else.
+	wantExactBody(t, ops[2], map[string]any{"name": "Trail des Crêtes 2026"})
 }
 
 func TestPlan_Modification_RemovedFormatIsDeleted(t *testing.T) {
@@ -419,20 +427,22 @@ func TestPlan_Modification_DateWaitsForTheEvent(t *testing.T) {
 	}
 }
 
-// The difference with buildBatch: a format that stays as it is gets no
-// operation, so that a tool never writes back what it read over the change of
+// The differences with buildBatch: a format that stays as it is gets no
+// operation, and the event is sent with the fields that change only, or not at
+// all, so that a tool never writes back what it read over the change of
 // somebody else (spec § 6.5).
 func TestPlan_UnchangedFormatsAreNotSent(t *testing.T) {
 	t.Run("the event alone changes", func(t *testing.T) {
 		ops, _, formatIDs := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) { d.Name = "Trail des Crêtes 2026" }), existing(), me)
 		wantSummary(t, ops, "update events")
+		wantExactBody(t, ops[0], map[string]any{"name": "Trail des Crêtes 2026"})
 		if !slices.Equal(formatIDs, []string{"f42", "f15"}) {
 			t.Errorf("the formats are %q", formatIDs)
 		}
 	})
-	t.Run("one format changes", func(t *testing.T) {
+	t.Run("one format changes: the event is not sent", func(t *testing.T) {
 		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) { d.Formats[1].DistanceKm = 16 }), existing(), me)
-		wantSummary(t, ops, "update formats", "update events")
+		wantSummary(t, ops, "update formats")
 		if idOf(ops[0]) != "f15" {
 			t.Errorf("the format sent is %s, want F15", idOf(ops[0]))
 		}
@@ -443,7 +453,28 @@ func TestPlan_UnchangedFormatsAreNotSent(t *testing.T) {
 			d.Formats[1].Date = "2026-06-15"
 		}), existing(), me)
 		wantSummary(t, ops, "update events", "update formats")
+		wantExactBody(t, ops[0], map[string]any{"end_date": "2026-06-15"})
 		wantExactBody(t, ops[1], map[string]any{"date": "2026-06-15"})
+	})
+	t.Run("nothing changes: nothing is sent", func(t *testing.T) {
+		ops, eventID, formatIDs := mcp.PlanBatch(editDraft(nil), existing(), me)
+		if len(ops) != 0 || eventID != "event" || !slices.Equal(formatIDs, []string{"f42", "f15"}) {
+			t.Errorf("the plan is %v, %q, %q; want no operation", summaryOf(ops), eventID, formatIDs)
+		}
+	})
+	t.Run("each field of the event that changes, alone", func(t *testing.T) {
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.Location = "Annecy-le-Vieux"
+			d.RegistrationURL = "https://inscriptions.example.test"
+			d.RegistrationDeadline = "2026-05-31"
+			d.Notes = "Navette."
+			d.StartDate = "2026-06-12"
+		}), existing(), me)
+		wantSummary(t, ops, "update events")
+		wantExactBody(t, ops[0], map[string]any{
+			"location": "Annecy-le-Vieux", "registration_url": "https://inscriptions.example.test",
+			"registration_deadline": "2026-05-31", "notes": "Navette.", "start_date": "2026-06-12",
+		})
 	})
 }
 
@@ -459,7 +490,8 @@ type stored struct {
 // runOnServer runs the operations against the two checks of the server
 // (server/events/hooks.go): the date of a format against the event as it is
 // stored, and the dates of an event against the formats as they are stored,
-// each time a request runs.
+// each time a request runs. An update of the event that does not send a day
+// leaves it as it is stored.
 func runOnServer(ops []mcp.BatchOp, view *mcp.StoredEvent) (stored, error) {
 	s := stored{start: view.StartDate, end: view.EndDate, formats: map[string]string{}}
 	for _, f := range view.Formats {
@@ -469,8 +501,14 @@ func runOnServer(ops []mcp.BatchOp, view *mcp.StoredEvent) (stored, error) {
 	for index, op := range ops {
 		switch collectionOf(op) {
 		case "events":
-			start, _ := op.Body["start_date"].(string)
-			end, _ := op.Body["end_date"].(string)
+			start, ok := op.Body["start_date"].(string)
+			if !ok {
+				start = s.start
+			}
+			end, ok := op.Body["end_date"].(string)
+			if !ok {
+				end = s.end
+			}
 			for id, day := range s.formats {
 				if day != "" && !within(day, start, end) {
 					return s, fmt.Errorf("request %d: the date %s of %s is out of the event", index, day, id)

@@ -186,10 +186,19 @@ func TestTools_CreateEvent(t *testing.T) {
 			"La course, date limite d'inscription : la date limite d'inscription doit être au plus tard le jour du début. (registration_deadline_after_start)")
 	})
 
+	// The form does not send it (the date of a format has the start as its
+	// minimum): announced, in the site's words, before any confirmation.
 	t.Run("a format dated before the start", func(t *testing.T) {
-		refused(t, app, alice, "create_event", base(func(a map[string]any) {
+		announced(t, app, alice, "create_event", base(func(a map[string]any) {
 			a["formats"] = []any{map[string]any{"race_type": "Trail", "distance_km": 42, "date": "2026-12-19"}}
 		}), "Épreuve 1 (« Trail 42 km »), date de l'épreuve : la date de l'épreuve doit être comprise dans les dates de l'événement. (format_date_out_of_range)")
+	})
+
+	t.Run("a format dated before the start of a race that has a duplicate: refused, not confirmed", func(t *testing.T) {
+		announced(t, app, alice, "create_event", map[string]any{
+			"name": "Trail des Crêtes", "location": "Annecy", "start_date": "2026-06-20",
+			"formats": []any{map[string]any{"race_type": "Trail", "distance_km": 20, "date": "2026-06-19"}},
+		}, "(format_date_out_of_range)")
 	})
 
 	t.Run("no format", func(t *testing.T) {
@@ -278,6 +287,41 @@ func TestTools_UpdateEvent(t *testing.T) {
 		refused(t, app, bob, "update_event", map[string]any{"event_id": fx.Event.Id, "name": " "},
 			"La course, nom : ce champ est obligatoire. (validation_required)")
 	})
+
+	// A race always has a first day: the form's field is required, and the
+	// start is what the days of the formats are read from.
+	t.Run("the start cleared", func(t *testing.T) {
+		announced(t, app, bob, "update_event", map[string]any{"event_id": fx.Event.Id, "start_date": " "},
+			"start_date ne s'efface pas : une course a toujours un premier jour (AAAA-MM-JJ).")
+	})
+
+	// Nothing to write: nothing is written, not even the race as it was read.
+	t.Run("nothing changes", func(t *testing.T) {
+		writesNothing(t, app, func() {
+			result := isDone(t, callTool(t, app, bob, "update_event", map[string]any{"event_id": fx.Event.Id, "name": "Trail des Crêtes 2026"}))
+			if want := "Rien à changer : « Trail des Crêtes 2026 » est déjà ainsi."; summaryOfResult(result) != want {
+				t.Errorf("the summary is %q, want %q", summaryOfResult(result), want)
+			}
+		})
+	})
+
+	// A field of the race is written alone: the others, read before, are not
+	// written back over a change that somebody else made meanwhile.
+	t.Run("only what changes is written", func(t *testing.T) {
+		var sent map[string]any
+		app.OnRecordUpdateRequest("events").BindFunc(func(e *core.RecordRequestEvent) error {
+			info, err := e.RequestInfo()
+			if err != nil {
+				return err
+			}
+			sent = info.Body
+			return e.Next()
+		})
+		isDone(t, callTool(t, app, bob, "update_event", map[string]any{"event_id": fx.Event.Id, "notes": "Navette depuis la gare."}))
+		if want := map[string]any{"notes": "Navette depuis la gare."}; fmt.Sprint(sent) != fmt.Sprint(want) {
+			t.Errorf("the update of the race sent %v, want %v", sent, want)
+		}
+	})
 }
 
 // A race moved with its dated format, in one call, as the form does: the format
@@ -293,6 +337,15 @@ func TestTools_UpdateEvent_MovesTheRaceWithItsFormats(t *testing.T) {
 		"event_id": fx.Event.Id, "start_date": "2026-06-20",
 		"formats": []any{map[string]any{"format_id": fx.F42.Id, "date": "2026-06-21"}},
 	}
+
+	// The start alone: F42 would be dated before it. The site refuses that, and
+	// the form does not send it: announced, with no confirmation of an outcome
+	// that cannot be.
+	t.Run("the start alone, a dated format left behind", func(t *testing.T) {
+		announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "start_date": "2026-06-20"},
+			"Épreuve 2 (« Trail 42 km »), date de l'épreuve : la date de l'épreuve doit être comprise dans les dates de l'événement. (format_date_out_of_range) "+
+				"Pour déplacer la course avec ses épreuves datées, donne à chacune son nouveau jour dans formats (update_event).")
+	})
 
 	// F42 and F15 have participants, whose day changes.
 	writesNothing(t, app, func() {
@@ -339,13 +392,15 @@ func TestTools_DeleteEvent(t *testing.T) {
 
 	t.Run("Bob, on Alice's race: refused before any confirmation", func(t *testing.T) {
 		announced(t, app, bob, "delete_event", map[string]any{"event_id": fx.Event.Id},
-			"Seule Alice, qui a créé la course, ou un admin peut la supprimer.")
+			"Seule la personne qui a créé la course, Alice, ou un admin peut la supprimer.")
 	})
 
+	// The message is what the assistant shows the person: it names who is
+	// registered, and not only how many.
 	t.Run("Alice: a confirmation that says what goes with it", func(t *testing.T) {
 		writesNothing(t, app, func() {
-			_, message, details := asked(t, callTool(t, app, alice, "delete_event", map[string]any{"event_id": fx.Event.Id}))
-			mentions(t, message, details,
+			_, message, _ := asked(t, callTool(t, app, alice, "delete_event", map[string]any{"event_id": fx.Event.Id}))
+			mentions(t, message, nil,
 				"« Trail des Crêtes » (2026-06-13 au 2026-06-14, Annecy)", "2 épreuves", "3 participations", "1 commentaire", "1 offre",
 				"« Trail 42 km » : Alice (Inscrit), Bob (Intéressé, non confirmé)", "« Trail 15 km » : Sam (Intéressé, non confirmé)")
 		})

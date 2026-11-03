@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -52,6 +54,10 @@ type pendingConfirmation struct {
 	args, state           string // hex SHA-256 of the normalized arguments, and of the state shown
 	made, expires         time.Time
 	order                 uint64
+	// shown are the lines that the confirmation showed (its details): a token
+	// refused because the state changed says which lines are new, and which are
+	// not true any more.
+	shown []string
 }
 
 // newConfirmations is the store of the app: Register gives it
@@ -93,6 +99,13 @@ func (s *confirmations) put(p pendingConfirmation) (token string, expires time.T
 // "unknown", "used", "expired", "other" (another user, MCP token, tool or arguments),
 // "changed" (state).
 func (s *confirmations) take(token string, p pendingConfirmation) (refusal string) {
+	refusal, _ = s.takeShown(token, p)
+	return refusal
+}
+
+// takeShown is take, and the lines that the confirmation of token showed, when
+// it is refused because the state changed.
+func (s *confirmations) takeShown(token string, p pendingConfirmation) (refusal string, shown []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -101,22 +114,22 @@ func (s *confirmations) take(token string, p pendingConfirmation) (refusal strin
 	e, ok := s.entries[token]
 	if !ok {
 		if _, used := s.spent[token]; used {
-			return refusalUsed
+			return refusalUsed, nil
 		}
-		return refusalUnknown
+		return refusalUnknown, nil
 	}
 	delete(s.entries, token)
 	s.spend(token, e.expires)
 
 	switch {
 	case !now.Before(e.expires):
-		return refusalExpired
+		return refusalExpired, nil
 	case e.userID != p.userID || e.tokenID != p.tokenID || e.tool != p.tool || e.args != p.args:
-		return refusalOther
+		return refusalOther, nil
 	case e.state != p.state:
-		return refusalChanged
+		return refusalChanged, e.shown
 	}
-	return ""
+	return "", nil
 }
 
 // sweep drops the confirmations that expired, and the spent tokens that would
@@ -242,7 +255,7 @@ func (t *tools) guard(ctx context.Context, tool string, args any, r *risk, given
 	p := pendingConfirmation{userID: c.user.Id, tokenID: c.token.Id, tool: tool, args: argsHash, state: stateHash}
 
 	if given != "" {
-		refusal := t.confirms.take(given, p)
+		refusal, shown := t.confirms.takeShown(given, p)
 		switch {
 		case refusal == "":
 			c.noteConfirmation(confirmationConfirmed)
@@ -251,10 +264,14 @@ func (t *tools) guard(ctx context.Context, tool string, args any, r *risk, given
 			return false, nil, noLongerNeeded, nil
 		}
 		notice = refusalNotices[refusal]
+		if refusal == refusalChanged {
+			notice += changesOf(shown, r.Details)
+		}
 	} else if r == nil {
 		return true, nil, "", nil
 	}
 
+	p.shown = slices.Clone(r.Details)
 	token, expires := t.confirms.put(p)
 	c.noteConfirmation(confirmationAsked)
 	return false, &confirmationOut{
@@ -264,6 +281,29 @@ func (t *tools) guard(ctx context.Context, tool string, args any, r *risk, given
 			" avec les mêmes arguments et confirmation: \"" + token + "\" (valable 10 minutes, une seule fois).",
 		Details: orEmpty(r.Details),
 	}, notice, nil
+}
+
+// changesOf says what changed between the lines that a confirmation showed and
+// the ones it would show now: the new lines, and the lines that are not true
+// any more. Nothing when no line changed (a record read for them did).
+func changesOf(before, after []string) string {
+	quoted := func(lines []string, keep func(string) bool) []string {
+		var out []string
+		for _, line := range lines {
+			if keep(line) {
+				out = append(out, "« "+strings.TrimSuffix(line, ".")+" »")
+			}
+		}
+		return out
+	}
+	text := ""
+	if added := quoted(after, func(line string) bool { return !slices.Contains(before, line) }); len(added) > 0 {
+		text += " Nouveau : " + strings.Join(added, ", ") + "."
+	}
+	if gone := quoted(before, func(line string) bool { return !slices.Contains(after, line) }); len(gone) > 0 {
+		text += " Plus d'actualité : " + strings.Join(gone, ", ") + "."
+	}
+	return text
 }
 
 // hashOf is the hex SHA-256 of the JSON of v: the canonical form of the

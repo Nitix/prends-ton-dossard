@@ -54,6 +54,7 @@ func TestTools_UpdateFormat_MovesTheEndInOneCall(t *testing.T) {
 	})
 
 	t.Run("another race type: written at once", func(t *testing.T) {
+		event := storedRecord(t, app, "events", fx.Event.Id)
 		result := isDone(t, callTool(t, app, alice, "update_format", map[string]any{"format_id": fx.F42.Id, "race_type": "Cross"}))
 		f := formatIn(t, result, fx.F42.Id)
 		assertJSON(t, f["race_type"], map[string]any{"id": fx.Cross.Id, "label": "Cross"})
@@ -61,6 +62,15 @@ func TestTools_UpdateFormat_MovesTheEndInOneCall(t *testing.T) {
 		if f["distance_km"] != float64(42) || f["elevation_gain_m"] != float64(2400) || f["date"] != "2026-06-16" {
 			t.Errorf("F42 is now %v", f)
 		}
+		// The race does not change: it is not written.
+		if after := storedRecord(t, app, "events", fx.Event.Id); after.GetString("updated") != event.GetString("updated") {
+			t.Error("the race was written back")
+		}
+	})
+
+	t.Run("a day before the start of the race", func(t *testing.T) {
+		announced(t, app, alice, "update_format", map[string]any{"format_id": fx.F42.Id, "date": "2026-06-12"},
+			"(« Cross 42 km »), date de l'épreuve : la date de l'épreuve doit être comprise dans les dates de l'événement. (format_date_out_of_range)")
 	})
 
 	t.Run("no measure left: refused", func(t *testing.T) {
@@ -109,6 +119,23 @@ func TestTools_AddFormat(t *testing.T) {
 		announced(t, app, bob, "add_format", map[string]any{"event_id": fx.Event.Id, "race_type": "Trail"},
 			"distance : indique au moins une distance, une durée ou un temps max. (format_measure_required)")
 	})
+
+	// A race whose last day was set by hand (v4), its formats undated: the form
+	// gives it the end of its formats, which shortens it. add_format asks first.
+	t.Run("a race whose end comes from no format: a confirmation", func(t *testing.T) {
+		v4 := create(t, app, "events", map[string]any{"name": "Raid du Vercors", "location": "Villard", "start_date": "2026-07-10", "end_date": "2026-07-12", "created_by": fx.AliceRunner.Id})
+		create(t, app, "formats", map[string]any{"event": v4.Id, "race_type": fx.Trail.Id, "distance_km": 50})
+		args := map[string]any{"event_id": v4.Id, "race_type": "Trail", "distance_km": 20}
+		writesNothing(t, app, func() {
+			_, message, _ := asked(t, callTool(t, app, bob, "add_format", args))
+			mentions(t, message, nil, "La course serait raccourcie : avant, du 2026-07-10 au 2026-07-12 ; après, le 2026-07-10.",
+				"Pour garder ces jours, donne sa date à l'épreuve du dernier jour.")
+		})
+		result := confirmAndCall(t, app, bob, "add_format", args)
+		if _, ok := result.Structured["end_date"]; ok {
+			t.Errorf("the race ends on %v, want one day", result.Structured["end_date"])
+		}
+	})
 }
 
 func TestTools_DeleteFormat(t *testing.T) {
@@ -123,7 +150,7 @@ func TestTools_DeleteFormat(t *testing.T) {
 
 	t.Run("Bob, on a format of Alice's race: refused before any confirmation", func(t *testing.T) {
 		announced(t, app, bob, "delete_format", map[string]any{"format_id": fx.F15.Id},
-			"Seule Alice, qui a créé la course, ou un admin peut supprimer une de ses épreuves.")
+			"Seule la personne qui a créé la course, Alice, ou un admin peut supprimer une de ses épreuves.")
 	})
 
 	t.Run("Alice: a confirmation that names who is on it", func(t *testing.T) {
