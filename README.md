@@ -312,6 +312,11 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] Changer sa photo en la choisissant dans la **photothèque** (une photo existante, de préférence en portrait) : même vérification. Si le téléphone ne la lit pas, un message le dit et rien n'est envoyé.
 - [ ] Sur un événement à plusieurs épreuves, cliquer sur « J'y vais » en laissant « Pas encore décidé » : le coureur apparaît dans « Intéressés, format à choisir ». Depuis le menu de sa participation, « Choisir l'épreuve » : choisir une épreuve et un statut, et vérifier qu'il passe dans la liste de cette épreuve.
 - [ ] Mettre quelqu'un en « Non partant » depuis le menu de sa participation : il quitte les listes et apparaît dans la section repliée « Non partants » (l'ouvrir pour le voir). Le remettre dans un autre statut le fait revenir dans les listes.
+- [ ] **Thèmes.** Dans Profil, Réglages, Apparence, choisir « Nuit », fermer l'appli installée (la balayer dans le sélecteur d'applications) et la rouvrir : la page s'ouvre directement en Nuit, sans un éclair de Crête.
+- [ ] Se déconnecter : la page de connexion est dessinée dans le thème choisi (en Carnet, rien n'y bouge).
+- [ ] En **mode avion**, choisir un thème jamais choisi sur cet iPhone : un message dit qu'il n'a pas pu être chargé, la page ne se recharge pas et garde son thème. Reprendre le réseau et choisir de nouveau le même thème : il se charge, sans relancer l'appli.
+- [ ] Se connecter avec le même compte sur un **deuxième appareil** : le thème choisi sur le premier le suit.
+- [ ] Choisir « Carnet », parcourir une longue liste, la fiche d'un événement et celle d'un coureur : le fond (points qui s'effacent par plaques, orbites qui tournent, une pulsation) bouge **sans saccade** au défilement. Laisser l'accueil ouvert 2 minutes ; depuis un Mac, dans Safari (Développement, Inspecteur web, Chronologies) il n'y a pas de Mise en page ni de Peinture en continu. « Animer le fond » (Profil, Réglages, Apparence) l'arrête ; avec Réglages d'iOS, Accessibilité, Mouvement, Réduire les animations, rien ne bouge non plus.
 - [ ] Désactiver le compte de test.
 
 ## Feuille de route
