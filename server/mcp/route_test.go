@@ -211,7 +211,7 @@ func TestMCP_RateLimitPerToken(t *testing.T) {
 	rpc(t, app, bearer(alice), http.StatusTooManyRequests, "ping", nil)
 }
 
-// A token has 4 requests under way at most: the limit of the arrivals does not
+// A token has 10 requests under way at most: the limit of the arrivals does not
 // bound the work in flight, and a request that turns out slow (a parse that waits,
 // say) would pile up. A fifth while four run is a 429 that says so in French, with
 // Retry-After; another token is not held back, and the place comes back with the

@@ -73,8 +73,9 @@ func (l *tokenLimiter) allow(tokenID string) bool {
 // bucket bounds the arrivals, not the work in flight: a request that turns out
 // slow (a parse that waits for its place, say) would pile up behind the others,
 // each with its body in memory. An assistant may run a few calls at once (Claude
-// Code runs some tools side by side); beyond 4, a 429 asks it to wait a second.
-const maxInFlight = 4
+// Code runs up to ten read-only tools side by side); beyond 10, a 429 asks it to
+// wait a second.
+const maxInFlight = 10
 
 // msgTooManyUnderWay is the refusal of a request beyond maxInFlight.
 var msgTooManyUnderWay = fmt.Sprintf("Ce jeton a déjà %d demandes en cours : attends la réponse de l'une d'elles avant d'en envoyer une autre.", maxInFlight)
