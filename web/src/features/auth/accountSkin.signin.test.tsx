@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { pb } from "../../lib/pb";
 import type { UserRecord } from "../../lib/types";
 import { SKIN_KEY, SKINS, chooseSkin } from "../../skins";
-import { UNSAVED_KEY, chooseSkinOnAccount } from "./accountSkin";
+import { UNSAVED_KEY, chooseSkinOnAccount, whenSaved } from "./accountSkin";
 import { connectSession, logout } from "./session";
 
 // The skin follows the account, from the sign-in to the sign-out: the real
@@ -83,8 +83,22 @@ afterEach(async () => {
   await chooseSkin("crete");
 });
 
-/** Lets what a sign-in started finish, to look at what it did not do. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+/**
+ * Lets what a sign-in started finish, to look at what it did not do: the saves
+ * that were on their way are over (`whenSaved`), and two frames have passed,
+ * which is far more than the microtasks that a sync would need to put a skin
+ * on the page. Not a wait of some milliseconds that a loaded machine could outrun.
+ */
+async function settle(): Promise<void> {
+  await whenSaved();
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+  });
+}
 
 test("connexion — le thème du compte est mis sur la page et gardé sur l'appareil, sans rien envoyer", async () => {
   pb.authStore.save(token(), user("u1", A));
