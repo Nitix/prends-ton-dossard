@@ -408,7 +408,7 @@ func TestTools_DeleteEvent(t *testing.T) {
 		writesNothing(t, app, func() {
 			_, message, _ := asked(t, callTool(t, app, alice, "delete_event", map[string]any{"event_id": fx.Event.Id}))
 			mentions(t, message, nil,
-				"« Trail des Crêtes » (2026-06-13 au 2026-06-14, Annecy)", "2 épreuves", "3 participations", "1 commentaire", "1 offre",
+				"« Trail des Crêtes » (2026-06-13 au 2026-06-14, « Annecy »)", "2 épreuves", "3 participations", "1 commentaire", "1 offre",
 				"« Trail 42 km » : Alice (Inscrit), Bob (Intéressé, non confirmé)", "« Trail 15 km » : Sam (Intéressé, non confirmé)")
 		})
 	})

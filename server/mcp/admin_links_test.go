@@ -100,8 +100,10 @@ func expiresIn7Days(t testing.TB, result toolResult) {
 	}
 }
 
-// An invitation: written at once when nothing waits and the role is member; asked
-// when it replaces a pending one, or gives the admin role.
+// An invitation is always asked, as a member with nothing waiting too: the link
+// opens an account to whoever has it, and a comment that an admin's assistant
+// reads must not get one made without the person agreeing. The confirmation says
+// more when it replaces a pending one, or gives the admin role.
 func TestAdmin_CreateLink_Invite(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
@@ -109,8 +111,14 @@ func TestAdmin_CreateLink_Invite(t *testing.T) {
 	julie := create(t, app, "runners", map[string]any{"name": "Julie"})
 	args := map[string]any{"runner": "Julie", "kind": "invite"}
 
+	var message string
+	var details []string
+	writesNothing(t, app, func() {
+		_, message, details = asked(t, callTool(t, app, admin, "admin_create_link", args))
+	})
+	mentions(t, message, details, "Ce lien permet à qui l'ouvre de créer le compte de Julie, avec le rôle membre.")
 	counted := mcp.CountInnerRequests(t)
-	first := isDone(t, callTool(t, app, admin, "admin_create_link", args))
+	first := confirmAndCall(t, app, admin, "admin_create_link", args)
 	_, oldToken := linkIn(t, first)
 	expiresIn7Days(t, first)
 	if got := counted.Of(http.MethodPost); got != 1 {
@@ -126,8 +134,6 @@ func TestAdmin_CreateLink_Invite(t *testing.T) {
 	}
 
 	// Again: it replaces the one waiting, which stops working.
-	var message string
-	var details []string
 	writesNothing(t, app, func() {
 		_, message, details = asked(t, callTool(t, app, admin, "admin_create_link", args))
 	})
@@ -143,8 +149,8 @@ func TestAdmin_CreateLink_Invite(t *testing.T) {
 	looksUp(t, app, oldToken, http.StatusNotFound)
 	looksUp(t, app, freshToken, http.StatusOK)
 
-	// An invitation that gives the admin role is asked (the one without anything
-	// waiting is a row of TestTools_Confirmation_NothingWrittenFirst).
+	// An invitation that gives the admin role says so (with nothing waiting, and as
+	// a member, they are rows of TestTools_Confirmation_NothingWrittenFirst).
 	writesNothing(t, app, func() {
 		_, message, details = asked(t, callTool(t, app, admin, "admin_create_link", map[string]any{"runner": "Julie", "kind": "invite", "role": "admin"}))
 	})
@@ -223,9 +229,15 @@ func TestAdmin_RevokeLink(t *testing.T) {
 		expired := linkWaiting(t, app, fx.SamRunner, "invite", "member")
 		update(t, app, expired, map[string]any{"expires_at": time.Now().Add(-time.Hour)})
 		announced(t, app, admin, "admin_revoke_link", map[string]any{"runner": "Sam", "kind": "invite"}, "Aucun lien en attente pour Sam")
-		// Nor is it one that a new invitation would stop: nothing to ask.
+		// Nor is it one that a new invitation would stop: the confirmation does not
+		// name it.
+		args := map[string]any{"runner": "Sam", "kind": "invite"}
+		_, message, details := asked(t, callTool(t, app, admin, "admin_create_link", args))
+		if all := message + strings.Join(details, " "); strings.Contains(all, "en attente") {
+			t.Errorf("the confirmation names an expired link as waiting: %s", redact(all))
+		}
 		writes := mcp.CountInnerRequests(t)
-		isDone(t, callTool(t, app, admin, "admin_create_link", map[string]any{"runner": "Sam", "kind": "invite"}))
+		confirmAndCall(t, app, admin, "admin_create_link", args)
 		if got := writes.Of(http.MethodPost); got != 1 {
 			t.Errorf("%d POST, want the one of the route", got)
 		}
@@ -275,12 +287,13 @@ func TestAdmin_LinkIsNotLogged(t *testing.T) {
 	handler.SetLevel(slog.LevelDebug)
 	admin := newToken(t, app, fx.Admin)
 
-	result := isDone(t, callTool(t, app, admin, "admin_create_link", map[string]any{"runner": "Sam", "kind": "invite"}))
+	result := confirmAndCall(t, app, admin, "admin_create_link", map[string]any{"runner": "Sam", "kind": "invite"})
 	address, token := linkIn(t, result)
 	secrets := map[string]string{"the link": address, "its token": token, "the hash of its token": invitations.Hash(token)}
 
-	// /mcp, and the inner requests: the runners, the links, and the route.
-	logs := waitForRequests(t, app, 4)
+	// The call that asks: /mcp, the runners and the links; the confirmed one: the
+	// same, and the route.
+	logs := waitForRequests(t, app, 7)
 	route := false
 	for _, entry := range logs {
 		data, err := json.Marshal(entry.Data)

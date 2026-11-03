@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -387,7 +388,7 @@ func measuresOf(r raceTypeRecord) []string {
 // search_events
 
 type searchEventsIn struct {
-	Query    string `json:"query,omitempty" jsonschema:"des mots cherchés dans le nom ou le lieu, sans tenir compte des majuscules ni des accents"`
+	Query    string `json:"query,omitempty" jsonschema:"des mots cherchés dans le nom ou le lieu, sans tenir compte des majuscules ni des accents ; 200 caractères au plus"`
 	Period   string `json:"period,omitempty" jsonschema:"upcoming (par défaut) : les courses pas finies, de la plus proche à la plus lointaine ; past : les courses finies, de la plus récente à la plus ancienne. Ignoré avec from ou to"`
 	From     string `json:"from,omitempty" jsonschema:"AAAA-MM-JJ : les courses qui ont au moins un jour entre from et to, bornes comprises ; sans to, toutes les courses à partir de ce jour. from ne peut pas être après to"`
 	To       string `json:"to,omitempty" jsonschema:"AAAA-MM-JJ : voir from ; sans from, toutes les courses jusqu'à ce jour"`
@@ -408,6 +409,11 @@ const (
 
 	defaultLimit = 20
 	maxLimit     = 50
+
+	// maxQuery is how many characters the text of a search has at most: a few
+	// words of a name or a place. Each word is looked for in each race read, and a
+	// body of a megabyte would hold half a million of them.
+	maxQuery = 200
 
 	// The days that stand for no bound of a range: texts of days sort like the days.
 	firstDay = "0001-01-01"
@@ -477,6 +483,10 @@ func (t *tools) searchEvents(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	if err != nil {
 		return fail(err)
 	}
+	query := strings.TrimSpace(in.Query)
+	if n := utf8.RuneCountInString(query); n > maxQuery {
+		return nil, searchEventsOut{}, fmt.Errorf("query : %d caractères au plus (celle-ci en a %d) ; cherche avec quelques mots du nom ou du lieu.", maxQuery, n)
+	}
 
 	from, err := checkDay("from", in.From)
 	if err != nil {
@@ -527,7 +537,7 @@ func (t *tools) searchEvents(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	if err != nil {
 		return fail(err)
 	}
-	words := strings.Fields(wording.Fold(in.Query))
+	words := strings.Fields(wording.Fold(query))
 	views = slices.DeleteFunc(views, func(v eventView) bool {
 		if !matchesWords(words, v.record.Name, v.record.Location) {
 			return true

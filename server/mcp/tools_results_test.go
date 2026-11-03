@@ -73,7 +73,7 @@ func TestTools_SetResult(t *testing.T) {
 		if got := counted.Total() - counted.Of("GET") - counted.Of("PATCH"); got != 0 {
 			t.Errorf("%d other requests that are not reads, want none", got)
 		}
-		if want := "Terminé · 4h 12min 30s · 12e sur 340 · 3e V1H"; !strings.Contains(summaryOfResult(result), want) {
+		if want := "Terminé · 4h 12min 30s · 12e sur 340 · « 3e V1H »"; !strings.Contains(summaryOfResult(result), want) {
 			t.Errorf("the summary is %q, want %q", summaryOfResult(result), want)
 		}
 		p := participationIn(t, result, "participation")
@@ -222,7 +222,7 @@ func TestTools_SetResult(t *testing.T) {
 			t.Errorf("the stored result is %s %d s %q, want dnf, no time, the note", stored.GetString("status"), stored.GetInt("finish_time_s"), stored.GetString("result_note"))
 		}
 		summary := summaryOfResult(result)
-		if !strings.Contains(summary, "Abandon · abandon au km 30") || !strings.Contains(summary, "ne sont pas gardés") {
+		if !strings.Contains(summary, "Abandon · « abandon au km 30 »") || !strings.Contains(summary, "ne sont pas gardés") {
 			t.Errorf("the summary is %q, want the result as written and that the time was not kept", summary)
 		}
 		assertJSON(t, participationIn(t, result, "participation")["result"], map[string]any{"note": "abandon au km 30"})

@@ -389,7 +389,7 @@ func TestTools_OfferPlace(t *testing.T) {
 
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, callTool(t, app, bob, "offer_place", args))
-			mentions(t, message, details, "Bob", "perdrait sa place", "la voiture d'Alice (départ de Lyon)", "« "+event.GetString("name")+" »")
+			mentions(t, message, details, "Bob", "perdrait sa place", "la voiture d'Alice (départ de « Lyon »)", "« "+event.GetString("name")+" »")
 			if all := message + strings.Join(details, ""); strings.Contains(all, "Sam") {
 				t.Errorf("the confirmation names Sam, who keeps his place: %s", all)
 			}
@@ -598,7 +598,7 @@ func TestTools_UpdateOffer(t *testing.T) {
 		name := event.GetString("name")
 		ride := rideOf(t, app, event, fx.AliceRunner)
 		token, message, _ := asked(t, callTool(t, app, alice, "update_offer", map[string]any{"offer_id": ride.Id, "notes": ""}))
-		if want := "Rien n'a été fait. Modifier la voiture d'Alice (départ de Lyon), pour « " + name + " », touche ce qu'une personne a saisi : " +
+		if want := "Rien n'a été fait. Modifier la voiture d'Alice (départ de « Lyon »), pour « " + name + " », touche ce qu'une personne a saisi : " +
 			"Les notes seraient effacées (actuellement : « Départ devant la gare. »). Demande son accord à la personne ; si elle accepte, " +
 			`rappelle update_offer avec les mêmes arguments et confirmation: "` + token + `" (valable 10 minutes, une seule fois).`; message != want {
 			t.Errorf("the message is\n%s\nwant\n%s", redact(message), redact(want))
@@ -620,7 +620,7 @@ func TestTools_UpdateOffer(t *testing.T) {
 		// The place of a car is not quoted: its marks are made single all the same.
 		ride := create(t, app, "offers", map[string]any{"event": race().Id, "kind": "ride", "owner": fx.AliceRunner.Id, "place": "Lyon » gare", "seats": 2})
 		_, message, details = asked(t, callTool(t, app, alice, "delete_offer", map[string]any{"offer_id": ride.Id}))
-		mentions(t, message, details, "la voiture d'Alice (départ de Lyon › gare)")
+		mentions(t, message, details, "la voiture d'Alice (départ de « Lyon › gare »)")
 	})
 
 	t.Run("a filled field cleared: a confirmation that names it, then it is cleared", func(t *testing.T) {
@@ -685,7 +685,7 @@ func TestTools_UpdateOffer(t *testing.T) {
 		args := map[string]any{"offer_id": ride.Id, "place": "Villeurbanne"}
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, callTool(t, app, admin, "update_offer", args))
-			mentions(t, message, details, "d'un autre coureur", "la voiture d'Alice (départ de Lyon)")
+			mentions(t, message, details, "d'un autre coureur", "la voiture d'Alice (départ de « Lyon »)")
 		})
 		result := confirmAndCall(t, app, admin, "update_offer", args)
 		if got := storedRecord(t, app, "offers", ride.Id); got.GetString("place") != "Villeurbanne" || got.GetString("owner") != fx.AliceRunner.Id {
@@ -715,7 +715,7 @@ func TestTools_DeleteOffer(t *testing.T) {
 
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, callTool(t, app, alice, "delete_offer", args))
-			mentions(t, message, details, "la voiture d'Alice (départ de Lyon)", "« Course à supprimer »", "Bob et Sam perdront leur place", "Place de Sam (ajoutée par Alice)")
+			mentions(t, message, details, "la voiture d'Alice (départ de « Lyon »)", "« Course à supprimer »", "Bob et Sam perdront leur place", "Place de Sam, ajoutée par Alice")
 		})
 		if storedRecord(t, app, "offers", ride.Id) == nil {
 			t.Fatal("the offer is gone before the confirmation")

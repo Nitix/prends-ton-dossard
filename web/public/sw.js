@@ -34,16 +34,21 @@ const SHELL = "/";
 function strategyFor(url, mode) {
   const path = url.pathname;
   if (mode === "navigate") {
-    // PocketBase's own pages (see `reserved` in server/webdist/spa.go): the
-    // dashboard is HTML, and must never be kept as the shell of the app.
-    return isPocketBasePath(path) ? "network-only" : "network-first";
+    // The program's own addresses (see `reservedDirs` in
+    // server/webdist/spa.go): the API, PocketBase's dashboard, the MCP server and
+    // the well-known addresses. The dashboard is HTML, and the others are JSON:
+    // none must ever be kept as the shell of the app, nor answered by it.
+    return isProgramPath(path) ? "network-only" : "network-first";
   }
   if (path.startsWith("/assets/")) return "cache-first";
   return "network-only";
 }
 
-function isPocketBasePath(path) {
-  return path === "/api" || path.startsWith("/api/") || path === "/_" || path.startsWith("/_/");
+/** The directories of `reservedDirs` in server/webdist/spa.go. */
+const PROGRAM_DIRS = ["api", "_", "mcp", ".well-known"];
+
+function isProgramPath(path) {
+  return PROGRAM_DIRS.some((dir) => path === `/${dir}` || path.startsWith(`/${dir}/`));
 }
 
 /** Only a complete answer of the site itself is worth keeping: no error, no redirect, no opaque response. */

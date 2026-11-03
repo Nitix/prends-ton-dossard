@@ -494,12 +494,14 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	var r risk
 	event := view.record
 	eventShown := false
-	for _, field := range []struct{ name, was, now string }{
-		{"registration_url", event.RegistrationURL, draft.RegistrationURL},
-		{"registration_deadline", event.RegistrationDeadline, draft.RegistrationDeadline},
+	// The link is a text that a member wrote, quoted; the deadline is a day that
+	// the site checked.
+	for _, field := range []struct{ name, was, now, shown string }{
+		{"registration_url", event.RegistrationURL, draft.RegistrationURL, quote(event.RegistrationURL)},
+		{"registration_deadline", event.RegistrationDeadline, draft.RegistrationDeadline, event.RegistrationDeadline},
 	} {
 		if strings.TrimSpace(field.was) != "" && field.now == "" {
-			r.Details = append(r.Details, upperFirst(clearedPhrases[field.name])+" (actuellement : "+plain(field.was)+").")
+			r.Details = append(r.Details, upperFirst(clearedPhrases[field.name])+" (actuellement : "+field.shown+").")
 			eventShown = true
 		}
 	}
@@ -542,7 +544,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			{"duration_min", was.DurationMin != 0, now.DurationMin != 0, strconv.Itoa(was.DurationMin) + " min"},
 			{"time_limit_min", was.TimeLimitMin != 0, now.TimeLimitMin != 0, strconv.Itoa(was.TimeLimitMin) + " min"},
 			{"price_eur", was.PriceEur != 0, now.PriceEur != 0, number(was.PriceEur) + " €"},
-			{"route_url", was.RouteURL != "", now.RouteURL != "", plain(was.RouteURL)},
+			{"route_url", was.RouteURL != "", now.RouteURL != "", quote(was.RouteURL)},
 			// The day that moves says it already.
 			{"date", was.Date != "" && !dayMoves, now.Date != "", was.Date},
 		} {

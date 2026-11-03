@@ -637,6 +637,34 @@ func TestTools_SearchEvents_ReadsAtMost(t *testing.T) {
 	}
 }
 
+// The text of a search is 200 characters at most: a few words of a name or a
+// place. Each word is looked for in each race that the search reads, and a body
+// of a megabyte held half a million of them.
+func TestTools_SearchEvents_ATextOf200CharactersAtMost(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	mcp.SetNow(t, at(2026, 6, 1, 10, 0))
+	token := newToken(t, app, fx.Alice)
+
+	// 200 characters (393 bytes), and blanks around, are a search.
+	words := "  " + strings.Repeat("é", 193) + " Crêtes  "
+	if got := ids(t, succeeded(t, callTool(t, app, token, "search_events", map[string]any{"query": words}))); len(got) != 0 {
+		t.Errorf("a search of 200 characters found %v, want none", got)
+	}
+	got := ids(t, succeeded(t, callTool(t, app, token, "search_events", map[string]any{"query": strings.Repeat(" ", 300) + "crêtes"})))
+	if len(got) != 1 || got[0] != fx.Event.Id {
+		t.Errorf("a search with blanks around found %v, want the Trail des Crêtes", got)
+	}
+
+	for _, query := range []string{strings.Repeat("a ", 100) + "b", strings.Repeat("a ", 500_000)} {
+		result := callTool(t, app, token, "search_events", map[string]any{"query": query})
+		want := fmt.Sprintf("query : 200 caractères au plus (celle-ci en a %d) ; cherche avec quelques mots du nom ou du lieu.", len(strings.TrimSpace(query)))
+		if !result.IsError || result.Text != want {
+			t.Errorf("a search of %d characters: isError %v, %.200q; want %q", len(query), result.IsError, result.Text, want)
+		}
+	}
+}
+
 // The way the site tells that a comment was changed: more than a second after
 // it was written (isEdited of features/comments/api.ts), the cases of its tests.
 func TestIsEdited(t *testing.T) {

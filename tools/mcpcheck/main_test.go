@@ -734,6 +734,11 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 	case "admin_create_runner":
 		return done("Le coureur est ajouté.", obj{"runner": obj{"id": f.id("run"), "name": str("name")}})
 	case "admin_create_link":
+		// Always asked, an invitation as a member too.
+		proceed, answer := f.guard(tool, args, true, "Ce lien permet à qui l'ouvre de créer le compte de Test MCP, avec le rôle membre.")
+		if !proceed {
+			return answer, ""
+		}
 		expires := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
 		return done("Le lien est fait.", obj{"url": f.base() + "/invitation#abcdefghijklmnopqrstuvwxyz", "expires_at": expires})
 	case "admin_revoke_link":
@@ -959,7 +964,7 @@ func TestRun_Write_AsAnAdmin(t *testing.T) {
 		"ok   create_event — « Course de test MCP »",
 		"ok   delete_event — confirmé",
 	)
-	wantPrefixes(t, out, "ok   admin_create_link — lien reçu, expire le 20")
+	wantPrefixes(t, out, "ok   admin_create_link — confirmé, lien reçu, expire le 20")
 	wantLines(t, out,
 		"ok   admin_merge — aperçu, puis fusion",
 		"ok   admin_delete_runner — confirmé",

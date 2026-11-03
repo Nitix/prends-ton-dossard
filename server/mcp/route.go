@@ -122,8 +122,12 @@ func Register(app core.App, cfg config.Config) {
 				e.App.Logger().Error("mcp: checking a token", "error", err)
 				return e.InternalServerError("", nil)
 			}
+			// A refusal of the limits of the token is a 429 in French, that the
+			// assistant reads, and says when to come back: the bucket gains a
+			// request in a fifth of a second.
 			if !limiter.allow(token.Id) {
-				return e.TooManyRequestsError("", nil)
+				e.Response.Header().Set("Retry-After", "1")
+				return e.TooManyRequestsError(msgTooManyRequests, nil)
 			}
 			if !running.enter(token.Id) {
 				e.Response.Header().Set("Retry-After", "1")

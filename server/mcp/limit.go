@@ -18,6 +18,9 @@ const (
 	sweepEvery = time.Minute
 )
 
+// msgTooManyRequests is the refusal of a request beyond the bucket.
+const msgTooManyRequests = "Trop de demandes pour ce jeton : attends quelques secondes avant de réessayer (300 par minute en moyenne)."
+
 // tokenLimiter allows 300 requests a minute per MCP token: a bucket of 300 that
 // refills 5 a second, in memory, keyed by token id. A bucket idle for 10
 // minutes is full again: it is dropped, and the token gets a new full one.
@@ -69,8 +72,8 @@ func (l *tokenLimiter) allow(tokenID string) bool {
 // maxInFlight is how many requests of a token may be under way at once. The
 // bucket bounds the arrivals, not the work in flight: a request that turns out
 // slow (a parse that waits for its place, say) would pile up behind the others,
-// each with its body in memory. A client of today sends one at a time; beyond,
-// 429.
+// each with its body in memory. An assistant may run a few calls at once (Claude
+// Code runs some tools side by side); beyond 4, a 429 asks it to wait a second.
 const maxInFlight = 4
 
 // msgTooManyUnderWay is the refusal of a request beyond maxInFlight.

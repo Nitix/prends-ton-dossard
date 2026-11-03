@@ -196,7 +196,7 @@ func (t *tools) deleteFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	// What goes with it: its participations, its track, and the days of the race
 	// it was the last of.
 	r := risk{Records: append([]stamp{{Collection: "formats", ID: format.record.ID, Updated: format.record.Updated}}, stampsOf(format.participations)...)}
-	r.Message = "Supprimer l'épreuve " + quote(title) + " (" + plain(event.Name) + ")"
+	r.Message = "Supprimer l'épreuve " + quote(title) + " (" + quote(event.Name) + ")"
 	if n := len(format.participations); n > 0 {
 		r.Message += " supprime aussi " + plural(n, "participation", "participations") + " : " + participantLabels(w, format.participations) + "."
 		for _, p := range format.participations {

@@ -110,9 +110,12 @@ func quote(text string) string {
 	return "« " + guillemets.Replace(text) + " »"
 }
 
-// plain writes a text that a member wrote, which a message shows outside « »
-// (the race of a format, between parentheses): its « and » become ‹ and ›, so
-// that it opens or closes no quotation of the message either.
+// plain writes the name of a runner, which a message shows outside « », as the
+// site does: its « and » become ‹ and ›, so that it opens or closes no quotation
+// of the message either. A free text (the name of a race, a place, notes, a note
+// of a result, a link) is always quoted instead: written plain between the
+// parentheses of a sentence, its ) would close them, and what follows would read
+// as the message's own words. Nor is a runner's name ever put between them.
 func plain(text string) string {
 	return guillemets.Replace(text)
 }
@@ -143,11 +146,27 @@ func plural(n int, one, many string) string {
 // the status (and the result when there is one), and whether it is confirmed:
 // « Bob (Intéressé, non confirmé) ».
 func participantLabel(w wording.Words, p participationRecord) string {
-	text := resultText(w, p)
+	text := resultPhrase(w, p.Status, resultOfRecord(p))
 	if !p.Confirmed {
 		text += ", non confirmé"
 	}
-	return plain(p.Expand.Runner.Name) + " (" + plain(text) + ")"
+	return plain(p.Expand.Runner.Name) + " (" + text + ")"
+}
+
+// resultWords are what the site writes of a result (wording.ResultParts), as a
+// sentence of a tool writes them: the note, which a member wrote, quoted.
+func resultWords(w wording.Words, r resultFields) []string {
+	parts := w.ResultParts(r.TimeS, r.Rank, r.RankOf, "")
+	if note := strings.TrimSpace(r.Note); note != "" {
+		parts = append(parts, quote(note))
+	}
+	return parts
+}
+
+// resultPhrase is a status and its result, as a sentence of a tool writes them:
+// « Terminé · 4:12:30 · « Belle course » ».
+func resultPhrase(w wording.Words, status string, r resultFields) string {
+	return strings.Join(append([]string{w.Status(status)}, resultWords(w, r)...), wording.Separator)
 }
 
 // participantLabels are participations as a confirmation names them.

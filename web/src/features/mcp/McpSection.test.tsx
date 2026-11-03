@@ -353,8 +353,10 @@ test("McpSection — créer un jeton le montre une fois, avec la commande de Cla
   const shown = fieldOf(commandField(screen));
   expect(getComputedStyle(shown).fontFamily).toMatch(/mono/i);
   expect(shown.scrollWidth).toBeLessThanOrEqual(shown.clientWidth);
-  // For any other assistant: the address and the header.
+  // For any other assistant: the address and the header. Nothing sends a member to
+  // the README of the site, which a member has no link to.
   await expect.element(dialog(screen).getByText(fr.mcp.otherClients(SERVER))).toBeVisible();
+  expect(fr.mcp.otherClients(SERVER)).not.toMatch(/README/);
   // The name form is gone, and the window closes on « J'ai copié le jeton ».
   await expect.element(nameField(screen)).not.toBeInTheDocument();
   await expect.element(inDialog(screen, fr.mcp.createSubmit)).not.toBeInTheDocument();
@@ -937,6 +939,7 @@ test("McpSection — en anglais", async () => {
   await expect.element(dialog(screen).getByText(english.showOnce)).toBeVisible();
   await expect.element(dialog(screen).getByText(english.claudeCode)).toBeVisible();
   await expect.element(dialog(screen).getByText(english.otherClients(SERVER))).toBeVisible();
+  expect(english.otherClients(SERVER)).not.toMatch(/README/);
   await expect.element(commandField(screen, english.commandLabel)).toBeVisible();
   await inDialog(screen, english.copyToken).click();
   await expect.element(dialog(screen).getByRole("status")).toHaveTextContent(english.tokenCopied);

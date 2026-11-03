@@ -109,14 +109,14 @@ func offerPath(id string) string {
 }
 
 // offerLabel is an offer as a message names it: « la voiture d'Alice (départ de
-// Lyon) », « le logement de Bob (« Gîte des Lacs ») ». Nothing in it agrees with
-// the owner.
+// « Lyon ») », « le logement de Bob (« Gîte des Lacs ») ». Nothing in it agrees
+// with the owner.
 func offerLabel(o offerRecord) string {
 	owner := ofName(o.Expand.Owner.Name)
 	if o.Kind == offerLodging {
 		return "le logement " + owner + " (" + quote(o.Place) + ")"
 	}
-	return "la voiture " + owner + " (départ de " + plain(o.Place) + ")"
+	return "la voiture " + owner + " (départ de " + quote(o.Place) + ")"
 }
 
 // proposes reports whether the offer is the caller's own: its owner is the runner of
@@ -166,14 +166,20 @@ func byPlaceRunner(a, b offerMemberRecord) int {
 	return compareNames(a.Expand.Runner.Name, b.Expand.Runner.Name)
 }
 
-// placeLine says whose a place is, and who added it: « Place de Bob (ajoutée par
-// Alice) ». The participle agrees with the place.
+// placeLine says whose a place is, and who added it: « Place de Bob, ajoutée par
+// Alice ». The participle agrees with the place. The names are not put between
+// parentheses, which one of them could close.
 func placeLine(p offerMemberRecord) string {
-	line := "Place " + ofName(p.Expand.Runner.Name)
+	return "Place " + ofName(p.Expand.Runner.Name) + addedBy(p)
+}
+
+// addedBy says who added a place, after the words about it: « , ajoutée par
+// Alice »; "" when nobody is known.
+func addedBy(p offerMemberRecord) string {
 	if by := plain(p.Expand.AddedBy.Name); by != "" {
-		line += " (ajoutée par " + by + ")"
+		return ", ajoutée par " + by
 	}
-	return line
+	return ""
 }
 
 // offerEvent is the race of an offer, as an answer gives it.
@@ -302,7 +308,7 @@ func (t *tools) addOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in addO
 }
 
 // offerSummary says what an offer is, for a race: « Voiture proposée au départ de
-// Lyon pour « Trail des Crêtes » : 3 places, le 2026-06-13 à 06:30. »
+// « Lyon » pour « Trail des Crêtes » : 3 places, le 2026-06-13 à 06:30. »
 func offerSummary(o offerRecord, event string) string {
 	var parts []string
 	switch {
@@ -321,7 +327,7 @@ func offerSummary(o offerRecord, event string) string {
 	case o.Time != "":
 		parts = append(parts, "à "+o.Time)
 	}
-	head := "Voiture proposée au départ de " + plain(o.Place)
+	head := "Voiture proposée au départ de " + quote(o.Place)
 	if o.Kind == offerLodging {
 		head = "Logement " + quote(o.Place) + " proposé"
 	}
@@ -501,7 +507,13 @@ func (t *tools) updateOffer(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 			continue
 		}
 		field := offerFieldOf(o.Kind, ch.field)
-		line := upperFirst(field.name) + " " + field.cleared + " (actuellement : " + ch.was + ")."
+		// A link is a text that a member wrote, quoted; a day, an hour and a number
+		// of places are what the site checked.
+		was := ch.was
+		if ch.field == "url" || ch.field == "place" {
+			was = quote(was)
+		}
+		line := upperFirst(field.name) + " " + field.cleared + " (actuellement : " + was + ")."
 		switch {
 		case ch.field == "notes":
 			verb := field.cleared
@@ -726,7 +738,7 @@ func (t *tools) offerPlace(ctx context.Context, _ *mcpsdk.CallToolRequest, in of
 	var r *risk
 	if action == "free" {
 		place := places[index]
-		line := placeLine(place) + " dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + "."
+		line := "Place " + ofName(place.Expand.Runner.Name) + " dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + addedBy(place) + "."
 		r = &risk{
 			Message: "Libérer cette place : " + plain(runner.Name) + " perdrait sa place dans " + offerLabel(o) + ", pour " + quote(o.Expand.Event.Name) + ".",
 			Details: []string{line},

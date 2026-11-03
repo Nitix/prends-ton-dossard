@@ -77,8 +77,8 @@ func TestAdmin_Merge(t *testing.T) {
 	counted := mcp.CountInnerRequests(t)
 	token, message, details := asked(t, callTool(t, app, admin, "admin_merge", args))
 	mentions(t, message, details,
-		"Reste : la course « Marathon d'Annecy » (2026-09-20, Annecy)",
-		"Fusionnée dans l'autre, puis supprimée : la course « Marathon Annecy » (2026-09-20, Annecy)",
+		"Reste : la course « Marathon d'Annecy » (2026-09-20, « Annecy »)",
+		"Fusionnée dans l'autre, puis supprimée : la course « Marathon Annecy » (2026-09-20, « Annecy »)",
 		"1 épreuve déplacée", "2 participations déplacées", "1 commentaire déplacé", "1 offre déplacée",
 		"La fusion est définitive.")
 	if got := counted.Of(http.MethodPost); got != 1 || counted.Total()-counted.Of(http.MethodGet) != 1 {
@@ -119,8 +119,8 @@ func TestAdmin_Merge(t *testing.T) {
 		args := map[string]any{"kind": "formats", "keep_id": fx.F42.Id, "merge_id": fx.F15.Id}
 		_, message, details := asked(t, callTool(t, app, admin, "admin_merge", args))
 		mentions(t, message, details,
-			"Reste : l'épreuve « Trail 42 km » (Trail des Crêtes)",
-			"Fusionnée dans l'autre, puis supprimée : l'épreuve « Trail 15 km » (Trail des Crêtes)",
+			"Reste : l'épreuve « Trail 42 km » (« Trail des Crêtes »)",
+			"Fusionnée dans l'autre, puis supprimée : l'épreuve « Trail 15 km » (« Trail des Crêtes »)",
 			"1 participation déplacée")
 		done := confirmAndCall(t, app, admin, "admin_merge", args)
 		assertJSON(t, done.Structured["kept"], map[string]any{"id": fx.F42.Id, "name": "Trail 42 km"})

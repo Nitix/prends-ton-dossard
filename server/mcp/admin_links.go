@@ -105,7 +105,7 @@ func addAdminCreateLink(s *mcpsdk.Server, t *tools) {
 			"kind invite, pour un coureur sans compte : la personne choisit son email et son mot de passe en ouvrant le lien (role : member par défaut, ou admin). " +
 			"kind reset, pour un coureur qui a un compte : la personne choisit un nouveau mot de passe ; ses sessions ouvertes sont alors fermées, et ses jetons d'assistant (MCP) supprimés. " +
 			"Le lien vaut 7 jours, et remplace celui du même genre qui attendait pour ce coureur. " +
-			"Une réinitialisation demande toujours une confirmation ; une invitation, quand elle remplace un lien en attente ou donne le rôle admin. " +
+			"Il demande toujours une confirmation, une invitation comme une réinitialisation : le premier appel ne fait rien, dit à qui le lien donnerait accès (et le lien en attente qu'il remplacerait), et donne un jeton à redonner si la personne accepte. " +
 			"Le lien donne l'accès au compte : ne le transmets qu'à la personne concernée, et ne l'écris nulle part ailleurs.",
 		InputSchema:  inputSchema[createLinkIn](map[string][]string{"kind": {linkInvite, linkReset}, "role": {accountMember, accountAdmin}}),
 		OutputSchema: createLinkSchema(),
@@ -163,13 +163,15 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 		return fail(err)
 	}
 
-	// A reset is always asked: it opens an account to whoever has it. An invitation
-	// is asked when it stops a link that waits, or when it makes an admin.
+	// A link is always asked: it opens an account to whoever has it, and what the
+	// assistant reads (a comment, say) must not get one made without the person
+	// agreeing. The confirmation says too when it stops a link that waits, or makes
+	// an admin.
 	var lines []string
 	if kind == linkReset {
 		lines = append(lines, fmt.Sprintf("Ce lien permet à qui l'ouvre de choisir un nouveau mot de passe pour le compte de %s, donc de se connecter en tant que %s : ne le donne qu'à %s. "+
 			"Dès qu'il servira, les sessions ouvertes de ce compte seront fermées, et ses jetons d'assistant (MCP) supprimés.", plain(runner.Name), plain(runner.Name), plain(runner.Name)))
-	} else if len(waiting) > 0 || role == accountAdmin {
+	} else {
 		line := fmt.Sprintf("Ce lien permet à qui l'ouvre de créer le compte de %s, avec le rôle %s", plain(runner.Name), roleWords[role])
 		if role == accountAdmin {
 			line += " : ce compte pourra " + adminPowers
@@ -189,10 +191,7 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 		lines = append(lines, waitingLine(link, runner.runnerRecord))
 		records = append(records, stamp{Collection: "invitations", ID: link.ID, Updated: link.Updated})
 	}
-	var r *risk
-	if len(lines) > 0 {
-		r = &risk{Message: strings.Join(lines, " "), Details: lines, Records: records}
-	}
+	r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: records}
 	proceed, out, notice, err := t.guard(ctx, "admin_create_link", struct{ Runner, Kind, Role string }{runner.ID, kind, role}, r, strings.TrimSpace(in.Confirmation))
 	if err != nil {
 		return fail(err)

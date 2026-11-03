@@ -191,7 +191,15 @@ func TestMCP_RateLimitPerToken(t *testing.T) {
 	for range 300 {
 		rpc(t, app, bearer(alice), http.StatusOK, "ping", nil)
 	}
-	rpc(t, app, bearer(alice), http.StatusTooManyRequests, "ping", nil)
+	// The 429 says it in French, and when to come back: the bucket gains one
+	// request in a fifth of a second.
+	header, body := rpc(t, app, bearer(alice), http.StatusTooManyRequests, "ping", nil)
+	if got := header.Get("Retry-After"); got != "1" {
+		t.Errorf("Retry-After = %q, want 1", got)
+	}
+	if !strings.Contains(body, "Trop de demandes pour ce jeton") {
+		t.Errorf("the 429 says %.200s, want the French message", body)
+	}
 	rpc(t, app, bearer(aliceAgain), http.StatusOK, "ping", nil)
 	rpc(t, app, bearer(bob), http.StatusOK, "ping", nil)
 

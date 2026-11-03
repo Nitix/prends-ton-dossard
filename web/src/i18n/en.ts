@@ -143,7 +143,7 @@ export const en = {
     copyCommand: "Copy the command",
     commandCopied: "Command copied.",
     otherClients: (url: string) =>
-      `For another assistant: the address is ${url}, with the Authorization: Bearer header followed by the token. The site's README explains Claude Desktop.`,
+      `For another assistant: the address is ${url}, with the Authorization: Bearer header followed by the token.`,
     done: "I've copied the token",
   },
   install: {

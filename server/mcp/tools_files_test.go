@@ -395,7 +395,7 @@ func TestTools_SetTrack(t *testing.T) {
 		if got := storedRecord(t, app, "formats", fx.F42.Id).GetFloat("distance_km"); got != 42 {
 			t.Errorf("F42 is now %v km, want 42 still", got)
 		}
-		if summary := summaryOfResult(result); !strings.HasPrefix(summary, "La trace de « Trail 42 km » (Trail des Crêtes) est enregistrée") {
+		if summary := summaryOfResult(result); !strings.HasPrefix(summary, "La trace de « Trail 42 km » (« Trail des Crêtes ») est enregistrée") {
 			t.Errorf("the summary is %q", summary)
 		}
 	})
@@ -450,7 +450,7 @@ func TestTools_SetTrack(t *testing.T) {
 			var message string
 			var details []string
 			token, message, details = asked(t, callTool(t, app, bob, "set_track", args))
-			mentions(t, message, details, "La trace actuelle de « Trail 42 km » (Trail des Crêtes) serait remplacée", fileURL("formats", fx.F42.Id, before))
+			mentions(t, message, details, "La trace actuelle de « Trail 42 km » (« Trail des Crêtes ») serait remplacée", fileURL("formats", fx.F42.Id, before))
 		})
 		isDone(t, callTool(t, app, bob, "set_track", with(args, token)))
 		if after := trackOf(fx.F42); after == before || after == "" {
@@ -466,7 +466,7 @@ func TestTools_SetTrack(t *testing.T) {
 			var message string
 			var details []string
 			token, message, details = asked(t, callTool(t, app, bob, "set_track", args))
-			mentions(t, message, details, "La trace actuelle de « Trail 42 km » (Trail des Crêtes) serait retirée", fileURL("formats", fx.F42.Id, before))
+			mentions(t, message, details, "La trace actuelle de « Trail 42 km » (« Trail des Crêtes ») serait retirée", fileURL("formats", fx.F42.Id, before))
 		})
 		result := isDone(t, callTool(t, app, bob, "set_track", with(args, token)))
 		if got := trackOf(fx.F42); got != "" {
@@ -479,7 +479,7 @@ func TestTools_SetTrack(t *testing.T) {
 			t.Error("a removal answers a track")
 		}
 		assertJSON(t, result.Structured["format"], map[string]any{"id": fx.F42.Id, "title": "Trail 42 km"})
-		if summary := summaryOfResult(result); summary != "La trace de « Trail 42 km » (Trail des Crêtes) est retirée." {
+		if summary := summaryOfResult(result); summary != "La trace de « Trail 42 km » (« Trail des Crêtes ») est retirée." {
 			t.Errorf("the summary is %q", summary)
 		}
 	})
@@ -487,7 +487,7 @@ func TestTools_SetTrack(t *testing.T) {
 	t.Run("remove when there is none: nothing to do", func(t *testing.T) {
 		writesNothing(t, app, func() {
 			result := isDone(t, callTool(t, app, bob, "set_track", map[string]any{"format_id": fx.F42.Id, "remove": true}))
-			if summary := summaryOfResult(result); summary != "Rien à changer : « Trail 42 km » (Trail des Crêtes) n'a pas de trace." {
+			if summary := summaryOfResult(result); summary != "Rien à changer : « Trail 42 km » (« Trail des Crêtes ») n'a pas de trace." {
 				t.Errorf("the summary is %q", summary)
 			}
 		})

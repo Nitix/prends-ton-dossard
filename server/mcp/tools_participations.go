@@ -116,7 +116,7 @@ func placeOf(w wording.Words, r participationRow) string {
 	if r.Participation.Format == "" {
 		return quote(r.Event.Name) + " (course seule)"
 	}
-	return quote(r.formatTitle(w)) + " (" + plain(r.Event.Name) + ")"
+	return quote(r.formatTitle(w)) + " (" + quote(r.Event.Name) + ")"
 }
 
 // ofName writes de before a name, elided before a vowel or a mute h: « de Bob »,
@@ -510,9 +510,9 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 		}
 		records = append(records, stamp{Collection: "formats", ID: moved.ID, Updated: moved.Updated})
 	}
-	lost := resultOfRecord(p).lostBy(next).parts(w)
+	lost := resultWords(w, resultOfRecord(p).lostBy(next))
 	if len(lost) > 0 {
-		details = append(details, "Le résultat serait effacé : "+plain(strings.Join(lost, wording.Separator))+".")
+		details = append(details, "Le résultat serait effacé : "+strings.Join(lost, wording.Separator)+".")
 	}
 	var r *risk
 	if !own || len(lost) > 0 {

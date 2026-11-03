@@ -137,7 +137,7 @@ func (t *tools) mergeSideOf(ctx context.Context, kind, param, id string) (mergeS
 		}
 		return mergeSide{
 			id: event.ID, name: event.Name, updated: event.Updated,
-			described: fmt.Sprintf("la course %s (%s, %s)", quote(event.Name), days(event.StartDate, event.EndDate), plain(event.Location)),
+			described: fmt.Sprintf("la course %s (%s, %s)", quote(event.Name), days(event.StartDate, event.EndDate), quote(event.Location)),
 		}, nil
 	}
 	var format struct {
@@ -154,7 +154,7 @@ func (t *tools) mergeSideOf(ctx context.Context, kind, param, id string) (mergeS
 	title := wording.Of("fr").RaceName(format.Name, format.Expand.RaceType.Label, format.DistanceKm, format.DurationMin, format.TimeLimitMin)
 	return mergeSide{
 		id: format.ID, name: title, updated: format.Updated,
-		described: fmt.Sprintf("l'épreuve %s (%s)", quote(title), plain(format.Expand.Event.Name)),
+		described: fmt.Sprintf("l'épreuve %s (%s)", quote(title), quote(format.Expand.Event.Name)),
 	}, nil
 }
 

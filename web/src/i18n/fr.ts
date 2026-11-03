@@ -164,7 +164,7 @@ export const fr = {
     copyCommand: "Copier la commande",
     commandCopied: "Commande copiée.",
     otherClients: (url: string) =>
-      `Pour un autre assistant : l'adresse est ${url}, avec l'en-tête Authorization: Bearer suivi du jeton. Le README du site explique Claude Desktop.`,
+      `Pour un autre assistant : l'adresse est ${url}, avec l'en-tête Authorization: Bearer suivi du jeton.`,
     done: "J'ai copié le jeton",
   },
   // The "App" section of the settings page (see features/pwa): putting the site on the home screen.

@@ -149,7 +149,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 	old := resultOfRecord(p)
 	if p.Status == status && old == stored && (!own || p.Confirmed) {
 		return nil, t.participationAnswer(w, row, fmt.Sprintf("Rien à changer : le résultat %s à %s est déjà ainsi (%s).",
-			ofName(row.Runner.Name), placeOf(w, row), plain(resultText(w, p)))), nil
+			ofName(row.Runner.Name), placeOf(w, row), resultPhrase(w, p.Status, old))), nil
 	}
 
 	// The risk: the result of somebody else's participation, and a result that is
@@ -166,8 +166,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 		(old.Rank != 0 && (stored.Rank != old.Rank || stored.RankOf != old.RankOf)) ||
 		(old.Note != "" && stored.Note != old.Note)
 	if replaced {
-		next := strings.Join(append([]string{w.Status(status)}, stored.parts(w)...), wording.Separator)
-		details = append(details, "Résultat actuel : "+plain(resultText(w, p))+".", "Nouveau résultat : "+plain(next)+".")
+		details = append(details, "Résultat actuel : "+resultPhrase(w, p.Status, old)+".", "Nouveau résultat : "+resultPhrase(w, status, stored)+".")
 	}
 	var r *risk
 	if len(details) > 0 {
@@ -204,7 +203,8 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 		return fail(err)
 	}
 
-	head := fmt.Sprintf("Résultat %s enregistré pour %s : %s", ofName(after.Runner.Name), placeOf(w, after), plain(resultText(w, after.Participation)))
+	head := fmt.Sprintf("Résultat %s enregistré pour %s : %s", ofName(after.Runner.Name), placeOf(w, after),
+		resultPhrase(w, after.Participation.Status, resultOfRecord(after.Participation)))
 	dropped := ""
 	if given != stored {
 		dropped = "le temps et le classement ne sont pas gardés avec un abandon"

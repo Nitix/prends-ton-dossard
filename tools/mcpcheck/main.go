@@ -1618,8 +1618,9 @@ func (c *checker) adminSteps() {
 		return "« " + testName + " »", nil
 	})
 
+	// An invitation is always asked: the link opens an account to whoever has it.
 	c.step("admin_create_link", func() (string, error) {
-		r, err := c.callDone("admin_create_link", map[string]any{"runner": testName, "kind": "invite"})
+		r, _, err := c.confirmed("admin_create_link", map[string]any{"runner": testName, "kind": "invite"})
 		if err != nil {
 			return "", err
 		}
@@ -1636,7 +1637,7 @@ func (c *checker) adminSteps() {
 		if left := time.Until(expires); left < 6*24*time.Hour || left > 8*24*time.Hour {
 			return "", fmt.Errorf("le lien vaut %s, pas 7 jours", left.Round(time.Hour))
 		}
-		return "lien reçu, expire le " + expires.UTC().Format(time.DateOnly), nil
+		return "confirmé, lien reçu, expire le " + expires.UTC().Format(time.DateOnly), nil
 	})
 	c.step("admin_revoke_link", func() (string, error) {
 		r, err := c.call("admin_revoke_link", map[string]any{"runner": testName, "kind": "invite"})

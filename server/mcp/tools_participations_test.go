@@ -556,7 +556,7 @@ func TestTools_RemoveParticipation(t *testing.T) {
 		args := map[string]any{"participation_id": fx.P3.Id}
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, callTool(t, app, alice, "remove_participation", args))
-			mentions(t, message, details, "Sam (Intéressé, non confirmé)", "« Trail 15 km » (Trail des Crêtes)", "ajoutée par Alice")
+			mentions(t, message, details, "Sam (Intéressé, non confirmé)", "« Trail 15 km » (« Trail des Crêtes »)", "ajoutée par Alice")
 		})
 		if storedRecord(t, app, "participations", fx.P3.Id) == nil {
 			t.Fatal("the participation is gone before the confirmation")
@@ -597,7 +597,7 @@ func TestTools_RemoveParticipation(t *testing.T) {
 		args := map[string]any{"participation_id": fx.P1.Id}
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, callTool(t, app, admin, "remove_participation", args))
-			mentions(t, message, details, "Alice (Terminé · 4h 12min 30s · 12e sur 340 · 3e V1H)", "« Trail 42 km »", "résultat")
+			mentions(t, message, details, "Alice (Terminé · 4h 12min 30s · 12e sur 340 · « 3e V1H »)", "« Trail 42 km »", "résultat")
 		})
 		confirmAndCall(t, app, admin, "remove_participation", args)
 		if storedRecord(t, app, "participations", fx.P1.Id) != nil {
