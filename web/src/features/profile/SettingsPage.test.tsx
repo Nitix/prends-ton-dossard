@@ -141,8 +141,24 @@ beforeEach(() => {
   mocks.passkeysSupported.mockReturnValue(true);
   // The calendar section asks the server whether the account has a link; a test
   // of another route gives its own answer.
-  mocks.send.mockResolvedValue({ exists: false });
+  sendAs({ exists: false });
 });
+
+/** What the server says of the tokens of the assistants of an account that has none. */
+const NO_TOKENS = { url: "http://localhost:5173/mcp", max: 5, tokens: [] };
+
+/**
+ * Makes the server answer every request with `answer` (a refusal, when it is an
+ * error), except the one for the tokens of the assistants, which has its own
+ * answer by path: the page asks for it as it opens, whatever a test is about,
+ * and what it is given is not the answer of the calendar or of the email.
+ */
+function sendAs(answer: unknown) {
+  mocks.send.mockImplementation((path) => {
+    if (path === "/api/app/mcp-tokens") return Promise.resolve(NO_TOKENS);
+    return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
+  });
+}
 
 function refusal(status: number, data: unknown) {
   return new ClientResponseError({ status, response: { status, message: "…", data } });
@@ -263,6 +279,36 @@ test("SettingsPage — la section Agenda vient après les clés d'accès, et ava
   expect(
     follows(calendar.element(), screen.getByRole("button", { name: fr.profile.logout }).element()),
   ).toBe(true);
+});
+
+test("SettingsPage — « Assistant IA (MCP) » vient après « Agenda », et avant « Application »", async () => {
+  const screen = await renderSettings();
+
+  const mcp = section(screen, fr.mcp.title);
+  await expect.element(mcp.getByRole("button", { name: fr.mcp.create })).toBeVisible();
+  await expect.element(mcp.getByText(fr.mcp.empty)).toBeVisible();
+  expect(mocks.send).toHaveBeenCalledWith("/api/app/mcp-tokens", { method: "GET" });
+  expect(follows(section(screen, fr.calendar.title).element(), mcp.element())).toBe(true);
+  expect(follows(mcp.element(), section(screen, fr.install.title).element())).toBe(true);
+  expect(
+    follows(mcp.element(), screen.getByRole("button", { name: fr.profile.logout }).element()),
+  ).toBe(true);
+});
+
+test("SettingsPage — sans serveur MCP (la démo), la page n'a pas la section « Assistant IA (MCP) »", async () => {
+  mocks.send.mockImplementation((path) =>
+    path === "/api/app/mcp-tokens"
+      ? Promise.reject(refusal(404, { message: "The requested resource wasn't found." }))
+      : Promise.resolve({ exists: false }),
+  );
+  const screen = await renderSettings();
+
+  // The rest of the page is there: the sections around it, and the calendar that asked too.
+  await expect
+    .element(section(screen, fr.calendar.title).getByRole("button", { name: fr.calendar.create }))
+    .toBeVisible();
+  await expect.element(section(screen, fr.install.title)).toBeVisible();
+  await expect.element(screen.getByRole("region", { name: fr.mcp.title })).not.toBeInTheDocument();
 });
 
 test("SettingsPage — la section Application vient après l'Agenda, et avant « Se déconnecter »", async () => {
@@ -605,7 +651,7 @@ test("SettingsPage — un nom fait d'espaces est refusé sans appeler le serveur
 
 test("SettingsPage — changer d'email : /api/app/me/email, puis le nouveau jeton est gardé", async () => {
   const record = { ...ALICE, email: "new@example.test" };
-  mocks.send.mockResolvedValue({ token: "new-token", record });
+  sendAs({ token: "new-token", record });
   const screen = await renderSettings();
   const form = section(screen, fr.profile.emailTitle);
 
@@ -629,7 +675,7 @@ test("SettingsPage — changer d'email : /api/app/me/email, puis le nouveau jeto
 });
 
 test("SettingsPage — un mot de passe faux est dit sous le champ, l'email saisi est gardé", async () => {
-  mocks.send.mockRejectedValue(refusal(400, { code: "wrong_password" }));
+  sendAs(refusal(400, { code: "wrong_password" }));
   const screen = await renderSettings();
   const form = section(screen, fr.profile.emailTitle);
 
@@ -651,7 +697,7 @@ test.each([
   ["email_taken", fr.errors.email_taken],
   ["email_invalid", fr.errors.email_invalid],
 ])("SettingsPage — %s est dit sous le champ email", async (code, message) => {
-  mocks.send.mockRejectedValue(refusal(400, { code }));
+  sendAs(refusal(400, { code }));
   const screen = await renderSettings();
   const form = section(screen, fr.profile.emailTitle);
 
@@ -667,7 +713,7 @@ test.each([
 });
 
 test("SettingsPage — une panne pendant le changement d'email affiche le message générique", async () => {
-  mocks.send.mockRejectedValue(new TypeError("Failed to fetch"));
+  sendAs(new TypeError("Failed to fetch"));
   const screen = await renderSettings();
   const form = section(screen, fr.profile.emailTitle);
 

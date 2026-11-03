@@ -189,6 +189,12 @@ test("sw — l'API passe toujours par le réseau", () => {
     ["/_/", "navigate"],
     ["/_", "navigate"],
     ["/_/assets/index-1a2b3c.js", "no-cors"],
+    // The MCP server and the addresses that an MCP client reads after a 401: the
+    // program answers them JSON, never the shell (`reserved` of spa.go).
+    ["/mcp", "navigate"],
+    ["/mcp/", "navigate"],
+    ["/.well-known/oauth-protected-resource", "navigate"],
+    ["/.well-known", "navigate"],
     // Everything else that is not a page or a built file.
     ["/manifest.webmanifest", "cors"],
     ["/icons/icon-192.png", "no-cors"],
@@ -213,6 +219,8 @@ test("sw — une page vient du réseau d'abord", async () => {
   );
   // Only the directory is a built-files directory: a route that starts like it is a page.
   expect(worker.strategyFor("/assets-de-course", "navigate")).toBe("network-first");
+  // So is a route that starts like a directory of the program.
+  expect(worker.strategyFor("/mcpx", "navigate")).toBe("network-first");
 
   worker.network.mockResolvedValue(reply("fresh"));
   const response = await worker.get("/evenements/abc123", { mode: "navigate" });

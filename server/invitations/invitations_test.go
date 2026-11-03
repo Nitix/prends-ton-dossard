@@ -1,7 +1,6 @@
 package invitations_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
-	"ganigeorgiev.com/pocketbase/pocketbase/tools/logger"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/router"
 
 	"courses/server/apperr"
@@ -1237,33 +1235,6 @@ func TestInvitations_ResetFlow(t *testing.T) {
 // ---------------------------------------------------------------------------
 // The token is a secret
 
-// requestLogs returns what the request log of app holds once it has at least
-// want entries (or after a few seconds). The logger writes in the background, a
-// few seconds after the request: this writes what it holds at once.
-func requestLogs(t testing.TB, app *tests.TestApp, want int) []*core.Log {
-	t.Helper()
-	handler, ok := app.Logger().Handler().(*logger.BatchHandler)
-	if !ok {
-		t.Fatalf("the logger is a %T, want PocketBase's batch handler", app.Logger().Handler())
-	}
-	blocking := context.WithValue(context.Background(), logger.BlockKey, true)
-
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if err := handler.WriteAll(blocking); err != nil {
-			t.Fatal(err)
-		}
-		var logs []*core.Log
-		if err := app.LogQuery().All(&logs); err != nil {
-			t.Fatal(err)
-		}
-		if len(logs) >= want || time.Now().After(deadline) {
-			return logs
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
 // PocketBase logs the URL of every request, successful or not, for several
 // days. The token must not be in any URL, or the database would hold a working
 // link in clear text, which is what storing only its hash is meant to avoid.
@@ -1286,7 +1257,7 @@ func TestInvitations_TokenIsNotLogged(t *testing.T) {
 		acceptJSON(token, "sam@example.test", testutil.Password, testutil.Password), http.StatusOK, `"token"`)
 
 	const requests = 5
-	logs := requestLogs(t, app, requests)
+	logs := testutil.RequestLogs(t, app, requests)
 
 	// Without this, the checks below would pass on an empty log.
 	if len(logs) < requests {

@@ -16,6 +16,8 @@ import (
 	"courses/server/demo"
 	"courses/server/events"
 	"courses/server/invitations"
+	"courses/server/mcp"
+	"courses/server/mcpauth"
 	"courses/server/offers"
 	"courses/server/participations"
 	"courses/server/passkeys"
@@ -42,6 +44,8 @@ func Register(app core.App, cfg config.Config) error {
 	comments.Register(app)
 	offers.Register(app)
 	invitations.Register(app, cfg)
+	mcpauth.Register(app, cfg)
+	mcp.Register(app, cfg)
 	calendar.Register(app, cfg)
 	demo.Register(app, cfg)
 	admin.Register(app)

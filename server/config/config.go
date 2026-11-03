@@ -77,5 +77,13 @@ func Load(getenv func(string) string) (Config, error) {
 	}, nil
 }
 
+// Demo says whether this is the demo: the site with an account that anybody can
+// sign in to, which DEMO_LOGIN_EMAIL turns on. What a shared account must not
+// have (the tokens of the assistants, which would give a lasting access to it)
+// is left out when it is true.
+func (c Config) Demo() bool {
+	return c.DemoLoginEmail != ""
+}
+
 // defaultPorts is the port that each scheme implies, which an origin omits.
 var defaultPorts = map[string]string{"http": "80", "https": "443"}

@@ -15,7 +15,8 @@ import (
 //
 // The paths under /api/ and /_/ are never served by it. PocketBase handles
 // them (the API and its dashboard), and an unknown one must stay a 404: an API
-// client expects JSON, not the HTML of the app.
+// client expects JSON, not the HTML of the app. /mcp and /.well-known/ are the
+// same (see reservedDirs).
 //
 // A missing file under /assets/, where Vite writes the built files, is a 404
 // too. Their names change with every build: after a deploy, a tab opened before
@@ -108,9 +109,20 @@ var rootFiles = map[string]map[string]string{
 	"manifest.webmanifest": {"Content-Type": "application/manifest+json"},
 }
 
-// reserved reports whether path, without its leading slash, belongs to
-// PocketBase: the API or its dashboard.
+// reservedDirs are the directories, without their slashes, that belong to the
+// program and not to the app: the API, the dashboard of PocketBase, the MCP
+// server, and the well-known addresses that an MCP client reads after a 401
+// (its OAuth metadata). A client of these expects JSON, never the HTML of the
+// app, and a 404 even where the route does not exist, as /mcp on the demo.
+var reservedDirs = []string{"api", "_", "mcp", ".well-known"}
+
+// reserved reports whether path, without its leading slash, is one of
+// reservedDirs or under one.
 func reserved(path string) bool {
-	return path == "api" || strings.HasPrefix(path, "api/") ||
-		path == "_" || strings.HasPrefix(path, "_/")
+	for _, dir := range reservedDirs {
+		if path == dir || strings.HasPrefix(path, dir+"/") {
+			return true
+		}
+	}
+	return false
 }

@@ -26,7 +26,7 @@ func main() {
 	if os.Getenv("APP_URL") == "" {
 		app.Logger().Warn("APP_URL is not set, using the default", "origin", cfg.Origin)
 	}
-	if cfg.DemoLoginEmail != "" {
+	if cfg.Demo() {
 		app.Logger().Warn("DEMO_LOGIN_EMAIL is set: anybody can sign in as this account", "email", cfg.DemoLoginEmail)
 	}
 

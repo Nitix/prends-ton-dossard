@@ -43,6 +43,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
 		"participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
+		"mcp_tokens",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -715,6 +716,9 @@ func TestMigrations_Settings(t *testing.T) {
 		// Ours.
 		"/api/app/invitations/":    {10, 60},
 		"/api/app/passkeys/login/": {20, 60},
+		// A backstop per address for the requests of /mcp that carry no valid
+		// token: the limit of a token is held by the mcp package.
+		"/mcp": {1500, 60},
 	}
 	if len(s.RateLimits.Rules) != len(wantRules) {
 		t.Errorf("got %d rate limit rules, want %d: %+v", len(s.RateLimits.Rules), len(wantRules), s.RateLimits.Rules)
@@ -746,6 +750,7 @@ func TestMigrations_SettingsRateLimitRulesAreEffective(t *testing.T) {
 		"/api/app/invitations/some-token/accept": 10,
 		"/api/app/passkeys/login/start":          20,
 		"/api/collections/events/records":        300,
+		"/mcp":                                   1500,
 	} {
 		rule, ok := limits.FindRateLimitRule([]string{"POST " + path, path})
 		if !ok || rule.MaxRequests != wantMax {
@@ -823,6 +828,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 
 	for _, name := range []string{
 		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
+		"mcp_tokens",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -1942,6 +1948,193 @@ func TestMigrations_UserSkin(t *testing.T) {
 	if err := setSkin("sentier"); err != nil {
 		t.Errorf("a skin is refused after applying again: %v", err)
 	}
+}
+
+// The migration 9k creates the personal tokens of the accounts, and adds the
+// rate limit rule of /mcp to the settings. Its rollback drops the table, and
+// the tokens in it, and takes the rule away; the settings of the other
+// migrations stay.
+func TestMigrations_MCPTokensDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9k_mcp_tokens.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("mcp_tokens")
+		if err != nil {
+			t.Fatalf("the collection mcp_tokens is missing: %v", err)
+		}
+		return c
+	}
+	// checkTable checks the fields, the index and the rules of the collection.
+	checkTable := func(when string) {
+		t.Helper()
+		c := collection()
+
+		// A token goes with its account.
+		user, ok := c.Fields.GetByName("user").(*core.RelationField)
+		if !ok {
+			t.Fatalf("%s: mcp_tokens.user must be a relation field, got %T", when, c.Fields.GetByName("user"))
+		}
+		users, err := app.FindCollectionByNameOrId("users")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if user.CollectionId != users.Id || user.MaxSelect != 1 || !user.Required || !user.CascadeDelete {
+			t.Errorf("%s: mcp_tokens.user = collection %q, maxSelect %d, required %v, cascade %v; want users, 1, true, true",
+				when, user.CollectionId, user.MaxSelect, user.Required, user.CascadeDelete)
+		}
+
+		name, ok := c.Fields.GetByName("name").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: mcp_tokens.name must be a text field, got %T", when, c.Fields.GetByName("name"))
+		}
+		if !name.Required || name.Min != 1 || name.Max != 50 {
+			t.Errorf("%s: mcp_tokens.name = required %v, min %d, max %d; want required, 1, 50", when, name.Required, name.Min, name.Max)
+		}
+
+		// Only the hash of the secret is kept, and no API response shows it.
+		hash, ok := c.Fields.GetByName("token_hash").(*core.TextField)
+		if !ok {
+			t.Fatalf("%s: mcp_tokens.token_hash must be a text field, got %T", when, c.Fields.GetByName("token_hash"))
+		}
+		if !hash.Required || !hash.Hidden {
+			t.Errorf("%s: mcp_tokens.token_hash = required %v, hidden %v; want required and hidden", when, hash.Required, hash.Hidden)
+		}
+
+		// The last use is not known for a token that was never used.
+		lastUsed, ok := c.Fields.GetByName("last_used_at").(*core.DateField)
+		if !ok {
+			t.Fatalf("%s: mcp_tokens.last_used_at must be a date field, got %T", when, c.Fields.GetByName("last_used_at"))
+		}
+		if lastUsed.Required {
+			t.Errorf("%s: mcp_tokens.last_used_at must not be required", when)
+		}
+
+		for _, field := range []string{"created", "updated"} {
+			if _, ok := c.Fields.GetByName(field).(*core.AutodateField); !ok {
+				t.Errorf("%s: mcp_tokens.%s must be a date field that PocketBase fills, got %T", when, field, c.Fields.GetByName(field))
+			}
+		}
+
+		const index = "CREATE INDEX idx_mcp_tokens_user ON mcp_tokens (user)"
+		if len(c.Indexes) != 1 || c.Indexes[0] != index {
+			t.Errorf("%s: mcp_tokens.indexes = %q, want [%q]", when, c.Indexes, index)
+		}
+
+		// Every rule is null: nobody reads or writes the table through the
+		// collection API, not even its owner.
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got != nil {
+				t.Errorf("%s: mcp_tokens rule %d = %q, want null (superusers only)", when, i, *got)
+			}
+		}
+	}
+	// mcpRule is the rate limit rule that matches a POST to /mcp.
+	mcpRule := func() (core.RateLimitRule, bool) {
+		limits := app.Settings().RateLimits
+		return limits.FindRateLimitRule([]string{"POST /mcp", "/mcp"})
+	}
+	checkRule := func(when string) {
+		t.Helper()
+		rule, ok := mcpRule()
+		if !ok || rule.Label != "/mcp" || rule.MaxRequests != 1500 || rule.Duration != 60 || rule.Audience != "" {
+			t.Errorf("%s: /mcp is limited by %+v (found %v), want 1500 requests per 60 s for everyone", when, rule, ok)
+		}
+		// The other rules are where they were: ours, and the defaults.
+		if got := len(app.Settings().RateLimits.Rules); got != 7 {
+			t.Errorf("%s: %d rate limit rules, want 7: %+v", when, got, app.Settings().RateLimits.Rules)
+		}
+	}
+	saveToken := func(user *core.Record, name string) *core.Record {
+		t.Helper()
+		return mustSave(t, app, "mcp_tokens", map[string]any{"user": user.Id, "name": name, "token_hash": "a1b2"})
+	}
+
+	checkTable("as created")
+	checkRule("as created")
+
+	// The name is 1 to 50 characters.
+	for _, c := range []struct {
+		name string
+		code string // "" when accepted
+	}{
+		{name: "Claude", code: ""},
+		{name: strings.Repeat("é", 50), code: ""},
+		{name: "", code: "validation_required"},
+		{name: strings.Repeat("é", 51), code: "validation_max_text_constraint"},
+	} {
+		_, err := trySave(app, "mcp_tokens", map[string]any{"user": fx.Alice.Id, "name": c.name, "token_hash": "a1b2"})
+		if c.code == "" {
+			if err != nil {
+				t.Errorf("a token named %q (%d characters) is refused: %v", c.name, len([]rune(c.name)), err)
+			}
+			continue
+		}
+		var invalid validation.Errors
+		if !errors.As(err, &invalid) || invalid["name"] == nil {
+			t.Errorf("a token named %q (%d characters): error %v, want a validation error on name", c.name, len([]rune(c.name)), err)
+			continue
+		}
+		if got := invalid["name"].(validation.Error).Code(); got != c.code {
+			t.Errorf("a token named %q (%d characters): code %q, want %q", c.name, len([]rune(c.name)), got, c.code)
+		}
+	}
+	// The hash is not optional, and a token has an account.
+	if _, err := trySave(app, "mcp_tokens", map[string]any{"user": fx.Alice.Id, "name": "Claude"}); err == nil {
+		t.Error("a token without a hash must be refused")
+	}
+	if _, err := trySave(app, "mcp_tokens", map[string]any{"name": "Claude", "token_hash": "a1b2"}); err == nil {
+		t.Error("a token without an account must be refused")
+	}
+
+	// The token goes with its account.
+	account := mustSave(t, app, "users", map[string]any{"email": "zoe@example.test", "password": testutil.Password, "role": "member"})
+	saveToken(account, "Zoé")
+	if err := app.Delete(account); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.CountRecords("mcp_tokens"); err != nil || got != 2 {
+		t.Errorf("after deleting an account, %d tokens (error %v), want the 2 of Alice", got, err)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with tokens: %v", err)
+	}
+	if _, err := app.FindCollectionByNameOrId("mcp_tokens"); err == nil {
+		t.Error("the collection mcp_tokens must be gone after the rollback")
+	}
+	if rule, ok := mcpRule(); ok {
+		t.Errorf("after the rollback /mcp is still limited by %+v", rule)
+	}
+	// What the table held went with it, and nothing else did.
+	for name, id := range map[string]string{"users": fx.Alice.Id, "runners": fx.AliceRunner.Id} {
+		if _, err := app.FindRecordById(name, id); err != nil {
+			t.Errorf("after the rollback, the %s %s is gone: %v", name, id, err)
+		}
+	}
+	// The rules of the other migrations are still there.
+	if rule, ok := app.Settings().RateLimits.FindRateLimitRule([]string{"POST /api/app/invitations/x", "/api/app/invitations/x"}); !ok || rule.MaxRequests != 10 {
+		t.Errorf("after the rollback, the invitations are limited by %+v (found %v), want 10", rule, ok)
+	}
+	if got := len(app.Settings().RateLimits.Rules); got != 6 {
+		t.Errorf("after the rollback, %d rate limit rules, want the 6 that were there before", got)
+	}
+	// Rolling back again, with nothing left to drop, is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	checkRule("after applying again")
+	if got, err := app.CountRecords("mcp_tokens"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d tokens (error %v), want an empty table", got, err)
+	}
+	saveToken(fx.Alice, "Claude")
 }
 
 // mustFind reads a record that must be there.

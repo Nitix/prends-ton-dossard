@@ -15,7 +15,7 @@ import (
 // A disabled admin is refused too, although disabling an account ends its
 // sessions: the check does not rely on that.
 func RequireAdmin(e *core.RequestEvent) error {
-	if e.Auth == nil || !isActiveAdmin(e.Auth) {
+	if e.Auth == nil || !IsActiveAdmin(e.Auth) {
 		return apperr.New(http.StatusForbidden, apperr.CodeForbidden)
 	}
 	return e.Next()

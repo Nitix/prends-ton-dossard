@@ -58,15 +58,17 @@ func Register(app core.App) {
 	registerEmailRoute(app)
 }
 
-// isActiveAdmin reports whether the account can still administrate the site.
-func isActiveAdmin(account *core.Record) bool {
+// IsActiveAdmin reports whether the account can still administrate the site:
+// the one test of an active admin, of the routes (RequireAdmin) and of the MCP
+// server, which reads the role of the account at each request.
+func IsActiveAdmin(account *core.Record) bool {
 	return account.GetString("role") == "admin" && !account.GetBool("disabled")
 }
 
 // guardLastAdmin refuses the update, from before to after, that leaves the site
 // without an active admin: nobody could then manage the accounts any more.
 func guardLastAdmin(app core.App, before, after *core.Record) error {
-	if !isActiveAdmin(before) || isActiveAdmin(after) {
+	if !IsActiveAdmin(before) || IsActiveAdmin(after) {
 		return nil
 	}
 

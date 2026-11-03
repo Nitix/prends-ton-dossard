@@ -21,5 +21,7 @@ courses.example.fr {
 	# the path would also cover the 404 of a missing chunk, which a browser
 	# could then keep for a year.
 
+	# /mcp and /api/app/mcp-uploads (the MCP server) go through reverse_proxy
+	# like the rest: nothing to add.
 	reverse_proxy 127.0.0.1:8090
 }
