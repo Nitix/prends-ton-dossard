@@ -577,8 +577,6 @@ func TestTools_SearchEvents_ReadsEveryPage(t *testing.T) {
 	}
 }
 
-// A search reads at most so many races of a period: past that, it asks for a
-// narrower one, instead of reading a table that grows with the years.
 // Every read stops at its bound (5000 records in the real one), and says that
 // trying again is no use: not the « Réessaie dans un instant » of a fault that
 // passes.
@@ -586,13 +584,17 @@ func TestTools_Reads_StopAtTheBound(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
 	mcp.SetNow(t, at(2026, 6, 20, 10, 0))
-	// Four runners and more race types than three.
+	// Four runners and more race types than three, and four results this year.
+	for _, p := range []*core.Record{fx.P1, fx.P2, fx.P3} {
+		update(t, app, p, map[string]any{"status": "finished"})
+	}
+	joined(t, app, fx.AdminRunner, fx.F15, "dnf", true, fx.AdminRunner)
 	mcp.SetMaxRecords(t, 3)
 	alice := newToken(t, app, fx.Alice)
 
 	const want = "Il y a trop d'enregistrements pour les lire d'un coup (plus de 3) : réessayer n'y changera rien. " +
 		"Précise la demande si l'outil le permet (une autre année pour get_stats), sinon c'est une limite du serveur MCP."
-	for _, tool := range []string{"list_runners", "list_race_types", "home", "get_runner"} {
+	for _, tool := range []string{"list_runners", "list_race_types", "home", "get_runner", "get_stats"} {
 		t.Run(tool, func(t *testing.T) {
 			result := callTool(t, app, alice, tool, nil)
 			if !result.IsError || result.Text != want {
@@ -605,6 +607,8 @@ func TestTools_Reads_StopAtTheBound(t *testing.T) {
 	}
 }
 
+// A search reads at most so many races of a period: past that, it asks for a
+// narrower one, instead of reading a table that grows with the years.
 func TestTools_SearchEvents_ReadsAtMost(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)

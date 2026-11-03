@@ -49,16 +49,20 @@ type ruleRow struct {
 	allowed bool
 	prepare prepareRow
 	// site is the request that the site is sent for a row that is refused: it
-	// refuses it too.
+	// refuses it too. A refused row has one.
 	site siteRequest
+	// siteStatus is what the site answers it: 0 for a refusal (404 for an update and
+	// a deletion, 400 for a creation). Confirming a participation is answered 200 by
+	// the site, which only leaves it as it was.
+	siteStatus int
 }
 
 // eachPerson is the three rows of a call by Alice, Bob and the admin.
 func eachPerson(tool, what string, alice, bob, admin bool, prepare prepareRow, site siteRequest) []ruleRow {
 	return []ruleRow{
-		{tool, what, "Alice", alice, prepare, site},
-		{tool, what, "Bob", bob, prepare, site},
-		{tool, what, "Admin", admin, prepare, site},
+		{tool: tool, what: what, person: "Alice", allowed: alice, prepare: prepare, site: site},
+		{tool: tool, what: what, person: "Bob", allowed: bob, prepare: prepare, site: site},
+		{tool: tool, what: what, person: "Admin", allowed: admin, prepare: prepare, site: site},
 	}
 }
 
@@ -191,6 +195,28 @@ func participationToolRows() []ruleRow {
 				return participationOf(t, app, fx.SamRunner, format) != nil
 			}
 		}, nil)...)
+
+	// Confirming a participation: only its runner, an admin included (spec v1 §
+	// 6.1). The others are refused by the tool, and the site, which answers them 200,
+	// leaves the participation unconfirmed: its hook confirms a change that the
+	// runner makes. Sam, who has no account, cannot be confirmed by anybody.
+	confirming := func(what string, runner func(testutil.Fixture) *core.Record, bob bool) {
+		confirm := eachPerson("update_participation", what, false, bob, false,
+			func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+				p := joined(t, app, runner(fx), racePast(t, app, fx), "interested", false, fx.AliceRunner)
+				return map[string]any{"participation_id": p.Id}, func() bool {
+					_, confirmed := storedStatus(t, app, p)
+					return confirmed
+				}
+			},
+			participationSite(http.MethodPatch, `{}`))
+		for i := range confirm {
+			confirm[i].siteStatus = http.StatusOK
+		}
+		rows = append(rows, confirm...)
+	}
+	confirming("confirming the participation of Bob, not confirmed yet", func(fx testutil.Fixture) *core.Record { return fx.BobRunner }, true)
+	confirming("confirming the participation of Sam, who has no account", func(fx testutil.Fixture) *core.Record { return fx.SamRunner }, false)
 
 	rows = append(rows, participationRows("update_participation",
 		func(p *core.Record) map[string]any { return map[string]any{"participation_id": p.Id, "status": "dns"} },
@@ -433,12 +459,18 @@ func callThrough(t *testing.T, app *tests.TestApp, token, tool string, args map[
 }
 
 // siteRefuses checks that the site refuses a request to the person: a rule that
-// fails is a 404 for an update and a deletion, and a 400 for a creation.
-func siteRefuses(t *testing.T, app *tests.TestApp, user *core.Record, method, path, body string) {
+// fails is a 404 for an update and a deletion, and a 400 for a creation (status 0);
+// status is what the site answers when it does not refuse but leaves things as
+// they were.
+func siteRefuses(t *testing.T, app *tests.TestApp, user *core.Record, method, path, body string, status int) {
 	t.Helper()
-	refusedStatus := http.StatusNotFound
-	if method == http.MethodPost {
+	refusedStatus := status
+	switch {
+	case status != 0:
+	case method == http.MethodPost:
 		refusedStatus = http.StatusBadRequest
+	default:
+		refusedStatus = http.StatusNotFound
 	}
 	var reader io.Reader
 	if body != "" {
@@ -521,10 +553,15 @@ func TestTools_FollowTheRulesOfTheOwner(t *testing.T) {
 				if after := dbState(t, app); after != before {
 					t.Errorf("the site refuses %s, and the database changed:\nbefore\n%s\nafter\n%s", row.person, before, after)
 				}
-				// The site says the same to the same person.
-				if row.site != nil {
-					method, path, body := row.site(args)
-					siteRefuses(t, app, person.user, method, path, body)
+				// The site says the same to the same person: a refused row that has no
+				// request for it would never be tied to the rules of the site.
+				if row.site == nil {
+					t.Fatalf("the row has no request for the site: give it one")
+				}
+				method, path, body := row.site(args)
+				siteRefuses(t, app, person.user, method, path, body, row.siteStatus)
+				if written() {
+					t.Errorf("the site wrote it when %s asked", row.person)
 				}
 			}
 		})

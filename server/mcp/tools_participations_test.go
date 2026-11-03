@@ -379,7 +379,7 @@ func TestTools_UpdateParticipation(t *testing.T) {
 
 		writesNothing(t, app, func() {
 			_, message, details := asked(t, callTool(t, app, alice, "update_participation", args))
-			mentions(t, message, details, "Bob (Intéressé, non confirmé)", "« Trail 42 km »", "d'un autre coureur", "de Intéressé à Inscrit")
+			mentions(t, message, details, "Bob (Intéressé, non confirmé)", "« Trail 42 km »", "d'un autre coureur", "de « Intéressé » à « Inscrit »")
 		})
 		result := confirmAndCall(t, app, alice, "update_participation", args)
 		p := participationIn(t, result, "participation")
@@ -666,7 +666,7 @@ func TestTools_ParticipationDescriptions(t *testing.T) {
 	assertJSON(t, schemaOf("set_result")["required"], []any{"participation_id", "status"})
 	assertJSON(t, schemaOf("update_participation")["required"], []any{"participation_id"})
 	assertJSON(t, schemaOf("remove_participation")["required"], []any{"participation_id"})
-	contains("set_result: finish_time", describedAt(t, schemaOf("set_result"), "finish_time"), "h:mm:ss", "4:12:30")
+	contains("set_result: finish_time", describedAt(t, schemaOf("set_result"), "finish_time"), "h:mm:ss", "4:12:30", "1:30 est une minute et demie", "1:30:00")
 	contains("set_result", tools["set_result"].Description, "en entier", "effacé", "dnf", "confirmation")
 
 	update := tools["update_participation"]

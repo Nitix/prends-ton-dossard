@@ -80,7 +80,7 @@ func parseFinishTime(s string) (int, error) {
 type setResultIn struct {
 	ParticipationID string `json:"participation_id" jsonschema:"l'identifiant de la participation, tel que get_event le donne : une participation à une épreuve"`
 	Status          string `json:"status" jsonschema:"finished (Terminé) ou dnf (Abandon) ; seulement à partir du jour de l'épreuve"`
-	FinishTime      string `json:"finish_time,omitempty" jsonschema:"le temps final, h:mm:ss (4:12:30), ou mm:ss sous une heure ; avec finished seulement"`
+	FinishTime      string `json:"finish_time,omitempty" jsonschema:"le temps final, h:mm:ss (4:12:30), ou mm:ss sous une heure : 1:30 est une minute et demie, 1h30 s'écrit 1:30:00 ; avec finished seulement"`
 	Rank            int    `json:"rank,omitempty" jsonschema:"le classement général, 1 ou plus ; avec finished seulement, et au plus rank_of"`
 	RankOf          int    `json:"rank_of,omitempty" jsonschema:"le nombre de classés, 1 ou plus ; avec finished seulement"`
 	Note            string `json:"note,omitempty" jsonschema:"quelques mots (« 3e V1H », « abandon au km 30 »), 200 caractères au plus ; avec finished et dnf"`

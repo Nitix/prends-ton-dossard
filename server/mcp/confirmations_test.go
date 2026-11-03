@@ -206,7 +206,7 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 		{
 			"update_participation: somebody else's", "update_participation",
 			map[string]any{"participation_id": fx.P2.Id, "status": "registered"},
-			[]string{"Bob (Intéressé, non confirmé)", "« Trail 42 km »", "d'un autre coureur", "de Intéressé à Inscrit"},
+			[]string{"Bob (Intéressé, non confirmé)", "« Trail 42 km »", "d'un autre coureur", "de « Intéressé » à « Inscrit »"},
 		},
 		{
 			"update_participation: a status that erases a result", "update_participation",

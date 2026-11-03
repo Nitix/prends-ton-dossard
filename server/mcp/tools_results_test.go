@@ -133,9 +133,12 @@ func TestTools_SetResult(t *testing.T) {
 		}
 	})
 
-	t.Run("a rank, a number ranked or a note that was entered: changing or dropping any is asked", func(t *testing.T) {
+	// The result is written whole, as the form of the site does: what the call does
+	// not give is cleared. A confirmation is asked first, and once it is given the
+	// database holds exactly the new result: a rank, a number ranked or a note that
+	// was left out is gone, and the time, which the call gives, stays.
+	t.Run("a rank, a number ranked or a note that was entered: changing or dropping any is asked, and the result is then written whole", func(t *testing.T) {
 		app, fx, alice := caseApp(t)
-		update(t, app, fx.P1, map[string]any{"status": "finished", "finish_time_s": 15150, "rank": 12, "rank_of": 340, "result_note": "3e V1H"})
 		same := map[string]any{"participation_id": fx.P1.Id, "status": "finished", "finish_time": "4:12:30", "rank": 12, "rank_of": 340, "note": "3e V1H"}
 
 		for _, row := range []struct {
@@ -144,14 +147,19 @@ func TestTools_SetResult(t *testing.T) {
 			change map[string]any
 			drop   []string
 			want   []string
+			// stored is the result that the database holds once it is written.
+			rank, rankOf int
+			note         string
 		}{
-			{"another rank", map[string]any{"rank": 11}, nil, []string{"12e sur 340", "11e sur 340"}},
-			{"another number ranked", map[string]any{"rank_of": 350}, nil, []string{"12e sur 340", "12e sur 350"}},
-			{"another note", map[string]any{"note": "4e V1H"}, nil, []string{"3e V1H", "4e V1H"}},
-			{"no note", nil, []string{"note"}, []string{"3e V1H"}},
-			{"no ranking", nil, []string{"rank", "rank_of"}, []string{"12e sur 340"}},
+			{"another rank", map[string]any{"rank": 11}, nil, []string{"12e sur 340", "11e sur 340"}, 11, 340, "3e V1H"},
+			{"another number ranked", map[string]any{"rank_of": 350}, nil, []string{"12e sur 340", "12e sur 350"}, 12, 350, "3e V1H"},
+			{"another note", map[string]any{"note": "4e V1H"}, nil, []string{"3e V1H", "4e V1H"}, 12, 340, "4e V1H"},
+			{"no note", nil, []string{"note"}, []string{"3e V1H"}, 12, 340, ""},
+			{"no ranking", nil, []string{"rank", "rank_of"}, []string{"12e sur 340"}, 0, 0, "3e V1H"},
 		} {
 			t.Run(row.name, func(t *testing.T) {
+				// Each row starts from the same result.
+				update(t, app, fx.P1, map[string]any{"status": "finished", "finish_time_s": 15150, "rank": 12, "rank_of": 340, "result_note": "3e V1H"})
 				args := map[string]any{}
 				for k, v := range same {
 					args[k] = v
@@ -166,7 +174,41 @@ func TestTools_SetResult(t *testing.T) {
 					_, message, details := asked(t, callTool(t, app, alice, "set_result", args))
 					mentions(t, message, details, row.want...)
 				})
+
+				result := confirmAndCall(t, app, alice, "set_result", args)
+				stored := storedRecord(t, app, "participations", fx.P1.Id)
+				if stored.GetInt("rank") != row.rank || stored.GetInt("rank_of") != row.rankOf || stored.GetString("result_note") != row.note || stored.GetInt("finish_time_s") != 15150 {
+					t.Errorf("the stored result is %d s, %d of %d, %q; want 15150 s, %d of %d, %q",
+						stored.GetInt("finish_time_s"), stored.GetInt("rank"), stored.GetInt("rank_of"), stored.GetString("result_note"), row.rank, row.rankOf, row.note)
+				}
+				// The answer says the same.
+				want := map[string]any{"finish_time": "4:12:30", "finish_time_s": 15150}
+				if row.rank != 0 {
+					want["rank"], want["rank_of"] = row.rank, row.rankOf
+				}
+				if row.note != "" {
+					want["note"] = row.note
+				}
+				assertJSON(t, participationIn(t, result, "participation")["result"], want)
 			})
+		}
+	})
+
+	t.Run("a result that only fills a number ranked: it is not a result, so replacing it asks nothing", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		// What a person entered of it alone is no result for the site: nothing is shown.
+		update(t, app, fx.P1, map[string]any{"status": "finished", "rank_of": 340})
+		same := isDone(t, callTool(t, app, alice, "update_participation", map[string]any{"participation_id": fx.P1.Id, "status": "finished"}))
+		if _, has := participationIn(t, same, "participation")["result"]; has {
+			t.Errorf("the participation shows a result: %v", participationIn(t, same, "participation"))
+		}
+
+		result := isDone(t, callTool(t, app, alice, "set_result", map[string]any{"participation_id": fx.P1.Id, "status": "finished", "finish_time": "4:12:30"}))
+		if want := "Terminé · 4h 12min 30s"; !strings.Contains(summaryOfResult(result), want) {
+			t.Errorf("the summary is %q, want %q", summaryOfResult(result), want)
+		}
+		if stored := storedRecord(t, app, "participations", fx.P1.Id); stored.GetInt("rank_of") != 0 || stored.GetInt("finish_time_s") != 15150 {
+			t.Errorf("the stored result is %d s of %d ranked, want the time and no number ranked", stored.GetInt("finish_time_s"), stored.GetInt("rank_of"))
 		}
 	})
 
@@ -184,6 +226,55 @@ func TestTools_SetResult(t *testing.T) {
 			t.Errorf("the summary is %q, want the result as written and that the time was not kept", summary)
 		}
 		assertJSON(t, participationIn(t, result, "participation")["result"], map[string]any{"note": "abandon au km 30"})
+	})
+
+	// What a status keeps of a result is the hook's (kept ports it): an abandon keeps
+	// the note and nothing else. The summary says what was given and not kept, and
+	// only then.
+	t.Run("dnf: the time, the rank and the number ranked are not kept, and the summary says so", func(t *testing.T) {
+		for _, row := range []struct {
+			name string
+			args map[string]any
+		}{
+			{"a time, a rank and a number ranked", map[string]any{"finish_time": "5:00:00", "rank": 10, "rank_of": 50}},
+			{"a rank", map[string]any{"rank": 10}},
+			// The number ranked alone is not a result, and is not kept either.
+			{"a number ranked", map[string]any{"rank_of": 50}},
+		} {
+			t.Run(row.name, func(t *testing.T) {
+				app, fx, alice := caseApp(t)
+				args := map[string]any{"participation_id": fx.P1.Id, "status": "dnf", "note": "abandon au km 30"}
+				for k, v := range row.args {
+					args[k] = v
+				}
+				result := isDone(t, callTool(t, app, alice, "set_result", args))
+				if !strings.Contains(summaryOfResult(result), "le temps et le classement ne sont pas gardés avec un abandon") {
+					t.Errorf("the summary is %q, want it to say that what was given is not kept", summaryOfResult(result))
+				}
+				stored := storedRecord(t, app, "participations", fx.P1.Id)
+				if stored.GetInt("finish_time_s") != 0 || stored.GetInt("rank") != 0 || stored.GetInt("rank_of") != 0 || stored.GetString("result_note") != "abandon au km 30" {
+					t.Errorf("the stored result is %d s, %d of %d, %q; want only the note", stored.GetInt("finish_time_s"), stored.GetInt("rank"), stored.GetInt("rank_of"), stored.GetString("result_note"))
+				}
+			})
+		}
+	})
+
+	t.Run("a result that has nothing to drop does not say that something was: a plain abandon, a finish", func(t *testing.T) {
+		for _, given := range []map[string]any{
+			{"status": "dnf"},
+			{"status": "dnf", "note": "abandon au km 30"},
+			{"status": "finished", "finish_time": "4:12:30", "rank": 12, "rank_of": 340},
+		} {
+			app, fx, alice := caseApp(t)
+			args := map[string]any{"participation_id": fx.P1.Id}
+			for k, v := range given {
+				args[k] = v
+			}
+			result := isDone(t, callTool(t, app, alice, "set_result", args))
+			if strings.Contains(summaryOfResult(result), "ne sont pas gardés") {
+				t.Errorf("%v: the summary says that something was not kept: %q", args["status"], summaryOfResult(result))
+			}
+		}
 	})
 
 	t.Run("a result with no time: the rank alone", func(t *testing.T) {

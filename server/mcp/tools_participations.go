@@ -159,7 +159,7 @@ func (t *tools) participationAnswer(w wording.Words, r participationRow, summary
 	return participationResult{Done: true, Participation: &out, Event: &event, FormatTitle: r.formatTitle(w), Summary: summary}
 }
 
-// result is the result of a participation: its time, its rank and how many were
+// resultFields is the result of a participation: its time, its rank and how many were
 // ranked, its note (the fields of resultOut, as the site stores them).
 type resultFields struct {
 	TimeS, Rank, RankOf int
@@ -496,7 +496,7 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 		details = append(details, line+".")
 	}
 	if _, ok := body["status"]; ok {
-		details = append(details, fmt.Sprintf("Le statut passerait de %s à %s.", w.Status(p.Status), w.Status(status)))
+		details = append(details, fmt.Sprintf("Le statut passerait de « %s » à « %s ».", w.Status(p.Status), w.Status(status)))
 	}
 	if moved.ID != "" {
 		movedTitle := formatView{record: moved, raceType: moved.Expand.RaceType}.title(w)
