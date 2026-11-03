@@ -79,7 +79,9 @@ type formatRecord struct {
 }
 
 // participationRecord is a participation, with its runner and who added it
-// expanded. Format is empty for a participation on the event alone.
+// expanded (and, for the reads that ask for them, its event and its format, the
+// format with its race type). Format is empty for a participation on the event
+// alone.
 type participationRecord struct {
 	ID          string `json:"id"`
 	Runner      string `json:"runner"`
@@ -94,16 +96,24 @@ type participationRecord struct {
 	Expand      struct {
 		Runner  runnerRecord `json:"runner"`
 		AddedBy runnerRecord `json:"added_by"`
+		Event   eventRecord  `json:"event"`
+		Format  formatRecord `json:"format"`
 	} `json:"expand"`
 }
 
-// commentRecord is a comment on an event.
+// commentRecord is a comment on an event, with its author and its event expanded
+// for the reads that ask for them.
 type commentRecord struct {
 	ID      string `json:"id"`
 	Author  string `json:"author"`
+	Event   string `json:"event"`
 	Body    string `json:"body"`
 	Created string `json:"created"`
 	Updated string `json:"updated"`
+	Expand  struct {
+		Author runnerRecord `json:"author"`
+		Event  eventRecord  `json:"event"`
+	} `json:"expand"`
 }
 
 // offerRecord is a ride or a lodging, with its owner expanded.
@@ -297,6 +307,15 @@ func runnerURL(cfg config.Config, id string) string {
 	return cfg.AppURL + "/coureurs/" + id
 }
 
+// photoURL is the address of the photo of a runner: the file is not protected, as
+// on the site. "" for a runner who has none.
+func photoURL(cfg config.Config, r runnerRecord) string {
+	if r.Avatar == "" {
+		return ""
+	}
+	return cfg.AppURL + "/api/files/runners/" + r.ID + "/" + url.PathEscape(r.Avatar)
+}
+
 // ref is a runner in an answer. A runner that the API did not send (a
 // participation that nobody added, a creator who is gone) is the zero value,
 // which an answer leaves out.
@@ -336,7 +355,9 @@ func (p participationRecord) out(w wording.Words) participationOut {
 	return out
 }
 
-// raceTime writes a time in seconds as the tools say a time: h:mm:ss, "4:12:30".
+// raceTime writes a time in seconds as the tools give a time in a field
+// (spec § 6.1): h:mm:ss, "4:12:30". The site's own raceTime, "4h 12min 30s", is
+// wording.RaceTime: it is what a result is written with in a line of text.
 func raceTime(seconds int) string {
 	return fmt.Sprintf("%d:%02d:%02d", seconds/3600, seconds%3600/60, seconds%60)
 }

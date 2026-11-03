@@ -370,7 +370,7 @@ Un compte sans coureur (impossible par les invitations) : erreur « Ton compte n
   "history": [{ "participation_id", "event", "format_title", "day", "status", "status_label", "result" }] }
 ```
 
-Comptage du site (`features/stats/stats.ts`) : une course terminée compte sa distance, son D+ et son temps quand ils sont renseignés ; un abandon ne compte que dans les abandons ; l'année est celle du jour de l'épreuve.
+Comptage du site (`features/stats/stats.ts`) : une course terminée compte sa distance, son D+ et son temps quand ils sont renseignés ; un abandon ne compte que dans les abandons ; l'année est celle du jour de l'épreuve. `result` d'une ligne de `history` est le texte que le site écrit (`features/results/resultText.ts`, `server/wording`) : le libellé du statut, puis le temps (« 4h 12min 30s »), le classement avec le nombre de classés quand il est connu (« 12e sur 340 ») et la note, séparés par « · » ; `photo_url` est absent sans photo.
 
 **`get_stats`** (Statistiques) — `year` facultatif (l'année en cours à Paris par défaut). → `{ "year", "runners": [{ "runner": { "id", "name" }, "finished", "dnf", "distance_km", "elevation_gain_m", "time_s" }] }`, les coureurs qui ont au moins un résultat cette année-là, triés par kilomètres puis par nom.
 

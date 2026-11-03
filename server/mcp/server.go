@@ -59,6 +59,9 @@ var (
 		addListRaceTypes,
 		addSearchEvents,
 		addGetEvent,
+		addHome,
+		addGetRunner,
+		addGetStats,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

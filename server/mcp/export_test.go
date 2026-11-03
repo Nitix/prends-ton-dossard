@@ -196,3 +196,44 @@ func SetMaxEventsRead(t testing.TB, n int) {
 	maxEventsRead = n
 	t.Cleanup(func() { maxEventsRead = previous })
 }
+
+// The records the API sends, with the fields that the ports are given.
+type (
+	ParticipationRecord = participationRecord
+	EventRecord         = eventRecord
+	FormatRecord        = formatRecord
+)
+
+// The rows of the home page and of the statistics, and the blocks that the ports
+// of the site's functions make of them (home.go, stats.go).
+type (
+	ParticipationRow = participationRow
+	ResultRow        = resultRow
+	RegistrationTodo = registrationTodo
+	Totals           = totals
+	RunnerTotals     = runnerTotals
+	YearTotals       = yearTotals
+)
+
+// ResultsWindowDays is RESULTS_WINDOW_DAYS of the site.
+const ResultsWindowDays = resultsWindowDays
+
+func PendingOf(rows []ParticipationRow, today string) []ParticipationRow {
+	return pendingOf(rows, today)
+}
+func TodosOf(rows []ParticipationRow, today string) []RegistrationTodo { return todosOf(rows, today) }
+func ToEnterOf(rows []ParticipationRow, today string) []ParticipationRow {
+	return toEnterOf(rows, today)
+}
+func IsResultToEnter(status, day, today string) bool { return isResultToEnter(status, day, today) }
+func UpcomingOf(rows []ParticipationRow, today string) []ParticipationRow {
+	return upcomingOf(rows, today)
+}
+func Excerpt(body string, max int) string                { return excerpt(body, max) }
+func TotalsOf(rows []ResultRow) Totals                   { return totalsOf(rows) }
+func ByRunner(rows []ResultRow, year int) []RunnerTotals { return byRunner(rows, year) }
+func ByYear(rows []ResultRow) []YearTotals               { return byYear(rows) }
+
+// NewResultRow is toResultRow of the site: a participation of the answer to a
+// request made with the expand of the statistics.
+func NewResultRow(record ParticipationRecord) (ResultRow, error) { return newResultRow(record) }

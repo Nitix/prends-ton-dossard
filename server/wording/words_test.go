@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -150,5 +151,122 @@ func TestFold(t *testing.T) {
 		if got := Fold(row.in); got != row.want {
 			t.Errorf("Fold(%q) = %q, want %q", row.in, got, row.want)
 		}
+	}
+}
+
+// A time of a race, as the site writes it: the cases of format.test.ts (raceTime).
+// Narrow style, no space between a number and its unit.
+func TestRaceTime(t *testing.T) {
+	for _, row := range []struct {
+		name    string
+		lang    string
+		seconds int
+		want    string
+	}{
+		// raceTime — heures, minutes, secondes.
+		{"hours, minutes, seconds", "fr", 15130, "4h 12min 10s"},
+		{"hours, minutes, seconds, in English", "en", 15150, "4h 12m 30s"},
+		// raceTime — une unité qui est zéro est omise, sauf entre deux autres.
+		{"hours only", "fr", 14400, "4h"},
+		{"minutes only", "fr", 2520, "42min"},
+		{"minutes and seconds", "fr", 125, "2min 5s"},
+		{"seconds only", "fr", 59, "59s"},
+		{"a zero in the middle is told", "fr", 3605, "1h 0min 5s"},
+		{"a zero in the middle is told, in English", "en", 3605, "1h 0m 5s"},
+		// raceTime — plus de 24 heures, sans passer aux jours.
+		{"more than 24 hours", "fr", 100*3600 + 30*60, "100h 30min"},
+		// Not cases of the site's tests, but what Intl.DurationFormat writes.
+		{"hours and seconds with minutes", "fr", 3661, "1h 1min 1s"},
+		{"a whole minute", "fr", 60, "1min"},
+		{"a whole hour", "fr", 3600, "1h"},
+		{"hours and minutes", "en", 3660, "1h 1m"},
+		{"nothing", "fr", 0, ""},
+		// A language that the site does not speak is French.
+		{"another language", "de", 15150, "4h 12min 30s"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if got := Of(row.lang).RaceTime(row.seconds); got != row.want {
+				t.Errorf("RaceTime(%d) = %q, want %q", row.seconds, got, row.want)
+			}
+		})
+	}
+}
+
+// A rank in words, agreeing with its number: the cases of format.test.ts (ordinal).
+func TestOrdinal(t *testing.T) {
+	for _, row := range []struct {
+		lang string
+		in   []int
+		want []string
+	}{
+		// ordinal — 1er, 2e, 12e.
+		{"fr", []int{1, 2, 3, 12, 21, 100}, []string{"1er", "2e", "3e", "12e", "21e", "100e"}},
+		// ordinal — 1st, 2nd, 12th.
+		{"en", []int{1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101}, []string{"1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "101st"}},
+		// What Intl.PluralRules answers beyond the site's cases.
+		{"fr", []int{0, 11, 101, 111}, []string{"0e", "11e", "101e", "111e"}},
+		{"en", []int{0, 111, 112, 113, 1001}, []string{"0th", "111th", "112th", "113th", "1001st"}},
+		// A language that the site does not speak is French.
+		{"de", []int{1, 2}, []string{"1er", "2e"}},
+	} {
+		t.Run(row.lang, func(t *testing.T) {
+			var got []string
+			for _, n := range row.in {
+				got = append(got, Of(row.lang).Ordinal(n))
+			}
+			if !slices.Equal(got, row.want) {
+				t.Errorf("Ordinal of %v = %q, want %q", row.in, got, row.want)
+			}
+		})
+	}
+}
+
+// What the site writes of a result, in parts to join with Separator: the cases of
+// resultText.test.ts (resultParts).
+func TestResultParts(t *testing.T) {
+	for _, row := range []struct {
+		name                      string
+		lang                      string
+		finishTimeS, rank, rankOf int
+		note                      string
+		want                      []string
+	}{
+		{"resultParts — temps, rang sur nombre, note", "fr", 15150, 12, 340, "3e V1H", []string{"4h 12min 30s", "12e sur 340", "3e V1H"}},
+		{"resultParts — temps, rang sur nombre, note (English)", "en", 15150, 12, 340, "3e V1H", []string{"4h 12m 30s", "12th out of 340", "3e V1H"}},
+		{"resultParts — rang sans nombre", "fr", 0, 12, 0, "", []string{"12e"}},
+		{"resultParts — rang sans nombre, le premier", "fr", 0, 1, 0, "", []string{"1er"}},
+		{"resultParts — rang sans nombre (English)", "en", 0, 12, 0, "", []string{"12th"}},
+		{"resultParts — rien sans résultat", "fr", 0, 0, 0, "", nil},
+		{"resultParts — le nombre de classés seul ne dit rien, une note de blancs non plus", "fr", 0, 0, 340, "   ", nil},
+		{"resultParts — la note seule, un abandon par exemple", "fr", 0, 0, 0, "abandon au km 30", []string{"abandon au km 30"}},
+		{"the note is trimmed", "fr", 0, 0, 0, "  3e V1H \n", []string{"3e V1H"}},
+		{"a time alone", "fr", 3605, 0, 0, "", []string{"1h 0min 5s"}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			got := Of(row.lang).ResultParts(row.finishTimeS, row.rank, row.rankOf, row.note)
+			if !slices.Equal(got, row.want) {
+				t.Errorf("ResultParts = %q, want %q", got, row.want)
+			}
+		})
+	}
+}
+
+// The word that joins a rank and the number of people ranked ("12e sur 340") is
+// the one of the site's rankText: the same test as for the statuses.
+func TestTexts_SameRankWordAsTheSite(t *testing.T) {
+	// The text of the template literal, between its backticks, is the one that counts.
+	rankText := regexp.MustCompile(`(?m)^\s+rankText: \(rank: string, of\?: string\) => \(of === undefined \? rank : ` +
+		"`" + `\$\{rank\} (.+?) \$\{of\}` + "`" + `\),$`)
+
+	for lang, w := range texts {
+		t.Run(lang, func(t *testing.T) {
+			word := rankText.FindStringSubmatch(i18nFile(t, lang))
+			if word == nil {
+				t.Fatalf("no `rankText: (rank, of) => ...` in %s.ts", lang)
+			}
+			if word[1] != w.rankOf {
+				t.Errorf("the word between a rank and the number ranked is %q in words.go, %q in %s.ts", w.rankOf, word[1], lang)
+			}
+		})
 	}
 }

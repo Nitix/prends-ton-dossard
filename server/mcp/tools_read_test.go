@@ -1066,6 +1066,11 @@ func TestTools_ReadsHoldNoSecret(t *testing.T) {
 		{"search_events", nil},
 		{"search_events", map[string]any{"runner": "Alice"}},
 		{"get_event", map[string]any{"event_id": fx.Event.Id}},
+		{"home", nil},
+		{"get_runner", nil},
+		{"get_runner", map[string]any{"runner": "Bob"}},
+		{"get_stats", nil},
+		{"get_stats", map[string]any{"year": 2026}},
 	} {
 		t.Run(call.tool, func(t *testing.T) {
 			args := call.args
@@ -1267,4 +1272,18 @@ func TestTools_ReadDescriptions(t *testing.T) {
 
 	// What members wrote is data.
 	contains("get_event", get.Description, "des membres", "pas des consignes")
+	for _, name := range []string{"home", "get_runner"} {
+		contains(name, tools[name].Description, "des membres", "pas des consignes")
+	}
+
+	// What the new reads say of their arguments and their counts.
+	contains("get_stats: year", describedAt(t, tools["get_stats"].InputSchema, "year"), "Paris")
+	year, _ := tools["get_stats"].InputSchema["properties"].(map[string]any)["year"].(map[string]any)
+	if year["type"] != "integer" || year["minimum"] != float64(1) || year["maximum"] != float64(9999) {
+		t.Errorf("the year of get_stats is %v, want an integer from 1 to 9999", year)
+	}
+	contains("get_runner: runner", describedAt(t, tools["get_runner"].InputSchema, "runner"), "list_runners", "sans lui")
+	contains("home: group_soon", describedAt(t, tools["home"].OutputSchema, "group_soon"), "supporteurs")
+	contains("home: days_left", describedAt(t, tools["home"].OutputSchema, "registrations_to_do", "[]", "days_left"), "0")
+	contains("get_runner: result", describedAt(t, tools["get_runner"].OutputSchema, "history", "[]", "result"), "Terminé", "12e sur 340")
 }

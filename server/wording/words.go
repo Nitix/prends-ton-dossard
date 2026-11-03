@@ -27,6 +27,12 @@ type Words struct {
 	// minute is the unit of the minutes of a duration, in the narrow style of
 	// Intl.DurationFormat ("46h 30min", "46h 30m").
 	minute string
+	// rankOf is what stands between a rank and the number of people ranked
+	// ("12e sur 340", "12th out of 340"): the word of rankText of the site.
+	rankOf string
+	// ending is the ending of an ordinal number agreeing with its number: "er" for
+	// 1 in French, "st" for 21 in English (the plural rules of the language).
+	ending func(n int) string
 }
 
 var texts = map[string]Words{
@@ -43,6 +49,14 @@ var texts = map[string]Words{
 		deadline:    "Clôture des inscriptions",
 		decimal:     ",",
 		minute:      "min",
+		rankOf:      "sur",
+		// Only 1 has a form of its own.
+		ending: func(n int) string {
+			if n == 1 {
+				return "er"
+			}
+			return "e"
+		},
 	},
 	"en": {
 		status: map[string]string{
@@ -57,6 +71,18 @@ var texts = map[string]Words{
 		deadline:    "Registration closes",
 		decimal:     ".",
 		minute:      "m",
+		rankOf:      "out of",
+		ending: func(n int) string {
+			switch {
+			case n%10 == 1 && n%100 != 11:
+				return "st"
+			case n%10 == 2 && n%100 != 12:
+				return "nd"
+			case n%10 == 3 && n%100 != 13:
+				return "rd"
+			}
+			return "th"
+		},
 	},
 }
 
@@ -153,4 +179,55 @@ var folded = strings.NewReplacer(
 // the same name for whoever asks for a runner, a type or a race by its name.
 func Fold(s string) string {
 	return strings.Join(strings.Fields(folded.Replace(strings.ToLower(s))), " ")
+}
+
+// RaceTime writes a time of a race given in seconds as the site does (raceTime of
+// lib/format.ts), in the narrow style of Intl.DurationFormat: no space between a
+// number and its unit, a unit that is zero left out, but for the minutes between
+// the hours and the seconds ("1h 0min 5s", not "1h 5s"). There is no day: "100h
+// 30min". "4h 12min 30s", "42min", "59s"; in English "4h 12m 30s".
+func (w Words) RaceTime(seconds int) string {
+	hours, minutes, rest := seconds/3600, seconds%3600/60, seconds%60
+	var parts []string
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	if minutes > 0 || (hours > 0 && rest > 0) {
+		parts = append(parts, fmt.Sprintf("%d%s", minutes, w.minute))
+	}
+	if rest > 0 {
+		parts = append(parts, fmt.Sprintf("%ds", rest))
+	}
+	return strings.Join(parts, " ")
+}
+
+// Ordinal writes a rank in words, agreeing with its number, as the site does
+// (ordinal of lib/format.ts): "1er", "2e", "12e" in French; "1st", "2nd", "3rd",
+// "4th", "11th" in English.
+func (w Words) Ordinal(n int) string {
+	return strconv.Itoa(n) + w.ending(n)
+}
+
+// ResultParts is what the site writes of a result (resultParts of
+// features/results/resultText.ts), as the parts of a line to be joined with
+// Separator: the time ("4h 12min 30s"), the rank, with how many were ranked when
+// it is known ("12e sur 340", or "12e"), then the note, without the blanks around
+// it. A part that is not given (0 and "") is left out: none at all without a
+// result, and the number of people ranked alone is not one.
+func (w Words) ResultParts(finishTimeS, rank, rankOf int, note string) []string {
+	var parts []string
+	if finishTimeS != 0 {
+		parts = append(parts, w.RaceTime(finishTimeS))
+	}
+	if rank != 0 {
+		text := w.Ordinal(rank)
+		if rankOf != 0 {
+			text += " " + w.rankOf + " " + strconv.Itoa(rankOf)
+		}
+		parts = append(parts, text)
+	}
+	if note = strings.TrimSpace(note); note != "" {
+		parts = append(parts, note)
+	}
+	return parts
 }
