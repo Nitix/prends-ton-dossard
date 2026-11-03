@@ -65,7 +65,9 @@ function askAgain(link: HTMLLinkElement): Promise<void> {
     again.href = link.href;
     if (link.crossOrigin !== null) again.crossOrigin = link.crossOrigin;
     again.addEventListener("load", () => {
-      link.remove();
+      // A response that is not a stylesheet can load too, with no rule in it: that is no sheet either.
+      if (hasNoSheet(again)) again.remove();
+      else link.remove();
       resolve();
     });
     again.addEventListener("error", () => {
@@ -78,13 +80,21 @@ function askAgain(link: HTMLLinkElement): Promise<void> {
 
 /**
  * Whether the look of a skin is whole in the page, once its code has loaded:
- * its palette is there. When it is not, the sheets that are missing are asked
- * for again (a failure of the network may be over), and the answer is given
- * once they have loaded or failed. A look that is not whole is not to be put on
- * the page.
+ * its palette is there, and no stylesheet of the page is missing. A look has
+ * more sheets than its palette (its faces, its trail: some are shared with
+ * other looks), and one of them can fail while the palette's loads: all or
+ * nothing. The sheets that are missing are asked for again (a failure of the
+ * network may be over), and the answer is given once they have loaded or
+ * failed. A look that is not whole is not to be put on the page.
+ *
+ * It looks at every stylesheet link of the page, since a look's own sheets are
+ * not told apart from the others': a sheet of another route that failed and
+ * cannot be had again keeps a skin from being chosen until the page is
+ * reloaded. That is rare (it takes a failed sheet and no network, with the look
+ * kept by the service worker), and it fails safe: the choice is said to have
+ * failed, and the page keeps its skin.
  */
 export async function settleSheets(id: string): Promise<boolean> {
-  if (hasPalette(id)) return true;
   await Promise.all(missingSheets().map(askAgain));
-  return hasPalette(id);
+  return hasPalette(id) && missingSheets().length === 0;
 }

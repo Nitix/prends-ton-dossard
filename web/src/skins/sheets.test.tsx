@@ -10,9 +10,14 @@ import { hasPalette, settleSheets } from "./sheets";
 // lookFailure.test.ts.
 
 const added: Element[] = [];
+/** The links that the page had before a test: the others are the test's, or those that `settleSheets` asked for again. */
+const before = new Set(document.querySelectorAll("link"));
 
 afterEach(() => {
   for (const element of added.splice(0)) element.remove();
+  for (const element of document.querySelectorAll("link")) {
+    if (!before.has(element)) element.remove();
+  }
 });
 
 /** A <style> in the page, as Vite's dev server puts a look's sheet. */
@@ -60,9 +65,9 @@ test("sheets — une règle qui ne parle pas de la page d'un skin n'est pas sa p
 
 test("sheets — la palette est là : rien n'est demandé de nouveau", async () => {
   style(':root[data-skin="sheets-f"] { --color-ink: #123456; }');
-  const before = document.querySelectorAll("link").length;
+  const links = document.querySelectorAll("link").length;
   await expect(settleSheets("sheets-f")).resolves.toBe(true);
-  expect(document.querySelectorAll("link").length).toBe(before);
+  expect(document.querySelectorAll("link").length).toBe(links);
 });
 
 test("sheets — une feuille qui n'est pas encore là : le skin est entier quand elle est venue", async () => {
@@ -80,4 +85,40 @@ test("sheets — une feuille qui manque encore après qu'on l'a redemandée : le
 
   await expect(settleSheets("sheets-h")).resolves.toBe(false);
   expect(hasPalette("sheets-h")).toBe(false);
+});
+
+// A look has more sheets than its palette: its faces (fonts.css, shared by some
+// skins), its trail (shared too). One of them can fail while the palette's
+// loads, and Vite does not ask for it again: the skin would be dressed in its
+// colours with no faces, or none of its trail motifs, for the life of the page.
+test("sheets — la palette est là mais une autre feuille manque encore après qu'on l'a redemandée : le skin n'est pas entier", async () => {
+  style(':root[data-skin="sheets-i"] { --color-ink: #123456; }');
+  link("/sheets-its-faces-that-are-not-there.css");
+
+  await expect(settleSheets("sheets-i")).resolves.toBe(false);
+  // The palette is there all the same: what is missing is another sheet.
+  expect(hasPalette("sheets-i")).toBe(true);
+});
+
+test("sheets — la palette est là et une autre feuille n'est pas encore venue : le skin est entier quand elle est venue", async () => {
+  style(':root[data-skin="sheets-j"] { --color-ink: #123456; }');
+  link("/src/skins/_example/palette.css");
+
+  await expect(settleSheets("sheets-j")).resolves.toBe(true);
+  expect(hasPalette("_example")).toBe(true);
+});
+
+test("sheets — toutes les feuilles sont là : rien n'est demandé de nouveau", async () => {
+  style(':root[data-skin="sheets-k"] { --color-ink: #123456; }');
+  const loaded = link("/src/skins/_example/palette.css");
+  await new Promise<void>((resolve) => {
+    loaded.addEventListener("load", () => {
+      resolve();
+    });
+  });
+  const links = document.querySelectorAll("link").length;
+
+  await expect(settleSheets("sheets-k")).resolves.toBe(true);
+
+  expect(document.querySelectorAll("link").length).toBe(links);
 });
