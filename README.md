@@ -298,7 +298,30 @@ Les métadonnées d'une photo, sa position GPS comprise, sont retirées. Un fich
 
 ### En local
 
-Sur le site de développement (voir « Développement local »), le serveur MCP est à **`http://localhost:5173/mcp`** (Vite transmet `/mcp`) ou, sans Vite, à `http://127.0.0.1:8090/mcp`. Créer un jeton sur le site local, comme plus haut : **jamais le même qu'en production**, qui n'a rien à faire sur un poste de développement ni dans un test. Sur le port 8090, lancer le serveur avec `APP_URL=http://127.0.0.1:8090` : sans lui, `start_upload` donne une adresse d'envoi sur le port de Vite.
+Sur le site de développement (voir « Développement local »), le serveur MCP est à **`http://localhost:5173/mcp`** (Vite transmet `/mcp`) ou, sans Vite, à `http://localhost:8090/mcp`. Créer un jeton sur le site local, comme plus haut : **jamais le même qu'en production**, qui n'a rien à faire sur un poste de développement ni dans un test. Sur le port 8090, lancer le serveur avec `APP_URL=http://localhost:8090` : sans lui, `start_upload` donne une adresse d'envoi sur le port de Vite. Une adresse IP (`APP_URL=http://127.0.0.1:8090`) ne convient pas : les clés d'accès veulent un nom de domaine, et le serveur refuse de démarrer.
+
+#### Vérifier le serveur avec un vrai client : `mcpcheck`
+
+`tools/mcpcheck` est un client MCP réel, fait avec le SDK officiel : il se connecte comme un assistant, liste les outils et les appelle, une ligne par étape (`ok   whoami — Alice`, ou `FAIL …` et le code de sortie 1 à la première étape qui échoue). Il n'écrit jamais un jeton, un secret d'envoi, un lien d'invitation ni un lien d'agenda.
+
+```sh
+# Sans -write, il ne fait que lire (initialize, tools/list, whoami, home, list_race_types, search_events, get_stats) :
+# il peut viser le vrai site, avec TON jeton dans PTD_MCP_TOKEN.
+PTD_MCP_TOKEN=ptd_… go run ./tools/mcpcheck -url https://courses.example.fr/mcp
+
+# Sur un serveur local seulement : -login fait un jeton d'essai (mot de passe de PTD_PASSWORD, celui du seed par défaut)
+# et le révoque à la fin, même après un échec ; -write essaie aussi les outils qui écrivent, puis remet tout en place.
+D="$(mktemp -d)"
+go run ./server seed --dir "$D"
+APP_URL=http://localhost:8090 go run ./server serve --http=127.0.0.1:8090 --dir "$D"     # dans un autre terminal
+go run ./tools/mcpcheck -url http://localhost:8090/mcp -login alice@example.test -write    # un membre : 32 outils
+go run ./tools/mcpcheck -url http://localhost:8090/mcp -login admin@example.test -write    # un admin : 43 outils
+```
+
+- `-write` et `-login` sont **refusés** pour toute adresse qui n'est pas `localhost` ou `127.0.0.1` : une exécution qui écrit laisserait sa trace sur un vrai site. Les données d'essai portent leurs propres noms (« Course de test MCP », « Doublon MCP », « Test MCP ») et sont supprimées en fin de course ; ne le lancer que sur une base à jeter (le `seed` ci-dessus).
+- Il passe par les confirmations (une fausse, une servie deux fois), un envoi de trace et de photo, la révocation d'un jeton (401 aussitôt) et, pour un admin, les outils `admin_…` (lien d'invitation, doublons fusionnés).
+- Il laisse 400 ms entre deux appels : les limites de requêtes de PocketBase valent pour les outils comme pour le navigateur.
+- Les fichiers d'essai (`tools/mcpcheck/testdata`) sont ceux des générateurs des tests du serveur ; `MCPCHECK_UPDATE=1 go test ./tools/mcpcheck/` les refait.
 
 ## Sauvegardes
 
