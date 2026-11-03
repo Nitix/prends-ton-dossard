@@ -578,6 +578,10 @@ conditions (`../motion.test.ts` checks the file, and `animatedBackground`):
   the pulse a `<span>` in the box of its ring; the cost is a few small
   layers, not a repaint of the page (`carnet/motifs.test.tsx` checks that no
   animated element is an SVG or in one).
+- **Not where nobody can stop it.** The sign-in pages (`/connexion`,
+  `/invitation`) are drawn in the skin, but « Animer le fond » is in the
+  settings of a signed-in person: a motif there (`HeaderArt` with
+  `place="welcome"`) stands still, with its patches at rest.
 - The motifs stay silent (`aria-hidden`, nothing to read: `components.test.tsx`),
   and nothing in them can be touched.
 

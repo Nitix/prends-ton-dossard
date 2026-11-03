@@ -110,12 +110,18 @@ function Dots({ fade, veils = false }: { fade?: "header" | "event" | "runner"; v
  * The sky behind the name. In the header of a page: the sheet of dots, with its
  * patches, and, on a page with no hero of its own, the orbits of the data in the
  * corner. On the pages to sign in: the sheet over the whole page, and under the
- * card the arch of a start line, in isometric hairlines, on a ground of dots.
+ * card the arch of a start line, in isometric hairlines, on a ground of dots. Those
+ * pages stand still: « Animer le fond » is in the settings of a signed-in person,
+ * so nobody there could stop it.
  */
 export function HeaderArt({ place, sun }: HeaderArtProps) {
   const [moving] = useAmbient();
   return (
-    <span aria-hidden="true" data-moving={moving ? "" : undefined} className="carnet-art">
+    <span
+      aria-hidden="true"
+      data-moving={moving && place === "header" ? "" : undefined}
+      className="carnet-art"
+    >
       {place === "header" ? (
         <>
           <Dots veils fade="header" />

@@ -83,10 +83,16 @@ test("Carnet — la feuille de points du ciel s'efface par plaques qui vont et v
   expect([...properties].toSorted()).toEqual(["opacity", "transform"]);
 });
 
-test("Carnet — la page de connexion a la même feuille de points, qui s'efface par plaques", async () => {
+test("Carnet — la page de connexion a la même feuille de points, mais immobile : personne n'y a « Animer le fond », qui est dans les réglages", async () => {
+  // The background is on (the default), and nothing moves there all the same.
+  chooseAmbient(true);
   const screen = await render(<HeaderArt place="welcome" />);
   expect(screen.container.querySelectorAll(".carnet-veil")).toHaveLength(4);
-  expect(names(screen.container).filter((name) => name === "carnet-veil")).toHaveLength(4);
+  expect(moving(screen.container)).toEqual([]);
+  expect(screen.container.querySelector("[data-moving]")).toBeNull();
+  // The same sheet in the header of a signed-in page does move.
+  const header = await render(<HeaderArt place="header" sun={false} />);
+  expect(names(header.container).filter((name) => name === "carnet-veil")).toHaveLength(4);
 });
 
 test("Carnet — l'orbite des données tourne derrière l'entête d'une page sans bandeau, pas d'une page qui a le sien", async () => {
@@ -185,7 +191,7 @@ test("Carnet — pour qui a demandé moins d'animations, rien ne bouge, mais tou
 test("Carnet — « Animer le fond » éteint : rien ne bouge, tout est dessiné ; rallumé, ça reprend", async () => {
   chooseAmbient(false);
   const hero = await render(<HeroArt place="runner" />);
-  const header = await render(<HeaderArt place="welcome" />);
+  const header = await render(<HeaderArt place="header" sun />);
   for (const screen of [hero, header]) {
     expect(moving(screen.container)).toEqual([]);
     expect(screen.container.querySelectorAll(".carnet-veil")).toHaveLength(4);
