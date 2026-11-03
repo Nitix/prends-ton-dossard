@@ -33,7 +33,7 @@ pnpm --dir web dev        # le site : http://localhost:5173
 ```
 
 - Le site s'ouvre sur **`http://localhost:5173`** (pas `127.0.0.1`) : sans `APP_URL`, le serveur prend cette adresse pour origine WebAuthn. Vite refuse de démarrer si le port 5173 est pris, car un autre port casserait les passkeys.
-- Vite transmet les appels `/api` au serveur sur le port 8090.
+- Vite transmet les appels `/api` et `/mcp` (le serveur MCP, voir « Assistant IA (MCP) ») au serveur sur le port 8090.
 - Les données sont dans `pb_data/`, à la racine du dépôt (ignoré par Git). Pour repartir de zéro : arrêter le serveur, supprimer ce dossier.
 
 Remplir une base vide avec des données de démonstration :
@@ -182,6 +182,124 @@ docker compose up -d
 docker compose exec -e SEED_PASSWORD="$(openssl rand -base64 24)" courses /app/courses seed --force
 ```
 
+## Assistant IA (MCP)
+
+Un assistant IA (Claude Code, Claude Desktop…) peut faire sur le site ce que tu y fais, en ton nom, sans l'ouvrir : chercher une course, l'ajouter, t'y inscrire, saisir un résultat, commenter, proposer une voiture. Tout ce qu'il fait est signé de ton nom, comme si tu l'avais fait toi-même. Il te demande ton accord avant de supprimer ou d'effacer quoi que ce soit, et il ne voit jamais un mot de passe ni un email. Le serveur MCP est dans le même programme que le site, à l'adresse **`https://<domaine>/mcp`** ; chaque membre s'y connecte avec un jeton personnel. Le détail est dans [`docs/superpowers/specs/2026-11-03-courses-mcp-design.md`](docs/superpowers/specs/2026-11-03-courses-mcp-design.md).
+
+### Créer un jeton
+
+1. Dans le site, ouvrir Profil, Réglages, puis la section « Assistant IA (MCP) ».
+2. « Nouveau jeton » : lui donner un nom qui permet de le reconnaître (« Claude sur mon PC »), puis « Créer le jeton ».
+3. **Le jeton (`ptd_…`) n'est montré qu'une fois**, dans cette fenêtre, avec les commandes à copier. Le site n'en garde qu'une empreinte : un jeton perdu se révoque et se refait.
+
+Un compte a cinq jetons au plus (un par machine ou par assistant), sans date d'expiration. Un jeton donne à l'assistant tout ce que tu peux faire toi-même (il n'y en a pas en lecture seule) : ne jamais le mettre dans un dépôt Git, dans le `.mcp.json` d'un projet, dans un message ni dans un fichier partagé.
+
+La liste des réglages dit quand chaque jeton a servi pour la dernière fois (« Utilisé le … »). **« Révoquer » le coupe aussitôt** : la requête suivante de l'assistant est refusée (401). Un admin qui désactive un compte supprime ses jetons ; changer de mot de passe ou d'email ne les touche pas : au moindre doute, les révoquer.
+
+### Claude Code
+
+Coller dans un terminal la commande de la fenêtre de création (« Copier la commande ») :
+
+```sh
+claude mcp add --transport http --scope user prends-ton-dossard https://courses.example.fr/mcp --header "Authorization: Bearer ptd_…"
+```
+
+`--scope user` range le jeton dans ta configuration personnelle (`~/.claude.json`), pour tous tes projets, et jamais dans le `.mcp.json` d'un projet, que l'on commite souvent. La commande contient le jeton : il reste aussi dans l'historique du terminal.
+
+```sh
+claude mcp list                                     # prends-ton-dossard doit y être « Connected »
+claude mcp remove prends-ton-dossard --scope user   # pour le retirer
+```
+
+Dans une session, `/mcp` montre le même état. Essayer ensuite : « Qui suis-je, et quelles courses arrivent ? ». Retirer le serveur de Claude Code ne révoque pas le jeton : le faire aussi dans les Réglages.
+
+### Claude Desktop
+
+Les connecteurs distants de Claude Desktop ne prennent pas d'en-tête fixe : ils veulent une connexion OAuth, que le site n'offre pas. Il passe donc par un pont, [`mcp-remote`](https://github.com/punkpeye/mcp-remote), que `npx` lance : il faut **Node 20.18 ou plus** (`node --version`). Dans le fichier de configuration de Claude Desktop, ouvert par Settings, Developer, « Edit Config » :
+
+- macOS : `~/Library/Application Support/Claude/claude_desktop_config.json` ;
+- Windows : `%APPDATA%\Claude\claude_desktop_config.json`.
+
+```json
+{
+  "mcpServers": {
+    "prends-ton-dossard": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@0.16.0",
+        "https://courses.example.fr/mcp",
+        "--header",
+        "Authorization:${PTD_AUTH}"
+      ],
+      "env": {
+        "PTD_AUTH": "Bearer ptd_…"
+      }
+    }
+  }
+}
+```
+
+- Le jeton est dans `env` et non dans `args`, que tout utilisateur de la machine peut lire dans la liste des processus. L'en-tête s'écrit `Authorization:${PTD_AUTH}`, sans espace après les deux-points : Claude Desktop sur Windows abîme les espaces des `args`, et celui de `Bearer ptd_…` est dans la variable (le conseil du pont lui-même).
+- `0.16.0` est la dernière version de `mcp-remote` au 3 novembre 2026. Le pont tourne avec ton jeton : ne pas le laisser changer sans que tu le saches. Pour une version plus récente : `npm view mcp-remote version`, lire son README, puis changer le numéro.
+- Quitter complètement Claude Desktop et le relancer : les outils de `prends-ton-dossard` apparaissent dans ses connecteurs. S'ils manquent, `mcp.log` et `mcp-server-prends-ton-dossard.log` disent pourquoi (macOS : `~/Library/Logs/Claude`, Windows : `%APPDATA%\Claude\logs`).
+- Claude Desktop n'a pas de terminal par défaut : sans lui, la commande `curl` de `start_upload` ne se lance pas, et les fichiers passent en base64 (512 Ko au plus, voir « Les fichiers »).
+
+### Un autre client
+
+Tout client MCP qui sait envoyer un en-tête fixe en « streamable HTTP » convient : l'adresse `https://<domaine>/mcp` et l'en-tête `Authorization: Bearer ptd_…`. Le serveur ne garde aucune session et répond en JSON, jamais en flux SSE (`GET` et `DELETE` répondent 405, les lots JSON-RPC sont refusés). Il n'offre pas OAuth : un client qui n'accepte que lui ne se branche pas.
+
+### Ce que l'assistant peut faire
+
+Chaque outil se limite à ce que le site te permet : l'assistant n'a pas d'autre droit que toi, et les refus du site restent les siens (modifier la participation confirmée d'un autre, supprimer la course d'un autre auteur…). Trente-deux outils, que l'assistant choisit seul quand tu lui parles :
+
+| Domaine | Outils |
+| --- | --- |
+| Lire | `whoami` (qui suis-je, quel jour), `home` (l'accueil), `list_runners`, `get_runner`, `get_stats`, `list_race_types`, `search_events`, `get_event` |
+| Courses et épreuves | `create_event`, `update_event`, `delete_event`, `add_format`, `update_format`, `delete_format` |
+| Participations et résultats | `add_participation`, `update_participation`, `remove_participation`, `set_result` |
+| Commentaires | `add_comment`, `update_comment`, `delete_comment` |
+| Covoiturage et logement | `add_offer`, `update_offer`, `delete_offer`, `offer_place` (prendre ou libérer une place) |
+| Fichiers | `start_upload`, `set_photo`, `set_track` |
+| Profil et réglages | `rename_runner`, `passkeys` (lister, renommer, supprimer), `calendar_link`, `mcp_tokens` (lister, révoquer) |
+
+Avec le jeton d'un **admin**, onze outils `admin_…` s'ajoutent, ceux de la partie Admin du site : les membres, leurs liens d'invitation et de réinitialisation, les rôles, la désactivation d'un compte, les types de course et la fusion des doublons. Le jeton d'un membre ne les voit pas, et le rôle est relu à chaque requête : un admin rétrogradé les perd aussitôt. Un compte se crée toujours par une invitation que la personne ouvre elle-même : `admin_create_link` donne le lien, l'assistant ne choisit jamais un mot de passe.
+
+Ce qui n'a pas d'outil :
+
+- **changer son email ou son mot de passe** : le site demande le mot de passe actuel, qui ne doit jamais passer par un assistant ;
+- **créer une clé d'accès** : il faut l'appareil, dans le navigateur ;
+- **créer un jeton** : un jeton n'en fabrique pas un autre, dont le secret passerait par l'assistant ;
+- **choisir le thème, installer l'appli, se déconnecter** : ce sont des réglages de l'appareil, ou une liste de thèmes que le serveur ne connaît pas ;
+- **le fichier `.ics`, la carte, le profil du D+** : le navigateur les fabrique (l'assistant a le lien d'agenda et les chiffres de la trace).
+
+### Les confirmations
+
+Ce qui supprime ou efface ce qu'une personne a saisi, ou touche à l'accès d'un compte, **ne se fait pas au premier appel** : supprimer une course, une épreuve, une participation, un commentaire, une offre, une clé d'accès, le lien d'agenda ou un jeton ; vider un champ rempli ; remplacer des notes, un résultat, une photo ou une trace ; raccourcir une course ou changer le jour d'une épreuve où des gens sont inscrits ; toucher à la participation, à la photo ou à l'offre de quelqu'un d'autre ; libérer une place ; créer une course qui ressemble à une autre. Remplacer une valeur par une autre (corriger une distance, renommer une course) n'en demande pas.
+
+Le premier appel répond « Rien n'a été fait » : ce qui serait perdu (une épreuve et ses inscrits, par exemple) et un jeton de confirmation (`cfm_…`). **L'assistant doit te le montrer et attendre ton accord**, puis rappeler le même outil avec les mêmes arguments et ce jeton. Le jeton vaut 10 minutes, une seule fois, pour cette demande exacte : un autre argument, un autre assistant, ou quelque chose qui a changé entre-temps (un nouvel inscrit) le fait refuser, et l'outil en redonne un qui décrit la situation d'aujourd'hui. Le serveur garantit que rien de tout cela n'est fait sans lui ; il ne peut pas savoir si l'assistant t'a vraiment posé la question, c'est la consigne qu'il reçoit. Relis ce qu'il te montre avant de dire oui.
+
+### Les fichiers
+
+Une photo (JPEG, PNG ou WebP, 5 Mo au plus) ou une trace GPX (10 Mo au plus) arrive de deux façons :
+
+- `start_upload` réserve un emplacement (10 minutes, deux au plus par jeton) et donne une commande `curl` qui envoie le fichier tel quel à `https://<domaine>/api/app/mcp-uploads/<id>`. Claude Code la lance dans son terminal, puis appelle `set_photo` ou `set_track` avec l'identifiant de l'emplacement ;
+- en base64 dans l'appel (`content_base64`), pour un petit fichier : 512 Ko au plus.
+
+Les métadonnées d'une photo, sa position GPS comprise, sont retirées. Un fichier qui n'est pas une trace GPX lisible est refusé avant tout envoi.
+
+### Côté serveur
+
+- **Caddy : rien à ajouter.** `/mcp` et `/api/app/mcp-uploads` passent par le `reverse_proxy` du bloc de « Mise en service » comme le reste : les réponses sont du JSON (pas de flux SSE à travers `encode`), le blocage `@pbadmin` ne les touche pas, Caddy ne limite pas la taille d'un corps (le programme le fait), et `X-Forwarded-For`, déjà réglé, donne à `/mcp` ses limites par adresse. Pour vérifier : `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://courses.example.fr/mcp` répond `401`, le refus d'une requête sans jeton.
+- **`APP_URL`** doit être l'adresse publique du site (voir « Mise en service »). L'adresse et la commande de la fenêtre de création d'un jeton, l'adresse d'envoi de `start_upload` (`<APP_URL>/api/app/mcp-uploads/<id>`) et les liens que l'assistant donne (`<APP_URL>/evenements/<id>`) en viennent : avec la valeur par défaut, celle de Vite (`http://localhost:5173`), l'assistant enverrait ses fichiers au mauvais endroit. La route d'envoi n'a pas de session : l'en-tête `X-Upload-Secret` d'un emplacement ouvert par `start_upload` l'ouvre, pour un seul fichier.
+- **Limites.** 300 requêtes par minute et par jeton (un seau de 300 qui se remplit de 5 par seconde, tenu en mémoire) : au-delà, 429, sans ralentir les autres jetons. Pour les requêtes sans jeton valide, une règle de PocketBase limite `/mcp` à 1 500 par minute et par adresse (migration `9k`, qui crée aussi la table des jetons : une sauvegarde avant la mise à jour, comme d'habitude). Les requêtes qu'un outil fait à l'API du site comptent dans les limites du site, comme celles du navigateur : un assistant qui inscrit trente personnes d'un coup peut attendre quelques secondes. Un corps de requête `/mcp` fait 1 Mio au plus (413 au-delà). Les confirmations et les emplacements d'envoi sont gardés en mémoire : un redémarrage les perd, l'assistant recommence.
+- **Pas de MCP sur la démo.** Avec `DEMO_LOGIN_EMAIL`, il n'y a ni `/mcp`, ni routes des jetons, ni route d'envoi (404), ni section dans les Réglages : tout le monde partage le compte de la démo, un jeton y donnerait un accès durable à chacun.
+- **Journaux.** Le journal des requêtes de PocketBase (5 jours par défaut ; tableau de bord, Logs, par le tunnel SSH) garde chaque `POST /mcp`, avec dans `meta` l'identifiant du jeton (`mcpToken`), celui du compte (`mcpUser`) et les outils appelés (`mcpTools`), dont chacun dit si une confirmation a été demandée (`asked`) ou utilisée (`confirmed`) ; chaque requête qu'un outil fait à l'API du site, avec l'agent `prends-ton-dossard-mcp` ; chaque envoi de fichier ; et les erreurs du serveur MCP (`mcp: …`). **Il ne garde jamais** le jeton (la base n'en a que l'empreinte), son secret, l'en-tête `Authorization`, la session interne d'un outil, le secret d'un envoi (il voyage dans un en-tête, pas dans l'adresse), un jeton de confirmation, ni un lien d'agenda, d'invitation ou de réinitialisation. Dans le site, ce que fait un assistant porte le nom de la personne (« ajouté par … ») : il n'y a pas d'autre trace par course.
+
+### En local
+
+Sur le site de développement (voir « Développement local »), le serveur MCP est à **`http://localhost:5173/mcp`** (Vite transmet `/mcp`) ou, sans Vite, à `http://127.0.0.1:8090/mcp`. Créer un jeton sur le site local, comme plus haut : **jamais le même qu'en production**, qui n'a rien à faire sur un poste de développement ni dans un test. Sur le port 8090, lancer le serveur avec `APP_URL=http://127.0.0.1:8090` : sans lui, `start_upload` donne une adresse d'envoi sur le port de Vite.
+
 ## Sauvegardes
 
 Le tableau de bord dont parle cette section s'ouvre par le tunnel SSH (voir « Tableau de bord PocketBase »).
@@ -317,7 +435,11 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] En **mode avion**, choisir un thème jamais choisi sur cet iPhone : un message dit qu'il n'a pas pu être chargé, la page ne se recharge pas et garde son thème. Reprendre le réseau et choisir de nouveau le même thème : il se charge, sans relancer l'appli.
 - [ ] Se connecter avec le même compte sur un **deuxième appareil** : le thème choisi sur le premier le suit.
 - [ ] Choisir « Carnet », parcourir une longue liste, la fiche d'un événement et celle d'un coureur : le fond (points qui s'effacent par plaques, orbites qui tournent, une pulsation) bouge **sans saccade** au défilement. Laisser l'accueil ouvert 2 minutes ; depuis un Mac, dans Safari (Développement, Inspecteur web, Chronologies) il n'y a pas de Mise en page ni de Peinture en continu. « Animer le fond » (Profil, Réglages, Apparence) l'arrête ; avec Réglages d'iOS, Accessibilité, Mouvement, Réduire les animations, rien ne bouge non plus.
-- [ ] Désactiver le compte de test.
+- [ ] **MCP, brancher.** Depuis un ordinateur (pas l'iPhone), avec Claude Code et le même compte de test, sur le vrai domaine : Profil, Réglages, « Assistant IA (MCP) », « Nouveau jeton », puis la commande copiée dans un terminal. `claude mcp list` montre `prends-ton-dossard` « Connected ». Sans jeton, `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<domaine>/mcp` répond `401`.
+- [ ] **MCP, lire.** Demander à Claude « Qui suis-je, et quelles courses arrivent ? » : il donne le nom du coureur de test et des courses du site. Dans Réglages (page rechargée), le jeton dit « Utilisé le » avec la date du jour.
+- [ ] **MCP, écrire et confirmer.** Lui faire créer une course d'essai avec une épreuve, où le coureur de test est inscrit : elle apparaît sur l'iPhone, au nom du compte de test. Lui demander de retirer cette participation, puis de supprimer la course : à chaque fois il montre ce qui serait perdu et attend ton accord avant de rappeler l'outil.
+- [ ] **MCP, révoquer.** « Révoquer » le jeton dans Réglages : `claude mcp list` ne montre plus le serveur « Connected ». Le retirer de Claude Code : `claude mcp remove prends-ton-dossard --scope user`.
+- [ ] Désactiver le compte de test (ses jetons MCP partent avec lui).
 
 ## Feuille de route
 

@@ -67,7 +67,8 @@ Voir § 10.
 - `StreamableHTTPOptions{Stateless: true, JSONResponse: true}` :
   - **sans état** : aucune session du protocole gardée en mémoire ; chaque `POST` se suffit à lui-même, et un redémarrage du conteneur ne casse rien. Le serveur n'a rien à pousser vers le client (pas de notification, pas de question), donc rien ne manque. Les confirmations (§ 6.13) et les envois de fichiers (§ 6.9) sont des jetons que l'assistant renvoie dans les arguments, pas une session ;
   - **réponses `application/json`**, jamais `text/event-stream` : pas de flux SSE à travers le `encode zstd gzip` de Caddy ;
-  - `GET` et `DELETE` répondent 405, comme le prévoit le transport pour un serveur qui n'ouvre pas de flux.
+  - `GET` et `DELETE` répondent 405, comme le prévoit le transport pour un serveur qui n'ouvre pas de flux ;
+  - **un message par requête** : un lot JSON-RPC (un tableau) est refusé en 400, avec l'erreur `-32600` (« batches are not supported: send one JSON-RPC message per request »). Le SDK en sert un quand la version du protocole manque ou précède 2025-06-18, qui les a retirés ; il compterait une requête pour la limite du § 3.4, et porterait autant d'appels d'outils que le corps en contient. Aucun client d'aujourd'hui n'en envoie.
 - `DisableLocalhostProtection: true`. Cette protection du SDK refuse une requête arrivée sur une adresse locale avec un `Host` qui n'est pas local (attaque par « DNS rebinding » contre un serveur local sans authentification). Ici, chaque requête doit porter un jeton, et derrière Caddy sans Docker (le programme lancé sur l'hôte) la protection refuserait toutes les requêtes du domaine public.
 - `MaxRequestBodyBytes` : 1 Mio. Le plus gros appel ordinaire, une course de vingt épreuves, fait quelques Ko ; un petit fichier en base64 tient dedans (§ 6.9), un gros passe par `PUT /api/app/mcp-uploads`.
 - `Logger` : aucun. Le SDK n'écrit rien dans les journaux.
@@ -120,7 +121,7 @@ Tout refus donne la même réponse, qui ne dit pas pourquoi : **401**, `WWW-Auth
 Une requête acceptée :
 
 - passe la limite par jeton (§ 3.4) ;
-- met `e.Auth` sur le compte : le journal des requêtes de PocketBase l'attribue au compte (§ 8.4) ;
+- met `e.Auth` sur le compte : la ligne du journal des requêtes de PocketBase porte alors `auth: "users"` (et l'identifiant du compte si `Logs.LogAuthId` est activé, ce qu'il n'est pas par défaut) ; le compte et le jeton sont dans le `meta` de la ligne, dans tous les cas (§ 8.4) ;
 - met à jour `last_used_at`, **au plus une fois par minute et par jeton** (une écriture de moins à chaque appel) ; un échec de cette écriture est journalisé (sans le jeton) et ne fait pas échouer l'appel.
 
 ### 4.4 Limites
@@ -982,13 +983,13 @@ Sur une instance de démo (`DEMO_LOGIN_EMAIL` défini), **le serveur MCP est abs
 
 ### 8.3 Caddy
 
-**Rien à changer.** `reverse_proxy` transmet tous les chemins, dont `/mcp` et `/api/app/mcp-uploads`, et les en-têtes `Authorization` et `X-Upload-Secret` ; `encode zstd gzip` compresse des réponses JSON (aucun flux SSE, § 3.3) ; le blocage `@pbadmin` ne touche pas ces chemins ; Caddy ne limite pas la taille d'un corps par défaut (le programme le fait, § 6.9). Le programme se fie déjà à `X-Forwarded-For` (migration 6) : les limites par adresse marchent pour `/mcp` comme pour le reste. Si un jour Caddy journalise les accès, il masque `Authorization` par défaut ; `X-Upload-Secret` ne vit que 10 minutes et ne sert qu'une fois.
+**Rien à changer** (`Caddyfile.example` le dit en un commentaire, au-dessus de `reverse_proxy`). `reverse_proxy` transmet tous les chemins, dont `/mcp` et `/api/app/mcp-uploads`, et les en-têtes `Authorization` et `X-Upload-Secret` ; `encode zstd gzip` compresse des réponses JSON (aucun flux SSE, § 3.3) ; le blocage `@pbadmin` ne touche pas ces chemins ; Caddy ne limite pas la taille d'un corps par défaut (le programme le fait, § 6.9). Le programme se fie déjà à `X-Forwarded-For` (migration 6) : les limites par adresse marchent pour `/mcp` comme pour le reste. Si un jour Caddy journalise les accès, il masque `Authorization` par défaut ; `X-Upload-Secret` ne vit que 10 minutes et ne sert qu'une fois.
 
 ### 8.4 Traces
 
 - **`last_used_at`** de chaque jeton, visible dans Réglages et par `mcp_tokens` (§ 4.3).
-- **Le journal des requêtes de PocketBase** (5 jours, tableau de bord par le tunnel SSH) :
-  - chaque `POST /mcp`, attribué au compte (`e.Auth`), avec dans `meta` l'identifiant du jeton, celui du compte, les outils appelés, et pour chacun s'il a demandé une confirmation ou en a utilisé une (`apis.RequestEventKeyLogMeta`) ;
+- **Le journal des requêtes de PocketBase** (5 jours, le réglage par défaut de PocketBase, que le programme ne change pas ; tableau de bord, Logs, par le tunnel SSH) :
+  - chaque `POST /mcp`, avec `auth: "users"` (`e.Auth`) et, dans son `meta` (`apis.RequestEventKeyLogMeta`) : `mcpToken`, l'identifiant du jeton ; `mcpUser`, celui du compte (le `authId` de PocketBase n'est écrit que si `Logs.LogAuthId` est activé, ce qu'il n'est pas par défaut : le compte se lit donc dans `meta`) ; `mcpTools`, les outils appelés, chacun `{"tool": "…"}` avec `"confirmation": "asked"` quand il a demandé une confirmation, `"confirmed"` quand il en a utilisé une. Un nom d'outil n'entre dans le journal que s'il a la forme d'un nom d'outil (lettres minuscules et `_`, 64 au plus ; sinon `(invalid)`) et 16 par requête au plus (`mcpToolsMore` compte les autres) : un assistant ne remplit pas le journal avec ce qu'il envoie. Les arguments des outils n'entrent pas dans le `meta` ;
   - chaque requête interne, avec l'agent `prends-ton-dossard-mcp` ;
   - chaque `PUT /api/app/mcp-uploads/{id}`, sans le secret.
 - **Dans le site**, ce que fait l'assistant porte le nom de la personne, comme si elle l'avait fait : `created_by` d'une course, `added_by` d'une participation ou d'une place, `author` d'un commentaire, `owner` d'une offre.
@@ -1029,7 +1030,7 @@ Ce que le site permet mais qui reste sans outil, et pourquoi :
 - **Installer l'appli, se déconnecter, entrer dans la démo** : ce sont des réglages de l'appareil ou du navigateur, pas du site.
 - **Télécharger le fichier `.ics` d'une course, la carte, le profil du D+** : le navigateur les fabrique ; l'assistant a le lien d'agenda, la fiche et les chiffres de la trace.
 - **Le reste de ce que le site ne fait pas** : créer un compte directement ou choisir le mot de passe d'un autre (une invitation ou un lien de réinitialisation, que la personne ouvre) ; `bootstrap-admin`, `seed` et le tableau de bord de PocketBase (la ligne de commande et le super-admin restent hors du site).
-- **OAuth 2.1** (connexion de l'assistant par le site, sans jeton à copier) : il le faudrait pour les connecteurs distants de claude.ai et de Claude Desktop, qui ne prennent pas d'en-tête fixe. En attendant, Claude Desktop passe par le pont `mcp-remote` (README).
+- **OAuth 2.1** (connexion de l'assistant par le site, sans jeton à copier) : il le faudrait pour les connecteurs distants de claude.ai et de Claude Desktop, qui ne prennent pas d'en-tête fixe. En attendant, Claude Desktop passe par le pont `mcp-remote` (README). Le README l'épingle à la version `0.16.0` (la dernière au 2026-11-03, publiée la veille ; la précédente, `0.15.2`, date du 2026-10-20) et demande Node 20.18 ou plus : c'est ce que demande `undici` 7, l'une de ses dépendances (`npm view` ne donne aucun `engines` à `mcp-remote` lui-même). Le README dit comment passer à une version plus récente (`npm view mcp-remote version`, son README, puis le numéro).
 - **Ressources et invites MCP** (`resources/*`, `prompts/*`), et l'« élicitation » du protocole (le serveur qui pose lui-même la question à la personne) : les confirmations passent par l'assistant (§ 6.13), que tous les clients savent faire.
 - **Jetons limités** (lecture seule, une partie des outils) et **expiration** des jetons.
 - **Notifications** au coureur qu'on ajoute : il le voit dans « À confirmer », comme aujourd'hui.
@@ -1058,7 +1059,7 @@ Ce que ni tes réponses ni le code ne tranchaient ; dis lesquelles revoir, par l
 6. **Confirmations et envois en mémoire**, 10 minutes, une fois, liés au jeton MCP qui les a demandés : un redémarrage les perd (l'assistant recommence).
 7. **Limite** : 300 par minute et par jeton, comptée par le programme, et aussi 1 500 par minute et par adresse, un filet pour les requêtes sans jeton valide ; les limites du site restent pour les requêtes internes.
 8. **Noms des outils en anglais**, titres, descriptions et messages **en français seulement** (l'assistant du membre anglophone traduit).
-9. **Encore plus strict que le site, sans confirmation possible** : la dernière épreuve d'une course ne se supprime pas (comme dans le formulaire) ; pas de « format à choisir » sur une course à une épreuve ; statut toujours explicite ; 20 épreuves au plus par course.
+9. **Encore plus strict que le site, sans confirmation possible** : la dernière épreuve d'une course ne se supprime pas (comme dans le formulaire) ; pas de « format à choisir » sur une course à une épreuve ; statut toujours explicite ; 20 épreuves au plus à la création d'une course (`add_format` en ajoute d'autres ensuite).
 10. **La date de fin suit les épreuves à chaque modification**, comme le formulaire ; quand cela raccourcit une vieille course de plusieurs jours, c'est une confirmation.
 11. **Traces** : `last_used_at` et le journal des requêtes de PocketBase (5 jours) ; pas d'historique par course, pas de marque « via un assistant » sur les enregistrements.
 12. **Liste des jetons réservée à leur propriétaire** : un admin ne voit pas ceux des autres (pas comme les clés d'accès) ; il désactive le compte.
