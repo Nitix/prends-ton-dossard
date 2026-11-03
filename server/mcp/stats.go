@@ -3,7 +3,6 @@ package mcp
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -194,13 +193,18 @@ type getStatsOut struct {
 	Runners []statsRunnerOut `json:"runners" jsonschema:"les coureurs qui ont au moins un résultat cette année-là, par kilomètres puis par nom"`
 }
 
+// firstStatsYear is the first year of the page of statistics of the site, and the
+// first year that a day can be in with four digits (FIRST_YEAR of
+// features/stats/search.ts).
+const firstStatsYear = 1000.0
+
 // getStatsSchema is the input of get_stats: the schema that the SDK infers, with
 // the years that a day can be in. Made once, for the servers that OnServe makes
 // again (the schema cache keeps it by pointer).
 var getStatsSchema = sync.OnceValue(func() *jsonschema.Schema {
 	schema := inputSchema[getStatsIn](nil)
 	year := schema.Properties["year"]
-	year.Minimum, year.Maximum = ptr(1.0), ptr(9999.0)
+	year.Minimum, year.Maximum = ptr(firstStatsYear), ptr(9999.0)
 	return schema
 })
 
@@ -211,7 +215,7 @@ func addGetStats(s *mcpsdk.Server, t *tools) {
 		Description: "Donne les statistiques d'une année, coureur par coureur, comme la page Statistiques du site : " +
 			"les courses terminées, les abandons, les kilomètres, le dénivelé et le temps des courses terminées. " +
 			"Seuls les coureurs qui ont au moins un résultat cette année-là y sont, par kilomètres puis par nom. " +
-			"L'année est celle du jour de l'épreuve. Une course terminée compte sa distance, son D+ et son temps quand ils sont renseignés ; un abandon ne compte que comme abandon.",
+			"L'année est celle du jour de l'épreuve. Une course terminée compte sa distance, son D+ et son temps quand ils sont renseignés ; un abandon ne compte que comme abandon. " + readBound,
 		InputSchema: getStatsSchema(),
 		Annotations: readOnly(),
 	}, t.getStats)
@@ -222,8 +226,8 @@ func (t *tools) getStats(ctx context.Context, _ *mcpsdk.CallToolRequest, in getS
 		return nil, getStatsOut{}, describe(t.app, err, nil)
 	}
 	year := cmp.Or(in.Year, yearOf(today()))
-	if year < 1 || year > 9999 {
-		return nil, getStatsOut{}, errors.New("year : l'année se donne sur 4 chiffres (de 0001 à 9999).")
+	if year < int(firstStatsYear) || year > 9999 {
+		return nil, getStatsOut{}, fmt.Errorf("year : l'année se donne sur 4 chiffres (de %d à 9999).", int(firstStatsYear))
 	}
 
 	// The participations that have a result, in the events that have a day in the

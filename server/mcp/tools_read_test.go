@@ -579,6 +579,32 @@ func TestTools_SearchEvents_ReadsEveryPage(t *testing.T) {
 
 // A search reads at most so many races of a period: past that, it asks for a
 // narrower one, instead of reading a table that grows with the years.
+// Every read stops at its bound (5000 records in the real one), and says that
+// trying again is no use: not the « Réessaie dans un instant » of a fault that
+// passes.
+func TestTools_Reads_StopAtTheBound(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	mcp.SetNow(t, at(2026, 6, 20, 10, 0))
+	// Four runners and more race types than three.
+	mcp.SetMaxRecords(t, 3)
+	alice := newToken(t, app, fx.Alice)
+
+	const want = "Il y a trop d'enregistrements pour les lire d'un coup (plus de 3) : réessayer n'y changera rien. " +
+		"Précise la demande si l'outil le permet (une autre année pour get_stats), sinon c'est une limite du serveur MCP."
+	for _, tool := range []string{"list_runners", "list_race_types", "home", "get_runner"} {
+		t.Run(tool, func(t *testing.T) {
+			result := callTool(t, app, alice, tool, nil)
+			if !result.IsError || result.Text != want {
+				t.Errorf("%s answered isError %v, %q, want %q", tool, result.IsError, result.Text, want)
+			}
+			if strings.Contains(result.Text, "Réessaie") {
+				t.Errorf("%s tells to try again: %q", tool, result.Text)
+			}
+		})
+	}
+}
+
 func TestTools_SearchEvents_ReadsAtMost(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
@@ -1279,11 +1305,39 @@ func TestTools_ReadDescriptions(t *testing.T) {
 	// What the new reads say of their arguments and their counts.
 	contains("get_stats: year", describedAt(t, tools["get_stats"].InputSchema, "year"), "Paris")
 	year, _ := tools["get_stats"].InputSchema["properties"].(map[string]any)["year"].(map[string]any)
-	if year["type"] != "integer" || year["minimum"] != float64(1) || year["maximum"] != float64(9999) {
-		t.Errorf("the year of get_stats is %v, want an integer from 1 to 9999", year)
+	// The years of the site: four digits (FIRST_YEAR of the statistics page).
+	if year["type"] != "integer" || year["minimum"] != float64(1000) || year["maximum"] != float64(9999) {
+		t.Errorf("the year of get_stats is %v, want an integer from 1000 to 9999", year)
 	}
+	contains("get_stats: year", describedAt(t, tools["get_stats"].InputSchema, "year"), "4 chiffres")
 	contains("get_runner: runner", describedAt(t, tools["get_runner"].InputSchema, "runner"), "list_runners", "sans lui")
 	contains("home: group_soon", describedAt(t, tools["home"].OutputSchema, "group_soon"), "supporteurs")
 	contains("home: days_left", describedAt(t, tools["home"].OutputSchema, "registrations_to_do", "[]", "days_left"), "0")
 	contains("get_runner: result", describedAt(t, tools["get_runner"].OutputSchema, "history", "[]", "result"), "Terminé", "12e sur 340")
+
+	// A participation that its runner has not confirmed is not a fact: the site
+	// writes « Non confirmé », and the lists of races to come say it.
+	for _, row := range []struct {
+		what   string
+		schema map[string]any
+		path   []string
+	}{
+		{"home: my_upcoming", tools["home"].OutputSchema, []string{"my_upcoming", "[]", "confirmed"}},
+		{"get_runner: upcoming", tools["get_runner"].OutputSchema, []string{"upcoming", "[]", "confirmed"}},
+	} {
+		contains(row.what+": confirmed", describedAt(t, row.schema, row.path...), "Non confirmé", "pas encore confirmée", "pas comme un fait")
+	}
+	for _, name := range []string{"home", "get_runner"} {
+		contains(name, tools[name].Description, "Non confirmé", "confirmed")
+	}
+
+	// The history of a runner is bounded, and says by how much.
+	contains("get_runner", tools["get_runner"].Description, "50 dernières", "history_total")
+	contains("get_runner: history", describedAt(t, tools["get_runner"].OutputSchema, "history"), "50 dernières")
+	contains("get_runner: history_total", describedAt(t, tools["get_runner"].OutputSchema, "history_total"), "50", "years")
+
+	// So is every read, at 5000 records: said where it applies.
+	for _, name := range []string{"home", "get_runner", "get_stats"} {
+		contains(name, tools[name].Description, "5000 enregistrements")
+	}
 }

@@ -475,7 +475,7 @@ func TestTools_Home(t *testing.T) {
 			// What is not confirmed is part of his plans until he refuses it, as on the site.
 			"my_upcoming": []any{map[string]any{
 				"participation_id": fx.P2.Id, "event": eventRefOf(fx.Event), "format_title": "Trail 42 km",
-				"day": "2026-06-14", "status": "interested", "status_label": "Intéressé",
+				"day": "2026-06-14", "status": "interested", "status_label": "Intéressé", "confirmed": false,
 			}},
 			"group_soon": []any{trailSummary(fx, map[string]any{
 				"participation_id": fx.P2.Id, "format_id": fx.F42.Id, "status": "interested", "status_label": "Intéressé",
@@ -493,7 +493,7 @@ func TestTools_Home(t *testing.T) {
 		assertJSON(t, block(t, got, "to_confirm"), []any{})
 		assertJSON(t, block(t, got, "my_upcoming"), []any{map[string]any{
 			"participation_id": fx.P1.Id, "event": eventRefOf(fx.Event), "format_title": "Trail 42 km",
-			"day": "2026-06-14", "status": "registered", "status_label": "Inscrit",
+			"day": "2026-06-14", "status": "registered", "status_label": "Inscrit", "confirmed": true,
 		}})
 		assertJSON(t, block(t, got, "group_soon"), []any{trailSummary(fx, map[string]any{
 			"participation_id": fx.P1.Id, "format_id": fx.F42.Id, "status": "registered", "status_label": "Inscrit",
@@ -532,25 +532,31 @@ func TestTools_Home(t *testing.T) {
 		assertJSON(t, block(t, got, "results_to_enter"), []any{})
 	})
 
-	t.Run("registrations to do: interested, the deadline not passed, the day of it included", func(t *testing.T) {
-		app := testutil.NewApp(t)
-		fx := testutil.Seed(t, app)
+	// A half marathon whose registrations close on the 5th of June, and Alice
+	// interested in it. want is the block that it makes of her home page.
+	// An event with no deadline (the trail) holds nothing to do.
+	semiWithADeadline := func(t *testing.T) (app *tests.TestApp, fx testutil.Fixture, todo *core.Record, want func(daysLeft int) []any) {
+		app = testutil.NewApp(t)
+		fx = testutil.Seed(t, app)
 		semi := create(t, app, "events", map[string]any{
 			"name": "Semi de Chambéry", "location": "Chambéry", "start_date": "2026-06-28", "registration_deadline": "2026-06-05",
 			"registration_url": "https://inscriptions.example.test/semi", "created_by": fx.AliceRunner.Id,
 		})
 		fSemi := create(t, app, "formats", map[string]any{"event": semi.Id, "race_type": fx.Road.Id, "distance_km": 21.1})
-		todo := create(t, app, "participations", map[string]any{
+		todo = create(t, app, "participations", map[string]any{
 			"runner": fx.AliceRunner.Id, "format": fSemi.Id, "status": "interested", "confirmed": true, "added_by": fx.AliceRunner.Id,
 		})
-		// An event with no deadline (the trail) holds nothing to do.
-
-		want := func(daysLeft int) []any {
+		want = func(daysLeft int) []any {
 			return []any{map[string]any{
 				"participation_id": todo.Id, "event": eventRefOf(semi), "format_title": "Route 21,1 km",
 				"deadline": "2026-06-05", "days_left": daysLeft, "registration_url": "https://inscriptions.example.test/semi",
 			}}
 		}
+		return app, fx, todo, want
+	}
+
+	t.Run("registrations to do: interested, the deadline not passed, the day of it included", func(t *testing.T) {
+		app, fx, todo, want := semiWithADeadline(t)
 		assertJSON(t, block(t, homeAt(t, app, fx.Alice, june1), "registrations_to_do"), want(4))
 		// The day of the deadline one can still register.
 		assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 6, 5, 10, 0)), "registrations_to_do"), want(0))
@@ -560,6 +566,15 @@ func TestTools_Home(t *testing.T) {
 		// Registered, it is done.
 		update(t, app, todo, map[string]any{"status": "registered"})
 		assertJSON(t, block(t, homeAt(t, app, fx.Alice, june1), "registrations_to_do"), []any{})
+	})
+
+	t.Run("registrations to do: the day is the one in Paris", func(t *testing.T) {
+		app, fx, _, want := semiWithADeadline(t)
+		// Paris is two hours ahead of UTC in June: at half past eleven in the evening
+		// of the 5th it is still the day of the deadline, and an hour later, which is
+		// still the 5th in UTC, the deadline is behind.
+		assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 6, 5, 21, 30)), "registrations_to_do"), want(0))
+		assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 6, 5, 22, 30)), "registrations_to_do"), []any{})
 	})
 
 	t.Run("results to enter: registered, over for 60 days at most", func(t *testing.T) {
@@ -577,6 +592,42 @@ func TestTools_Home(t *testing.T) {
 		assertJSON(t, block(t, got, "results_to_enter"), []any{})
 	})
 
+	t.Run("a race of several days under way: what is on the event alone stays, the race of the day before is to enter", func(t *testing.T) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		// Five days, from the 10th to the 14th, with a supporter who confirmed her
+		// participation: nothing but the end of the event keeps it among the races to
+		// come on the 14th (it is not to confirm, nor registered, and the event started
+		// before).
+		ultra := create(t, app, "events", map[string]any{
+			"name": "Ultra des Lacs", "location": "Annecy", "start_date": "2026-06-10", "end_date": "2026-06-14", "created_by": fx.AliceRunner.Id,
+		})
+		create(t, app, "formats", map[string]any{"event": ultra.Id, "race_type": fx.Trail.Id, "distance_km": 100, "date": "2026-06-14"})
+		supporter := onEvent(t, app, fx.AliceRunner, ultra, "supporter", true, fx.AliceRunner)
+		// She is registered on the 15 km of the 13th too, which has been run.
+		run := create(t, app, "participations", map[string]any{
+			"runner": fx.AliceRunner.Id, "format": fx.F15.Id, "status": "registered", "confirmed": true, "added_by": fx.AliceRunner.Id,
+		})
+
+		got := homeAt(t, app, fx.Alice, at(2026, 6, 14, 10, 0))
+
+		assertJSON(t, block(t, got, "my_upcoming"), []any{
+			// On the event alone, sorted on its first day.
+			map[string]any{
+				"participation_id": supporter.Id, "event": eventRefOf(ultra),
+				"day": "2026-06-10", "status": "supporter", "status_label": "Supporteur", "confirmed": true,
+			},
+			map[string]any{
+				"participation_id": fx.P1.Id, "event": eventRefOf(fx.Event), "format_title": "Trail 42 km",
+				"day": "2026-06-14", "status": "registered", "status_label": "Inscrit", "confirmed": true,
+			},
+		})
+		// The 13th is behind: its result is to enter, and it is not to come.
+		assertJSON(t, block(t, got, "results_to_enter"), []any{map[string]any{
+			"participation_id": run.Id, "event": eventRefOf(fx.Event), "format_title": "Trail 15 km", "day": "2026-06-13",
+		}})
+	})
+
 	t.Run("my upcoming races: not those that are not started, the races on the event alone too", func(t *testing.T) {
 		app := testutil.NewApp(t)
 		fx := testutil.Seed(t, app)
@@ -587,7 +638,7 @@ func TestTools_Home(t *testing.T) {
 
 		assertJSON(t, block(t, got, "my_upcoming"), []any{map[string]any{
 			"participation_id": supporter.Id, "event": eventRefOf(fx.Event2),
-			"day": "2026-06-22", "status": "supporter", "status_label": "Supporteur",
+			"day": "2026-06-22", "status": "supporter", "status_label": "Supporteur", "confirmed": true,
 		}})
 	})
 

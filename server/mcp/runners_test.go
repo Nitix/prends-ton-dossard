@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 
@@ -69,7 +70,7 @@ func TestTools_GetRunner(t *testing.T) {
 			// Not the half marathon that she does not start.
 			"upcoming": []any{map[string]any{
 				"participation_id": lyon.Id, "event": eventRefOf(fx.Event2), "format_title": "Route 10 km",
-				"day": "2026-06-22", "status": "interested", "status_label": "Intéressé",
+				"day": "2026-06-22", "status": "interested", "status_label": "Intéressé", "confirmed": true,
 			}},
 			// The latest year first. An abandon only counts as one.
 			"years": []any{
@@ -89,6 +90,7 @@ func TestTools_GetRunner(t *testing.T) {
 					"result": "Abandon · abandon au km 30",
 				},
 			},
+			"history_total": 2,
 		})
 		textIs(t, result)
 	})
@@ -123,6 +125,7 @@ func TestTools_GetRunner(t *testing.T) {
 			// The lists are empty, not null.
 			assertJSON(t, result.Structured["years"], []any{})
 			assertJSON(t, result.Structured["history"], []any{})
+			assertJSON(t, result.Structured["history_total"], 0)
 		}
 	})
 
@@ -131,7 +134,7 @@ func TestTools_GetRunner(t *testing.T) {
 		result := succeeded(t, get(alice, map[string]any{"runner": "Sam"}))
 		assertJSON(t, result.Structured["upcoming"], []any{map[string]any{
 			"participation_id": fx.P3.Id, "event": eventRefOf(fx.Event), "format_title": "Trail 15 km",
-			"day": "2026-06-13", "status": "interested", "status_label": "Intéressé",
+			"day": "2026-06-13", "status": "interested", "status_label": "Intéressé", "confirmed": false,
 		}})
 	})
 
@@ -168,4 +171,51 @@ func TestTools_GetRunner(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The history of a runner is the latest 50 races that they started, and says how
+// many there are: a runner with years of races is not answered with all of them.
+func TestTools_GetRunner_BoundsTheHistory(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	mcp.SetNow(t, at(2026, 6, 20, 10, 0))
+
+	// 55 races of one event of 55 days, Alice finished each: one a day, from the
+	// 1st of January, the time of each being its number.
+	event := create(t, app, "events", map[string]any{
+		"name": "Le Grand Défi", "location": "Annecy", "start_date": "2026-01-01", "end_date": "2026-02-24", "created_by": fx.AliceRunner.Id,
+	})
+	first := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 55; i++ {
+		format := create(t, app, "formats", map[string]any{
+			"event": event.Id, "race_type": fx.Trail.Id, "distance_km": 10, "date": first.AddDate(0, 0, i).Format(time.DateOnly),
+		})
+		create(t, app, "participations", map[string]any{
+			"runner": fx.AliceRunner.Id, "format": format.Id, "status": "finished", "confirmed": true, "added_by": fx.AliceRunner.Id,
+			"finish_time_s": 3600 + i,
+		})
+	}
+
+	result := succeeded(t, callTool(t, app, newToken(t, app, fx.Alice), "get_runner", nil))
+
+	history := result.Structured["history"].([]any)
+	if len(history) != 50 {
+		t.Fatalf("%d races in the history, want the latest 50", len(history))
+	}
+	if got := result.Structured["history_total"]; got != float64(55) {
+		t.Errorf("history_total = %v, want 55", got)
+	}
+	// The latest first: the 24th of February, and the 6th of January last of the 50.
+	if day := history[0].(map[string]any)["day"]; day != "2026-02-24" {
+		t.Errorf("the first race of the history is on %v, want the latest, 2026-02-24", day)
+	}
+	if day := history[49].(map[string]any)["day"]; day != "2026-01-06" {
+		t.Errorf("the last race of the history is on %v, want 2026-01-06", day)
+	}
+	// What is left out of the list is not left out of the year.
+	years := result.Structured["years"].([]any)
+	if len(years) != 1 || years[0].(map[string]any)["finished"] != float64(55) {
+		t.Errorf("the years are %v, want 55 finished in 2026", years)
+	}
+	textIs(t, result)
 }

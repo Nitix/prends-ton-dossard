@@ -398,7 +398,7 @@ func TestTools_GetStats(t *testing.T) {
 	})
 
 	t.Run("the year is bounded by the schema", func(t *testing.T) {
-		for _, year := range []any{-1, 10000, 2026.5, "2026"} {
+		for _, year := range []any{-1, 0, 5, 999, 10000, 2026.5, "2026"} {
 			if result := stats(map[string]any{"year": year}); !result.IsError {
 				t.Errorf("year %v accepted: %.200s", year, result.Text)
 			}

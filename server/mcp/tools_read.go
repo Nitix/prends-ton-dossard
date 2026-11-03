@@ -46,16 +46,40 @@ func readOnly() *mcpsdk.ToolAnnotations {
 // at maxRecords, which no collection of the site comes near; a search of events,
 // whose table is the one that grows and whose records are the heaviest (every
 // participation is expanded), at maxEventsRead, and asks for a narrower period.
+// What a read that stops there answers is said by describe (tooManyError), and
+// the tools that read what grows with the years say it in their description
+// (readBound).
 const (
-	maxRecords      = 5000
-	eventsReadLimit = 2000
+	recordsReadLimit = 5000
+	eventsReadLimit  = 2000
 )
 
-// maxEventsRead is eventsReadLimit, which the tests lower.
-var maxEventsRead = eventsReadLimit
+// maxRecords is recordsReadLimit, and maxEventsRead is eventsReadLimit: the tests
+// lower them.
+var (
+	maxRecords    = recordsReadLimit
+	maxEventsRead = eventsReadLimit
+)
+
+// readBound is the sentence of a description that says what a read does at its
+// bound.
+var readBound = fmt.Sprintf("Une lecture s'arrête à %d enregistrements : au-delà, l'outil le dit au lieu de répondre, et réessayer n'y change rien.", recordsReadLimit)
 
 // errTooMany is a read that found more records than it may take.
 var errTooMany = errors.New("mcp: more records than a read may take")
+
+// tooManyError is a read that found more records of a collection than its limit:
+// errors.Is(err, errTooMany) is true of it, and describe tells what is to be done.
+type tooManyError struct {
+	Collection string
+	Limit      int
+}
+
+func (e *tooManyError) Error() string {
+	return fmt.Sprintf("%v: %s, more than %d", errTooMany, e.Collection, e.Limit)
+}
+
+func (e *tooManyError) Is(target error) bool { return target == errTooMany }
 
 // listAll reads every record of a collection that the query selects, up to
 // maxRecords: see listUpTo.
@@ -64,8 +88,8 @@ func listAll[T any](ctx context.Context, a *innerAPI, collection string, query u
 }
 
 // listUpTo reads the records of a collection that the query selects, by pages of
-// perPage: the pages end with one that is not full. It fails with errTooMany
-// when there are more than limit, rather than read them all. The sort of the query
+// perPage: the pages end with one that is not full. It fails with a tooManyError
+// (errTooMany) when there are more than limit, rather than read them all. The sort of the query
 // is given the id as its last key, so that two records of a kind are never
 // swapped, nor one of them read twice or not at all, between two pages.
 func listUpTo[T any](ctx context.Context, a *innerAPI, collection string, query url.Values, perPage, limit int) ([]T, error) {
@@ -87,7 +111,7 @@ func listUpTo[T any](ctx context.Context, a *innerAPI, collection string, query 
 		}
 		all = append(all, answer.Items...)
 		if len(all) > limit {
-			return nil, fmt.Errorf("%w: %s, more than %d", errTooMany, collection, limit)
+			return nil, &tooManyError{Collection: collection, Limit: limit}
 		}
 		if len(answer.Items) < perPage {
 			return all, nil

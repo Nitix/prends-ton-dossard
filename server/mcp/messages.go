@@ -125,6 +125,10 @@ const (
 	msgNotFoundWrite = "Introuvable, ou ce n'est pas à toi de le modifier."
 	msgTooMany       = "Trop de demandes d'un coup : attends une minute avant de réessayer."
 	msgSiteError     = "Le site a rencontré une erreur. Réessaie dans un instant."
+	// msgTooManyRecords is the message of a read that stopped at its bound (limit):
+	// it is no fault that passes, and trying again is no use.
+	msgTooManyRecords = "Il y a trop d'enregistrements pour les lire d'un coup (plus de %d) : réessayer n'y changera rien. " +
+		"Précise la demande si l'outil le permet (une autre année pour get_stats), sinon c'est une limite du serveur MCP."
 	// msgRefused is the message of a code that has none: the code is what the
 	// assistant can go on.
 	msgRefused = "Le site a refusé (code %s)."
@@ -136,6 +140,13 @@ const (
 // (apiError.Request): the tool builds it from its operations ("Épreuve 2
 // (« Trail 15 km »)"); nil for a single request.
 func describe(app core.App, err error, subject func(request int) string) error {
+	// A read that stopped at its bound: said as it is, with the collection in the
+	// log.
+	var many *tooManyError
+	if errors.As(err, &many) {
+		app.Logger().Warn("mcp: a read hit the bound", "error", err)
+		return fmt.Errorf(msgTooManyRecords, many.Limit)
+	}
 	var refused *apiError
 	if !errors.As(err, &refused) {
 		// The errors of the package name a method and a path, never a header:

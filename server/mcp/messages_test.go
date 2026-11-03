@@ -202,6 +202,18 @@ func TestDescribe(t *testing.T) {
 			"a 404 with its code", withCode(http.StatusNotFound, "not_found"), nil,
 			"Introuvable, ou ce n'est pas à toi de le modifier.",
 		},
+		{
+			// A read that stopped at its bound: trying again is no use, which the message
+			// says, with the bound of that read.
+			"a read that hit the bound", mcp.TooMany("participations", 5000), nil,
+			"Il y a trop d'enregistrements pour les lire d'un coup (plus de 5000) : réessayer n'y changera rien. " +
+				"Précise la demande si l'outil le permet (une autre année pour get_stats), sinon c'est une limite du serveur MCP.",
+		},
+		{
+			"a read that hit the bound, wrapped", fmt.Errorf("reading the events: %w", mcp.TooMany("events", 2000)), nil,
+			"Il y a trop d'enregistrements pour les lire d'un coup (plus de 2000) : réessayer n'y changera rien. " +
+				"Précise la demande si l'outil le permet (une autre année pour get_stats), sinon c'est une limite du serveur MCP.",
+		},
 		{"a 429", refused(http.StatusTooManyRequests, http.MethodGet), nil, "Trop de demandes d'un coup : attends une minute avant de réessayer."},
 		{"a 500", refused(http.StatusInternalServerError, http.MethodGet), nil, "Le site a rencontré une erreur. Réessaie dans un instant."},
 		{"another error", errors.New("the router is gone"), nil, "Le site a rencontré une erreur. Réessaie dans un instant."},
@@ -216,12 +228,22 @@ func TestDescribe(t *testing.T) {
 
 	// What the generic message hides is in the log of the server.
 	logged := map[string]string{}
-	for _, entry := range testutil.RequestLogs(t, app, 3) {
+	var bounds []string
+	for _, entry := range testutil.RequestLogs(t, app, 5) {
 		text, _ := entry.Data["error"].(string)
 		logged[entry.Message] = text
+		if entry.Message == "mcp: a read hit the bound" {
+			bounds = append(bounds, text)
+		}
 	}
 	if got := logged["mcp: a read was refused as malformed"]; !strings.Contains(got, "400") {
 		t.Errorf("the bare 400 of a read is logged as %q", got)
+	}
+	// The bound that a read hit, and the collection, are in the log.
+	for _, want := range []string{"participations, more than 5000", "events, more than 2000"} {
+		if !slices.ContainsFunc(bounds, func(logged string) bool { return strings.Contains(logged, want) }) {
+			t.Errorf("the bounds that were logged are %q, want one with %q", bounds, want)
+		}
 	}
 	if got := logged["mcp: a tool failed"]; got != "the router is gone" {
 		t.Errorf("the error of another kind is logged as %q", got)

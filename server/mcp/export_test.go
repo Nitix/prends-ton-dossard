@@ -197,6 +197,20 @@ func SetMaxEventsRead(t testing.TB, n int) {
 	t.Cleanup(func() { maxEventsRead = previous })
 }
 
+// SetMaxRecords makes a read take at most n records, until the test ends.
+func SetMaxRecords(t testing.TB, n int) {
+	t.Helper()
+	previous := maxRecords
+	maxRecords = n
+	t.Cleanup(func() { maxRecords = previous })
+}
+
+// TooMany is the error of a read that found more records of a collection than its
+// limit.
+func TooMany(collection string, limit int) error {
+	return &tooManyError{Collection: collection, Limit: limit}
+}
+
 // The records the API sends, with the fields that the ports are given.
 type (
 	ParticipationRecord = participationRecord

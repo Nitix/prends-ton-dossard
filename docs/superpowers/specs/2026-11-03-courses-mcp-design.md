@@ -347,7 +347,7 @@ Un compte sans coureur (impossible par les invitations) : erreur « Ton compte n
 { "to_confirm": [ PARTICIPATION + { "event", "format_title", "day" } ],
   "registrations_to_do": [{ "participation_id", "event", "format_title", "deadline", "days_left", "registration_url" }],
   "results_to_enter": [{ "participation_id", "event", "format_title", "day" }],
-  "my_upcoming": [{ "participation_id", "event", "format_title", "day", "status", "status_label" }],
+  "my_upcoming": [{ "participation_id", "event", "format_title", "day", "status", "status_label", "confirmed" }],
   "group_soon": [ EVENT_SUMMARY ],
   "latest_comments": [{ "comment_id", "event", "author", "excerpt", "created" }] }
 ```
@@ -355,7 +355,7 @@ Un compte sans coureur (impossible par les invitations) : erreur « Ton compte n
 - `to_confirm` : ses participations ajoutées par d'autres, pas encore confirmées ;
 - `registrations_to_do` : ses participations `interested` dont la course a une date limite pas passée (le jour même compte) ;
 - `results_to_enter` : ses participations `registered` dont le jour est passé depuis 60 jours au plus ;
-- `my_upcoming` : ses participations à venir, sauf « Non partant » ;
+- `my_upcoming` : ses participations à venir, sauf « Non partant » ; `confirmed` dit si son coureur l'a confirmée : faux pour une qui a été ajoutée par un autre et qu'il n'a pas encore confirmée, que le site écrit « Non confirmé » (elle fait partie de ses projets tant qu'il ne la refuse pas) : l'assistant ne la présente pas comme un fait acquis ;
 - `group_soon` : les 5 prochaines courses qui ont des participants autres que non partants et supporteurs ;
 - `latest_comments` : les 5 commentaires les plus récents, le début du texte (140 caractères, coupé au mot).
 
@@ -365,14 +365,15 @@ Un compte sans coureur (impossible par les invitations) : erreur « Ton compte n
 
 ```json
 { "runner": { "id", "name", "has_account", "is_me", "url", "photo_url" },
-  "upcoming": [{ "participation_id", "event", "format_title", "day", "status", "status_label" }],
+  "upcoming": [{ "participation_id", "event", "format_title", "day", "status", "status_label", "confirmed" }],
   "years": [{ "year": 2026, "finished": 4, "dnf": 1, "distance_km": 118.4, "elevation_gain_m": 6200, "time_s": 61200 }],
-  "history": [{ "participation_id", "event", "format_title", "day", "status", "status_label", "result" }] }
+  "history": [{ "participation_id", "event", "format_title", "day", "status", "status_label", "result" }],
+  "history_total": 2 }
 ```
 
-Comptage du site (`features/stats/stats.ts`) : une course terminée compte sa distance, son D+ et son temps quand ils sont renseignés ; un abandon ne compte que dans les abandons ; l'année est celle du jour de l'épreuve. `result` d'une ligne de `history` est le texte que le site écrit (`features/results/resultText.ts`, `server/wording`) : le libellé du statut, puis le temps (« 4h 12min 30s »), le classement avec le nombre de classés quand il est connu (« 12e sur 340 ») et la note, séparés par « · » ; `photo_url` est absent sans photo.
+Comptage du site (`features/stats/stats.ts`) : une course terminée compte sa distance, son D+ et son temps quand ils sont renseignés ; un abandon ne compte que dans les abandons ; l'année est celle du jour de l'épreuve. `upcoming` dit `confirmed` comme `my_upcoming` de `home` : une participation que son coureur n'a pas confirmée y est, et se dit « Non confirmé ». `history` donne les **50 dernières** courses terminées ou abandonnées, la plus récente d'abord, et `history_total` leur nombre ; `years` compte toutes les courses. `result` d'une ligne de `history` est le texte que le site écrit (`features/results/resultText.ts`, `server/wording`) : le libellé du statut, puis le temps (« 4h 12min 30s »), le classement avec le nombre de classés quand il est connu (« 12e sur 340 ») et la note, séparés par « · » ; `photo_url` est absent sans photo.
 
-**`get_stats`** (Statistiques) — `year` facultatif (l'année en cours à Paris par défaut). → `{ "year", "runners": [{ "runner": { "id", "name" }, "finished", "dnf", "distance_km", "elevation_gain_m", "time_s" }] }`, les coureurs qui ont au moins un résultat cette année-là, triés par kilomètres puis par nom.
+**`get_stats`** (Statistiques) — `year` facultatif (quatre chiffres, de 1000 à 9999 comme la page du site ; l'année en cours à Paris par défaut). → `{ "year", "runners": [{ "runner": { "id", "name" }, "finished", "dnf", "distance_km", "elevation_gain_m", "time_s" }] }`, les coureurs qui ont au moins un résultat cette année-là, triés par kilomètres puis par nom.
 
 **`list_race_types`** — aucune entrée → `{ "race_types": [{ "id", "label", "measures" }] }`, par nom. `measures` : les mesures que le formulaire montre d'abord pour ce type (`distance` → `distance_km`, `elevation` → `elevation_gain_m`, `duration` → `duration_min`, `time_limit` → `time_limit_min`) ; les quatre quand le type n'en dit rien.
 
@@ -401,6 +402,7 @@ Comptage du site (`features/stats/stats.ts`) : une course terminée compte sa di
 - `participants` compte les participations qui ne sont pas « Non partant », supporteurs et intéressés sans épreuve compris (ce n'est pas le nombre de coureurs au départ) ; `mine` : celles du propriétaire du jeton.
 - `end_date` est absent pour une course d'un seul jour, `registration_deadline` quand la course n'a pas de date limite renseignée. `from` seul : toutes les courses à partir de ce jour ; `to` seul : jusqu'à ce jour ; `from` après `to` est une erreur.
 - Une réponse est bornée : 50 courses au plus (`limit`), et la recherche lit au plus 2000 courses d'une période, au-delà de quoi elle demande de la resserrer avec `from` et `to`.
+- **Toute lecture s'arrête à 5000 enregistrements** (un groupe d'amis n'en approche pas) : au-delà, l'outil répond « Il y a trop d'enregistrements pour les lire d'un coup (plus de 5000) : réessayer n'y changera rien. … », et non « Réessaie dans un instant », et le paquet journalise la collection. Les descriptions de `home`, `get_runner` et `get_stats`, dont les lectures croissent avec les années, le disent.
 - `title` d'une épreuve : comme le site (`formatDisplayName`) : son nom, sinon le type et sa mesure principale (« Trail 42,2 km », « Route 6h », « Backyard max 48h »). Les mots viennent de ceux du flux d'agenda (`calendar/texts.go`), déplacés dans un paquet `wording` que les deux partagent ; les libellés des statuts aussi.
 - Mêmes requêtes que la liste du site (filtre de période ou de plage, `expand` des épreuves et des participations) ; le texte, le coureur et le type sont filtrés ensuite, comme le fait le site.
 
@@ -797,6 +799,7 @@ Ils reprennent les trois pages Admin du site (`web/src/features/admin`, `web/src
 |---|---|
 | 400 avec des codes de champ | le message de chaque champ (ci-dessus) |
 | 400 sur une création, sans champ (règle de création) | « Tu n'as pas le droit de faire ça. » |
+| 400 sans code ni champ sur une lecture (un filtre, un tri ou un `expand` mal formé : un défaut de l'outil, pas un droit qui manque) | « Le site a rencontré une erreur. Réessaie dans un instant. » (et le paquet journalise la route, sans la requête) |
 | 403 | « Tu n'as pas le droit de faire ça. » |
 | 404 sur une lecture | « Introuvable : il a peut-être été supprimé. » |
 | 404 sur une modification ou une suppression | message propre à l'outil quand il sait pourquoi (participation confirmée d'un autre, course d'un autre auteur, commentaire ou offre d'un autre), sinon « Introuvable, ou ce n'est pas à toi de le modifier. » |
