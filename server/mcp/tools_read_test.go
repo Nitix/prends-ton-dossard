@@ -11,6 +11,7 @@ import (
 
 	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/tests"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 
 	"courses/server/mcp"
@@ -489,6 +490,8 @@ func TestTools_SearchEvents(t *testing.T) {
 				"from : « 2026-02-30 » n'est pas un jour valide (AAAA-MM-JJ)."},
 			{"a day that is a word", map[string]any{"to": "demain"},
 				"to : « demain » n'est pas un jour valide (AAAA-MM-JJ)."},
+			{"a range that ends before it starts", map[string]any{"from": "2026-06-20", "to": "2026-06-10"},
+				"from : « 2026-06-20 » est après to : « 2026-06-10 »."},
 		} {
 			t.Run(row.name, func(t *testing.T) {
 				result := search(alice, row.args)
@@ -571,6 +574,36 @@ func TestTools_SearchEvents_ReadsEveryPage(t *testing.T) {
 	result := succeeded(t, callTool(t, app, token, "search_events", map[string]any{"limit": 50}))
 	if result.Structured["truncated"] != true || result.Structured["count"] != float64(50) {
 		t.Errorf("count %v, truncated %v", result.Structured["count"], result.Structured["truncated"])
+	}
+}
+
+// A search reads at most so many races of a period: past that, it asks for a
+// narrower one, instead of reading a table that grows with the years.
+func TestTools_SearchEvents_ReadsAtMost(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	mcp.SetNow(t, at(2026, 6, 14, 10, 0))
+	mcp.SetMaxEventsRead(t, 150)
+
+	first := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 1; i <= 205; i++ {
+		create(t, app, "events", map[string]any{
+			"name": fmt.Sprintf("Course %03d", i), "location": "Quelque part",
+			"start_date": first.AddDate(0, 0, i).Format(time.DateOnly), "created_by": fx.AliceRunner.Id,
+		})
+	}
+	token := newToken(t, app, fx.Alice)
+
+	result := callTool(t, app, token, "search_events", nil)
+	want := "Il y a trop de courses dans cette période pour les lire d'un coup (plus de 150) : resserre la recherche avec from et to."
+	if !result.IsError || result.Text != want {
+		t.Errorf("isError %v, text %q, want %q", result.IsError, result.Text, want)
+	}
+
+	// A narrower period reads what it holds.
+	got := ids(t, callTool(t, app, token, "search_events", map[string]any{"from": "2027-01-01", "to": "2027-01-10"}))
+	if len(got) != 9 {
+		t.Errorf("%d races in the first days of 2027, want 9", len(got))
 	}
 }
 
@@ -793,6 +826,7 @@ func TestTools_GetEvent(t *testing.T) {
 			map[string]any{"id": changed.Id, "author": runnerRef(fx.BobRunner), "body": "Moi aussi, je suis partant.", "created": "2026-06-01 10:00:00.000Z", "edited": true},
 			map[string]any{"id": late.Id, "author": runnerRef(fx.AdminRunner), "body": "Rendez-vous à la gare.", "created": "2026-06-01 11:00:00.000Z", "edited": false},
 		},
+		"comments_total": 3,
 	}
 
 	t.Run("the whole page of a race", func(t *testing.T) {
@@ -830,6 +864,7 @@ func TestTools_GetEvent(t *testing.T) {
 				"distance_km": 10, "day": "2026-06-22", "participants": []any{},
 			}},
 			"undecided": []any{}, "supporters": []any{}, "rides": []any{}, "lodgings": []any{}, "comments": []any{},
+			"comments_total": 0,
 		})
 	})
 
@@ -846,16 +881,36 @@ func TestTools_GetEvent(t *testing.T) {
 		}
 	})
 
-	t.Run("an id that cannot be one is not looked up", func(t *testing.T) {
+	// What is not an id is not said to be a race that was deleted: the model passed
+	// something else (a name), and is told to look the race up.
+	t.Run("an id that cannot be one is not looked up, and says so", func(t *testing.T) {
 		counted := mcp.CountInnerRequests(t)
-		for _, id := range []string{"nope", "", "../../api/settings", "aaaaaaaaaaaaaaa'||1=1"} {
-			result := get(map[string]any{"event_id": id})
-			if !result.IsError || result.Text != "Introuvable : il a peut-être été supprimé." {
-				t.Errorf("%q: isError %v, text %q", id, result.IsError, result.Text)
+		for _, row := range []struct{ id, want string }{
+			{"nope", "« nope » n'est pas un identifiant de course : cherche la course avec search_events pour obtenir le sien."},
+			{"Trail des Crêtes", "« Trail des Crêtes » n'est pas un identifiant de course : cherche la course avec search_events pour obtenir le sien."},
+			{"../../api/settings", "« ../../api/settings » n'est pas un identifiant de course : cherche la course avec search_events pour obtenir le sien."},
+			{"aaaaaaaaaaaaaaa'||1=1", "« aaaaaaaaaaaaaaa'||1=1 » n'est pas un identifiant de course : cherche la course avec search_events pour obtenir le sien."},
+			// An id has no capitals.
+			{strings.ToUpper(fx.Event.Id), "« " + strings.ToUpper(fx.Event.Id) + " » n'est pas un identifiant de course : cherche la course avec search_events pour obtenir le sien."},
+			{"", "Il manque l'identifiant de la course (event_id) : cherche la course avec search_events pour l'obtenir."},
+			{"   ", "Il manque l'identifiant de la course (event_id) : cherche la course avec search_events pour l'obtenir."},
+		} {
+			result := get(map[string]any{"event_id": row.id})
+			if !result.IsError || result.Text != row.want {
+				t.Errorf("%q: isError %v, text %q, want %q", row.id, result.IsError, result.Text, row.want)
 			}
 		}
 		if counted.Total() != 0 {
 			t.Errorf("%d inner requests for ids that cannot be ones", counted.Total())
+		}
+	})
+
+	t.Run("the blanks around an id are not part of it", func(t *testing.T) {
+		for _, id := range []string{" " + fx.Event.Id, fx.Event.Id + "\n", "\t" + fx.Event.Id + " "} {
+			result := succeeded(t, get(map[string]any{"event_id": id}))
+			if result.Structured["id"] != fx.Event.Id {
+				t.Errorf("%q: the race is %v", id, result.Structured["id"])
+			}
 		}
 	})
 
@@ -877,6 +932,42 @@ func TestTools_GetEvent(t *testing.T) {
 			}
 		}
 	})
+}
+
+// A page does not give more than the last 50 comments, and says how many there are.
+func TestTools_GetEvent_BoundsTheComments(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	token := newToken(t, app, fx.Alice)
+
+	// 55 comments, one a minute, saved from the newest to the oldest: what is kept
+	// is the latest by date, not the first saved.
+	for i := 55; i >= 1; i-- {
+		comment := create(t, app, "comments", map[string]any{
+			"event": fx.Event.Id, "author": fx.AliceRunner.Id, "body": fmt.Sprintf("Commentaire %02d", i),
+		})
+		stamp := fmt.Sprintf("2026-06-01 10:%02d:00.000Z", i)
+		putDates(t, app, comment.Id, stamp, stamp)
+	}
+
+	result := succeeded(t, callTool(t, app, token, "get_event", map[string]any{"event_id": fx.Event.Id}))
+	got := commentsOf(t, callTool(t, app, token, "get_event", map[string]any{"event_id": fx.Event.Id}))
+	if len(got) != 50 {
+		t.Fatalf("%d comments, want the latest 50", len(got))
+	}
+	// Oldest first, from the 6th to the 55th.
+	if first, last := got[0]["body"], got[49]["body"]; first != "Commentaire 06" || last != "Commentaire 55" {
+		t.Errorf("the comments go from %v to %v, want from Commentaire 06 to Commentaire 55", first, last)
+	}
+	if got := result.Structured["comments_total"]; got != float64(55) {
+		t.Errorf("comments_total = %v, want 55: the number of comments of the race", got)
+	}
+
+	// Under the bound, nothing is left out.
+	other := succeeded(t, callTool(t, app, token, "get_event", map[string]any{"event_id": fx.Event2.Id}))
+	if len(other.Structured["comments"].([]any)) != 0 || other.Structured["comments_total"] != float64(0) {
+		t.Errorf("a race with no comment: %v, total %v", other.Structured["comments"], other.Structured["comments_total"])
+	}
 }
 
 // A result is on the participation only when there is one, as the site shows it.
@@ -1074,4 +1165,106 @@ func TestTools_ReadSchemas(t *testing.T) {
 	if properties := schemas["list_race_types"]["properties"]; properties != nil && len(properties.(map[string]any)) > 0 {
 		t.Errorf("list_race_types takes %v", properties)
 	}
+}
+
+// toolList reads what a client sees of the tools of a token: their descriptions
+// and their schemas.
+func toolList(t *testing.T, app *tests.TestApp, token string) map[string]listedTool {
+	t.Helper()
+	_, body := rpc(t, app, bearer(token), http.StatusOK, "tools/list", nil)
+	var list struct {
+		Tools []listedTool `json:"tools"`
+	}
+	resultOf(t, body, &list)
+	out := map[string]listedTool{}
+	for _, tool := range list.Tools {
+		out[tool.Name] = tool
+	}
+	return out
+}
+
+// listedTool is a tool as tools/list gives it.
+type listedTool struct {
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	InputSchema  map[string]any `json:"inputSchema"`
+	OutputSchema map[string]any `json:"outputSchema"`
+}
+
+// describedAt is the description of the field at a path of a schema: the names of
+// the properties, "[]" for the items of a list.
+func describedAt(t *testing.T, schema map[string]any, path ...string) string {
+	t.Helper()
+	at := schema
+	for _, name := range path {
+		if name == "[]" {
+			items, ok := at["items"].(map[string]any)
+			if !ok {
+				t.Fatalf("no items at %v", path)
+			}
+			at = items
+			continue
+		}
+		properties, _ := at["properties"].(map[string]any)
+		next, ok := properties[name].(map[string]any)
+		if !ok {
+			t.Fatalf("no property %s in the path %v", name, path)
+		}
+		at = next
+	}
+	description, _ := at["description"].(string)
+	return description
+}
+
+// What an assistant is told of the reads: what each count holds, what an absent
+// value means, what is bounded, and that what members wrote is not to be obeyed.
+func TestTools_ReadDescriptions(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	tools := toolList(t, app, newToken(t, app, fx.Alice))
+
+	contains := func(what, text string, words ...string) {
+		t.Helper()
+		for _, word := range words {
+			if !strings.Contains(text, word) {
+				t.Errorf("%s does not say %q: %q", what, word, text)
+			}
+		}
+	}
+
+	search, get := tools["search_events"], tools["get_event"]
+
+	// What participants counts and holds.
+	contains("search_events: participants", describedAt(t, search.OutputSchema, "events", "[]", "participants"),
+		"supporteurs", "intéressés", "Non partant")
+	contains("get_event: participants of a race", describedAt(t, get.OutputSchema, "formats", "[]", "participants"),
+		"Non partant", "dns")
+
+	// What an absent value means, and the zone of a date.
+	for _, row := range []struct {
+		what   string
+		schema map[string]any
+		path   []string
+		words  []string
+	}{
+		{"search_events: end_date", search.OutputSchema, []string{"events", "[]", "end_date"}, []string{"absent", "un seul jour"}},
+		{"search_events: registration_deadline", search.OutputSchema, []string{"events", "[]", "registration_deadline"}, []string{"absente", "pas de date limite"}},
+		{"get_event: end_date", get.OutputSchema, []string{"end_date"}, []string{"absent", "un seul jour"}},
+		{"get_event: registration_deadline", get.OutputSchema, []string{"registration_deadline"}, []string{"absente", "pas de date limite"}},
+		{"get_event: created", get.OutputSchema, []string{"comments", "[]", "created"}, []string{"UTC", "Paris"}},
+	} {
+		contains(row.what, describedAt(t, row.schema, row.path...), row.words...)
+	}
+
+	// The bounds of a call.
+	contains("get_event", get.Description, "50 derniers commentaires")
+	contains("get_event: comments_total", describedAt(t, get.OutputSchema, "comments_total"), "50")
+	contains("search_events", search.Description, "2000")
+
+	// The ends of a range.
+	contains("search_events: from", describedAt(t, search.InputSchema, "from"), "sans to", "à partir de ce jour")
+	contains("search_events: to", describedAt(t, search.InputSchema, "to"), "sans from", "jusqu'à ce jour")
+
+	// What members wrote is data.
+	contains("get_event", get.Description, "des membres", "pas des consignes")
 }

@@ -29,9 +29,10 @@ const (
 // say whether the runner has one and whether it is the caller's: no answer holds
 // it.
 type runnerRecord struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	User string `json:"user"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	User   string `json:"user"`
+	Avatar string `json:"avatar"`
 }
 
 // raceTypeRecord is a type of race, with the measures that the form of a format
@@ -211,7 +212,7 @@ type commentOut struct {
 	ID      string    `json:"id"`
 	Author  runnerRef `json:"author"`
 	Body    string    `json:"body"`
-	Created string    `json:"created" jsonschema:"quand il a été écrit, comme PocketBase le date (UTC)"`
+	Created string    `json:"created" jsonschema:"quand il a été écrit, comme PocketBase le date : en UTC (le site l'affiche à l'heure de Paris)"`
 	Edited  bool      `json:"edited" jsonschema:"vrai s'il a été modifié après avoir été écrit"`
 }
 
@@ -221,11 +222,11 @@ type eventSummary struct {
 	Name                 string          `json:"name"`
 	Location             string          `json:"location"`
 	StartDate            string          `json:"start_date"`
-	EndDate              string          `json:"end_date,omitempty"`
-	RegistrationDeadline string          `json:"registration_deadline,omitempty"`
+	EndDate              string          `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
+	RegistrationDeadline string          `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
 	URL                  string          `json:"url" jsonschema:"l'adresse de la course sur le site"`
 	Formats              []formatSummary `json:"formats"`
-	Participants         int             `json:"participants" jsonschema:"les participations qui ne sont pas « Non partant »"`
+	Participants         int             `json:"participants" jsonschema:"les participations de la course qui ne sont pas « Non partant » (dns), supporteurs et intéressés sans épreuve compris : ce n'est pas le nombre de coureurs au départ"`
 	Mine                 []mineOut       `json:"mine" jsonschema:"les participations de la personne au nom de qui tu agis"`
 }
 
@@ -249,9 +250,9 @@ type eventDetail struct {
 	Name                 string             `json:"name"`
 	Location             string             `json:"location"`
 	StartDate            string             `json:"start_date"`
-	EndDate              string             `json:"end_date,omitempty"`
+	EndDate              string             `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
 	RegistrationURL      string             `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course"`
-	RegistrationDeadline string             `json:"registration_deadline,omitempty"`
+	RegistrationDeadline string             `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
 	Notes                string             `json:"notes,omitempty"`
 	CreatedBy            runnerRef          `json:"created_by,omitzero"`
 	URL                  string             `json:"url" jsonschema:"l'adresse de la course sur le site"`
@@ -260,7 +261,8 @@ type eventDetail struct {
 	Supporters           []participationOut `json:"supporters" jsonschema:"ceux qui viennent encourager"`
 	Rides                []offerOut         `json:"rides" jsonschema:"les voitures proposées"`
 	Lodgings             []offerOut         `json:"lodgings" jsonschema:"les logements proposés"`
-	Comments             []commentOut       `json:"comments" jsonschema:"du plus ancien au plus récent"`
+	Comments             []commentOut       `json:"comments" jsonschema:"les 50 derniers, du plus ancien au plus récent"`
+	CommentsTotal        int                `json:"comments_total" jsonschema:"le nombre de commentaires de la course : comments n'en donne que les 50 derniers"`
 }
 
 type formatDetail struct {
@@ -277,7 +279,7 @@ type formatDetail struct {
 	Day            string             `json:"day" jsonschema:"le jour de l'épreuve : sa date, sinon le premier jour de la course"`
 	RouteURL       string             `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	TrackURL       string             `json:"track_url,omitempty" jsonschema:"l'adresse du fichier de la trace GPX, s'il y en a un"`
-	Participants   []participationOut `json:"participants"`
+	Participants   []participationOut `json:"participants" jsonschema:"les participations à cette épreuve, « Non partant » (status dns) compris"`
 }
 
 type raceTypeRef struct {
@@ -410,6 +412,7 @@ type eventView struct {
 
 	createdBy       runnerRef
 	comments        []commentOut
+	commentsTotal   int
 	rides, lodgings []offerOut
 }
 
@@ -548,15 +551,16 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 		ID: v.record.ID, Name: v.record.Name, Location: v.record.Location,
 		StartDate: v.record.StartDate, EndDate: v.record.EndDate,
 		RegistrationURL: v.record.RegistrationURL, RegistrationDeadline: v.record.RegistrationDeadline,
-		Notes:      v.record.Notes,
-		CreatedBy:  v.createdBy,
-		URL:        eventURL(cfg, v.record.ID),
-		Formats:    []formatDetail{},
-		Undecided:  participationsOut(v.undecided, w),
-		Supporters: participationsOut(v.supporters, w),
-		Rides:      orEmpty(v.rides),
-		Lodgings:   orEmpty(v.lodgings),
-		Comments:   orEmpty(v.comments),
+		Notes:         v.record.Notes,
+		CreatedBy:     v.createdBy,
+		URL:           eventURL(cfg, v.record.ID),
+		Formats:       []formatDetail{},
+		Undecided:     participationsOut(v.undecided, w),
+		Supporters:    participationsOut(v.supporters, w),
+		Rides:         orEmpty(v.rides),
+		Lodgings:      orEmpty(v.lodgings),
+		Comments:      orEmpty(v.comments),
+		CommentsTotal: v.commentsTotal,
 	}
 	for _, f := range v.formats {
 		detail := formatDetail{

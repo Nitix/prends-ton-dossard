@@ -66,12 +66,13 @@ type formFile struct {
 }
 
 // apiError is a refusal of the API: its status, the method of the request that
-// it refused (a 404 does not say the same for a read and a write), its code,
-// the code of each field, and, for a batch, the index of the request that
-// failed (-1 otherwise).
+// it refused (a 404 does not say the same for a read and a write) and its path
+// (without the query, for the log), its code, the code of each field, and, for
+// a batch, the index of the request that failed (-1 otherwise).
 type apiError struct {
 	Status  int
 	Method  string
+	Path    string
 	Code    string
 	Fields  map[string]string
 	Request int
@@ -247,7 +248,9 @@ func (a *innerAPI) serve(ctx context.Context, c *caller, method, path string, bo
 // *apiError of any other.
 func decode(method, path string, status int, data []byte, out any) error {
 	if status < 200 || status > 299 {
-		return parseAPIError(method, status, data)
+		e := parseAPIError(method, status, data)
+		e.Path = pathOf(path)
+		return e
 	}
 	if out == nil || len(bytes.TrimSpace(data)) == 0 {
 		return nil

@@ -187,3 +187,12 @@ func ResolveRunner(all []RunnerRecord, idOrName, me string) (RunnerRecord, error
 func ResolveRaceType(all []RaceTypeRecord, idOrName string) (RaceTypeRecord, error) {
 	return resolveRaceType(all, idOrName)
 }
+
+// SetMaxEventsRead makes a search read at most n races of a period, until the
+// test ends.
+func SetMaxEventsRead(t testing.TB, n int) {
+	t.Helper()
+	previous := maxEventsRead
+	maxEventsRead = n
+	t.Cleanup(func() { maxEventsRead = previous })
+}

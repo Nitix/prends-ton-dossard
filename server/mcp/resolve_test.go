@@ -18,7 +18,7 @@ func TestResolve(t *testing.T) {
 		jeanID   = "jjjjjjjjjjjjjjj"
 	)
 	runners := []mcp.RunnerRecord{
-		{ID: aliceID, Name: "Alice", User: "u1"},
+		{ID: aliceID, Name: "Alice", User: "u1", Avatar: "alice.jpg"},
 		{ID: bobID, Name: "Bob"},
 		{ID: elodieID, Name: "Élodie"},
 		{ID: jeanID, Name: "Jean-Pierre"},
@@ -88,7 +88,10 @@ func TestResolve(t *testing.T) {
 		t.Run("two runners with the same name are not guessed", func(t *testing.T) {
 			twins := append([]mcp.RunnerRecord{{ID: "ddddddddddddddd", Name: "alice"}}, runners...)
 			_, err := mcp.ResolveRunner(twins, "ALICE", aliceID)
-			want := "Plusieurs coureurs s'appellent « ALICE » : donne l'identifiant de celui que tu veux (ddddddddddddddd, aaaaaaaaaaaaaaa)."
+			// What the site shows of a runner besides the name: a photo, and whether
+			// there is an account behind (has_account of list_runners).
+			want := "Plusieurs coureurs s'appellent « ALICE » : demande à la personne lequel c'est, ou donne son identifiant : " +
+				"ddddddddddddddd (sans compte, sans photo), aaaaaaaaaaaaaaa (avec un compte, avec une photo)."
 			if err == nil || err.Error() != want {
 				t.Errorf("error %v, want %q", err, want)
 			}
@@ -143,6 +146,16 @@ func TestResolve(t *testing.T) {
 				}
 			})
 		}
+
+		t.Run("two types of one name are not guessed, and are told apart by their measures", func(t *testing.T) {
+			twins := append([]mcp.RaceTypeRecord{{ID: "ddddddddddddddd", Label: "trail", Measures: []string{"time_limit", "distance"}}}, types...)
+			_, err := mcp.ResolveRaceType(twins, "TRAIL")
+			want := "Plusieurs types de course s'appellent « TRAIL » : demande à la personne lequel c'est, ou donne son identifiant : " +
+				"ddddddddddddddd (mesures : distance, time_limit), ttttttttttttttt (mesures : distance, elevation, duration, time_limit)."
+			if err == nil || err.Error() != want {
+				t.Errorf("error %v, want %q", err, want)
+			}
+		})
 
 		_, err := mcp.ResolveRaceType(types, "Marche")
 		want := "Type de course inconnu : « Marche ». Les types de course : Crête, Route, Trail, Ultra-trail."

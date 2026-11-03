@@ -188,6 +188,12 @@ func TestDescribe(t *testing.T) {
 			"a bare 400", refused(http.StatusBadRequest, http.MethodPost), nil,
 			"Tu n'as pas le droit de faire ça.",
 		},
+		{
+			// A read that PocketBase finds malformed (a filter, a sort, an expand) is a
+			// fault of the tool, not a right that the person lacks.
+			"a bare 400 on a read", refused(http.StatusBadRequest, http.MethodGet), nil,
+			"Le site a rencontré une erreur. Réessaie dans un instant.",
+		},
 		{"a 403", refused(http.StatusForbidden, http.MethodPost), nil, "Tu n'as pas le droit de faire ça."},
 		{"a 404 on a read", refused(http.StatusNotFound, http.MethodGet), nil, "Introuvable : il a peut-être été supprimé."},
 		{"a 404 on an update", refused(http.StatusNotFound, http.MethodPatch), nil, "Introuvable, ou ce n'est pas à toi de le modifier."},
@@ -210,9 +216,12 @@ func TestDescribe(t *testing.T) {
 
 	// What the generic message hides is in the log of the server.
 	logged := map[string]string{}
-	for _, entry := range testutil.RequestLogs(t, app, 2) {
+	for _, entry := range testutil.RequestLogs(t, app, 3) {
 		text, _ := entry.Data["error"].(string)
 		logged[entry.Message] = text
+	}
+	if got := logged["mcp: a read was refused as malformed"]; !strings.Contains(got, "400") {
+		t.Errorf("the bare 400 of a read is logged as %q", got)
 	}
 	if got := logged["mcp: a tool failed"]; got != "the router is gone" {
 		t.Errorf("the error of another kind is logged as %q", got)

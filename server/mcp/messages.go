@@ -148,6 +148,14 @@ func describe(app core.App, err error, subject func(request int) string) error {
 		return errors.New(msgSiteError)
 	}
 
+	// A read that the site finds malformed (a filter, a sort or an expand that a
+	// change of the schema left behind) is a fault of the tool: it is not a right
+	// that the person lacks, which is what the bare 400 of a creation says.
+	if refused.Status == http.StatusBadRequest && refused.Method == http.MethodGet && refused.Code == "" && len(refused.Fields) == 0 {
+		app.Logger().Error("mcp: a read was refused as malformed", "error", refused.Error(), "path", refused.Path)
+		return errors.New(msgSiteError)
+	}
+
 	text := refused.text()
 	if subject != nil && refused.Request >= 0 {
 		text = subject(refused.Request) + ", " + lowerFirst(text)
