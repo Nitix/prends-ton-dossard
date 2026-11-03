@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -28,8 +29,13 @@ import (
 
 const (
 	uploadTTL      = 10 * time.Minute
-	uploadPerToken = 2         // slots of an MCP token; the oldest goes beyond
-	uploadTotal    = 64 << 20  // bytes kept in all, or kept room for
+	uploadPerToken = 2        // slots of an MCP token; the oldest goes beyond
+	uploadTotal    = 64 << 20 // bytes kept in all, or kept room for
+	// uploadPerAccount is what one account keeps, or keeps room for: it does not
+	// take the room of the others, nor drop their files.
+	uploadPerAccount = 20 << 20
+	// putTimeout is how long the file of a slot may take to come.
+	putTimeout     = 2 * time.Minute
 	photoMaxBytes  = 5 << 20   // runners.avatar
 	trackMaxBytes  = 10 << 20  // formats.gpx
 	inlineMaxBytes = 512 << 10 // content_base64, decoded
@@ -64,19 +70,20 @@ const trackType = "application/gpx+xml"
 
 // sniff is the type of a file for that purpose, told from what it holds, as the
 // field of the site will tell it: the signature of an image (photoTypes), or a
-// GPX file that parseGpx reads. errUploadInvalid when it is not one.
-func sniff(p uploadPurpose, data []byte) (string, error) {
+// GPX file that parseGpx reads, whose numbers it gives too (a track is read once,
+// here). errUploadInvalid when it is not one.
+func sniff(p uploadPurpose, data []byte) (string, *gpxStats, error) {
 	switch p {
 	case purposePhoto:
 		if contentType := http.DetectContentType(data); slices.Contains(photoTypes, contentType) {
-			return contentType, nil
+			return contentType, nil, nil
 		}
 	case purposeTrack:
-		if _, err := parseGpx(data); err == nil {
-			return trackType, nil
+		if stats, err := readTrack(data); err == nil {
+			return trackType, &stats, nil
 		}
 	}
-	return "", errUploadInvalid
+	return "", nil, errUploadInvalid
 }
 
 var (
@@ -88,6 +95,12 @@ var (
 	errUploadEmpty = errors.New("mcp: an upload slot whose file has not come")
 	// errUploadTooLarge is a file over the size of its slot.
 	errUploadTooLarge = errors.New("mcp: a file over the size of its slot")
+	// errUploadBusy is a store with no room now for the file of a slot: every
+	// byte is held by the PUTs under way (of the account, or of all). The slot
+	// still waits for its file.
+	errUploadBusy = errors.New("mcp: no room for a file now")
+	// errUploadTooSlow is a file that took more than putTimeout to come.
+	errUploadTooSlow = errors.New("mcp: a file that came too slowly")
 )
 
 // The states of a slot.
@@ -98,33 +111,55 @@ const (
 )
 
 // uploadSlot is a slot: who opened it (the account and the MCP token), for
-// what, the hash of its secret, and its file once it has come.
+// what, the hash of its secret, and its file once it has come, with what the PUT
+// read of a track.
 type uploadSlot struct {
 	id, secretHash, userID, tokenID string
 	purpose                         uploadPurpose
 	data                            []byte // nil until the PUT
 	contentType                     string
+	track                           *gpxStats // the numbers of a track
 	expires                         time.Time
 	state                           int
 	// order tells the oldest of two slots opened at the same moment.
 	order uint64
 }
 
-// uploads keeps the slots, in memory. bytes counts the files kept, and the room
+// storedFile is the file of a slot, as a tool gets it: its bytes, its type, when
+// the slot expires (a confirmation is no good past it), and the numbers that the
+// PUT read of a track.
+type storedFile struct {
+	data        []byte
+	contentType string
+	expires     time.Time
+	track       *gpxStats
+}
+
+// uploads keeps the slots, in memory. bytes counts the files kept and the room
 // that each PUT under way holds for its file (its declared size, or the most its
-// slot takes): what the slots hold never goes past uploadTotal.
+// slot takes), in all and by account: what the slots hold never goes past
+// uploadTotal, nor uploadPerAccount for one account.
 type uploads struct {
-	now   func() time.Time
-	mu    sync.Mutex
-	slots map[string]*uploadSlot
-	bytes int
-	made  uint64
+	now    func() time.Time
+	mu     sync.Mutex
+	slots  map[string]*uploadSlot
+	bytes  int
+	byUser map[string]int
+	made   uint64
 }
 
 // newUploads is the store of the app: Register gives it
 // func() time.Time { return now() }, so that it reads the clock of the package.
 func newUploads(now func() time.Time) *uploads {
-	return &uploads{now: now, slots: map[string]*uploadSlot{}}
+	return &uploads{now: now, slots: map[string]*uploadSlot{}, byUser: map[string]int{}}
+}
+
+// hold counts n more bytes for the account userID (n < 0 gives them back).
+func (u *uploads) hold(userID string, n int) {
+	u.bytes += n
+	if u.byUser[userID] += n; u.byUser[userID] == 0 {
+		delete(u.byUser, userID)
+	}
 }
 
 // hashSecret is the hash that a slot keeps of its secret.
@@ -143,7 +178,7 @@ func (u *uploads) open(userID, tokenID string, p uploadPurpose) (id, secret stri
 	now := u.now()
 	u.sweep(now)
 
-	for u.count(tokenID) >= uploadPerToken {
+	for u.slotsOf(tokenID) >= uploadPerToken {
 		u.dropOldest(func(s *uploadSlot) bool { return s.tokenID == tokenID })
 	}
 	for id == "" || u.slots[id] != nil {
@@ -161,29 +196,48 @@ func (u *uploads) open(userID, tokenID string, p uploadPurpose) (id, secret stri
 // put fills the slot id with body, once. size is the length that the request
 // declares (-1 when it does not): a file declared over the size of the slot is
 // refused before a byte of it is read, and none is read past the size of the
-// slot, or past the declared length.
+// slot, or past the declared length, or past putTimeout.
 //
 // The secret is compared in constant time with the hash of the slot's. A wrong
-// one leaves the slot as it was. With the right one, the slot is used, whatever
-// comes of it: a file over its size is errUploadTooLarge, one of the wrong type
-// errUploadInvalid, and the slot is gone; a slot that a PUT reads already, or
-// that is filled, is errUploadInvalid. Its file is told by what it holds
-// (sniff); it is kept as it came.
+// one leaves the slot as it was, and so does a store with no room now
+// (errUploadBusy). Once the file comes, the slot is used, whatever comes of it: a
+// file over its size is errUploadTooLarge, one too slow errUploadTooSlow, one of
+// the wrong type errUploadInvalid, and the slot is gone; a slot that a PUT reads
+// already, or that is filled, is errUploadInvalid. Its file is told by what it
+// holds (sniff), a track read then, once; it is kept as it came.
 func (u *uploads) put(id, secret string, size int64, body io.Reader) error {
-	slot, reserved, err := u.receive(id, secret, size)
+	slot, held, start, err := u.receive(id, secret, size)
 	if err != nil {
 		return err
 	}
+	// The room is given back whatever happens: on a panic on the way too (none is
+	// known), the slot, which was used, going with it.
+	done := false
+	defer func() {
+		if done {
+			return
+		}
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		u.hold(slot.userID, -int(held))
+		if u.slots[id] == slot {
+			u.drop(id)
+		}
+	}()
 
-	data, err := readAtMost(body, reserved)
-	contentType := ""
+	data, err := readAtMost(&timedReader{r: body, now: u.now, deadline: start.Add(putTimeout)}, held)
+	var (
+		contentType string
+		track       *gpxStats
+	)
 	if err == nil {
-		contentType, err = sniff(slot.purpose, data)
+		contentType, track, err = sniff(slot.purpose, data)
 	}
 
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.bytes -= int(reserved)
+	done = true
+	u.hold(slot.userID, -int(held))
 	if u.slots[id] != slot {
 		// Gone while its file came: expired, or dropped for a newer one.
 		return errUploadInvalid
@@ -196,54 +250,83 @@ func (u *uploads) put(id, secret string, size int64, body io.Reader) error {
 		return err
 	}
 	// The room held for it is enough: the file is no longer than it.
-	slot.data, slot.contentType, slot.state = data, contentType, slotFilled
-	u.bytes += len(data)
+	slot.data, slot.contentType, slot.track, slot.state = data, contentType, track, slotFilled
+	u.hold(slot.userID, len(data))
 	return nil
 }
 
-// receive checks a PUT, and holds the room of its file: the size it declares,
-// or the most its slot takes. While the slots would go past uploadTotal with it,
-// the oldest file goes; when no file can go, every byte being held by a PUT under
-// way, the PUT is refused.
-func (u *uploads) receive(id, secret string, size int64) (*uploadSlot, int64, error) {
+// receive checks a PUT, and holds the room of its file: the size it declares, or
+// the most its slot takes. While the account would go past uploadPerAccount with
+// it, its own oldest file goes; then, while the slots would go past uploadTotal,
+// the oldest file of all. When no file can go (every byte is held by PUTs under
+// way), the PUT is errUploadBusy, and the slot waits. It returns when the PUT
+// began.
+func (u *uploads) receive(id, secret string, size int64) (*uploadSlot, int64, time.Time, error) {
 	given := hashSecret(secret)
 
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.sweep(u.now())
+	now := u.now()
+	u.sweep(now)
 
 	slot := u.slots[id]
 	if slot == nil || subtle.ConstantTimeCompare([]byte(given), []byte(slot.secretHash)) != 1 || slot.state != slotWaiting {
-		return nil, 0, errUploadInvalid
+		return nil, 0, time.Time{}, errUploadInvalid
 	}
 	limit := slot.purpose.maxBytes()
 	if size > limit {
 		u.drop(id)
-		return nil, 0, errUploadTooLarge
+		return nil, 0, time.Time{}, errUploadTooLarge
 	}
-	reserved := limit
+	held := limit
 	if size >= 0 {
-		reserved = size
+		held = size
 	}
-	for u.bytes+int(reserved) > uploadTotal {
-		if !u.dropOldest(func(s *uploadSlot) bool { return s.state == slotFilled }) {
-			return nil, 0, errUploadInvalid
+	filled := func(s *uploadSlot) bool { return s.state == slotFilled }
+	for u.byUser[slot.userID]+int(held) > uploadPerAccount {
+		if !u.dropOldest(func(s *uploadSlot) bool { return filled(s) && s.userID == slot.userID }) {
+			return nil, 0, time.Time{}, errUploadBusy
 		}
 	}
-	u.bytes += int(reserved)
+	for u.bytes+int(held) > uploadTotal {
+		if !u.dropOldest(filled) {
+			return nil, 0, time.Time{}, errUploadBusy
+		}
+	}
+	u.hold(slot.userID, int(held))
 	slot.state = slotReceiving
-	return slot, reserved, nil
+	return slot, held, now, nil
+}
+
+// timedReader cuts a body that is still coming at its deadline: a PUT that
+// trickles holds the room of its file, which the others do not have meanwhile.
+// (The route sets the same deadline on the connection, so that a body that stops
+// coming at all is cut too.)
+type timedReader struct {
+	r        io.Reader
+	now      func() time.Time
+	deadline time.Time
+}
+
+func (t *timedReader) Read(p []byte) (int, error) {
+	n, err := t.r.Read(p)
+	if !t.now().Before(t.deadline) {
+		return n, errUploadTooSlow
+	}
+	return n, err
 }
 
 // readAtMost reads body, which must hold max bytes at most: errUploadTooLarge
-// beyond (and the reading stops there), errUploadInvalid when it cannot be read
-// (the client went away).
+// beyond (and the reading stops there), errUploadTooSlow past its time,
+// errUploadInvalid when it cannot be read (the client went away).
 func readAtMost(body io.Reader, max int64) ([]byte, error) {
 	data, err := io.ReadAll(io.LimitReader(body, max+1))
 	var tooLarge *http.MaxBytesError
 	switch {
 	case int64(len(data)) > max, errors.As(err, &tooLarge):
 		return nil, errUploadTooLarge
+	case errors.Is(err, errUploadTooSlow), errors.Is(err, os.ErrDeadlineExceeded):
+		return nil, errUploadTooSlow
 	case err != nil:
 		return nil, errUploadInvalid
 	}
@@ -254,26 +337,31 @@ func readAtMost(body io.Reader, max int64) ([]byte, error) {
 // opened it, and its purpose. A risky first call hashes the bytes for its
 // confirmation and leaves the slot to the second call; a refused peek leaves it
 // too.
-func (u *uploads) peek(id, tokenID string, p uploadPurpose) (data []byte, contentType string, err error) {
+func (u *uploads) peek(id, tokenID string, p uploadPurpose) (storedFile, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	slot, err := u.find(id, tokenID, p)
 	if err != nil {
-		return nil, "", err
+		return storedFile{}, err
 	}
-	return slot.data, slot.contentType, nil
+	return slot.file(), nil
 }
 
 // take is peek, and frees the slot: it hands the file to the tool that writes it.
-func (u *uploads) take(id, tokenID string, p uploadPurpose) (data []byte, contentType string, err error) {
+func (u *uploads) take(id, tokenID string, p uploadPurpose) (storedFile, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	slot, err := u.find(id, tokenID, p)
 	if err != nil {
-		return nil, "", err
+		return storedFile{}, err
 	}
 	u.drop(id)
-	return slot.data, slot.contentType, nil
+	return slot.file(), nil
+}
+
+// file is the file of a filled slot.
+func (s *uploadSlot) file() storedFile {
+	return storedFile{data: s.data, contentType: s.contentType, expires: s.expires, track: s.track}
 }
 
 // find is the filled slot id of the MCP token tokenID for p. A slot of another
@@ -305,13 +393,13 @@ func (u *uploads) sweep(now time.Time) {
 // the PUT's to give back.
 func (u *uploads) drop(id string) {
 	if slot := u.slots[id]; slot != nil {
-		u.bytes -= len(slot.data)
+		u.hold(slot.userID, -len(slot.data))
 		delete(u.slots, id)
 	}
 }
 
-// count is the number of slots of the MCP token tokenID.
-func (u *uploads) count(tokenID string) int {
+// slotsOf is the number of slots of the MCP token tokenID.
+func (u *uploads) slotsOf(tokenID string) int {
 	n := 0
 	for _, slot := range u.slots {
 		if slot.tokenID == tokenID {
@@ -340,15 +428,25 @@ func (u *uploads) dropOldest(match func(*uploadSlot) bool) bool {
 // ---------------------------------------------------------------------------
 // The route
 
+// busyRetry is how long a client waits before it sends a file again, when the
+// store has no room for it now.
+const busyRetry = "60"
+
 // uploadRoute is PUT /api/app/mcp-uploads/{id}: the file of a slot, as it is,
 // with its secret in the X-Upload-Secret header. It has no session: the secret
 // is the right to fill the slot, which a page elsewhere does not know (no cookie
 // or session stands for it, and a browser sends a custom header only to a page
 // that the CORS of the site lets it, after a preflight). The secret is never in
-// the address, so never in the request log. Any refusal of the slot is a 400
-// upload_invalid, which never says which; a file over its size is a 413.
+// the address, so never in the request log.
+//
+// Any refusal of the slot is a 400 upload_invalid, which never says which; a
+// file over its size is a 413; one that took more than putTimeout a 408; a store
+// with no room now a 503 with Retry-After, the slot still waiting.
 func uploadRoute(store *uploads) func(*core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
+		// A body that stops coming is cut at the time a PUT has, at the
+		// connection (a test's recorder has none, which is not an error here).
+		_ = http.NewResponseController(e.Response).SetReadDeadline(time.Now().Add(putTimeout))
 		// The most that a slot takes: the slot's own size is checked by put. Over
 		// it, the server stops reading the request.
 		body := http.MaxBytesReader(e.Response, e.Request.Body, trackMaxBytes)
@@ -358,6 +456,11 @@ func uploadRoute(store *uploads) func(*core.RequestEvent) error {
 			return e.NoContent(http.StatusNoContent)
 		case errors.Is(err, errUploadTooLarge):
 			return e.Error(http.StatusRequestEntityTooLarge, "", nil)
+		case errors.Is(err, errUploadTooSlow):
+			return e.Error(http.StatusRequestTimeout, "", nil)
+		case errors.Is(err, errUploadBusy):
+			e.Response.Header().Set("Retry-After", busyRetry)
+			return e.Error(http.StatusServiceUnavailable, "Trop de fichiers arrivent en ce moment : renvoie celui-ci dans une minute, avec la même commande.", nil)
 		}
 		return apperr.New(http.StatusBadRequest, apperr.CodeUploadInvalid)
 	}

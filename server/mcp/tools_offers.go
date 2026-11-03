@@ -321,7 +321,7 @@ func offerSummary(o offerRecord, event string) string {
 	case o.Time != "":
 		parts = append(parts, "à "+o.Time)
 	}
-	head := "Voiture proposée au départ de " + o.Place
+	head := "Voiture proposée au départ de " + plain(o.Place)
 	if o.Kind == offerLodging {
 		head = "Logement " + quote(o.Place) + " proposé"
 	}

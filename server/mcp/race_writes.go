@@ -167,7 +167,7 @@ func titleOf(w wording.Words, f formatDraft, labels map[string]string) string {
 
 // formatSubject names a format of the form, by its place, in a message.
 func formatSubject(index int, title string) string {
-	return fmt.Sprintf("Épreuve %d (« %s »)", index+1, title)
+	return fmt.Sprintf("Épreuve %d (%s)", index+1, quote(title))
 }
 
 // measureRefusal is the refusal of the form for the first format of the draft
@@ -294,7 +294,7 @@ func normalizePatches(view eventView, patches []formatPatchIn, raceTypes []raceT
 		}
 		i := slices.IndexFunc(view.formats, func(f formatView) bool { return f.record.ID == id })
 		if i < 0 {
-			return nil, fmt.Errorf("L'épreuve %s n'est pas une épreuve de « %s » : get_event donne les siennes.", id, view.record.Name)
+			return nil, fmt.Errorf("L'épreuve %s n'est pas une épreuve de %s : get_event donne les siennes.", id, quote(view.record.Name))
 		}
 		if slices.ContainsFunc(out, func(q formatPatchIn) bool { return q.FormatID == id }) {
 			return nil, fmt.Errorf("L'épreuve %s est donnée deux fois dans formats : donne une seule modification par épreuve.", id)
@@ -302,7 +302,7 @@ func normalizePatches(view eventView, patches []formatPatchIn, raceTypes []raceT
 		p.FormatID = id
 		normal, err := normalizePatch(p, raceTypes)
 		if err != nil {
-			return nil, fmt.Errorf("Épreuve « %s », %s", view.formats[i].title(w), lowerFirst(err.Error()))
+			return nil, fmt.Errorf("Épreuve %s, %s", quote(view.formats[i].title(w)), lowerFirst(err.Error()))
 		}
 		out = append(out, normal)
 	}
@@ -350,7 +350,7 @@ func batchSubject(w wording.Words, ops []batchOp, draft eventDraft, labels map[s
 		case targetFormat:
 			return formatSubject(op.Format, titleOf(w, draft.Formats[op.Format], labels))
 		case targetRemoval:
-			return "La suppression de l'épreuve « " + removed[op.URL[strings.LastIndexByte(op.URL, '/')+1:]] + " »"
+			return "La suppression de l'épreuve " + quote(removed[op.URL[strings.LastIndexByte(op.URL, '/')+1:]])
 		}
 		return "La participation (join)"
 	}
@@ -499,7 +499,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		{"registration_deadline", event.RegistrationDeadline, draft.RegistrationDeadline},
 	} {
 		if strings.TrimSpace(field.was) != "" && field.now == "" {
-			r.Details = append(r.Details, upperFirst(clearedPhrases[field.name])+" (actuellement : "+field.was+").")
+			r.Details = append(r.Details, upperFirst(clearedPhrases[field.name])+" (actuellement : "+plain(field.was)+").")
 			eventShown = true
 		}
 	}
@@ -528,7 +528,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		dayWas, dayNow := cmp.Or(was.Date, event.StartDate), cmp.Or(now.Date, draft.StartDate)
 		dayMoves := dayWas != dayNow && len(f.participations) > 0
 		if dayMoves {
-			lines = append(lines, "Le jour de l'épreuve « "+title+" » passerait du "+dayWas+" au "+dayNow+
+			lines = append(lines, "Le jour de l'épreuve "+quote(title)+" passerait du "+dayWas+" au "+dayNow+
 				", pour ses participants : "+participantLabels(w, f.participations)+".")
 		}
 		for _, field := range []struct {
@@ -542,12 +542,12 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			{"duration_min", was.DurationMin != 0, now.DurationMin != 0, strconv.Itoa(was.DurationMin) + " min"},
 			{"time_limit_min", was.TimeLimitMin != 0, now.TimeLimitMin != 0, strconv.Itoa(was.TimeLimitMin) + " min"},
 			{"price_eur", was.PriceEur != 0, now.PriceEur != 0, number(was.PriceEur) + " €"},
-			{"route_url", was.RouteURL != "", now.RouteURL != "", was.RouteURL},
+			{"route_url", was.RouteURL != "", now.RouteURL != "", plain(was.RouteURL)},
 			// The day that moves says it already.
 			{"date", was.Date != "" && !dayMoves, now.Date != "", was.Date},
 		} {
 			if field.was && !field.now {
-				lines = append(lines, "Épreuve « "+title+" » : "+clearedPhrases[field.name]+" (actuellement : "+field.value+").")
+				lines = append(lines, "Épreuve "+quote(title)+" : "+clearedPhrases[field.name]+" (actuellement : "+field.value+").")
 			}
 		}
 		if len(lines) > 0 {

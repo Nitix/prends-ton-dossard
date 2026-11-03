@@ -39,31 +39,32 @@ import (
 // The file of a call
 
 // fileInput resolves a tool's upload_id or content_base64 (exactly one) into
-// bytes, and the type of the file: for a photo, told from what it holds (the
-// tool refuses a type that the site would); for a track, the type it is sent
-// with (the tool reads it). With consume false (before guard) a slot is peeked;
-// with true (once guard has let the call through) it is taken. A file in base64
-// is the same either way.
-func (t *tools) fileInput(ctx context.Context, p uploadPurpose, uploadID, content string, consume bool) ([]byte, string, error) {
+// its file: the bytes, and the type: for a photo, told from what it holds (the
+// tool refuses a type that the site would); for a track, the type it is sent with.
+// The file of a slot says when the slot expires, and, for a track, what its PUT
+// read of it (a slot's track is never read again); one in base64 says neither.
+// With consume false (before guard) a slot is peeked; with true (once guard has
+// let the call through) it is taken. A file in base64 is the same either way.
+func (t *tools) fileInput(ctx context.Context, p uploadPurpose, uploadID, content string, consume bool) (storedFile, error) {
 	uploadID, content = strings.TrimSpace(uploadID), strings.TrimSpace(content)
 	switch {
 	case uploadID != "" && content != "":
-		return nil, "", errors.New("Donne le fichier par upload_id ou par content_base64, pas les deux.")
+		return storedFile{}, errors.New("Donne le fichier par upload_id ou par content_base64, pas les deux.")
 	case uploadID == "" && content == "":
-		return nil, "", errors.New(missingFile[p])
+		return storedFile{}, errors.New(missingFile[p])
 	case content != "":
 		data, err := decodeBase64(content)
 		if err != nil {
-			return nil, "", errors.New("content_base64 n'est pas du base64 valide (alphabet standard, avec ou sans « = » à la fin).")
+			return storedFile{}, errors.New("content_base64 n'est pas du base64 valide (alphabet standard, avec ou sans « = » à la fin).")
 		}
 		if len(data) > inlineMaxBytes {
-			return nil, "", fmt.Errorf("En base64, un fichier fait %d Ko au plus une fois décodé, et celui-ci en fait %d : passe par start_upload.",
+			return storedFile{}, fmt.Errorf("En base64, un fichier fait %d Ko au plus une fois décodé, et celui-ci en fait %d : passe par start_upload.",
 				inlineMaxBytes>>10, (len(data)+1023)>>10)
 		}
 		if p == purposePhoto {
-			return data, http.DetectContentType(data), nil
+			return storedFile{data: data, contentType: http.DetectContentType(data)}, nil
 		}
-		return data, trackType, nil
+		return storedFile{data: data, contentType: trackType}, nil
 	}
 
 	// A mistake of the code, not a refusal: logged, and said with the generic
@@ -73,20 +74,20 @@ func (t *tools) fileInput(ctx context.Context, p uploadPurpose, uploadID, conten
 		err = errors.New("mcp: a file without an MCP token or a store of uploads")
 	}
 	if err != nil {
-		return nil, "", describe(t.app, err, nil)
+		return storedFile{}, describe(t.app, err, nil)
 	}
 	if !isID(uploadID) {
-		return nil, "", uploadRefusal(p, errUploadInvalid)
+		return storedFile{}, uploadRefusal(p, errUploadInvalid)
 	}
 	get := t.uploads.peek
 	if consume {
 		get = t.uploads.take
 	}
-	data, contentType, err := get(uploadID, c.token.Id, p)
+	file, err := get(uploadID, c.token.Id, p)
 	if err != nil {
-		return nil, "", uploadRefusal(p, err)
+		return storedFile{}, uploadRefusal(p, err)
 	}
-	return data, contentType, nil
+	return file, nil
 }
 
 // missingFile is what a call that gives no file, and does not remove one, is
@@ -241,7 +242,7 @@ func addSetPhoto(s *mcpsdk.Server, t *tools) {
 		Title: "Changer ou retirer une photo",
 		Description: "Change la photo d'un coureur, comme « Changer la photo » des Réglages, ou la retire (remove). " +
 			"La photo est un JPEG, un PNG ou un WebP de 5 Mo au plus : en base64 (content_base64) jusqu'à 512 Ko, sinon par start_upload (upload_id). " +
-			"Elle part telle quelle (le site la réduit dans le navigateur, pas l'outil) ; le site en fait les vignettes. " +
+			"Elle part sans être réencodée (le site la réduit dans le navigateur, pas l'outil), mais sans ses métadonnées (la position GPS, l'appareil, les dates) : l'orientation reste ; le site en fait les vignettes. " +
 			"Seul le coureur lui-même ou un admin change une photo : le refus est annoncé. " +
 			"Remplacer ou retirer une photo, ou changer celle d'un autre coureur, ne fait rien au premier appel : la réponse dit ce qui changerait et donne un jeton de confirmation.",
 		InputSchema:  inputSchema[setPhotoIn](nil),
@@ -290,20 +291,25 @@ func (t *tools) setPhoto(ctx context.Context, _ *mcpsdk.CallToolRequest, in setP
 	}
 
 	// 2. Normalize: the file to the hash of its bytes, once it is one the site
-	// takes.
+	// takes, and whose metadata can be taken out (a photo that cannot be read for
+	// them is refused now, not after the person agreed).
 	hash := ""
+	var until time.Time
 	if !in.Remove {
-		data, contentType, err := t.fileInput(ctx, purposePhoto, in.UploadID, in.ContentBase64, false)
+		file, err := t.fileInput(ctx, purposePhoto, in.UploadID, in.ContentBase64, false)
 		if err != nil {
 			return refuse(err)
 		}
-		if !slices.Contains(photoTypes, contentType) {
+		if !slices.Contains(photoTypes, file.contentType) {
 			return refuse(errors.New(fieldText("avatar", "validation_invalid_mime_type")))
 		}
-		if len(data) > photoMaxBytes {
+		if len(file.data) > photoMaxBytes {
 			return refuse(errors.New(fieldText("avatar", "validation_file_size_limit")))
 		}
-		hash = fileHash(data)
+		if _, err := stripPhotoMetadata(file.contentType, file.data); err != nil {
+			return refuse(errors.New(unreadablePhoto))
+		}
+		hash, until = fileHash(file.data), file.expires
 	}
 
 	// 4, 5. The risk, and guard.
@@ -312,7 +318,7 @@ func (t *tools) setPhoto(ctx context.Context, _ *mcpsdk.CallToolRequest, in setP
 		Remove bool
 		File   string
 	}{runner.ID, in.Remove, hash}
-	proceed, out, notice, err := t.guard(ctx, "set_photo", args, t.photoRisk(c, runner, in.Remove), strings.TrimSpace(in.Confirmation))
+	proceed, out, notice, err := t.guard(ctx, "set_photo", args, t.photoRisk(c, runner, in.Remove, until), strings.TrimSpace(in.Confirmation))
 	if err != nil {
 		return fail(err)
 	}
@@ -320,21 +326,25 @@ func (t *tools) setPhoto(ctx context.Context, _ *mcpsdk.CallToolRequest, in setP
 		return nil, setPhotoOut{writeStatus: notDoneOut(out, notice)}, nil
 	}
 
-	// 6. Write, as the site does: a form with the file, or {"avatar": null}.
+	// 6. Write, as the site does: a form with the file, without its metadata (as
+	// the site's resizing drops them), or {"avatar": null}.
 	var updated runnerRecord
 	path := "/api/collections/runners/records/" + runner.ID
 	if in.Remove {
 		err = t.inner.send(ctx, http.MethodPatch, path, map[string]any{"avatar": nil}, &updated)
 	} else {
-		var data []byte
-		var contentType string
-		if data, contentType, err = t.fileInput(ctx, purposePhoto, in.UploadID, in.ContentBase64, true); err != nil {
+		file, taken := t.fileInput(ctx, purposePhoto, in.UploadID, in.ContentBase64, true)
+		if taken != nil {
+			return refuse(taken)
+		}
+		if err := sameFile(purposePhoto, file.data, hash); err != nil {
 			return refuse(err)
 		}
-		if err := sameFile(purposePhoto, data, hash); err != nil {
-			return refuse(err)
+		clean, unread := stripPhotoMetadata(file.contentType, file.data)
+		if unread != nil {
+			return refuse(errors.New(unreadablePhoto))
 		}
-		err = t.inner.sendForm(ctx, http.MethodPatch, path, nil, []formFile{{Field: "avatar", Name: photoName(contentType), ContentType: contentType, Data: data}}, &updated)
+		err = t.inner.sendForm(ctx, http.MethodPatch, path, nil, []formFile{{Field: "avatar", Name: photoName(file.contentType), ContentType: file.contentType, Data: clean}}, &updated)
 	}
 	if err != nil {
 		return fail(err)
@@ -366,7 +376,7 @@ func photoRefusal(c *caller, runner runnerRecord) error {
 // photoRisk is what set_photo asks a confirmation for (spec § 6.13): a photo
 // that is there, replaced or removed, and the photo of somebody else. nil when
 // there is none.
-func (t *tools) photoRisk(c *caller, runner runnerRecord, remove bool) *risk {
+func (t *tools) photoRisk(c *caller, runner runnerRecord, remove bool, until time.Time) *risk {
 	var lines []string
 	if runner.Avatar != "" {
 		what := "remplacée"
@@ -385,6 +395,7 @@ func (t *tools) photoRisk(c *caller, runner runnerRecord, remove bool) *risk {
 		Message: strings.Join(lines, " "),
 		Details: lines,
 		Records: []stamp{{Collection: "runners", ID: runner.ID, Updated: runner.Updated}},
+		Until:   until,
 	}
 }
 
@@ -508,19 +519,22 @@ func (t *tools) setTrack(ctx context.Context, _ *mcpsdk.CallToolRequest, in setT
 	}
 
 	// 2, 3. Normalize: the file read as the form reads it (refused when it is
-	// not a track, as the form refuses it), then hashed.
+	// not a track, as the form refuses it), then hashed. The track of a slot was
+	// read at its PUT, once: it is never read again, however many calls come.
 	var stats gpxStats
 	hash := ""
+	var until time.Time
 	if !in.Remove {
-		data, _, err := t.fileInput(ctx, purposeTrack, in.UploadID, in.ContentBase64, false)
+		file, err := t.fileInput(ctx, purposeTrack, in.UploadID, in.ContentBase64, false)
 		if err != nil {
 			return refuse(err)
 		}
-		points, err := parseGpx(data)
-		if err != nil {
+		if file.track != nil {
+			stats = *file.track
+		} else if stats, err = readTrack(file.data); err != nil {
 			return refuse(errors.New(notATrack))
 		}
-		stats, hash = statsOf(points), fileHash(data)
+		hash, until = fileHash(file.data), file.expires
 	}
 
 	// 4, 5. The risk, and guard.
@@ -530,7 +544,7 @@ func (t *tools) setTrack(ctx context.Context, _ *mcpsdk.CallToolRequest, in setT
 		File           string
 		UseTrackValues bool
 	}{id, in.Remove, hash, in.UseTrackValues}
-	proceed, out, notice, err := t.guard(ctx, "set_track", args, t.trackRisk(w, format, in.Remove), strings.TrimSpace(in.Confirmation))
+	proceed, out, notice, err := t.guard(ctx, "set_track", args, t.trackRisk(w, format, in.Remove, until), strings.TrimSpace(in.Confirmation))
 	if err != nil {
 		return fail(err)
 	}
@@ -544,10 +558,11 @@ func (t *tools) setTrack(ctx context.Context, _ *mcpsdk.CallToolRequest, in setT
 	if in.Remove {
 		err = t.inner.send(ctx, http.MethodPatch, path, map[string]any{"gpx": nil}, &updated)
 	} else {
-		var data []byte
-		if data, _, err = t.fileInput(ctx, purposeTrack, in.UploadID, in.ContentBase64, true); err != nil {
-			return refuse(err)
+		taken, takeErr := t.fileInput(ctx, purposeTrack, in.UploadID, in.ContentBase64, true)
+		if takeErr != nil {
+			return refuse(takeErr)
 		}
+		data := taken.data
 		if err := sameFile(purposeTrack, data, hash); err != nil {
 			return refuse(err)
 		}
@@ -598,7 +613,7 @@ func trackValues(stats gpxStats) map[string]string {
 
 // trackRisk is what set_track asks a confirmation for (spec § 6.13): a track that
 // is there, replaced or removed. nil when there is none.
-func (t *tools) trackRisk(w wording.Words, format trackFormat, remove bool) *risk {
+func (t *tools) trackRisk(w wording.Words, format trackFormat, remove bool, until time.Time) *risk {
 	if format.GPX == "" {
 		return nil
 	}
@@ -611,6 +626,7 @@ func (t *tools) trackRisk(w wording.Words, format trackFormat, remove bool) *ris
 		Message: line,
 		Details: []string{line},
 		Records: []stamp{{Collection: "formats", ID: format.ID, Updated: format.Updated}},
+		Until:   until,
 	}
 }
 

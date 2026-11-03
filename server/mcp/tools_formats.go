@@ -69,7 +69,7 @@ func (t *tools) addFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in add
 
 	change := func(draft *eventDraft) { draft.Formats = append(draft.Formats, added) }
 	summary := func(draft eventDraft) string {
-		return fmt.Sprintf("L'épreuve « %s » est ajoutée à « %s » (%s).", titleOf(w, added, labels), draft.Name, days(draft.StartDate, draft.EndDate))
+		return fmt.Sprintf("L'épreuve %s est ajoutée à %s (%s).", quote(titleOf(w, added, labels)), quote(draft.Name), days(draft.StartDate, draft.EndDate))
 	}
 	args := struct {
 		Event  string
@@ -131,7 +131,7 @@ func (t *tools) updateFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	change := func(draft *eventDraft) { applyPatches(draft, patches) }
 	summary := func(draft eventDraft) string {
 		i := slices.IndexFunc(draft.Formats, func(f formatDraft) bool { return f.ID == formatID })
-		return fmt.Sprintf("L'épreuve « %s » de « %s » est modifiée (la course : %s).", titleOf(w, draft.Formats[i], labels), draft.Name, days(draft.StartDate, draft.EndDate))
+		return fmt.Sprintf("L'épreuve %s de %s est modifiée (la course : %s).", quote(titleOf(w, draft.Formats[i], labels)), quote(draft.Name), days(draft.StartDate, draft.EndDate))
 	}
 	answer, err := t.changeEvent(ctx, "update_format", view, labels, patches[0], strings.TrimSpace(in.Confirmation), change, nil, summary)
 	return nil, answer, err
@@ -219,7 +219,7 @@ func (t *tools) deleteFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	}
 
 	summary := func(eventDraft) string {
-		return fmt.Sprintf("L'épreuve « %s » est supprimée de « %s », avec %s.", title, event.Name,
+		return fmt.Sprintf("L'épreuve %s est supprimée de %s, avec %s.", quote(title), quote(event.Name),
 			plural(len(format.participations), "participation", "participations"))
 	}
 	answer, err := t.changeEvent(ctx, "delete_format", view, labelsOf(view, nil), struct{ Format string }{formatID},

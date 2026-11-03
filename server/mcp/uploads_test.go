@@ -7,16 +7,20 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/logger"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/router"
 
 	"courses/server/mcp"
 	"courses/server/testutil"
@@ -143,20 +147,24 @@ func TestUploads_Store(t *testing.T) {
 		}
 
 		// A slot that expires while its file comes refuses it too: the PUT is not
-		// told that a file was kept that no tool will get.
+		// told that a file was kept that no tool will get. (The PUT takes a minute,
+		// well within its time.)
 		id, secret, _ = u.Open("alice", "token-a", "photo")
+		c.advance(9 * time.Minute)
 		body, writer := io.Pipe()
 		done := make(chan error, 1)
 		go func() { done <- u.Put(id, secret, -1, body) }()
 		if _, err := writer.Write(png[:8]); err != nil {
 			t.Fatal(err)
 		}
-		c.advance(10 * time.Minute)
-		if _, err := writer.Write(png[8:]); err != nil {
-			t.Fatal(err)
-		}
-		_ = writer.Close()
-		if err := <-done; !errors.Is(err, mcp.ErrUploadInvalid) {
+		c.advance(time.Minute)
+		go func() {
+			_, _ = writer.Write(png[8:])
+			_ = writer.Close()
+		}()
+		err := <-done
+		_ = body.Close()
+		if !errors.Is(err, mcp.ErrUploadInvalid) {
 			t.Errorf("a file that came once its slot expired: %v, want a refusal", err)
 		}
 		if u.Len() != 0 || u.Bytes() != 0 {
@@ -204,10 +212,11 @@ func TestUploads_Store(t *testing.T) {
 		u := mcp.NewUploads(c.now)
 		five := photoOf(mcp.PhotoMaxBytes)
 		var ids []string
-		// Thirteen photos of 5 Mo, two per MCP token: the thirteenth goes past 64 Mo.
+		// Thirteen photos of 5 Mo, two per MCP token, of an account each: the
+		// thirteenth goes past 64 Mo.
 		for i := range 13 {
 			token := "token-" + string(rune('a'+i/2))
-			id, secret, _ := u.Open("someone", token, "photo")
+			id, secret, _ := u.Open("person-"+token, token, "photo")
 			if err := put(u, id, secret, five); err != nil {
 				t.Fatalf("photo %d: %v", i+1, err)
 			}
@@ -360,6 +369,175 @@ func TestUploads_Store(t *testing.T) {
 		}
 		if data, _, err := u.Peek(id, "token-a", "photo"); err != nil || !bytes.Equal(data, png) {
 			t.Errorf("the file of the first PUT: %d bytes, %v", len(data), err)
+		}
+	})
+
+	t.Run("a track is read once, at its PUT", func(t *testing.T) {
+		u := mcp.NewUploads(newClock().now)
+		var parses atomic.Int32
+		mcp.SetTrackParseHook(t, func(int) { parses.Add(1) })
+		id, secret, _ := u.Open("alice", "token-a", "track")
+		if err := put(u, id, secret, testutil.GPX(t, 30)); err != nil {
+			t.Fatal(err)
+		}
+		for range 5 {
+			stats, err := u.PeekTrack(id, "token-a")
+			if err != nil || stats.Points != 30 {
+				t.Fatalf("the track of the slot: %+v, %v", stats, err)
+			}
+		}
+		if _, _, err := u.Take(id, "token-a", "track"); err != nil {
+			t.Fatal(err)
+		}
+		if got := parses.Load(); got != 1 {
+			t.Errorf("the track was parsed %d times, want once", got)
+		}
+	})
+
+	t.Run("a panic while the file comes gives its room back", func(t *testing.T) {
+		u := mcp.NewUploads(newClock().now)
+		id, secret, _ := u.Open("alice", "token-a", "track")
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("the reader's panic did not reach the caller")
+				}
+			}()
+			_ = u.Put(id, secret, -1, readerFunc(func([]byte) (int, error) { panic("a body that fails") }))
+		}()
+		if u.Bytes() != 0 || u.Len() != 0 {
+			t.Errorf("after the panic, %d slots and %d bytes, want none", u.Len(), u.Bytes())
+		}
+	})
+
+	t.Run("an account keeps 20 Mo at most: its own oldest goes", func(t *testing.T) {
+		u := mcp.NewUploads(newClock().now)
+		five := photoOf(mcp.PhotoMaxBytes)
+		theirs, theirSecret, _ := u.Open("bob", "token-b", "photo")
+		if err := put(u, theirs, theirSecret, five); err != nil {
+			t.Fatal(err)
+		}
+		var mine []string
+		for i := range 5 {
+			token := "token-a" + string(rune('0'+i/2))
+			id, secret, _ := u.Open("alice", token, "photo")
+			if err := put(u, id, secret, five); err != nil {
+				t.Fatalf("photo %d: %v", i+1, err)
+			}
+			mine = append(mine, id)
+		}
+		if _, _, err := u.Peek(mine[0], "token-a0", "photo"); !errors.Is(err, mcp.ErrUploadInvalid) {
+			t.Errorf("Alice's oldest photo: %v, want it gone", err)
+		}
+		if _, _, err := u.Peek(theirs, "token-b", "photo"); err != nil {
+			t.Errorf("Bob's photo: %v, want it kept", err)
+		}
+		if want := 5 * mcp.PhotoMaxBytes; u.Bytes() != want {
+			t.Errorf("%d bytes kept, want %d", u.Bytes(), want)
+		}
+	})
+
+	t.Run("slow PUTs: the files of the others stay, and the store says it is full", func(t *testing.T) {
+		u := mcp.NewUploads(newClock().now)
+		five := photoOf(mcp.PhotoMaxBytes)
+		// Bob's four photos, kept.
+		var bobs []string
+		for i := range 4 {
+			token := "token-b" + string(rune('0'+i/2))
+			id, secret, _ := u.Open("bob", token, "photo")
+			if err := put(u, id, secret, five); err != nil {
+				t.Fatal(err)
+			}
+			bobs = append(bobs, id)
+		}
+		// Alice holds two chunked tracks open: 20 Mo held for her.
+		var writers []*io.PipeWriter
+		dones := make(chan error, 2)
+		for range 2 {
+			id, secret, _ := u.Open("alice", "token-a", "track")
+			body, writer := io.Pipe()
+			writers = append(writers, writer)
+			go func() { dones <- u.Put(id, secret, -1, body) }()
+			if _, err := writer.Write([]byte("<?xml")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// A third of hers finds no room of hers to free: busy, and the slot waits.
+		id, secret, _ := u.Open("alice", "token-a2", "photo")
+		if err := put(u, id, secret, testutil.PNG(t, 8, 8)); !errors.Is(err, mcp.ErrUploadBusy) {
+			t.Errorf("a PUT over Alice's room: %v, want busy", err)
+		}
+		for i, bob := range bobs {
+			if _, _, err := u.Peek(bob, "token-b"+string(rune('0'+i/2)), "photo"); err != nil {
+				t.Errorf("Bob's photo %d: %v, want it kept", i+1, err)
+			}
+		}
+		for _, writer := range writers {
+			_ = writer.Close()
+		}
+		for range 2 {
+			<-dones
+		}
+		// Once Alice's PUTs are over, the slot that was refused takes its file.
+		if err := put(u, id, secret, testutil.PNG(t, 8, 8)); err != nil {
+			t.Errorf("the slot refused as busy, afterwards: %v", err)
+		}
+	})
+
+	t.Run("every byte held by PUTs under way: busy, for any account", func(t *testing.T) {
+		u := mcp.NewUploads(newClock().now)
+		// Three accounts hold 20 Mo each with chunked tracks: 60 Mo held.
+		var writers []*io.PipeWriter
+		dones := make(chan error, 6)
+		for _, account := range []string{"alice", "bob", "sam"} {
+			for range 2 {
+				id, secret, _ := u.Open(account, "token-"+account, "track")
+				body, writer := io.Pipe()
+				writers = append(writers, writer)
+				go func() { dones <- u.Put(id, secret, -1, body) }()
+				if _, err := writer.Write([]byte("<?xml")); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		// A fourth account's photo of 5 Mo goes past 64 Mo, and no file can go.
+		id, secret, _ := u.Open("admin", "token-admin", "photo")
+		if err := put(u, id, secret, photoOf(mcp.PhotoMaxBytes)); !errors.Is(err, mcp.ErrUploadBusy) {
+			t.Errorf("a PUT past 64 Mo, all held: %v, want busy", err)
+		}
+		for _, writer := range writers {
+			_ = writer.Close()
+		}
+		for range 6 {
+			<-dones
+		}
+		if err := put(u, id, secret, photoOf(mcp.PhotoMaxBytes)); err != nil {
+			t.Errorf("the slot refused as busy, afterwards: %v", err)
+		}
+	})
+
+	t.Run("a PUT takes two minutes at most", func(t *testing.T) {
+		c := newClock()
+		u := mcp.NewUploads(c.now)
+		id, secret, _ := u.Open("alice", "token-a", "photo")
+		body, writer := io.Pipe()
+		done := make(chan error, 1)
+		go func() { done <- u.Put(id, secret, -1, body) }()
+		if _, err := writer.Write(png[:8]); err != nil {
+			t.Fatal(err)
+		}
+		c.advance(mcp.PutTimeout + time.Second)
+		go func() {
+			_, _ = writer.Write(png[8:16])
+			_ = writer.Close()
+		}()
+		err := <-done
+		_ = body.Close()
+		if !errors.Is(err, mcp.ErrUploadTooSlow) {
+			t.Errorf("a PUT of more than two minutes: %v, want it cut", err)
+		}
+		if u.Len() != 0 || u.Bytes() != 0 {
+			t.Errorf("then %d slots and %d bytes, want none", u.Len(), u.Bytes())
 		}
 	})
 
@@ -624,4 +802,49 @@ func TestUploads_AbsentOnTheDemo(t *testing.T) {
 		TestAppFactory:        func(testing.TB) *tests.TestApp { return app },
 		DisableTestAppCleanup: true,
 	}).Test(t)
+}
+
+// A store that has no room left says so, as a 503 with Retry-After: the slot is
+// not used up, and the client tries again later. It is not upload_invalid.
+func TestUploads_RouteSaysWhenTheStoreIsFull(t *testing.T) {
+	u := mcp.NewUploads(newClock().now)
+	// Alice holds her room with two chunked tracks under way.
+	var writers []*io.PipeWriter
+	dones := make(chan error, 2)
+	for range 2 {
+		id, secret, _ := u.Open("alice", "token-a", "track")
+		body, writer := io.Pipe()
+		writers = append(writers, writer)
+		go func() { dones <- u.Put(id, secret, -1, body) }()
+		if _, err := writer.Write([]byte("<?xml")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() {
+		for _, writer := range writers {
+			_ = writer.Close()
+		}
+		for range 2 {
+			<-dones
+		}
+	}()
+
+	id, secret, _ := u.Open("alice", "token-a2", "photo")
+	request := httptest.NewRequest(http.MethodPut, "/api/app/mcp-uploads/"+id, bytes.NewReader(testutil.PNG(t, 8, 8)))
+	request.SetPathValue("id", id)
+	request.Header.Set("X-Upload-Secret", secret)
+	recorder := httptest.NewRecorder()
+	e := &core.RequestEvent{}
+	e.Request, e.Response = request, recorder
+	err := mcp.UploadRoute(u)(e)
+	var refused *router.ApiError
+	if !errors.As(err, &refused) || refused.Status != http.StatusServiceUnavailable {
+		t.Fatalf("a PUT with no room: %v, want a 503", err)
+	}
+	if got := recorder.Header().Get("Retry-After"); got != "60" {
+		t.Errorf("Retry-After = %q, want 60", got)
+	}
+	if strings.Contains(refused.Message, "upload_invalid") {
+		t.Errorf("the refusal says %q", refused.Message)
+	}
 }

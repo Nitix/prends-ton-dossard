@@ -336,7 +336,7 @@ func (t *tools) addParticipation(ctx context.Context, _ *mcpsdk.CallToolRequest,
 	// one format only: there is nothing to choose.
 	if formatID == "" && status == "interested" && len(view.formats) == 1 {
 		only := view.formats[0]
-		return refuse(fmt.Errorf("Cette course n'a qu'une épreuve (« %s », id %s) : ajoute le coureur à cette épreuve.", only.title(w), only.record.ID))
+		return refuse(fmt.Errorf("Cette course n'a qu'une épreuve (%s, id %s) : ajoute le coureur à cette épreuve.", quote(only.title(w)), only.record.ID))
 	}
 
 	// The risk: a participation to a race replaces the one of the same runner to the
@@ -511,7 +511,7 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	}
 	lost := resultOfRecord(p).lostBy(next).parts(w)
 	if len(lost) > 0 {
-		details = append(details, "Le résultat serait effacé : "+strings.Join(lost, wording.Separator)+".")
+		details = append(details, "Le résultat serait effacé : "+plain(strings.Join(lost, wording.Separator))+".")
 	}
 	var r *risk
 	if !own || len(lost) > 0 {

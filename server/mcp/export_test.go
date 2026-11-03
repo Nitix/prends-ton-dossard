@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"errors"
 	"io"
 	"maps"
 	"net/http"
@@ -261,7 +262,8 @@ type Confirmations = confirmations
 func NewConfirmations(now func() time.Time) *Confirmations { return newConfirmations(now) }
 
 func (s *confirmations) Put(userID, tokenID, tool, args, state string) (string, time.Time) {
-	return s.put(pendingConfirmation{userID: userID, tokenID: tokenID, tool: tool, args: args, state: state})
+	token, expires, _ := s.put(pendingConfirmation{userID: userID, tokenID: tokenID, tool: tool, args: args, state: state})
+	return token, expires
 }
 
 func (s *confirmations) Take(token, userID, tokenID, tool, args, state string) string {
@@ -350,11 +352,13 @@ func (u *uploads) Put(id, secret string, size int64, body io.Reader) error {
 }
 
 func (u *uploads) Peek(id, tokenID, purpose string) ([]byte, string, error) {
-	return u.peek(id, tokenID, uploadPurpose(purpose))
+	file, err := u.peek(id, tokenID, uploadPurpose(purpose))
+	return file.data, file.contentType, err
 }
 
 func (u *uploads) Take(id, tokenID, purpose string) ([]byte, string, error) {
-	return u.take(id, tokenID, uploadPurpose(purpose))
+	file, err := u.take(id, tokenID, uploadPurpose(purpose))
+	return file.data, file.contentType, err
 }
 
 // Len is the number of slots that the store keeps.
@@ -468,3 +472,41 @@ func ExpiryDay(expiresAt string) string { return expiryDay(expiresAt) }
 type MergeResult = mergeResult
 
 func DescribeMerge(r MergeResult) []string { return describeMerge(r) }
+// ReadTrack is readTrack: the numbers of a track, its parse bounded.
+func ReadTrack(data []byte) (GpxStats, error) { return readTrack(data) }
+
+// SetTrackParseHook makes each parse of a track call hook with its size, until the
+// test ends.
+func SetTrackParseHook(t testing.TB, hook func(size int)) {
+	t.Helper()
+	previous := onTrackParse
+	onTrackParse = hook
+	t.Cleanup(func() { onTrackParse = previous })
+}
+
+// PeekTrack is what the PUT of a track slot read of its file.
+func (u *uploads) PeekTrack(id, tokenID string) (GpxStats, error) {
+	file, err := u.peek(id, tokenID, purposeTrack)
+	if err != nil {
+		return GpxStats{}, err
+	}
+	if file.track == nil {
+		return GpxStats{}, errors.New("no track read")
+	}
+	return *file.track, nil
+}
+
+var (
+	ErrUploadBusy    = errUploadBusy
+	ErrUploadTooSlow = errUploadTooSlow
+)
+
+const PutTimeout = putTimeout
+
+// UploadRoute is the handler of PUT /api/app/mcp-uploads/{id}, for a store.
+func UploadRoute(u *Uploads) func(*core.RequestEvent) error { return uploadRoute(u) }
+
+// StripPhotoMetadata is stripPhotoMetadata.
+func StripPhotoMetadata(contentType string, data []byte) ([]byte, error) {
+	return stripPhotoMetadata(contentType, data)
+}

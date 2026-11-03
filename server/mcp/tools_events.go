@@ -167,10 +167,10 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 		return nil, eventWriteOut{}, describe(t.app, err, batchSubject(w, ops, draft, labels, nil))
 	}
 
-	summary := fmt.Sprintf("La course « %s » est créée (%s, %s), avec %s.", draft.Name, days(draft.StartDate, draft.EndDate), draft.Location,
+	summary := fmt.Sprintf("La course %s est créée (%s, %s), avec %s.", quote(draft.Name), days(draft.StartDate, draft.EndDate), plain(draft.Location),
 		plural(len(draft.Formats), "épreuve", "épreuves"))
 	if draft.Join != nil {
-		summary += fmt.Sprintf(" %s participe à « %s » (%s).", me.Name, titleOf(w, draft.Formats[draft.Join.FormatIndex], labels), w.Status(draft.Join.Status))
+		summary += fmt.Sprintf(" %s participe à %s (%s).", me.Name, quote(titleOf(w, draft.Formats[draft.Join.FormatIndex], labels)), w.Status(draft.Join.Status))
 	}
 	answer, err := t.written(ctx, eventID, summary, draft)
 	return nil, answer, err
@@ -185,7 +185,7 @@ func (t *tools) duplicateRisk(w wording.Words, duplicates []eventView) *risk {
 	var r risk
 	for _, v := range duplicates {
 		s := v.summary(t.cfg, w, "")
-		r.Details = append(r.Details, fmt.Sprintf("%s (%s, %s, %s, id %s)", quote(s.Name), days(s.StartDate, s.EndDate), s.Location,
+		r.Details = append(r.Details, fmt.Sprintf("%s (%s, %s, %s, id %s)", quote(s.Name), days(s.StartDate, s.EndDate), plain(s.Location),
 			plural(s.Participants, "participant", "participants"), s.ID))
 		r.Records = append(r.Records, stamp{Collection: "events", ID: v.record.ID, Updated: v.record.Updated})
 	}
@@ -301,7 +301,7 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 		applyPatches(draft, patches)
 	}
 	summary := func(draft eventDraft) string {
-		return fmt.Sprintf("La course « %s » est modifiée (%s, %s).", draft.Name, days(draft.StartDate, draft.EndDate), draft.Location)
+		return fmt.Sprintf("La course %s est modifiée (%s, %s).", quote(draft.Name), days(draft.StartDate, draft.EndDate), plain(draft.Location))
 	}
 	answer, err := t.changeEvent(ctx, "update_event", view, labels, args, strings.TrimSpace(in.Confirmation), change, nil, summary)
 	return nil, answer, err
@@ -411,7 +411,7 @@ func (t *tools) deleteEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 		r.Details = append(r.Details, upperFirst(plural(offers, "offre", "offres"))+" de covoiturage ou de logement, avec leurs places.")
 	}
 	r.Message = fmt.Sprintf("Supprimer la course %s (%s, %s) supprime aussi tout ce qu'elle contient : %s, %s, %s et %s de covoiturage ou de logement. %s",
-		quote(event.Name), days(event.StartDate, event.EndDate), event.Location,
+		quote(event.Name), days(event.StartDate, event.EndDate), plain(event.Location),
 		plural(len(view.formats), "épreuve", "épreuves"), plural(len(view.participations()), "participation", "participations"),
 		plural(comments, "commentaire", "commentaires"), plural(offers, "offre", "offres"), who)
 
@@ -426,7 +426,7 @@ func (t *tools) deleteEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 		return fail(err)
 	}
 	return nil, deleteEventOut{
-		writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("La course « %s » est supprimée, avec %s, %s, %s et %s.", event.Name,
+		writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("La course %s est supprimée, avec %s, %s, %s et %s.", quote(event.Name),
 			plural(len(view.formats), "épreuve", "épreuves"), plural(len(view.participations()), "participation", "participations"),
 			plural(comments, "commentaire", "commentaires"), plural(offers, "offre", "offres"))},
 		Removed: &removedEvent{ID: event.ID, Name: event.Name, StartDate: event.StartDate},

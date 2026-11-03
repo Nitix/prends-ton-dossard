@@ -655,12 +655,13 @@ La route **`PUT /api/app/mcp-uploads/{id}`** (paquet `mcp`, absente sur la démo
 
 - n'a pas de session : l'en-tête **`X-Upload-Secret`** est le secret, comparé en temps constant à son empreinte ; il n'est jamais dans une URL, donc jamais dans le journal ;
 - lit au plus `max_bytes` (`http.MaxBytesReader`) : **5 Mo pour une photo, 10 Mo pour une trace**, les limites des champs du site ; au-delà, 413 ;
-- regarde le type du contenu (`http.DetectContentType`, et pour une trace : du XML) ; un mauvais type : 400 `upload_invalid` ;
-- un seul envoi par emplacement ; un emplacement inconnu, expiré, déjà rempli ou un mauvais secret : 400 `upload_invalid` (sans dire lequel) ; → 204.
+- prend **deux minutes au plus** (une échéance sur la connexion, et sur la lecture) ; au-delà, 408 : un envoi qui traîne ne garde pas la place des autres ;
+- regarde le type du contenu (`http.DetectContentType`, et pour une trace : du XML) ; un mauvais type : 400 `upload_invalid`. Une trace est lue là, une fois : l'emplacement en garde les chiffres, et aucun appel d'outil ne la relit ; deux traces de plus de 64 Ko au plus sont lues à la fois (une lecture coûte plusieurs fois le fichier en mémoire) ;
+- un seul envoi par emplacement ; un emplacement inconnu, expiré, déjà rempli ou un mauvais secret : 400 `upload_invalid` (sans dire lequel) ; pas de place pour le fichier en ce moment (voir ci-dessous) : 503 avec `Retry-After: 60`, l'emplacement attendant toujours son fichier ; → 204.
 
-Les emplacements vivent **en mémoire**, comme les confirmations (§ 6.13) : **10 minutes**, **deux en attente par jeton MCP**, **64 Mo en tout** (au-delà, l'emplacement le plus ancien part) ; un fichier pris par un outil ou expiré est libéré aussitôt. Un emplacement est lié au jeton MCP qui l'a demandé et à son usage : une photo ne sert pas de trace, et un autre assistant ne s'en sert pas. Un redémarrage les perd : l'assistant recommence.
+Les emplacements vivent **en mémoire**, comme les confirmations (§ 6.13) : **10 minutes**, **deux en attente par jeton MCP**, **20 Mo par compte** et **64 Mo en tout**, place gardée par les envois en cours comprise (au-delà, le fichier le plus ancien du compte, puis de tous, part ; quand toute la place est gardée par des envois en cours, 503) ; un fichier pris par un outil ou expiré est libéré aussitôt. Un emplacement est lié au jeton MCP qui l'a demandé et à son usage : une photo ne sert pas de trace, et un autre assistant ne s'en sert pas. Un redémarrage les perd : l'assistant recommence.
 
-Le fichier lui-même n'est pas transformé, sauf ce que le site fait aussi (ci-dessous) : la validation finale est celle du champ du site (`validation_invalid_mime_type`, `validation_file_size_limit`, avec leurs messages).
+Le fichier lui-même n'est pas réencodé : il part tel qu'il est arrivé, sauf ce que le site fait aussi (ci-dessous). Les **métadonnées d'une photo** sont retirées, comme le redimensionnement du site les perd : en JPEG les segments Exif (dont la position GPS), XMP, IPTC, les commentaires et les images qui suivent la fin de l'image, l'orientation étant gardée dans un Exif à elle seule ; en PNG les morceaux `eXIf`, `tEXt`, `iTXt`, `zTXt` ; en WebP les morceaux `EXIF` et `XMP `. Une photo dont la structure ne se lit pas est refusée avant toute confirmation. la validation finale est celle du champ du site (`validation_invalid_mime_type`, `validation_file_size_limit`, avec leurs messages).
 
 **`set_photo`** (« Changer la photo », « Retirer la photo »)
 
@@ -671,7 +672,7 @@ Le fichier lui-même n'est pas transformé, sauf ce que le site fait aussi (ci-d
 | `remove` | booléen | non | retirer la photo |
 | `confirmation` | texte | non | § 6.13 |
 
-- `PATCH runners/{id}` en `multipart/form-data`, champ `avatar`, comme le site ; pour retirer la photo, un `PATCH` JSON `{"avatar": null}`, comme `removeAvatar` du site. Le site réduit l'image dans le navigateur avant de l'envoyer ; l'outil l'envoie telle quelle, dans les limites du champ, et PocketBase fait les vignettes 96×96 et 256×256 comme pour toute photo.
+- `PATCH runners/{id}` en `multipart/form-data`, champ `avatar`, comme le site ; pour retirer la photo, un `PATCH` JSON `{"avatar": null}`, comme `removeAvatar` du site. Le site réduit l'image dans le navigateur avant de l'envoyer ; l'outil l'envoie sans la réencoder, sans ses métadonnées, dans les limites du champ, et PocketBase fait les vignettes 96×96 et 256×256 comme pour toute photo.
 - Confirmation quand une photo existe déjà (remplacée ou retirée), ou que le coureur n'est pas soi.
 - → `{ "done", "runner": { "id", "name", "photo_url" }, "summary" }`.
 
@@ -685,7 +686,7 @@ Le fichier lui-même n'est pas transformé, sauf ce que le site fait aussi (ci-d
 | `use_track_values` | booléen | non | « Reprendre ces valeurs » : met la distance et le D+ de l'épreuve à ceux de la trace, dans la même écriture |
 | `confirmation` | texte | non | § 6.13 |
 
-- L'outil lit la trace comme le site (`parseGpx` de `features/route/gpx.ts`, porté en Go) : les points `trkpt`, sinon `rtept` ; aucun point exploitable → « Ce fichier n'est pas une trace GPX exploitable. », rien n'est envoyé. Il en tire les chiffres du site (`gpxStats` : distance par haversine, D+ et D− avec l'hystérésis de 3 m, altitudes min et max).
+- L'outil lit la trace comme le site (`parseGpx` de `features/route/gpx.ts`, porté en Go) : les points `trkpt`, sinon `rtept` ; aucun point exploitable → « Ce fichier n'est pas une trace GPX exploitable. », rien n'est envoyé. Ce qu'un navigateur refuse comme XML (un préfixe non déclaré, un attribut deux fois, un second DOCTYPE ou un DOCTYPE après la racine), le portage le refuse aussi ; il est plus strict sur trois points que le site ignore : aucune entité d'une DTD n'est développée, 64 niveaux d'éléments et 64 attributs par élément au plus. Il en tire les chiffres du site (`gpxStats` : distance par haversine, D+ et D− avec l'hystérésis de 3 m, altitudes min et max).
 - Comme le site (`withXmlDeclaration`), un fichier sans déclaration XML en reçoit une, sinon PocketBase le prend pour du texte et le refuse.
 - `PATCH formats/{id}` en `multipart/form-data`, champ `gpx`, avec `distance_km` et `elevation_gain_m` si `use_track_values` ; pour retirer la trace, un `PATCH` JSON `{"gpx": null}`, comme le site. Tout connecté (règle du site).
 - Confirmation quand une trace existe déjà (remplacée ou retirée).
@@ -894,7 +895,7 @@ L'outil lit ce qu'il faut, vérifie ce qu'il peut sans rien écrire (les refus d
     "details": [ "…une ligne par élément perdu ou touché…" ] } }
 ```
 
-Le `message` est en français, prêt à être montré à la personne. Un fichier envoyé (`upload_id`) n'est pas pris par le premier appel : il attend le second.
+Le `message` est en français, prêt à être montré à la personne. Un fichier envoyé (`upload_id`) n'est pas pris par le premier appel : il attend le second. Une confirmation ne dure pas plus que lui : quand l'emplacement expire avant les 10 minutes, la confirmation expire avec lui, et son message le dit (« valable 3 minutes, le temps que le fichier envoyé reste gardé, une seule fois »).
 
 #### Le jeton de confirmation
 
@@ -993,7 +994,7 @@ Sur une instance de démo (`DEMO_LOGIN_EMAIL` défini), **le serveur MCP est abs
 
 - **CORS** : le programme garde le CORS par défaut de PocketBase. Un jeton n'est pas un identifiant « ambiant » (cookie) qu'un site tiers pourrait faire envoyer par un navigateur : il faudrait le connaître.
 - **Taille** : le corps d'une requête `/mcp` est limité à 1 Mio (§ 3.3), un envoi à 5 ou 10 Mo (§ 6.9).
-- **Mémoire** : confirmations (1 000 au plus) et envois (64 Mo au plus), tous de 10 minutes.
+- **Mémoire** : confirmations (1 000 au plus) et envois (64 Mo au plus, 20 Mo par compte), tous de 10 minutes ; une trace est lue une fois, à son envoi, et deux grandes traces au plus à la fois.
 - **Concurrence** : deux assistants qui modifient la même course au même moment peuvent s'écraser (lecture, puis écriture), comme deux onglets du site. Les épreuves qu'un outil ne change pas ne sont pas renvoyées (§ 6.5), et une confirmation est refusée si l'état a changé entre les deux appels (§ 6.13).
 
 ## 9. Tests

@@ -1070,3 +1070,115 @@ func TestTools_Confirmation_MemberTextStaysQuoted(t *testing.T) {
 		}
 	})
 }
+
+// Every sentence that a write tool builds with what a member wrote (the name, the
+// place and the notes of a race, the name of a format, a comment, the place and the
+// notes of an offer, the note of a result) keeps that text from opening or closing
+// a quotation: its « » become ‹ ›, in the confirmations, the summaries and the
+// warnings. (The names of the runners are not swept: see the report.)
+func TestTools_MemberTextNeverClosesAQuotation(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	const mark, escaped = "»!«", "›!‹"
+
+	event := create(t, app, "events", map[string]any{
+		"name": "Trail " + mark + " des Crêtes", "location": "Annecy " + mark + " centre", "start_date": "2026-09-05",
+		"notes": "Navette " + mark + " gare", "created_by": fx.AliceRunner.Id,
+	})
+	north := create(t, app, "formats", map[string]any{"event": event.Id, "race_type": fx.Trail.Id, "distance_km": 20, "name": "Boucle " + mark + " nord"})
+	south := create(t, app, "formats", map[string]any{"event": event.Id, "race_type": fx.Trail.Id, "distance_km": 10, "name": "Boucle " + mark + " sud"})
+	sam := joined(t, app, fx.SamRunner, north, "interested", false, fx.AliceRunner)
+	past := create(t, app, "events", map[string]any{"name": "Cross " + mark + " ouest", "location": "Lyon", "start_date": "2026-03-07", "created_by": fx.AliceRunner.Id})
+	cross := create(t, app, "formats", map[string]any{"event": past.Id, "race_type": fx.Cross.Id, "distance_km": 8, "name": "Cross " + mark + " court"})
+	mine := joined(t, app, fx.AliceRunner, cross, "finished", true, fx.AliceRunner)
+	update(t, app, mine, map[string]any{"finish_time_s": 2400, "result_note": "Belle " + mark + " course"})
+
+	var said []string
+	say := func(result toolResult) {
+		t.Helper()
+		if result.IsError {
+			t.Fatalf("the call failed: %s", result.Text)
+		}
+		s := result.Structured
+		if summary, _ := s["summary"].(string); summary != "" {
+			said = append(said, summary)
+		}
+		for _, w := range asList(s["warnings"]) {
+			said = append(said, w)
+		}
+		if c, _ := s["confirmation"].(map[string]any); c != nil {
+			message, _ := c["message"].(string)
+			said = append(said, message)
+			said = append(said, asList(c["details"])...)
+		}
+	}
+	// run calls a tool, and again with the token when it asks for a confirmation.
+	run := func(tool string, args map[string]any) toolResult {
+		t.Helper()
+		result := callTool(t, app, alice, tool, args)
+		say(result)
+		if c, _ := result.Structured["confirmation"].(map[string]any); c != nil {
+			result = callTool(t, app, alice, tool, with(args, c["token"].(string)))
+			say(result)
+		}
+		return result
+	}
+
+	run("create_event", map[string]any{"name": "Trail " + mark + " des Crêtes", "location": "Annecy " + mark + " haut", "start_date": "2026-09-06",
+		"formats": []any{map[string]any{"race_type": "Trail", "distance_km": 30, "name": "Boucle " + mark + " est"}},
+		"join":    map[string]any{"format_index": 0, "status": "interested"}})
+	run("update_event", map[string]any{"event_id": event.Id, "notes": ""})
+	run("update_event", map[string]any{"event_id": event.Id, "start_date": "2026-09-04"})
+	run("update_format", map[string]any{"format_id": north.Id, "name": ""})
+	update(t, app, north, map[string]any{"name": "Boucle " + mark + " nord"})
+	run("add_format", map[string]any{"event_id": event.Id, "race_type": "Trail", "distance_km": 5, "name": "Boucle " + mark + " ouest"})
+	run("add_participation", map[string]any{"runner": "Bob", "format_id": south.Id, "status": "interested"})
+	run("update_participation", map[string]any{"participation_id": sam.Id, "status": "registered"})
+	run("set_result", map[string]any{"participation_id": mine.Id, "status": "finished", "finish_time": "0:39:00", "note": "Encore " + mark + " mieux"})
+	run("remove_participation", map[string]any{"participation_id": mine.Id})
+	run("remove_participation", map[string]any{"participation_id": sam.Id})
+	comment := run("add_comment", map[string]any{"event_id": event.Id, "body": "Salut " + mark + " tous"})
+	commentID := comment.Structured["comment"].(map[string]any)["id"].(string)
+	run("update_comment", map[string]any{"comment_id": commentID, "body": "Salut " + mark + " à tous"})
+	run("delete_comment", map[string]any{"comment_id": commentID})
+	ride := run("add_offer", map[string]any{"event_id": event.Id, "kind": "ride", "place": "Lyon " + mark + " gare", "seats": 3, "notes": "Départ " + mark + " 7 h"})
+	rideID := ride.Structured["offer"].(map[string]any)["id"].(string)
+	run("add_offer", map[string]any{"event_id": event.Id, "kind": "lodging", "place": "Gîte " + mark + " lac", "time": "07:00"})
+	run("update_offer", map[string]any{"offer_id": rideID, "notes": ""})
+	run("offer_place", map[string]any{"offer_id": rideID, "action": "take", "runner": "Bob"})
+	run("offer_place", map[string]any{"offer_id": rideID, "action": "free", "runner": "Bob"})
+	run("delete_offer", map[string]any{"offer_id": rideID})
+	run("set_track", map[string]any{"format_id": south.Id, "content_base64": b64(testutil.GPX(t, 3))})
+	run("set_track", map[string]any{"format_id": south.Id, "content_base64": b64(testutil.GPX(t, 4))})
+	run("delete_format", map[string]any{"format_id": north.Id})
+	run("delete_event", map[string]any{"event_id": event.Id})
+
+	quoted := 0
+	for _, text := range said {
+		if strings.Contains(text, mark) {
+			t.Errorf("a member's « » are left as they are in %q", text)
+		}
+		if strings.Contains(text, escaped) {
+			quoted++
+		}
+	}
+	// Without them, the check above would pass on sentences that hold no text of a member.
+	if quoted < 30 {
+		t.Errorf("%d sentences hold a member's text, want the sweep to see at least 30", quoted)
+	}
+}
+
+// asList is a list of texts of an answer.
+func asList(v any) []string {
+	var out []string
+	list, _ := v.([]any)
+	for _, item := range list {
+		if text, ok := item.(string); ok {
+			out = append(out, text)
+		}
+	}
+	return out
+}

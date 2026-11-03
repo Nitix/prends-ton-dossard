@@ -167,7 +167,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 		(old.Note != "" && stored.Note != old.Note)
 	if replaced {
 		next := strings.Join(append([]string{w.Status(status)}, stored.parts(w)...), wording.Separator)
-		details = append(details, "Résultat actuel : "+resultText(w, p)+".", "Nouveau résultat : "+next+".")
+		details = append(details, "Résultat actuel : "+plain(resultText(w, p))+".", "Nouveau résultat : "+plain(next)+".")
 	}
 	var r *risk
 	if len(details) > 0 {
@@ -204,7 +204,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 		return fail(err)
 	}
 
-	head := fmt.Sprintf("Résultat %s enregistré pour %s : %s", ofName(after.Runner.Name), placeOf(w, after), resultText(w, after.Participation))
+	head := fmt.Sprintf("Résultat %s enregistré pour %s : %s", ofName(after.Runner.Name), placeOf(w, after), plain(resultText(w, after.Participation)))
 	dropped := ""
 	if given != stored {
 		dropped = "le temps et le classement ne sont pas gardés avec un abandon"

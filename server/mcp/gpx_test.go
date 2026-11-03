@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"courses/server/mcp"
+	"courses/server/testutil"
 )
 
 // The reading of a GPX track, ported from the site (parseGpx and gpxStats of
@@ -528,6 +531,83 @@ func TestParseGpx_NiEntitesNiProfondeurSansFin(t *testing.T) {
 	big := bytes.Repeat([]byte(" "), mcp.TrackMaxBytes)
 	if _, err := mcp.ParseGpx(append(big, gpxDoc(`<trkpt lat="45" lon="6"/>`)...)); err == nil {
 		t.Error("a file over 10 Mo was read")
+	}
+}
+
+// What a browser's XML parser refuses, and so the form of the site ("unreadable"),
+// the port refuses too; and an element with more attributes than a track has.
+func TestParseGpx_CeQueLesNavigateursRefusent(t *testing.T) {
+	const point = `<trk><trkseg><trkpt lat="45" lon="6"/></trkseg></trk>`
+	for _, row := range []struct {
+		name, xml string
+	}{
+		{"a prefix that is not declared", `<g:gpx><g:trk><g:trkseg><g:trkpt lat="45" lon="6"/></g:trkseg></g:trk></g:gpx>`},
+		{"an attribute of a prefix that is not declared", `<gpx>` + strings.Replace(point, `lat="45"`, `lat="45" g:x="1"`, 1) + `</gpx>`},
+		{"a prefix declared on a sibling only", `<gpx><a xmlns:g="g"/><g:trk><g:trkseg><g:trkpt lat="45" lon="6"/></g:trkseg></g:trk></gpx>`},
+		{"an attribute twice", `<gpx><trk><trkseg><trkpt lat="45" lat="46" lon="6"/></trkseg></trk></gpx>`},
+		{"one attribute twice by two prefixes", `<gpx xmlns:a="urn:x" xmlns:b="urn:x"><trk><trkseg><trkpt lat="45" lon="6" a:t="1" b:t="2"/></trkseg></trk></gpx>`},
+		{"a DOCTYPE after the root", `<gpx>` + point + `</gpx><!DOCTYPE gpx>`},
+		{"two DOCTYPEs", `<!DOCTYPE gpx><!DOCTYPE gpx><gpx>` + point + `</gpx>`},
+		{"a directive that is no DOCTYPE", `<!ELEMENT gpx ANY><gpx>` + point + `</gpx>`},
+		{"65 attributes", `<gpx` + manyAttributes(65) + `>` + point + `</gpx>`},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if points, err := mcp.ParseGpx([]byte(row.xml)); err == nil {
+				t.Errorf("read as %+v, want a refusal", points)
+			}
+		})
+	}
+
+	// What a real file has stays read: the schema of GPX, a prefix declared on an
+	// ancestor, xml:lang, a DOCTYPE before the root, 64 attributes.
+	for _, xml := range []string{
+		`<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">` + point + `</gpx>`,
+		`<gpx xmlns:g="urn:g"><g:trk><g:trkseg><g:trkpt lat="45" lon="6" xml:lang="fr"/></g:trkseg></g:trk></gpx>`,
+		`<!DOCTYPE gpx><gpx>` + point + `</gpx>`,
+		`<gpx` + manyAttributes(64) + `>` + point + `</gpx>`,
+	} {
+		if _, err := mcp.ParseGpx([]byte(xml)); err != nil {
+			t.Errorf("%.80q: %v", xml, err)
+		}
+	}
+}
+
+// manyAttributes are n attributes a0="0" a1="1"…
+func manyAttributes(n int) string {
+	var b strings.Builder
+	for i := range n {
+		fmt.Fprintf(&b, ` a%d="%d"`, i, i)
+	}
+	return b.String()
+}
+
+// A large track is read by two parses at most at once: a parse costs several times
+// the file in memory. A small one is not held back.
+func TestReadTrack_BoundsTheParsesThatRunAtOnce(t *testing.T) {
+	big := append(testutil.GPX(t, 2), bytes.Repeat([]byte(" "), 100<<10)...)
+	var running, most atomic.Int32
+	mcp.SetTrackParseHook(t, func(int) {
+		now := running.Add(1)
+		for {
+			seen := most.Load()
+			if now <= seen || most.CompareAndSwap(seen, now) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		running.Add(-1)
+	})
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if stats, err := mcp.ReadTrack(big); err != nil || stats.Points != 2 {
+				t.Errorf("readTrack: %+v, %v", stats, err)
+			}
+		})
+	}
+	wg.Wait()
+	if got := most.Load(); got < 1 || got > 2 {
+		t.Errorf("%d parses of a large track ran at once, want 2 at most", got)
 	}
 }
 

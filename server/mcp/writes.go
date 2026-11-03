@@ -147,7 +147,7 @@ func participantLabel(w wording.Words, p participationRecord) string {
 	if !p.Confirmed {
 		text += ", non confirmé"
 	}
-	return p.Expand.Runner.Name + " (" + text + ")"
+	return p.Expand.Runner.Name + " (" + plain(text) + ")"
 }
 
 // participantLabels are participations as a confirmation names them.

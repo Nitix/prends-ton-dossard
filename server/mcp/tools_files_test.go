@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/tests"
@@ -319,6 +321,21 @@ func TestTools_SetPhoto(t *testing.T) {
 		announced(t, app, alice, "set_photo", map[string]any{"upload_id": s.ID}, "pas encore arrivé")
 	})
 
+	// The site re-encodes a photo in the browser, which drops its metadata: the tool
+	// takes them out (where it was taken first), without re-encoding it.
+	t.Run("a photo of a phone: kept without its GPS", func(t *testing.T) {
+		phone := jpegWithGPS(t)
+		result := isDone(t, callTool(t, app, admin, "set_photo", with(map[string]any{"runner": "Sam", "content_base64": b64(phone)}, confirmationFor(t, app, admin, "set_photo", map[string]any{"runner": "Sam", "content_base64": b64(phone)}))))
+		address := result.Structured["runner"].(map[string]any)["photo_url"].(string)
+		kept := served(t, app, pathOf(address), "image/jpeg")
+		if bytes.Contains(kept, []byte(gpsDay)) || bytes.Contains(kept, []byte("GPSLatitude")) {
+			t.Error("the photo kept still holds where it was taken")
+		}
+		if !bytes.Contains(kept, minimalOrientation) {
+			t.Error("the photo kept lost its orientation")
+		}
+	})
+
 	t.Run("a GIF: the site's message for the photo", func(t *testing.T) {
 		announced(t, app, alice, "set_photo", map[string]any{"content_base64": b64(gifImage(t))},
 			"photo : ce type d'image n'est pas accepté : JPEG, PNG ou WebP. (validation_invalid_mime_type)")
@@ -496,4 +513,70 @@ func TestTools_SetTrack(t *testing.T) {
 // decimals.
 func number(v float64) string {
 	return strings.ReplaceAll(strconv.FormatFloat(v, 'f', -1, 64), ".", ",")
+}
+
+// confirmationFor is the token of the confirmation that a first call asks for.
+func confirmationFor(t *testing.T, app *tests.TestApp, token, tool string, args map[string]any) string {
+	t.Helper()
+	given, _, _ := asked(t, callTool(t, app, token, tool, args))
+	return given
+}
+
+// The track of a slot is read once, at its PUT: the calls of set_track use what
+// it read, however many there are (a first call that asks for a confirmation can
+// be made again and again).
+func TestTools_SetTrack_ReadsATrackOnce(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	bob := newToken(t, app, fx.Bob)
+	withFile(t, app, fx.F42, "gpx", "trace.gpx", testutil.GPX(t, 10))
+	var parses atomic.Int32
+	mcp.SetTrackParseHook(t, func(int) { parses.Add(1) })
+
+	gpx := testutil.GPX(t, 40)
+	args := map[string]any{"format_id": fx.F42.Id, "upload_id": uploaded(t, app, bob, "track", gpx)}
+	if got := parses.Load(); got != 1 {
+		t.Fatalf("the PUT parsed the track %d times, want once", got)
+	}
+	var token string
+	for range 20 {
+		token, _, _ = asked(t, callTool(t, app, bob, "set_track", args))
+	}
+	result := isDone(t, callTool(t, app, bob, "set_track", with(args, token)))
+	if got := parses.Load(); got != 1 {
+		t.Errorf("the track was parsed %d times in all, want once", got)
+	}
+	assertJSON(t, result.Structured["track"], trackNumbers(t, gpx))
+}
+
+// A confirmation is good as long as the file it was asked for: when the file of
+// the slot goes first, the confirmation says so, and ends with it.
+func TestTools_Confirmation_EndsWithItsFile(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	start := at(2026, 5, 1, 10, 0)
+	mcp.SetNow(t, start)
+	alice := newToken(t, app, fx.Alice)
+	withFile(t, app, fx.AliceRunner, "avatar", "avatar.png", testutil.PNG(t, 16, 16))
+	args := map[string]any{"upload_id": uploaded(t, app, alice, "photo", testutil.PNG(t, 20, 20))}
+
+	// Eight minutes later, the file has two left.
+	mcp.SetNow(t, start.Add(8*time.Minute))
+	first := callTool(t, app, alice, "set_photo", args)
+	confirmation, _ := first.Structured["confirmation"].(map[string]any)
+	if got := confirmation["expires_at"]; got != "2026-05-01T10:10:00Z" {
+		t.Errorf("expires_at = %v, want the end of the file, 10:10", got)
+	}
+	message, _ := confirmation["message"].(string)
+	if !strings.Contains(message, "valable 2 minutes, le temps que le fichier envoyé reste gardé, une seule fois") {
+		t.Errorf("the message is %q, want it to say the 2 minutes of the file", redact(message))
+	}
+	token, _ := confirmation["token"].(string)
+
+	// Within them, it is done.
+	mcp.SetNow(t, start.Add(9*time.Minute+30*time.Second))
+	isDone(t, callTool(t, app, alice, "set_photo", with(args, token)))
 }

@@ -66,6 +66,9 @@ const (
 // has no point, is errNotGpx; so is one over trackMaxBytes, nested deeper than
 // maxGpxDepth, or with an entity of a DTD.
 func parseGpx(data []byte) ([]trackPoint, error) {
+	if onTrackParse != nil {
+		onTrackParse(len(data))
+	}
 	if len(data) > trackMaxBytes {
 		return nil, errNotGpx
 	}
@@ -128,6 +131,11 @@ type gpxReader struct {
 	// reading are the points whose altitude is being read, with the depth of
 	// their ele element.
 	reading []pointAt
+	// scopes are the namespaces that each open element declares (xmlns, xmlns:p),
+	// from the root: a prefix that none of them declares is not XML.
+	scopes [][]string
+	// doctypes is how many DOCTYPEs the file has: one at most, before its root.
+	doctypes int
 }
 
 // pointAt is a point, and the depth of one of its elements.
@@ -165,6 +173,9 @@ func (r *gpxReader) read(token xml.Token, first bool) error {
 		if r.depth > maxGpxDepth || r.roots > 1 {
 			return errNotGpx
 		}
+		if err := r.checkNames(t); err != nil {
+			return err
+		}
 		switch t.Name.Local {
 		case "trkpt":
 			r.trkptElements++
@@ -191,6 +202,7 @@ func (r *gpxReader) read(token xml.Token, first bool) error {
 			}
 		}
 	case xml.EndElement:
+		r.scopes = r.scopes[:len(r.scopes)-1]
 		r.reading = slices.DeleteFunc(r.reading, func(p pointAt) bool { return p.depth == r.depth })
 		if n := len(r.open); n > 0 && r.open[n-1].depth == r.depth {
 			r.open = r.open[:n-1]
@@ -211,8 +223,10 @@ func (r *gpxReader) read(token xml.Token, first bool) error {
 		}
 	case xml.Directive:
 		// A DOCTYPE is only read past: its entities are not expanded, and a
-		// reference to one is refused by the decoder.
-		if r.depth > 0 {
+		// reference to one is refused by the decoder. There is one at most,
+		// before the root; no other directive is XML out of a DTD.
+		r.doctypes++
+		if r.depth > 0 || r.roots > 0 || r.doctypes > 1 || !bytes.HasPrefix(t, []byte("DOCTYPE")) {
 			return errNotGpx
 		}
 	}
@@ -404,4 +418,97 @@ func withXmlDeclaration(data []byte) []byte {
 		return data
 	}
 	return []byte(xmlDeclaration + "\n" + text)
+}
+
+// ---------------------------------------------------------------------------
+// The names of an element, as a browser's XML parser checks them
+
+// maxGpxAttributes is how many attributes an element may have: the root of a
+// real file has a dozen (its namespaces and its schema), a point two or three.
+const maxGpxAttributes = 64
+
+// xmlNamespace is the namespace of the prefix xml (xml:lang), which needs no
+// declaration.
+const xmlNamespace = "http://www.w3.org/XML/1998/namespace"
+
+// checkNames refuses what a browser's XML parser refuses in the names of an
+// element, and the form of the site with it: an attribute twice (by its name, or
+// by two prefixes of one namespace), a prefix that no open element declares. It
+// opens the scope of the namespaces that the element declares, which the end of
+// the element closes. encoding/xml leaves the prefix of an undeclared name where
+// a declared one has its namespace: a name whose space is neither empty, nor xml,
+// nor a namespace of an open element, has a prefix that nothing declared.
+func (r *gpxReader) checkNames(e xml.StartElement) error {
+	if len(e.Attr) > maxGpxAttributes {
+		return errNotGpx
+	}
+	var declared []string
+	for i, a := range e.Attr {
+		for _, before := range e.Attr[:i] {
+			if a.Name == before.Name {
+				return errNotGpx
+			}
+		}
+		if a.Name.Space == "xmlns" || (a.Name.Space == "" && a.Name.Local == "xmlns") {
+			declared = append(declared, a.Value)
+		}
+	}
+	r.scopes = append(r.scopes, declared)
+
+	if !r.declares(e.Name.Space) {
+		return errNotGpx
+	}
+	for _, a := range e.Attr {
+		if a.Name.Space != "xmlns" && !r.declares(a.Name.Space) {
+			return errNotGpx
+		}
+	}
+	return nil
+}
+
+// declares reports whether space is a namespace that a name may have: none, the
+// one of xml, or one that an open element declares.
+func (r *gpxReader) declares(space string) bool {
+	if space == "" || space == xmlNamespace {
+		return true
+	}
+	for _, scope := range r.scopes {
+		if slices.Contains(scope, space) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
+// A track, read once and at most two at a time
+
+// A parse costs several times the file in memory: some 4 for a real track, up to
+// 15 for a crafted one (a million attributes, or namespaces). The large tracks
+// (those of a slot, and the larger files in base64) are read two at a time at
+// most, whatever the number of calls; a slot's is read once, at its PUT.
+const (
+	maxTrackParses    = 2
+	boundedParseBytes = 64 << 10
+)
+
+// trackParses holds a place for each parse of a large track that runs.
+var trackParses = make(chan struct{}, maxTrackParses)
+
+// onTrackParse, when set, is told the size of each file that parseGpx reads: the
+// tests count the parses with it.
+var onTrackParse func(size int)
+
+// readTrack is what the site reads of a track (parseGpx, then gpxStats), the parse
+// of a large one waiting for its place.
+func readTrack(data []byte) (gpxStats, error) {
+	if len(data) > boundedParseBytes {
+		trackParses <- struct{}{}
+		defer func() { <-trackParses }()
+	}
+	points, err := parseGpx(data)
+	if err != nil {
+		return gpxStats{}, err
+	}
+	return statsOf(points), nil
 }

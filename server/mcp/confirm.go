@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,10 +67,11 @@ func newConfirmations(now func() time.Time) *confirmations {
 	return &confirmations{now: now, entries: map[string]pendingConfirmation{}, spent: map[string]time.Time{}}
 }
 
-// put keeps p, and returns its token and when it expires. The expired
+// put keeps p, and returns its token, when it expires, and how long it lasts
+// (confirmTTL, or less when p.expires is sooner). The expired
 // confirmations go first; then, beyond confirmPerToken for the MCP token of p or
 // confirmTotal in all, the oldest.
-func (s *confirmations) put(p pendingConfirmation) (token string, expires time.Time) {
+func (s *confirmations) put(p pendingConfirmation) (token string, expires time.Time, lasts time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -89,10 +91,16 @@ func (s *confirmations) put(p pendingConfirmation) (token string, expires time.T
 	}
 
 	s.made++
-	p.made, p.expires, p.order = now, now.Add(confirmTTL), s.made
+	// A confirmation lives confirmTTL, or less when what it was asked for goes
+	// first (the file of a slot): p.expires, when it is set and sooner.
+	limit := now.Add(confirmTTL)
+	if p.expires.IsZero() || p.expires.After(limit) {
+		p.expires = limit
+	}
+	p.made, p.order = now, s.made
 	token = "cfm_" + rand.Text()
 	s.entries[token] = p
-	return token, p.expires
+	return token, p.expires, p.expires.Sub(now)
 }
 
 // take removes token whatever happens, and returns why it does not fit p ("" when it does):
@@ -198,6 +206,10 @@ type risk struct {
 	Message string
 	Details []string
 	Records []stamp
+	// Until is when the request stops being possible, when that is sooner than a
+	// confirmation lasts (the file of a slot expires): the confirmation ends then.
+	// It is no part of the state.
+	Until time.Time `json:"-"`
 }
 
 // confirmationOut is the "confirmation" of a write tool's answer when done is false.
@@ -272,13 +284,14 @@ func (t *tools) guard(ctx context.Context, tool string, args any, r *risk, given
 	}
 
 	p.shown = slices.Clone(r.Details)
-	token, expires := t.confirms.put(p)
+	p.expires = r.Until
+	token, expires, lasts := t.confirms.put(p)
 	c.noteConfirmation(confirmationAsked)
 	return false, &confirmationOut{
 		Token:     token,
 		ExpiresAt: expires.UTC().Format(time.RFC3339),
 		Message: "Rien n'a été fait. " + r.Message + " Demande son accord à la personne ; si elle accepte, rappelle " + tool +
-			" avec les mêmes arguments et confirmation: \"" + token + "\" (valable 10 minutes, une seule fois).",
+			" avec les mêmes arguments et confirmation: \"" + token + "\" (" + validity(lasts) + ", une seule fois).",
 		Details: orEmpty(r.Details),
 	}, notice, nil
 }
@@ -336,4 +349,21 @@ func notDone(out *confirmationOut, notice string) string {
 		return "Rien n'a été fait : la demande attend l'accord de la personne (voir confirmation)."
 	}
 	return notice + " Rien n'a été fait : voici une nouvelle confirmation, qui décrit la situation d'aujourd'hui."
+}
+
+// validity says how long a confirmation lasts: « valable 10 minutes », or, when
+// the file that it was asked for goes sooner, the minutes that the file has left.
+func validity(lasts time.Duration) string {
+	if lasts >= confirmTTL {
+		return "valable 10 minutes"
+	}
+	minutes := int(lasts / time.Minute)
+	left := strconv.Itoa(minutes) + " minutes"
+	switch minutes {
+	case 0:
+		left = "moins d'une minute"
+	case 1:
+		left = "1 minute"
+	}
+	return "valable " + left + ", le temps que le fichier envoyé reste gardé"
 }
