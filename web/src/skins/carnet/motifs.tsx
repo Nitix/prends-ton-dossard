@@ -219,57 +219,55 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
  * data on it, and a ring that turns the other way with two more, one of which
  * pulses; round a corner of the hero or of the header. In white over the navy,
  * the data in teal, gold and indigo. They turn (160 s a turn) and pulse in a
- * drawing that moves (`data-moving` on it, see motion.css). A group turns about
- * the middle of its box, so each has a circle that fills it, drawn in nothing:
- * the box is then centred on the ring.
+ * drawing that moves (`data-moving` on it, see motion.css).
+ *
+ * What moves is a box of HTML, never an element of an `<svg>`: WebKit gives no
+ * layer of its own to what is inside an SVG, so an orbit made of `<g>` and
+ * `<circle>` that turn would be drawn again, on the main thread, at every frame,
+ * on every page. Each ring is an `<svg>` of its own in a `<span>` that turns
+ * (the transform is on a CSS box, which every engine composites), and the
+ * pulse is a `<span>` in the box of the ring that turns it along. The colours
+ * are the palette's, as properties of the page.
  */
 function Orbit({ className }: { className: string }) {
   return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      viewBox="-120 -120 240 240"
-      className={`carnet-orbits ${className}`}
-    >
-      <circle r="110" fill="none" stroke="#fff" strokeOpacity="0.1" />
+    <span aria-hidden="true" className={`carnet-orbits ${className}`}>
+      <svg focusable="false" viewBox="-120 -120 240 240" className="carnet-orbit-art">
+        <circle r="110" fill="none" stroke="#fff" strokeOpacity="0.1" />
+      </svg>
       {/* The ring that turns back, with its two dots of data: the teal one gives off a pulse. */}
-      <g className="carnet-orbit-back">
-        <circle r="88" fill="none" />
-        <circle r="84" fill="none" stroke="#fff" strokeOpacity="0.16" />
-        <circle
-          className="carnet-pulse"
-          cx="84"
-          cy="0"
-          r="4"
-          style={{ fill: "var(--dawn-ring-from)" }}
-        />
-        <circle
-          cx="84"
-          cy="0"
-          r="4"
-          className="carnet:stroke-white"
-          strokeWidth="2"
-          style={{ fill: "var(--dawn-ring-from)" }}
-        />
-        <circle cx="-42" cy="-72.7" r="4" className="carnet:fill-peach-400" />
-      </g>
-      <g className="carnet-orbit">
-        <circle r="64" fill="none" />
-        <circle
-          r="60"
-          fill="none"
-          stroke="#fff"
-          strokeOpacity="0.3"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeDasharray="0.01 5"
-        />
-        <circle cx="-5" cy="59.8" r="4" className="carnet:fill-blush-400" />
-      </g>
-    </svg>
+      <span className="carnet-orbit-back">
+        <svg focusable="false" viewBox="-120 -120 240 240" className="carnet-orbit-art">
+          <circle r="84" fill="none" stroke="#fff" strokeOpacity="0.16" />
+          <circle
+            cx="84"
+            cy="0"
+            r="4"
+            stroke="#fff"
+            strokeWidth="2"
+            style={{ fill: "var(--dawn-ring-from)" }}
+          />
+          <circle cx="-42" cy="-72.7" r="4" style={{ fill: "var(--color-peach-400)" }} />
+        </svg>
+        <span className="carnet-pulse" />
+      </span>
+      <span className="carnet-orbit">
+        <svg focusable="false" viewBox="-120 -120 240 240" className="carnet-orbit-art">
+          <circle
+            r="60"
+            fill="none"
+            stroke="#fff"
+            strokeOpacity="0.3"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeDasharray="0.01 5"
+          />
+          <circle cx="-5" cy="59.8" r="4" style={{ fill: "var(--color-blush-400)" }} />
+        </svg>
+      </span>
+    </span>
   );
 }
-
 /**
  * The poster of an event or of a runner: the sheet of dots fading towards the
  * foot (the left, for a runner), with the patches where it fades out and in, and

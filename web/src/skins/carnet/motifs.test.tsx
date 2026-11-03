@@ -27,6 +27,12 @@ afterEach(async () => {
   await resetMedia();
 });
 
+/** The middle of an element's box on the screen. */
+const middle = (element: Element) => {
+  const box = element.getBoundingClientRect();
+  return [box.left + box.width / 2, box.top + box.height / 2] as const;
+};
+
 /** What moves in a drawing: its animations of CSS, by name, with how they run. */
 function moving(root: Element) {
   return root
@@ -277,4 +283,54 @@ test("Carnet — la feuille de points : pour qui a demandé moins d'animations, 
   expect(reduced.container.querySelector(".carnet-page-dots")).not.toBeNull();
   chooseAmbient(true);
   await expect.poll(() => names(reduced.container)).toContain("carnet-veil");
+});
+
+test("Carnet — ce qui bouge est une boîte HTML, jamais un élément d'un <svg> : WebKit ne compose pas les enfants d'un svg, il les redessinerait à chaque image", async () => {
+  const drawings = [
+    await render(<HeaderArt place="header" sun />),
+    await render(<HeroArt place="event" />),
+    await render(<HeroArt place="runner" />),
+    await render(<Sheet />),
+  ];
+  for (const { container } of drawings) {
+    const animations = container
+      .getAnimations({ subtree: true })
+      .filter((animation): animation is CSSAnimation => animation instanceof CSSAnimation);
+    expect(animations.length).toBeGreaterThan(0);
+    for (const animation of animations) {
+      const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+      expect(target, `${animation.animationName}: its element`).not.toBeNull();
+      expect(
+        target instanceof SVGElement,
+        `${animation.animationName} animates an element of an SVG`,
+      ).toBe(false);
+      expect(
+        target?.closest("svg"),
+        `${animation.animationName} animates what is inside an SVG`,
+      ).toBeNull();
+    }
+  }
+});
+
+test("Carnet — la pulsation reste sur le point teal de sa bague, où qu'elle tourne", async () => {
+  const screen = await render(<HeroArt place="event" />);
+  const pulse = screen.container.querySelector(".carnet-pulse");
+  const dot = screen.container.querySelector('.carnet-orbit-back circle[cx="84"]');
+  const back = screen.container
+    .getAnimations({ subtree: true })
+    .find(
+      (animation) =>
+        animation instanceof CSSAnimation &&
+        animation.animationName === "carnet-orbit" &&
+        animation.effect instanceof KeyframeEffect &&
+        animation.effect.target?.classList.contains("carnet-orbit-back"),
+    );
+  if (!pulse || !dot || !back) throw new Error("no pulse, dot or back ring");
+  back.pause();
+  for (const at of [0, 30_000, 75_000, 120_000]) {
+    back.currentTime = at;
+    const [pulseX, pulseY] = middle(pulse);
+    const [dotX, dotY] = middle(dot);
+    expect(Math.hypot(pulseX - dotX, pulseY - dotY), `${at} ms into the turn`).toBeLessThan(1);
+  }
 });

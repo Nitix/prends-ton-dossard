@@ -2,7 +2,7 @@
    patches where its sheet of dots fades out and comes back in, the orbits of the
    data that turn (one ring the other way), a dot of data that pulses. This file
    is the layout of those drawings and their motion, in the skin's own classes
-   (`carnet-*`, never a class of the app, and no Tailwind utility: motifs.tsx).
+   (`carnet-*`, never a class of the app, and no Tailwind utility on what moves: motifs.tsx).
    It is the one place where the app has animations that never end
    (src/motion.test.ts lets this file have them, on these conditions):
 
@@ -11,8 +11,11 @@
    - only inside a drawing that has `data-moving` (motifs.tsx: the person has the
      background on, `lib/ambient.ts`, « Animer le fond » in the settings):
      without it, the drawings stand still too;
-   - only what the compositor does alone (`transform`, `opacity`): the cost is
-     a few small layers, not a repaint of the page.
+   - only what the compositor does alone (`transform`, `opacity`), and only on a
+     box of HTML: never an element inside an `<svg>` (WebKit gives such an
+     element no layer of its own, and would draw it again at every frame). A ring
+     of the orbits is an `<svg>` in a box that turns, the pulse a box; the cost
+     is a few small layers, not a repaint of the page.
 
    No colour of its own: a patch takes the colour of the ground it lies on, a
    custom property of the palette. */
@@ -108,10 +111,23 @@
 }
 
 /* The orbits of the data: a drawing in a corner, past the edge of its box,
-   over the dots and under what is written. */
+   over the dots and under what is written. Each ring is an `<svg>` that fills
+   its box (`carnet-orbit-art`), the box being what turns. */
 .carnet-orbits {
   display: block;
   pointer-events: none;
+}
+.carnet-orbit,
+.carnet-orbit-back {
+  position: absolute;
+  inset: 0;
+}
+.carnet-orbit-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .carnet-hero-orbit {
   position: absolute;
@@ -148,18 +164,18 @@
   opacity: 0.7;
 }
 
-/* Where a turn is about: the middle of the group (each has a circle that fills
-   it, so that its box is centred on the ring), and the middle of the dot that
-   pulses. */
-.carnet-orbit,
-.carnet-orbit-back,
+/* The pulse: a box on the teal dot of the back ring (at 84 of the 120 from the
+   middle of its box, 8 of 240 wide: 85 % across, 3.33 % wide), in the colour of
+   that dot. It turns with the ring and swells from its middle (the box's own).
+   It is not there when it does not move. */
 .carnet-pulse {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-/* The ring of the pulse is not there when it does not move. */
-.carnet-pulse {
+  position: absolute;
+  left: 83.3333%;
+  top: 48.3333%;
+  width: 3.3333%;
+  height: 3.3333%;
+  border-radius: 9999px;
+  background-color: var(--dawn-ring-from);
   opacity: 0;
 }
 

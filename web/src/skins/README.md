@@ -566,11 +566,18 @@ conditions (`../motion.test.ts` checks the file, and `animatedBackground`):
 - **Only decoration, only its own classes**: `motion.css` is the layout of the
   drawings that move and their motion, in classes that all start with the
   skin's id (`carnet-*`), never a class of the app, so the file cannot restyle
-  the structure; the motifs that move use these classes and no Tailwind utility
-  (the sheet of a skin must not depend on how it loads next to `styles.css`). It
-  has no colour of its own (a custom property of the palette); its keyframes
-  declare only `transform` and `opacity`, which the compositor does alone, so
-  that the cost is a few small layers and not a repaint of the page.
+  the structure; the drawings that move (the patches, the orbits, the pulse,
+  the sheet of the page) use these classes and no Tailwind utility (the sheet
+  of a skin must not depend on how it loads next to `styles.css`). It has no
+  colour of its own (a custom property of the palette).
+- **Only what the compositor does alone, on a box of HTML.** The keyframes
+  declare only `transform` and `opacity`, and what they move is never an
+  element inside an `<svg>`: WebKit gives such an element no layer of its own
+  and would draw it again at every frame, on every page, where Chromium
+  composites it. A ring of the orbits is an `<svg>` in a `<span>` that turns,
+  the pulse a `<span>` in the box of its ring; the cost is a few small
+  layers, not a repaint of the page (`carnet/motifs.test.tsx` checks that no
+  animated element is an SVG or in one).
 - The motifs stay silent (`aria-hidden`, nothing to read: `components.test.tsx`),
   and nothing in them can be touched.
 
