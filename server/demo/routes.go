@@ -35,10 +35,10 @@ const authMethod = "password"
 // for /api/. The account is the one of the configuration: a request never says
 // which one it wants.
 func Register(app core.App, cfg config.Config) {
-	email := cfg.DemoLoginEmail
-	if email == "" {
+	if !cfg.Demo() {
 		return
 	}
+	email := cfg.DemoLoginEmail
 
 	// The account is shared by every visitor, so it keeps no skin (see keepNoSkin).
 	app.OnRecordCreate("users").BindFunc(keepNoSkin(email))

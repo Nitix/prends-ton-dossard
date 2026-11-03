@@ -38,10 +38,11 @@ type Asking = "create" | "revoke";
  *
  * The focus never falls to the page. A token that is shown takes it, selected, as
  * the next thing to do is to copy it; when the window closes the button that
- * opened it has it back, or the title of the section if that button is gone (a
- * token that is revoked takes its row and its button with it; the fifth token
- * takes the place of the button that makes one); when the list could not be read
- * and the member asks again, the title takes it as they tap (see `LoadFailure`).
+ * opened it has it back, or the title of the section if that button is gone (the
+ * fifth token takes the place of the button that makes one); after a revocation
+ * the title takes it, whichever the page draws first, the window closed or the
+ * list without the row; when the list could not be read and the member asks
+ * again, the title takes it as they tap (see `LoadFailure`).
  */
 export function McpSection() {
   const { t, formatLocale } = useI18n();
@@ -52,6 +53,8 @@ export function McpSection() {
   const heading = useRef<HTMLHeadingElement>(null);
   // The button that opened the window.
   const opener = useRef<HTMLElement | null>(null);
+  // Set when a token has just been revoked.
+  const revoked = useRef(false);
 
   // The browser gives the focus back to the button that opened a window when it
   // closes, but not to one that never had it (Safari does not focus a button that
@@ -59,6 +62,17 @@ export function McpSection() {
   useRestoreFocus(asking !== null, () =>
     opener.current?.isConnected ? opener.current : heading.current,
   );
+
+  // A revoked token takes its row, and the button that opened the confirmation,
+  // with it. The page may not have drawn that when the window closes: the browser
+  // then gives the focus back to the button, which goes a moment later, and the
+  // focus falls to the page. So the title takes it once the window is closed,
+  // whichever comes first.
+  useEffect(() => {
+    if (asking !== null || !revoked.current) return;
+    revoked.current = false;
+    heading.current?.focus();
+  }, [asking]);
 
   // The server has no MCP: nothing to show, and nothing to say about it.
   if (status.data === null) return null;
@@ -137,7 +151,15 @@ export function McpSection() {
         <CreateToken onClose={close} />
       </Dialog>
       <Dialog open={asking === "revoke"} onClose={close} title={t.mcp.revokeTitle}>
-        {target !== null && <RevokeToken token={target} onClose={close} />}
+        {target !== null && (
+          <RevokeToken
+            token={target}
+            onRevoked={() => {
+              revoked.current = true;
+            }}
+            onClose={close}
+          />
+        )}
       </Dialog>
     </Section>
   );
@@ -409,7 +431,16 @@ function CopyField({
 // --- Revoking a token ---
 
 /** The content of the window that asks first: what the assistant loses, and the two buttons. */
-function RevokeToken({ token, onClose }: { token: McpToken; onClose: () => void }) {
+function RevokeToken({
+  token,
+  onRevoked,
+  onClose,
+}: {
+  token: McpToken;
+  /** Called when the token has been revoked, before the window is closed. */
+  onRevoked: () => void;
+  onClose: () => void;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const revoke = useRevokeMcpToken();
@@ -420,6 +451,7 @@ function RevokeToken({ token, onClose }: { token: McpToken; onClose: () => void 
     void run(async () => {
       await revoke.mutateAsync(token.id);
       toast.show(t.mcp.revoked);
+      onRevoked();
       onClose();
     });
   }

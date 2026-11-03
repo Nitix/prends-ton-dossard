@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { ClientResponseError } from "pocketbase";
 
+import { errorCode } from "../../i18n/errors";
 import { pb } from "../../lib/pb";
 import { useUserId } from "../auth/session";
 
@@ -59,7 +60,10 @@ export function useMcpTokens(): UseQueryResult<McpStatus | null> {
  * time (`gcTime` 0): it is let go of when nothing shows it any more. The list
  * gets the new token without its secret, and a read of it that is on its way
  * (the window was focused again, say) is cancelled first: it was started before
- * the change and would bring the old list back.
+ * the change and would bring the old list back. When the server says the member
+ * has all the tokens they may have (`token_limit`: one was made from another tab),
+ * the list is read again: it was out of date, and the button that makes a token
+ * with it.
  */
 export function useCreateMcpToken(): UseMutationResult<CreatedMcpToken, Error, string> {
   const queryClient = useQueryClient();
@@ -74,6 +78,11 @@ export function useCreateMcpToken(): UseMutationResult<CreatedMcpToken, Error, s
           ? { ...status, tokens: [{ id, name, created, lastUsedAt: "" }, ...status.tokens] }
           : status,
       );
+    },
+    onError: (err) => {
+      if (errorCode(err) === "token_limit") {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
     },
   });
 }

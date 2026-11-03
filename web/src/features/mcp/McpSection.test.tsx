@@ -243,6 +243,21 @@ async function expectToast(message: string) {
   });
 }
 
+/**
+ * Makes the list change late: the page gets what a request changed in it `ms`
+ * after the request has answered, as a slow device would. The window that asked
+ * first has closed by then: the order of the two is not one to count on.
+ */
+function lateList(client: QueryClient, ms = 150) {
+  const setQueryData = client.setQueryData.bind(client);
+  vi.spyOn(client, "setQueryData").mockImplementation((key, updater, options) => {
+    setTimeout(() => {
+      setQueryData(key, updater, options);
+    }, ms);
+    return undefined;
+  });
+}
+
 /** The list has that many rows. */
 async function expectRows(screen: Screen, count: number) {
   await vi.waitFor(() => {
@@ -551,6 +566,55 @@ test("McpSection — un nom vide ou refusé garde la fenêtre ouverte avec l'err
   await expect.element(dialog(screen).getByRole("alert")).not.toBeInTheDocument();
 });
 
+test("McpSection — « token_limit » : la liste est relue, et le bouton et la liste sont à jour", async () => {
+  serve(FIVE.slice(0, 4));
+  const screen = await mount();
+  await expectRows(screen, 4);
+  await button(screen, fr.mcp.create).click();
+  // Another tab made the fifth token meanwhile: the server refuses the sixth, and has five.
+  mocks.send.mockImplementation((_path, request) =>
+    request.method === "POST"
+      ? Promise.reject(refusal(400, { code: "token_limit" }))
+      : Promise.resolve({ url: SERVER, max: 5, tokens: FIVE }),
+  );
+  const before = reads();
+  await nameField(screen).fill("Le sixième");
+  await inDialog(screen, fr.mcp.createSubmit).click();
+
+  await expect.element(dialog(screen).getByRole("alert")).toHaveTextContent(fr.errors.token_limit);
+  // The page behind the window has been read again: the five tokens, and no button to make a sixth.
+  await expectRows(screen, 5);
+  expect(reads()).toBe(before + 1);
+  // The text of the limit is under the window as well as in its alert: the same words.
+  await vi.waitFor(() => {
+    expect(section(screen).getByText(fr.mcp.limit(5)).elements()).toHaveLength(2);
+  });
+  await expect.element(button(screen, fr.mcp.create)).not.toBeInTheDocument();
+  // The button that opened the window is gone: the title has the focus, not the page.
+  await inDialog(screen, fr.common.cancel).click();
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
+  await expect.element(heading(screen)).toHaveFocus();
+});
+
+test("McpSection — un autre refus de la création ne relit pas la liste", async () => {
+  serve([]);
+  const screen = await mount();
+  await button(screen, fr.mcp.create).click();
+  mocks.send.mockImplementation((_path, request) =>
+    request.method === "POST"
+      ? Promise.reject(fieldRefusal("name", "validation_max_text_constraint"))
+      : Promise.resolve({ url: SERVER, max: 5, tokens: [] }),
+  );
+  const before = reads();
+  await nameField(screen).fill("Claude");
+  await inDialog(screen, fr.mcp.createSubmit).click();
+
+  await expect
+    .element(dialog(screen).getByRole("alert"))
+    .toHaveTextContent(fr.errors.validation_max_text_constraint);
+  expect(reads()).toBe(before);
+});
+
 test("McpSection — à 5 jetons, le message de la limite remplace « Nouveau jeton »", async () => {
   serve(FIVE);
   const screen = await mount();
@@ -585,7 +649,8 @@ test("McpSection — le cinquième jeton prend la place de « Nouveau jeton » :
 
 test("McpSection — révoquer demande confirmation, puis le titre prend le focus", async () => {
   serve([USED, NEVER]);
-  const screen = await mount();
+  const client = newClient();
+  const screen = await mount(["fr"], client);
   const revoke = button(screen, fr.mcp.revokeLabel(USED.name));
 
   // Nothing is done before the member says so.
@@ -612,10 +677,15 @@ test("McpSection — révoquer demande confirmation, puis le titre prend le focu
   await revoke.click();
   const confirm = inDialog(screen, fr.mcp.revoke);
   expect(confirm.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  // The list loses the row after the window has closed: the focus is not left to
+  // the order of the two (the browser gives it back to the button, which is then removed).
+  lateList(client);
   await confirm.click();
 
   await expect.element(dialog(screen)).not.toBeInTheDocument();
   expect(changes()).toEqual([["DELETE", `${PATH}/${USED.id}`, undefined]]);
+  await expect.element(heading(screen)).toHaveFocus();
+  await expect.element(rows(screen).nth(1)).not.toBeInTheDocument();
   await expectToast(fr.mcp.revoked);
   await expectRows(screen, 1);
   await expect.element(rows(screen).nth(0)).toMatchTextContent(NEVER.name);
@@ -626,11 +696,15 @@ test("McpSection — révoquer demande confirmation, puis le titre prend le focu
 
 test("McpSection — révoquer le dernier jeton laisse « Aucun jeton pour l'instant. »", async () => {
   serve([NEVER]);
-  const screen = await mount();
+  const client = newClient();
+  const screen = await mount(["fr"], client);
 
   await button(screen, fr.mcp.revokeLabel(NEVER.name)).click();
+  lateList(client);
   await inDialog(screen, fr.mcp.revoke).click();
 
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
+  await expect.element(heading(screen)).toHaveFocus();
   await expect.element(section(screen).getByText(fr.mcp.empty)).toBeVisible();
   await expect.element(rows(screen)).not.toBeInTheDocument();
   await expect.element(heading(screen)).toHaveFocus();
