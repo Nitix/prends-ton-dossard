@@ -133,6 +133,7 @@ export const en = {
     fontSample: "Aa",
     skinLoading: "Loading the theme…",
     skinLoadFailed: "This theme could not be loaded: check your connection.",
+    skinLoadFailedOnline: "This theme could not be loaded: reload the app.",
     themeAuto: "Auto (like your system)",
     themeLight: "Light",
     themeDark: "Dark",

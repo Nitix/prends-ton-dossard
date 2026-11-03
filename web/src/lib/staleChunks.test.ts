@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { reloadOnStaleChunks } from "./staleChunks";
+import { isOnline, reloadOnce, reloadOnStaleChunks } from "./staleChunks";
 
 /** A sessionStorage of the test. */
 function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
@@ -163,5 +163,68 @@ describe("reloadOnStaleChunks", () => {
     target.dispatchEvent(chunkError());
 
     expect(reload).not.toHaveBeenCalled();
+  });
+});
+
+/** A storage that refuses, as some private windows' do. */
+function denied(): never {
+  throw new DOMException("denied", "SecurityError");
+}
+
+// The same guard, for the reload that something else asks for (a skin whose look
+// is gone after a deploy: skins/index.ts), so that the two never chain.
+describe("reloadOnce", () => {
+  const reload = vi.fn<() => void>();
+  let storage: Pick<Storage, "getItem" | "setItem">;
+  let now: number;
+
+  beforeEach(() => {
+    storage = memoryStorage();
+    now = 1_000_000;
+    reload.mockReset();
+  });
+
+  const once = () => reloadOnce({ storage: () => storage, reload, now: () => now });
+
+  test("reloads, and says so", () => {
+    expect(once()).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not reload again just after a reload, and says so: it cannot loop", () => {
+    once();
+    now += 3_000;
+
+    expect(once()).toBe(false);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("shares the guard with the stale chunks: a reload for one is not followed by one for the other", () => {
+    const target = new EventTarget();
+    reloadOnStaleChunks({ target, storage: () => storage, reload, now: () => now });
+    target.dispatchEvent(chunkError());
+    now += 1_000;
+
+    expect(once()).toBe(false);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("reloads again for a later deploy", () => {
+    once();
+    now += 60 * 60_000;
+
+    expect(once()).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not reload without a storage to remember it: it could loop", () => {
+    expect(reloadOnce({ storage: denied, reload, now: () => now })).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  });
+});
+
+describe("isOnline", () => {
+  test("is true where the browser says nothing of being offline (Node has no navigator.onLine)", () => {
+    expect(isOnline()).toBe(true);
   });
 });

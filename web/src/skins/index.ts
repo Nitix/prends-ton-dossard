@@ -183,6 +183,15 @@ function keepSkin(skin: Skin): void {
 }
 
 /**
+ * Keeps a skin on the device without putting it on the page: for a skin whose
+ * look cannot be had now (a tab older than the build that has it), which the
+ * page that comes will wear. An id that is not in the app is Crête.
+ */
+export function rememberSkin(id: string): void {
+  keepSkin(byId(id) ?? DEFAULT);
+}
+
+/**
  * A skin whose look could not be loaded cannot be the page's. The kept skin is
  * on the page before its look is there (index.html and `showKeptSkin` put it
  * on, for the no-flash): if the look fails, the page is Crête, whoever asked for

@@ -36,6 +36,18 @@ vi.mock("../../lib/pb", () => ({
   },
 }));
 
+/**
+ * What the browser says of the network, and the reload that it would do: a look
+ * that cannot be loaded online is a tab older than the deploy, and the page
+ * reloads (lib/staleChunks.ts), which a test must not do.
+ */
+const net = vi.hoisted(() => ({ online: false, reload: undefined as undefined | (() => boolean) }));
+
+vi.mock("../../lib/staleChunks", () => ({
+  isOnline: () => net.online,
+  reloadOnce: () => net.reload?.() ?? false,
+}));
+
 /** The skins whose look cannot be loaded (offline, never loaded before), and those that a test holds back (a slow network). */
 const failing = vi.hoisted(() => new Set<string>());
 const gates = vi.hoisted(() => new Map<string, Promise<void>>());
@@ -60,6 +72,9 @@ vi.mock("../../skins/looks", async (importOriginal) => {
 });
 
 beforeEach(() => {
+  // Offline unless a test says otherwise: the message that blames the connection.
+  net.online = false;
+  net.reload = undefined;
   account.record = { id: "u1", collectionName: "users" };
   account.update.mockReset();
   account.update.mockResolvedValue({});
@@ -250,4 +265,57 @@ test("Thème — quand « Clair ou sombre » cède la place à une phrase, le fo
   expect(document.activeElement, "the focus is on the skin chosen").toBe(
     card(screen, SINGLE.label.fr).element(),
   );
+});
+
+// A look that does not load while the browser is online is a tab that is older
+// than the last deploy: the choice is kept for the page that comes, and the page
+// reloads, with no message. If it was reloaded just before, the look is missing
+// for good: a message that does not blame the connection.
+test("Thème — en ligne, un look qui ne se charge pas (un déploiement) : le choix est gardé, la page se recharge, sans message, et la carte reste cochée", async () => {
+  const reload = vi.fn<() => boolean>(() => true);
+  net.online = true;
+  net.reload = reload;
+  failing.add(C.id);
+  const screen = await renderAppearance();
+
+  await card(screen, C.label.fr).click();
+
+  await expect.poll(() => reload.mock.calls.length).toBe(1);
+  expect(localStorage.getItem(SKIN_KEY)).toBe(C.id);
+  expect(localStorage.getItem(UNSAVED_KEY)).toBe("u1");
+  // The page is about to go: nothing is said, and the card is not unchecked under the finger.
+  expect(document.querySelector(".toast")).toBeNull();
+  await expect.element(card(screen, C.label.fr)).toBeChecked();
+  expect(document.documentElement.dataset.skin).toBeUndefined();
+  expect(account.update).not.toHaveBeenCalled();
+});
+
+test("Thème — en ligne, un look qui manque encore après un rechargement : un message qui ne met pas en cause la connexion", async () => {
+  net.online = true;
+  net.reload = () => false;
+  failing.add(C.id);
+  const screen = await renderAppearance();
+
+  await card(screen, C.label.fr).click();
+
+  await expect.element(screen.getByText(fr.settings.skinLoadFailedOnline)).toBeVisible();
+  expect(fr.settings.skinLoadFailedOnline).toBe(
+    "Ce thème n'a pas pu se charger : recharge l'application.",
+  );
+  expect(fr.settings.skinLoadFailedOnline).not.toContain("connexion");
+  await expect.element(card(screen, CRETE)).toBeChecked();
+});
+
+test("Thème — le message d'un look qui manque en ligne est dans la langue de la page", async () => {
+  net.online = true;
+  net.reload = () => false;
+  failing.add(C.id);
+  const screen = await renderAppearance(["en"]);
+
+  await screen
+    .getByRole("radiogroup", { name: en.settings.skin })
+    .getByRole("radio", { name: C.label.en, exact: true })
+    .click();
+
+  await expect.element(screen.getByText(en.settings.skinLoadFailedOnline)).toBeVisible();
 });

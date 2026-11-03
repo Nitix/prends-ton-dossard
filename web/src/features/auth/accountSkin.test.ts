@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { UserRecord } from "../../lib/types";
 import { SKIN_KEY, SKINS, chooseSkin, readSkin } from "../../skins";
@@ -146,9 +146,9 @@ test("compte — Crête aussi est enregistrée, sous son nom : sans cela un autr
   expect(server.update).toHaveBeenLastCalledWith("u1", { skin: "crete" });
 });
 
-test("compte — un look qui ne se charge pas : le choix est dit raté, et ni l'appareil ni le compte n'en savent rien", async () => {
+test("compte — hors ligne, un look qui ne se charge pas : le choix est dit raté, et ni l'appareil ni le compte n'en savent rien", async () => {
   looks.failing.add(C);
-  await expect(chooseSkinOnAccount(C, "u1")).resolves.toBe("failed");
+  await expect(chooseSkinOnAccount(C, "u1", { online: () => false })).resolves.toBe("failed");
   expect(device()).toBe("crete");
   expect(root.dataset.skin).toBeUndefined();
   expect(server.update).not.toHaveBeenCalled();
@@ -200,6 +200,75 @@ test("compte — hors ligne : l'appareil garde le choix, sans erreur, et se souv
   await chooseSkinOnAccount(B, "u1");
   expect(server.update).toHaveBeenLastCalledWith("u1", { skin: B });
   expect(stored.has(UNSAVED_KEY)).toBe(false);
+});
+
+// After a deploy, a tab that was opened before it asks for a look that the server
+// no longer has. Online, that is the likely reason a look fails: the choice is
+// kept on the device (and the account marked as not told), and the page reloads
+// once, into the build that has the look. Offline, it is the connection, and the
+// page stays as it is.
+describe("après un déploiement", () => {
+  const reload = vi.fn<() => boolean>();
+  const online = { online: () => true, reload };
+
+  beforeEach(() => {
+    reload.mockReset();
+    reload.mockReturnValue(true);
+    looks.failing.add(C);
+  });
+
+  test("en ligne, un look qui ne se charge pas : le choix est gardé sur l'appareil, le compte marqué non reçu, et la page se recharge", async () => {
+    await expect(chooseSkinOnAccount(C, "u1", online)).resolves.toBe("reloading");
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    // The choice is on the device, for the page that comes: not on this page, whose look is gone.
+    expect(device()).toBe(C);
+    expect(root.dataset.skin).toBeUndefined();
+    expect(stored.get(UNSAVED_KEY)).toBe("u1");
+    expect(server.update).not.toHaveBeenCalled();
+
+    // The next start: the account has an older skin, and the device's choice goes to it.
+    looks.failing.clear();
+    await synced(user("u1", B));
+    expect(device()).toBe(C);
+    expect(server.update).toHaveBeenCalledExactlyOnceWith("u1", { skin: C });
+  });
+
+  test("sans compte connecté, la marque n'a pas lieu d'être", async () => {
+    await expect(chooseSkinOnAccount(C, "", online)).resolves.toBe("reloading");
+
+    expect(device()).toBe(C);
+    expect(stored.has(UNSAVED_KEY)).toBe(false);
+  });
+
+  test("la garde dit qu'elle a déjà rechargé (le look manque pour de bon) : le choix est dit raté, pas de nouveau rechargement, et le choix reste sur l'appareil", async () => {
+    reload.mockReturnValue(false);
+
+    await expect(chooseSkinOnAccount(C, "u1", online)).resolves.toBe("failed");
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(device()).toBe(C);
+    expect(stored.get(UNSAVED_KEY)).toBe("u1");
+  });
+
+  test("hors ligne, rien n'est gardé ni rechargé : ce n'est pas un déploiement", async () => {
+    await expect(chooseSkinOnAccount(C, "u1", { online: () => false, reload })).resolves.toBe(
+      "failed",
+    );
+
+    expect(reload).not.toHaveBeenCalled();
+    expect(device()).toBe("crete");
+    expect(stored.has(UNSAVED_KEY)).toBe(false);
+  });
+
+  test("un choix remplacé par un autre ne recharge rien", async () => {
+    const slow = chooseSkinOnAccount(C, "u1", online);
+    await expect(chooseSkinOnAccount(B, "u1", online)).resolves.toBe("chosen");
+
+    await expect(slow).resolves.toBe("replaced");
+    expect(reload).not.toHaveBeenCalled();
+    expect(device()).toBe(B);
+  });
 });
 
 // An envoi coupé en route (l'appli d'un iPhone, glissée hors de l'écran) n'est

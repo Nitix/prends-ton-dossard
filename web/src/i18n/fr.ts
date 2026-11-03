@@ -161,6 +161,8 @@ export const fr = {
     // Said politely (a live region) while the look of a theme chosen loads: its card is checked at once.
     skinLoading: "Chargement du thème…",
     skinLoadFailed: "Ce thème n'a pas pu se charger : vérifie ta connexion.",
+    // Online: the look is gone even after the page was reloaded, so it is not the connection.
+    skinLoadFailedOnline: "Ce thème n'a pas pu se charger : recharge l'application.",
     themeAuto: "Auto (comme le système)",
     themeLight: "Clair",
     themeDark: "Sombre",

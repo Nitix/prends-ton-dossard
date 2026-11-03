@@ -11,6 +11,44 @@ const ROUTER_RELOAD = "tanstack_router_reload:";
 /** A chunk still missing this soon after a reload is not reloaded again. */
 const LOOP_GUARD_MS = 10_000;
 
+/** What the guard and the reload use: the session's storage, the reload itself, the clock. */
+type Reloading = {
+  storage?: () => Pick<Storage, "getItem" | "setItem">;
+  reload?: () => void;
+  now?: () => number;
+};
+
+/**
+ * Whether the browser says it is online. A browser that says nothing (no
+ * `navigator.onLine`: Node) is taken to be.
+ */
+export function isOnline(): boolean {
+  return typeof navigator === "undefined" || !("onLine" in navigator) || navigator.onLine;
+}
+
+/**
+ * Reloads the page, once: not again within `LOOP_GUARD_MS` of the last reload
+ * that this (or `reloadOnStaleChunks`) did, so that a build that stays broken
+ * cannot make the page loop; and not at all without a sessionStorage to
+ * remember it, for the same reason. Says whether it reloaded.
+ */
+export function reloadOnce({
+  storage = () => sessionStorage,
+  reload = () => location.reload(),
+  now = Date.now,
+}: Reloading = {}): boolean {
+  try {
+    const store = storage();
+    const last = Number(store.getItem(RELOADED_AT) ?? 0);
+    if (now() - last < LOOP_GUARD_MS) return false;
+    store.setItem(RELOADED_AT, String(now()));
+  } catch {
+    return false;
+  }
+  reload();
+  return true;
+}
+
 /**
  * After a deploy, a tab opened before asks for chunks of the old build, which
  * the server no longer has (a 404, see server/webdist/spa.go). Vite then fires
@@ -39,13 +77,10 @@ export function reloadOnStaleChunks({
   storage = () => sessionStorage,
   reload = () => location.reload(),
   now = Date.now,
-  online = () => typeof navigator === "undefined" || !("onLine" in navigator) || navigator.onLine,
+  online = isOnline,
   ignore = () => false,
-}: {
+}: Reloading & {
   target?: EventTarget;
-  storage?: () => Pick<Storage, "getItem" | "setItem">;
-  reload?: () => void;
-  now?: () => number;
   online?: () => boolean;
   ignore?: () => boolean;
 } = {}): () => void {
@@ -55,16 +90,8 @@ export function reloadOnStaleChunks({
       holdRouter(event, storage);
       return;
     }
-    try {
-      const store = storage();
-      const last = Number(store.getItem(RELOADED_AT) ?? 0);
-      if (now() - last < LOOP_GUARD_MS) return;
-      store.setItem(RELOADED_AT, String(now()));
-    } catch {
-      return;
-    }
-    event.preventDefault();
-    reload();
+    // The error is not thrown when the page is reloaded: it is going away.
+    if (reloadOnce({ storage, reload, now })) event.preventDefault();
   };
   target.addEventListener("vite:preloadError", onError);
   return () => target.removeEventListener("vite:preloadError", onError);

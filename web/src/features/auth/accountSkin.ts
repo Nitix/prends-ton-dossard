@@ -1,6 +1,7 @@
 import { pb } from "../../lib/pb";
+import { isOnline, reloadOnce } from "../../lib/staleChunks";
 import type { UserRecord } from "../../lib/types";
-import { DEFAULT_SKIN, SKINS, chooseSkin, readSkin, type Choice } from "../../skins";
+import { DEFAULT_SKIN, SKINS, chooseSkin, readSkin, rememberSkin, type Choice } from "../../skins";
 
 /**
  * The skin follows the account. It is kept on the device, as it always was (it
@@ -92,19 +93,43 @@ function save(userId: string, skin: string): Promise<void> {
   return saving;
 }
 
+/** What came of a choice made in the settings: as `Choice`, or the page is being reloaded (see `chooseSkinOnAccount`). */
+export type SettingsChoice = Choice | "reloading";
+
+/** What `chooseSkinOnAccount` asks of the browser, for a test to give it: whether it is online, and a reload that says whether it was done. */
+type Environment = { online?: () => boolean; reload?: () => boolean };
+
 /**
  * Chooses a skin as the settings do: on the page and on the device (see
  * `chooseSkin`), then, when that worked and somebody is signed in (`userId`,
  * empty when nobody is), on their account. It says what came of the choice, and
  * settles once the account has been told, or has failed to be. A skin whose
  * look cannot be loaded (`failed`) is neither on the device nor on the account.
+ *
+ * A look that cannot be loaded while the browser is online is most likely a
+ * tab older than the last deploy, asking for a look that the server no longer
+ * has (which a person who keeps the app suspended for days on a phone meets):
+ * the choice is kept on the device, the account is marked as not told (the next
+ * start sends it), and the page is reloaded once (`reloadOnce`, guarded so that
+ * it cannot loop): the new build applies the skin. It says `reloading`. When the
+ * guard says the page was reloaded just before (the look is missing for good), or
+ * offline (the connection, not a deploy), it says `failed`, and the page is as it was.
  */
-export async function chooseSkinOnAccount(id: string, userId: string): Promise<Choice> {
+export async function chooseSkinOnAccount(
+  id: string,
+  userId: string,
+  { online = isOnline, reload = reloadOnce }: Environment = {},
+): Promise<SettingsChoice> {
   const choice = await chooseSkin(id);
   if (choice === "chosen" && userId !== "") {
     // Crête is saved under its own name: for an account that has none, another
     // device that kept a skin would put it back.
     await save(userId, SKINS.some((skin) => skin.id === id) ? id : DEFAULT_SKIN);
+  }
+  if (choice === "failed" && online()) {
+    rememberSkin(id);
+    if (userId !== "") markUnsaved(userId);
+    if (reload()) return "reloading";
   }
   return choice;
 }

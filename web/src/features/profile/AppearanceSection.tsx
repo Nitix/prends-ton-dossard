@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react"
 
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
+import { isOnline } from "../../lib/staleChunks";
 import { useThemeChoice, type ThemeChoice } from "../../lib/theme";
 import { SKINS, useSkin } from "../../skins";
 import type { Skin } from "../../skins/types";
@@ -61,12 +62,17 @@ export function AppearanceSection() {
 
   async function chooseSkin(id: string) {
     setPending(id);
+    let reloading = false;
     try {
-      if ((await chooseSkinOnAccount(id, userId)) === "failed") {
-        toast.show(t.settings.skinLoadFailed);
+      const outcome = await chooseSkinOnAccount(id, userId);
+      reloading = outcome === "reloading";
+      // Online, a look that is missing after a reload is not the connection's doing.
+      if (outcome === "failed") {
+        toast.show(isOnline() ? t.settings.skinLoadFailedOnline : t.settings.skinLoadFailed);
       }
     } finally {
-      setPending((now) => (now === id ? null : now));
+      // A page that is reloading keeps the card checked: it is the skin it will come back in.
+      if (!reloading) setPending((now) => (now === id ? null : now));
     }
   }
   const labels: Record<ThemeChoice, string> = {
