@@ -136,7 +136,7 @@ func (t *tools) setResult(ctx context.Context, _ *mcpsdk.CallToolRequest, in set
 	w := wording.Of("fr")
 	p := row.Participation
 	own := c.owns(row)
-	if err := confirmedRefusal(c, row, "changer"); err != nil {
+	if err := confirmedRefusal(c, row, "changée"); err != nil {
 		return refuse(err)
 	}
 	if p.Format == "" {

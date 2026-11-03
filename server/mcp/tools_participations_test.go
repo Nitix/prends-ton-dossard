@@ -339,7 +339,7 @@ func TestTools_UpdateParticipation_OnlyTheRunnerConfirms(t *testing.T) {
 	app, fx, alice := caseApp(t)
 	bob := newToken(t, app, fx.Bob)
 
-	announced(t, app, alice, "update_participation", map[string]any{"participation_id": fx.P2.Id}, "Seul Bob peut confirmer sa participation.")
+	announced(t, app, alice, "update_participation", map[string]any{"participation_id": fx.P2.Id}, "Seule la personne concernée, Bob, peut confirmer sa participation.")
 	if _, confirmed := storedStatus(t, app, fx.P2); confirmed {
 		t.Fatal("Alice confirmed the participation of Bob")
 	}
@@ -396,7 +396,7 @@ func TestTools_UpdateParticipation(t *testing.T) {
 		// Bob confirms it: a member may not change it any more, an admin may.
 		update(t, app, fx.P2, map[string]any{"confirmed": true})
 		announced(t, app, alice, "update_participation", map[string]any{"participation_id": fx.P2.Id, "status": "dns"},
-			"Bob a confirmé cette participation : seuls Bob et les admins peuvent la changer.")
+			"Bob a confirmé cette participation : elle ne peut plus être changée que par Bob ou par un admin.")
 		confirmAndCall(t, app, admin, "update_participation", map[string]any{"participation_id": fx.P2.Id, "status": "dns"})
 		if status, confirmed := storedStatus(t, app, fx.P2); status != "dns" || !confirmed {
 			t.Errorf("the stored participation is %s, confirmed %v, want dns, still confirmed", status, confirmed)
@@ -579,7 +579,7 @@ func TestTools_RemoveParticipation(t *testing.T) {
 	t.Run("confirmed by its runner: a member is refused, with no confirmation", func(t *testing.T) {
 		update(t, app, fx.P2, map[string]any{"confirmed": true})
 		announced(t, app, alice, "remove_participation", map[string]any{"participation_id": fx.P2.Id},
-			"Bob a confirmé cette participation : seuls Bob et les admins peuvent la retirer.")
+			"Bob a confirmé cette participation : elle ne peut plus être retirée que par Bob ou par un admin.")
 		if storedRecord(t, app, "participations", fx.P2.Id) == nil {
 			t.Error("the participation of Bob is gone")
 		}

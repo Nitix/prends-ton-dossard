@@ -219,7 +219,7 @@ func TestTools_SetResult(t *testing.T) {
 		}{
 			{"a participation with no race", map[string]any{"participation_id": alone.Id, "status": "finished"}, "Choisis d'abord l'épreuve."},
 			{"a participation confirmed by somebody else", map[string]any{"participation_id": fx.P2.Id, "status": "finished"},
-				"Bob a confirmé cette participation : seuls Bob et les admins peuvent la changer."},
+				"Bob a confirmé cette participation : elle ne peut plus être changée que par Bob ou par un admin."},
 			{"a time that is none", map[string]any{"participation_id": fx.P1.Id, "status": "finished", "finish_time": "4h12"}, "finish_time"},
 			{"a participation that is not there", map[string]any{"participation_id": "aaaaaaaaaaaaaaa", "status": "finished"}, "Introuvable : il a peut-être été supprimé."},
 			{"an id that is not one", map[string]any{"participation_id": "P1", "status": "finished"}, "n'est pas un identifiant de participation"},

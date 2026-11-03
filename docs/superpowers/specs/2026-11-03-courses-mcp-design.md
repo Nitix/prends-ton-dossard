@@ -551,15 +551,15 @@ Une différence avec `buildBatch` : **une épreuve gardée qui ne change pas n'e
 | `format_id` | id | non | une épreuve de la même course : choisir l'épreuve d'un « Intéressé, format à choisir », ou changer d'épreuve |
 | `confirmation` | texte | non | § 6.13 |
 
-- Sans `status` ni `format_id` : **confirme** la participation (« Confirmer » de l'accueil), ce que seul son coureur peut faire ; sinon « Seul Bob peut confirmer sa participation. » Pas de confirmation du § 6.13 pour cela : rien n'est effacé.
+- Sans `status` ni `format_id` : **confirme** la participation (« Confirmer » de l'accueil), ce que seul son coureur peut faire ; sinon « Seule la personne concernée, Bob, peut confirmer sa participation. » Pas de confirmation du § 6.13 pour cela : rien n'est effacé.
 - Toute modification par le coureur lui-même confirme sa participation (règle du site).
 - Changer la participation **d'un autre coureur**, ou un statut qui **effacerait un résultat** (temps, classement, note : le hook les efface quand le statut ne va plus avec), demande une confirmation.
-- Refus du site sur une participation confirmée d'un autre : « Bob a confirmé cette participation : seuls Bob et les admins peuvent la changer. » (annoncé, § 5.3).
+- Refus du site sur une participation confirmée d'un autre : « Bob a confirmé cette participation : elle ne peut plus être changée que par Bob ou par un admin. » (annoncé, § 5.3).
 - `finished` et `dnf` avant le jour de la course : `status_before_race` (le site).
 - Une épreuve d'une autre course : `format_other_event`, annoncé. Seules les différences sont écrites : un statut et une épreuve qui sont déjà ceux de la participation, d'un coureur qui n'a rien à confirmer, ne font rien d'écrit — `done: true`, « Rien à changer ».
 - → comme `add_participation`.
 
-**`remove_participation`** (« Retirer ») — `participation_id` (obligatoire), `confirmation`. Supprime la participation : c'est la désinscription du site. **Toujours une confirmation**, qui dit le coureur, l'épreuve, le statut et le résultat perdu s'il y en a un. La description conseille plutôt `dns` (Non partant) pour quelqu'un qui ne prend pas le départ d'une course où il était inscrit. Mêmes droits que le site : un admin, le coureur lui-même, ou n'importe qui tant que le coureur n'a pas confirmé ; le refus est annoncé : « Bob a confirmé cette participation : seuls Bob et les admins peuvent la retirer. » → `{ "done", "removed": PARTICIPATION, "event": { "id", "name", "url" }, "summary" }`.
+**`remove_participation`** (« Retirer ») — `participation_id` (obligatoire), `confirmation`. Supprime la participation : c'est la désinscription du site. **Toujours une confirmation**, qui dit le coureur, l'épreuve, le statut et le résultat perdu s'il y en a un. La description conseille plutôt `dns` (Non partant) pour quelqu'un qui ne prend pas le départ d'une course où il était inscrit. Mêmes droits que le site : un admin, le coureur lui-même, ou n'importe qui tant que le coureur n'a pas confirmé ; le refus est annoncé : « Bob a confirmé cette participation : elle ne peut plus être retirée que par Bob ou par un admin. » → `{ "done", "removed": PARTICIPATION, "event": { "id", "name", "url" }, "summary" }`.
 
 **`set_result`** (« Saisir le résultat », « J'ai fini », « Abandon » des « Résultats à saisir »)
 

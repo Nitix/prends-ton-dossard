@@ -96,17 +96,18 @@ func (c *caller) owns(r participationRow) bool {
 	return r.Runner.User != "" && r.Runner.User == c.user.Id
 }
 
-// confirmedRefusal is the refusal that the site gives to a member who changes
-// (what is « la changer », « la retirer ») the participation of somebody else once
-// that runner confirmed it: the rule of the update and the deletion is that an
+// confirmedRefusal is the refusal that the site gives to a member who changes or
+// removes (what is « changée », « retirée ») the participation of somebody else
+// once that runner confirmed it: the rule of the update and the deletion is that an
 // admin, the runner or anybody while it is not confirmed may. nil when the caller
-// may.
+// may. The words never infer, from a name, how to speak of a person: nothing
+// agrees with the runner.
 func confirmedRefusal(c *caller, r participationRow, what string) error {
 	if c.role == roleAdmin || c.owns(r) || !r.Participation.Confirmed {
 		return nil
 	}
 	name := r.Runner.Name
-	return fmt.Errorf("%s a confirmé cette participation : seuls %s et les admins peuvent la %s.", name, name, what)
+	return fmt.Errorf("%s a confirmé cette participation : elle ne peut plus être %s que par %s ou par un admin.", name, what, name)
 }
 
 // placeOf says where a participation is: its race and its event, or the event
@@ -447,9 +448,9 @@ func (t *tools) updateParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	// only its runner gives.
 	confirming := status == "" && formatID == ""
 	if confirming && !own {
-		return refuse(fmt.Errorf("Seul %s peut confirmer sa participation.", row.Runner.Name))
+		return refuse(fmt.Errorf("Seule la personne concernée, %s, peut confirmer sa participation.", row.Runner.Name))
 	}
-	if err := confirmedRefusal(c, row, "changer"); err != nil {
+	if err := confirmedRefusal(c, row, "changée"); err != nil {
 		return refuse(err)
 	}
 
@@ -580,7 +581,7 @@ func (t *tools) removeParticipation(ctx context.Context, _ *mcpsdk.CallToolReque
 	if err != nil {
 		return fail(err)
 	}
-	if err := confirmedRefusal(c, row, "retirer"); err != nil {
+	if err := confirmedRefusal(c, row, "retirée"); err != nil {
 		return nil, removeParticipationResult{}, err
 	}
 
