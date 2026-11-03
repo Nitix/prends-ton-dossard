@@ -2,6 +2,13 @@
 
 Idées notées le 2026-11-03. Rien n'est commencé.
 
+## En premier
+
+- **L'ouverture des inscriptions, avec l'heure.** Beaucoup de courses sont complètes en quelques heures.
+  - **La course :** une date et une heure d'ouverture (« ouverture le 12 janvier à 10 h »), en plus de la date limite. Elle est affichée sur la course et dans la liste.
+  - **Un rappel ce jour-là :** sur l'accueil, et dans les rappels qui arrivent sans ouvrir le site (voir « Mes idées »).
+  - **Le flux iCal :** il gagne un événement à cette heure-là.
+
 ## Tes idées
 
 - **Une course sans date précise :** donner seulement un mois (« juin 2027 »). Il faudra :
@@ -21,6 +28,9 @@ Idées notées le 2026-11-03. Rien n'est commencé.
 
     C'est plus de travail et ça expose ces trois informations.
 
+- **La météo prévue** sur la page d'une course, à partir de J-7 (Open-Meteo : gratuit, sans clé).
+- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, à cocher la veille par chacun.
+
 ## Mes idées
 
 - **Vérifier sur un vrai iPhone** (Safari et l'app installée) : les thèmes, le mode hors ligne, la carte et le D+, et Claude Code avec le MCP. Les tests ne tournent que dans Chrome.
@@ -32,3 +42,10 @@ Idées notées le 2026-11-03. Rien n'est commencé.
   - le gris d'aide sur la carte de connexion est juste à 4,5:1 ;
   - les polices des échantillons du choix du thème pèsent 318 Ko sur la page Réglages ;
   - l'accueil ne montre pas encore les prochaines courses en grille.
+
+## Écarté
+
+- **Reprendre un résultat depuis Strava, automatiquement.** Le serveur n'a pas de LLM : seul celui de la personne, par le MCP, pourrait le faire. Et l'API de Strava est payante.
+- **Céder un dossard.** Un commentaire sur la course suffit.
+- **Un bilan de la saison.** Strava le fait mieux : il voit aussi l'entraînement.
+- **Une galerie photos, des plans d'entraînement, une messagerie interne.** Hors du sujet, ou WhatsApp le fait déjà.
