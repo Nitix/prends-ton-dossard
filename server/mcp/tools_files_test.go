@@ -145,9 +145,9 @@ func TestTools_StartUpload(t *testing.T) {
 			if accepted, _ := s["accepted"].(string); !strings.HasPrefix(accepted, row.accepted) {
 				t.Errorf("accepted = %q, want %q", accepted, row.accepted)
 			}
-			// The command sends the file as it is, with the secret in a header,
-			// to the address of the site.
-			want := `curl -sS -X PUT -H "X-Upload-Secret: ` + secret + `" --data-binary @<fichier> ` + address
+			// The command sends the file as it is, with the secret in a header and
+			// the type of a file (curl's own is a form's), to the address of the site.
+			want := `curl -sS -X PUT -H "X-Upload-Secret: ` + secret + `" -H "Content-Type: application/octet-stream" --data-binary @<fichier> ` + address
 			if s["command"] != want {
 				t.Errorf("command = %q, want %q", redact(s["command"].(string)), redact(want))
 			}

@@ -645,10 +645,10 @@ Le site envoie une photo et une trace comme un fichier d'un formulaire (`multipa
    { "upload_id": "…", "upload_url": "https://…/api/app/mcp-uploads/<upload_id>",
      "secret": "ptu_…", "expires_at": "…", "max_bytes": 5242880,
      "accepted": "JPEG, PNG ou WebP",
-     "command": "curl -sS -X PUT -H \"X-Upload-Secret: ptu_…\" --data-binary @<fichier> https://…/api/app/mcp-uploads/<upload_id>" }
+     "command": "curl -sS -X PUT -H \"X-Upload-Secret: ptu_…\" -H \"Content-Type: application/octet-stream\" --data-binary @<fichier> https://…/api/app/mcp-uploads/<upload_id>" }
    ```
 
-2. L'assistant (ou la personne) envoie le fichier tel quel à `upload_url`, avec la commande donnée. Claude Code la lance dans son terminal ; un client sans terminal passe par la base64.
+2. L'assistant (ou la personne) envoie le fichier tel quel à `upload_url`, avec la commande donnée. Elle dit `Content-Type: application/octet-stream` : c'est le type d'un fichier, alors que celui que curl met de lui-même avec `--data-binary` est celui d'un formulaire, que le corps n'est pas. Claude Code la lance dans son terminal ; un client sans terminal passe par la base64.
 3. L'outil qui en a besoin (`set_photo`, `set_track`) reçoit `upload_id` et prend le fichier.
 
 La route **`PUT /api/app/mcp-uploads/{id}`** (paquet `mcp`, absente sur la démo) :

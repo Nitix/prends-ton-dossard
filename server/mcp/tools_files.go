@@ -202,7 +202,9 @@ func (t *tools) startUpload(ctx context.Context, _ *mcpsdk.CallToolRequest, in s
 		ExpiresAt: expires.UTC().Format(time.RFC3339),
 		MaxBytes:  int(p.maxBytes()),
 		Accepted:  accepted[p],
-		Command:   `curl -sS -X PUT -H "` + secretHeader + `: ` + secret + `" --data-binary @<fichier> ` + address,
+		// The type of a file, not curl's own for --data-binary (a form's): the
+		// body is the file, whatever a proxy on the way would read in a form.
+		Command: `curl -sS -X PUT -H "` + secretHeader + `: ` + secret + `" -H "Content-Type: application/octet-stream" --data-binary @<fichier> ` + address,
 	}, nil
 }
 
