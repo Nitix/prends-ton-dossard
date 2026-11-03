@@ -122,9 +122,11 @@ type commentRecord struct {
 	} `json:"expand"`
 }
 
-// offerRecord is a ride or a lodging, with its owner expanded.
+// offerRecord is a ride or a lodging, with its owner expanded (and, for the tools
+// that write one, its event).
 type offerRecord struct {
 	ID      string `json:"id"`
+	Event   string `json:"event"`
 	Kind    string `json:"kind"`
 	Place   string `json:"place"`
 	Seats   int    `json:"seats"`
@@ -133,8 +135,10 @@ type offerRecord struct {
 	EndDate string `json:"end_date"`
 	URL     string `json:"url"`
 	Notes   string `json:"notes"`
+	Updated string `json:"updated"`
 	Expand  struct {
 		Owner runnerRecord `json:"owner"`
+		Event eventRecord  `json:"event"`
 	} `json:"expand"`
 }
 
@@ -145,6 +149,7 @@ type offerMemberRecord struct {
 	Offer   string `json:"offer"`
 	Runner  string `json:"runner"`
 	AddedBy string `json:"added_by"`
+	Updated string `json:"updated"`
 	Expand  struct {
 		Runner  runnerRecord `json:"runner"`
 		AddedBy runnerRecord `json:"added_by"`

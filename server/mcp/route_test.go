@@ -31,6 +31,7 @@ var (
 		"whoami", "list_runners", "list_race_types", "search_events", "get_event", "home", "get_runner", "get_stats",
 		"create_event", "update_event", "delete_event", "add_format", "update_format", "delete_format",
 		"add_participation", "update_participation", "remove_participation", "set_result",
+		"add_comment", "update_comment", "delete_comment", "add_offer", "update_offer", "delete_offer", "offer_place",
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
@@ -68,6 +69,15 @@ var wantHints = map[string]hints{
 	"update_participation": {destructive: true, idempotent: true},
 	"remove_participation": {destructive: true},
 	"set_result":           {destructive: true, idempotent: true},
+	// A comment is only deleted with a confirmation; an offer is changed, deleted and
+	// left (a place freed) with one.
+	"add_comment":    {},
+	"update_comment": {idempotent: true},
+	"delete_comment": {destructive: true},
+	"add_offer":      {},
+	"update_offer":   {destructive: true, idempotent: true},
+	"delete_offer":   {destructive: true},
+	"offer_place":    {destructive: true},
 }
 
 // realm is the challenge of a refused token.

@@ -133,6 +133,15 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	_, crossFormat := newRace(t, app, fx, fx.AliceRunner, "Cross des Lacs", "2026-03-08")
 	finished := joined(t, app, fx.AliceRunner, crossFormat, "finished", true, fx.AliceRunner)
 	update(t, app, finished, map[string]any{"finish_time_s": 5025, "rank": 3, "rank_of": 90})
+	// What the comment and offer tools are asked about: a comment of Alice, her ride
+	// with Bob and Sam in it, and a lodging of Bob.
+	admin := newToken(t, app, fx.Admin)
+	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
+	comment := commentOn(t, app, lake, fx.AliceRunner, "Je prends le train de 7 h 12 avec Sam, qui arrive à Annecy vers 9 h.")
+	ride := rideOf(t, app, lake, fx.AliceRunner)
+	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
+	seatFor(t, app, ride, fx.SamRunner, fx.AliceRunner)
+	lodging := lodgingOf(t, app, lake, fx.BobRunner)
 
 	for _, row := range []struct {
 		name string
@@ -219,6 +228,36 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			map[string]any{"participation_id": fx.P2.Id, "status": "finished", "finish_time": "5:00:00"},
 			[]string{"Bob (Intéressé, non confirmé)", "d'un autre coureur"},
 		},
+		{
+			"delete_comment", "delete_comment",
+			map[string]any{"comment_id": comment.Id},
+			[]string{"Alice", "« Foulées du lac »", "Je prends le train de 7 h 12 avec Sam"},
+		},
+		{
+			"update_offer: the notes cleared", "update_offer",
+			map[string]any{"offer_id": ride.Id, "notes": ""},
+			[]string{"Les notes seraient effacées", "Départ devant la gare.", "la voiture d'Alice (départ de Lyon)"},
+		},
+		{
+			"update_offer: the notes replaced", "update_offer",
+			map[string]any{"offer_id": ride.Id, "notes": "Départ devant le parking."},
+			[]string{"Les notes seraient remplacées", "Départ devant la gare."},
+		},
+		{
+			"update_offer: a filled field cleared", "update_offer",
+			map[string]any{"offer_id": ride.Id, "time": ""},
+			[]string{"L'heure de départ serait effacée", "06:30"},
+		},
+		{
+			"delete_offer", "delete_offer",
+			map[string]any{"offer_id": ride.Id},
+			[]string{"la voiture d'Alice (départ de Lyon)", "« Foulées du lac »", "Bob et Sam perdront leur place", "Place de Bob (ajoutée par Bob)", "Place de Sam (ajoutée par Alice)"},
+		},
+		{
+			"offer_place: freeing a place", "offer_place",
+			map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"},
+			[]string{"Bob perdrait sa place", "la voiture d'Alice (départ de Lyon)", "« Foulées du lac »", "ajoutée par Bob"},
+		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			writesNothing(t, app, func() {
@@ -227,6 +266,14 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			})
 		})
 	}
+
+	// An admin changes the offer of somebody else: the confirmation says whose it is.
+	t.Run("update_offer: the offer of somebody else, by the admin", func(t *testing.T) {
+		writesNothing(t, app, func() {
+			_, message, details := asked(t, callTool(t, app, admin, "update_offer", map[string]any{"offer_id": lodging.Id, "place": "Chalet des Lacs"}))
+			mentions(t, message, details, "d'un autre coureur", "le logement de Bob (« Gîte des Lacs »)")
+		})
+	})
 }
 
 // The confirmed call writes, once; the same token again is refused, and a new
@@ -307,7 +354,12 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	alice := newToken(t, app, fx.Alice)
 	aliceAgain := newToken(t, app, fx.Alice)
 	bob := newToken(t, app, fx.Bob)
+	admin := newToken(t, app, fx.Admin)
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
+	ride := rideOf(t, app, lake, fx.AliceRunner)
+	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
+	seatFor(t, app, ride, fx.SamRunner, fx.AliceRunner)
 
 	const other = "Confirmation refusée : elle ne correspond pas à cette demande."
 	for _, row := range []struct {
@@ -324,6 +376,9 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 		{"delete_format on delete_event", "delete_format", map[string]any{"format_id": fx.F42.Id}, alice, "delete_event", map[string]any{"event_id": fx.Event.Id}},
 		{"Alice's, by Bob", "update_event", map[string]any{"event_id": fx.Event.Id, "notes": ""}, bob, "update_event", map[string]any{"event_id": fx.Event.Id, "notes": ""}},
 		{"Alice's, through another of her tokens", "delete_format", map[string]any{"format_id": fx.F42.Id}, aliceAgain, "delete_format", map[string]any{"format_id": fx.F42.Id}},
+		{"update_offer with other notes", "update_offer", map[string]any{"offer_id": ride.Id, "notes": "Départ à 7 h."}, alice, "update_offer", map[string]any{"offer_id": ride.Id, "notes": "Départ à 8 h."}},
+		{"offer_place for Bob, on Sam", "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"}, alice, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Sam"}},
+		{"the delete_offer of Alice, by the admin", "delete_offer", map[string]any{"offer_id": ride.Id}, admin, "delete_offer", map[string]any{"offer_id": ride.Id}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.firstTool, row.firstArgs))
@@ -486,6 +541,12 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 	bob := newToken(t, app, fx.Bob)
 	// Bob confirmed his participation: a member may not remove it.
 	update(t, app, fx.P2, map[string]any{"confirmed": true})
+	// A comment and a ride of Alice, which Bob may not delete, with a place of Bob in
+	// the ride.
+	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
+	hers := commentOn(t, app, lake, fx.AliceRunner, "À moi.")
+	ride := rideOf(t, app, lake, fx.AliceRunner)
+	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
 
 	for _, row := range []struct {
 		name string
@@ -502,6 +563,9 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 		{"the refusal of the author", "delete_format", map[string]any{"format_id": fx.F42.Id}, bob, "delete_format", map[string]any{"format_id": fx.F15.Id}},
 		{"a format without a measure", "update_format", map[string]any{"format_id": fx.F42.Id, "elevation_gain_m": 0}, alice, "update_format", map[string]any{"format_id": fx.F42.Id, "distance_km": 0}},
 		{"the refusal of a participation that its runner confirmed", "remove_participation", map[string]any{"participation_id": fx.P3.Id}, alice, "remove_participation", map[string]any{"participation_id": fx.P2.Id}},
+		{"the refusal of a comment that is somebody else's", "delete_comment", map[string]any{"comment_id": hers.Id}, bob, "delete_comment", map[string]any{"comment_id": hers.Id}},
+		{"the refusal of an offer that is somebody else's", "delete_offer", map[string]any{"offer_id": ride.Id}, bob, "delete_offer", map[string]any{"offer_id": ride.Id}},
+		{"the refusal of a place that is not there", "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Bob"}, alice, "offer_place", map[string]any{"offer_id": ride.Id, "action": "free", "runner": "Sam"}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			token, _, _ := asked(t, callTool(t, app, alice, row.tool, row.args))
@@ -516,6 +580,40 @@ func TestTools_Confirmation_UsedUpByAnEarlyRefusal(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+// The people of an offer changed in the meantime: the token is refused, and the new
+// confirmation names who is there now.
+func TestTools_Confirmation_StateChangedForAnOffer(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
+	ride := rideOf(t, app, lake, fx.AliceRunner)
+	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
+	args := map[string]any{"offer_id": ride.Id}
+
+	token, message, details := asked(t, callTool(t, app, alice, "delete_offer", args))
+	if strings.Contains(message+strings.Join(details, ""), "Sam") {
+		t.Fatal("the first confirmation names Sam, who has no place yet")
+	}
+	// Meanwhile, Sam takes a place.
+	seatFor(t, app, ride, fx.SamRunner, fx.AliceRunner)
+
+	writesNothing(t, app, func() {
+		again := callTool(t, app, alice, "delete_offer", with(args, token))
+		_, message, details := asked(t, again)
+		const want = "Confirmation refusée : la situation a changé depuis. Nouveau : « Place de Sam (ajoutée par Alice) »."
+		if summary := summaryOfResult(again); !strings.HasPrefix(summary, want) {
+			t.Errorf("the summary is %q, want it to start with %q", summary, want)
+		}
+		mentions(t, message, details, "Bob et Sam perdront leur place")
+	})
+	if storedRecord(t, app, "offers", ride.Id) == nil {
+		t.Error("the offer is gone")
 	}
 }
 

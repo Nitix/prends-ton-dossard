@@ -75,6 +75,13 @@ var (
 		addUpdateParticipation,
 		addRemoveParticipation,
 		addSetResult,
+		addAddComment,
+		addUpdateComment,
+		addDeleteComment,
+		addAddOffer,
+		addUpdateOffer,
+		addDeleteOffer,
+		addOfferPlace,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

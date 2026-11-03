@@ -220,11 +220,195 @@ func participationToolRows() []ruleRow {
 	return rows
 }
 
+// The people of the table, as runners; Sam has no account, so nobody of the table
+// is the owner of what Sam offers.
+var rulePeople = map[string]func(fx testutil.Fixture) *core.Record{
+	"Alice": func(fx testutil.Fixture) *core.Record { return fx.AliceRunner },
+	"Bob":   func(fx testutil.Fixture) *core.Record { return fx.BobRunner },
+	"Admin": func(fx testutil.Fixture) *core.Record { return fx.AdminRunner },
+	"Sam":   func(fx testutil.Fixture) *core.Record { return fx.SamRunner },
+}
+
+// forEachPerson is a call by Alice, Bob and the admin, where what the call is
+// about depends on the person (build gets the name of the person: Alice, Bob or
+// Admin). allowed says what the site gives each of them.
+func forEachPerson(tool, what string, allowed map[string]bool, build func(person string) (prepareRow, siteRequest)) []ruleRow {
+	var rows []ruleRow
+	for _, person := range []string{"Alice", "Bob", "Admin"} {
+		prepare, site := build(person)
+		rows = append(rows, ruleRow{tool: tool, what: what, person: person, allowed: allowed[person], prepare: prepare, site: site})
+	}
+	return rows
+}
+
+// ruleAuthors are the two authors of the comments of the table.
+var ruleAuthors = []string{"Alice", "Bob"}
+
+// commentToolRows are the rows of the comments: anybody comments; only the author
+// edits (not even an admin); the author and the admins delete.
+func commentToolRows() []ruleRow {
+	var rows []ruleRow
+
+	rows = append(rows, eachPerson("add_comment", "a race", true, true, true,
+		func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+			event, _ := newRace(t, app, fx, fx.AliceRunner, ruleRaceName(), "2026-03-07")
+			return map[string]any{"event_id": event.Id, "body": "Courage !"}, func() bool {
+				found, err := app.FindAllRecords("comments", dbx.HashExp{"event": event.Id})
+				return err == nil && len(found) == 1 && found[0].GetString("body") == "Courage !"
+			}
+		}, nil)...)
+
+	// by says what each of the three may do with a comment that an author wrote.
+	by := func(tool string, allowed map[string]map[string]bool, args func(c *core.Record) map[string]any, written func(t testing.TB, app core.App, c *core.Record) bool, site siteRequest) {
+		for _, author := range ruleAuthors {
+			rows = append(rows, eachPerson(tool, "a comment of "+author, allowed[author]["Alice"], allowed[author]["Bob"], allowed[author]["Admin"],
+				func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+					event, _ := newRace(t, app, fx, fx.AliceRunner, ruleRaceName(), "2026-03-07")
+					c := commentOn(t, app, event, rulePeople[author](fx), "Un mot de "+author+".")
+					return args(c), func() bool { return written(t, app, c) }
+				}, site)...)
+		}
+	}
+	commentSite := func(method, body string) siteRequest {
+		return func(args map[string]any) (string, string, string) {
+			return method, "/api/collections/comments/records/" + args["comment_id"].(string), body
+		}
+	}
+	by("update_comment", map[string]map[string]bool{
+		"Alice": {"Alice": true, "Bob": false, "Admin": false},
+		"Bob":   {"Alice": false, "Bob": true, "Admin": false},
+	},
+		func(c *core.Record) map[string]any {
+			return map[string]any{"comment_id": c.Id, "body": "Corrigé par la règle."}
+		},
+		func(t testing.TB, app core.App, c *core.Record) bool {
+			return storedRecord(t, app, "comments", c.Id).GetString("body") == "Corrigé par la règle."
+		},
+		commentSite(http.MethodPatch, `{"body":"Corrigé par la règle."}`))
+	by("delete_comment", map[string]map[string]bool{
+		"Alice": {"Alice": true, "Bob": false, "Admin": true},
+		"Bob":   {"Alice": false, "Bob": true, "Admin": true},
+	},
+		func(c *core.Record) map[string]any { return map[string]any{"comment_id": c.Id} },
+		func(t testing.TB, app core.App, c *core.Record) bool {
+			return storedRecord(t, app, "comments", c.Id) == nil
+		},
+		commentSite(http.MethodDelete, ""))
+	return rows
+}
+
+// offerToolRows are the rows of the rides and the lodgings: anybody offers; the
+// owner and the admins change and delete an offer; a place is taken or freed by
+// its runner, by the owner of the offer (for anybody) and by the admins.
+func offerToolRows() []ruleRow {
+	var rows []ruleRow
+
+	rows = append(rows, eachPerson("add_offer", "a race", true, true, true,
+		func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+			event, _ := newRace(t, app, fx, fx.AliceRunner, ruleRaceName(), "2026-03-07")
+			return map[string]any{"event_id": event.Id, "kind": "ride", "place": "Lyon", "seats": 3}, func() bool {
+				found, err := app.FindAllRecords("offers", dbx.HashExp{"event": event.Id})
+				return err == nil && len(found) == 1
+			}
+		}, nil)...)
+
+	// owned says what each person may do with an offer that an owner made.
+	owned := func(tool string, allowed map[string]map[string]bool, args func(o *core.Record) map[string]any, written func(t testing.TB, app core.App, o *core.Record) bool, site siteRequest) {
+		for _, owner := range ruleAuthors {
+			rows = append(rows, eachPerson(tool, "a ride of "+owner, allowed[owner]["Alice"], allowed[owner]["Bob"], allowed[owner]["Admin"],
+				func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+					event, _ := newRace(t, app, fx, fx.AliceRunner, ruleRaceName(), "2026-03-07")
+					o := rideOf(t, app, event, rulePeople[owner](fx))
+					return args(o), func() bool { return written(t, app, o) }
+				}, site)...)
+		}
+	}
+	offerSite := func(method, body string) siteRequest {
+		return func(args map[string]any) (string, string, string) {
+			return method, "/api/collections/offers/records/" + args["offer_id"].(string), body
+		}
+	}
+	changes := map[string]map[string]bool{
+		"Alice": {"Alice": true, "Bob": false, "Admin": true},
+		"Bob":   {"Alice": false, "Bob": true, "Admin": true},
+	}
+	owned("update_offer", changes,
+		func(o *core.Record) map[string]any { return map[string]any{"offer_id": o.Id, "place": "Villeurbanne"} },
+		func(t testing.TB, app core.App, o *core.Record) bool {
+			return storedRecord(t, app, "offers", o.Id).GetString("place") == "Villeurbanne"
+		},
+		offerSite(http.MethodPatch, `{"place":"Villeurbanne"}`))
+	owned("delete_offer", changes,
+		func(o *core.Record) map[string]any { return map[string]any{"offer_id": o.Id} },
+		func(t testing.TB, app core.App, o *core.Record) bool {
+			return storedRecord(t, app, "offers", o.Id) == nil
+		},
+		offerSite(http.MethodDelete, ""))
+
+	// A place: the offer of an owner, and the runner that the place is for. A call
+	// names the runner (name "" for the person's own, whom the tool finds).
+	type placeCase struct {
+		what  string
+		owner string
+		// runner is whose place it is.
+		runner string
+		// named is whether the call names the runner, or leaves it to the tool.
+		named   bool
+		allowed map[string]bool
+	}
+	place := func(action string, c placeCase) {
+		rows = append(rows, forEachPerson("offer_place", action+": "+c.what, c.allowed, func(person string) (prepareRow, siteRequest) {
+			var runnerID, seatID string
+			prepare := func(t *testing.T, app core.App, fx testutil.Fixture) (map[string]any, func() bool) {
+				event, _ := newRace(t, app, fx, fx.AliceRunner, ruleRaceName(), "2026-03-07")
+				ride := rideOf(t, app, event, rulePeople[c.owner](fx))
+				name := c.runner
+				if name == "self" {
+					name = person
+				}
+				who := rulePeople[name](fx)
+				runnerID = who.Id
+				args := map[string]any{"offer_id": ride.Id, "action": action}
+				if c.named {
+					args["runner"] = who.Id
+				}
+				if action == "take" {
+					return args, func() bool { return seatOf(t, app, ride, who) != nil }
+				}
+				seat := seatFor(t, app, ride, who, fx.AdminRunner)
+				seatID = seat.Id
+				return args, func() bool { return storedRecord(t, app, "offer_members", seat.Id) == nil }
+			}
+			site := func(args map[string]any) (string, string, string) {
+				if action == "take" {
+					return http.MethodPost, "/api/collections/offer_members/records", fmt.Sprintf(`{"offer":%q,"runner":%q}`, args["offer_id"], runnerID)
+				}
+				return http.MethodDelete, "/api/collections/offer_members/records/" + seatID, ""
+			}
+			return prepare, site
+		})...)
+	}
+	// Taking a place. The owner of a ride never takes one in it (the hooks
+	// refuse it, whatever the rule says): Alice, for herself, in her own ride.
+	place("take", placeCase{"for oneself, in the ride of Alice", "Alice", "self", false, map[string]bool{"Alice": false, "Bob": true, "Admin": true}})
+	place("take", placeCase{"for oneself, in the ride of Sam", "Sam", "self", false, map[string]bool{"Alice": true, "Bob": true, "Admin": true}})
+	place("take", placeCase{"for Sam, in the ride of Alice", "Alice", "Sam", true, map[string]bool{"Alice": true, "Bob": false, "Admin": true}})
+	place("take", placeCase{"for Sam, in the ride of Bob", "Bob", "Sam", true, map[string]bool{"Alice": false, "Bob": true, "Admin": true}})
+	// Freeing a place.
+	place("free", placeCase{"one's own, in the ride of Sam", "Sam", "self", false, map[string]bool{"Alice": true, "Bob": true, "Admin": true}})
+	place("free", placeCase{"the place of Bob, in the ride of Alice", "Alice", "Bob", true, map[string]bool{"Alice": true, "Bob": true, "Admin": true}})
+	place("free", placeCase{"the place of Sam, in the ride of Alice", "Alice", "Sam", true, map[string]bool{"Alice": true, "Bob": false, "Admin": true}})
+	place("free", placeCase{"the place of Sam, in the ride of Bob", "Bob", "Sam", true, map[string]bool{"Alice": false, "Bob": true, "Admin": true}})
+	return rows
+}
+
 // ruleRows is every row. A task that adds write tools adds its own here.
 var ruleRows = func() []ruleRow {
 	var rows []ruleRow
 	rows = append(rows, eventRows()...)
 	rows = append(rows, participationToolRows()...)
+	rows = append(rows, commentToolRows()...)
+	rows = append(rows, offerToolRows()...)
 	return rows
 }()
 
@@ -249,9 +433,13 @@ func callThrough(t *testing.T, app *tests.TestApp, token, tool string, args map[
 }
 
 // siteRefuses checks that the site refuses a request to the person: a rule that
-// fails is a 404 for an update and a deletion.
+// fails is a 404 for an update and a deletion, and a 400 for a creation.
 func siteRefuses(t *testing.T, app *tests.TestApp, user *core.Record, method, path, body string) {
 	t.Helper()
+	refusedStatus := http.StatusNotFound
+	if method == http.MethodPost {
+		refusedStatus = http.StatusBadRequest
+	}
 	var reader io.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
@@ -261,7 +449,7 @@ func siteRefuses(t *testing.T, app *tests.TestApp, user *core.Record, method, pa
 		URL:            path,
 		Body:           reader,
 		Headers:        map[string]string{"Authorization": testutil.Token(t, user), "Content-Type": "application/json"},
-		ExpectedStatus: http.StatusNotFound,
+		ExpectedStatus: refusedStatus,
 		// A text that no answer can contain: an answer is expected, whatever it holds.
 		NotExpectedContent:    []string{"\x00"},
 		TestAppFactory:        func(testing.TB) *tests.TestApp { return app },
@@ -283,8 +471,8 @@ func TestTools_FollowTheRulesOfTheOwner(t *testing.T) {
 		"Admin": {newToken(t, app, fx.Admin), fx.Admin},
 	}
 
-	// The table covers every write tool of the races, the formats and the
-	// participations, for the three people.
+	// The table covers every write tool of the races, the formats, the
+	// participations, the comments and the offers, for the three people.
 	covered := map[string]map[string]bool{}
 	for _, row := range ruleRows {
 		if covered[row.tool] == nil {
@@ -295,6 +483,7 @@ func TestTools_FollowTheRulesOfTheOwner(t *testing.T) {
 	for _, tool := range []string{
 		"create_event", "update_event", "delete_event", "add_format", "update_format", "delete_format",
 		"add_participation", "update_participation", "remove_participation", "set_result",
+		"add_comment", "update_comment", "delete_comment", "add_offer", "update_offer", "delete_offer", "offer_place",
 	} {
 		for _, person := range []string{"Alice", "Bob", "Admin"} {
 			if !covered[tool][person] {
