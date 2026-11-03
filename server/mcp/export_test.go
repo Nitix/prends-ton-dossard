@@ -3,8 +3,8 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -472,6 +472,7 @@ func ExpiryDay(expiresAt string) string { return expiryDay(expiresAt) }
 type MergeResult = mergeResult
 
 func DescribeMerge(r MergeResult) []string { return describeMerge(r) }
+
 // ReadTrack is readTrack: the numbers of a track, its parse bounded.
 func ReadTrack(data []byte) (GpxStats, error) { return readTrack(data) }
 
