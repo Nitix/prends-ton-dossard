@@ -44,6 +44,13 @@ func Register(app core.App, cfg config.Config) {
 	// between the update and the deletion, or one made for the account while it
 	// was disabled. Without this, that token would work again, which is what the
 	// deletion is for.
+	//
+	// They are deleted too when the token key of the account changes: what ends
+	// its sessions ends its tokens. PocketBase renews the key on a new password or
+	// a new email (in the save, inside e.Next), and a reset link renews it itself.
+	// A token needs only a session to be made: a stolen session would otherwise
+	// make one that outlives the remedy for the theft (a new password, a reset
+	// link from an admin).
 	app.OnRecordUpdate("users").BindFunc(func(e *core.RecordEvent) error {
 		// The account as it is stored, as the guards of the accounts package do:
 		// not Record.Original, which is stale for a record that was changed and
@@ -60,7 +67,7 @@ func Register(app core.App, cfg config.Config) {
 		if err := e.Next(); err != nil {
 			return err
 		}
-		if before.GetBool("disabled") == e.Record.GetBool("disabled") {
+		if before.GetBool("disabled") == e.Record.GetBool("disabled") && before.TokenKey() == e.Record.TokenKey() {
 			return nil
 		}
 		return deleteTokensOf(e.App, e.Record.Id)

@@ -194,7 +194,7 @@ Un assistant IA (Claude Code, Claude Desktop…) peut faire sur le site ce que t
 
 Un compte a cinq jetons au plus (un par machine ou par assistant), sans date d'expiration. Un jeton donne à l'assistant tout ce que tu peux faire toi-même (il n'y en a pas en lecture seule) : ne jamais le mettre dans un dépôt Git, dans le `.mcp.json` d'un projet, dans un message ni dans un fichier partagé.
 
-La liste des réglages dit quand chaque jeton a servi pour la dernière fois (« Utilisé le … »). **« Révoquer » le coupe aussitôt** : la requête suivante de l'assistant est refusée (401). Un admin qui désactive un compte supprime ses jetons ; changer de mot de passe ou d'email ne les touche pas : au moindre doute, les révoquer.
+La liste des réglages dit quand chaque jeton a servi pour la dernière fois (« Utilisé le … »). **« Révoquer » le coupe aussitôt** : la requête suivante de l'assistant est refusée (401). **Changer ton mot de passe ou ton email révoque tous tes jetons**, comme il ferme tes sessions (un lien de réinitialisation aussi) : il faut alors en refaire un dans les Réglages, et le redonner à l'assistant. Un admin qui désactive un compte supprime ses jetons de même. Au moindre doute (un téléphone perdu, un ordinateur partagé), changer de mot de passe coupe à la fois les sessions et les jetons.
 
 ### Claude Code
 
@@ -428,7 +428,7 @@ Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les com
 
 ## Mot de passe oublié
 
-- **Un membre** : un admin crée un lien de réinitialisation depuis l'administration des membres, et le lui envoie. Les sessions ouvertes du compte sont fermées dès que le lien est utilisé.
+- **Un membre** : un admin crée un lien de réinitialisation depuis l'administration des membres, et le lui envoie. Les sessions ouvertes du compte sont fermées, et ses jetons d'assistant IA (MCP) supprimés, dès que le lien est utilisé.
 - **Le seul admin** : personne ne peut lui créer ce lien. Deux façons d'en sortir, depuis le serveur :
   - inviter un admin de secours, **sous un autre nom** (`bootstrap-admin` refuse un coureur qui a déjà un compte, et `--force` passe outre l'admin qui existe) :
 
@@ -437,7 +437,7 @@ Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les com
     ```
 
     Ouvrir le lien affiché pour créer ce compte, puis, depuis l'administration des membres, créer un lien de réinitialisation pour le compte d'origine et l'utiliser. Désactiver ensuite le compte de secours ;
-  - ou ouvrir le tableau de bord par le tunnel SSH (voir « Tableau de bord PocketBase »), et dans la collection `users`, donner un nouveau mot de passe au compte (10 caractères au moins). Ses sessions ouvertes sont fermées.
+  - ou ouvrir le tableau de bord par le tunnel SSH (voir « Tableau de bord PocketBase »), et dans la collection `users`, donner un nouveau mot de passe au compte (10 caractères au moins). Ses sessions ouvertes sont fermées, et ses jetons d'assistant IA (MCP) supprimés.
 
 ## Recette manuelle sur iPhone
 

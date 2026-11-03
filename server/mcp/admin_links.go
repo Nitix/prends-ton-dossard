@@ -82,7 +82,7 @@ func linkKindOf(kind string) (string, error) {
 
 type createLinkIn struct {
 	Runner       string `json:"runner" jsonschema:"l'identifiant ou le nom du coureur (admin_list_members les donne)"`
-	Kind         string `json:"kind" jsonschema:"invite : pour un coureur sans compte, la personne crée son compte en ouvrant le lien ; reset : pour un coureur qui a un compte, la personne choisit un nouveau mot de passe (ses sessions sont fermées quand elle s'en sert)"`
+	Kind         string `json:"kind" jsonschema:"invite : pour un coureur sans compte, la personne crée son compte en ouvrant le lien ; reset : pour un coureur qui a un compte, la personne choisit un nouveau mot de passe (ses sessions sont fermées et ses jetons d'assistant supprimés quand elle s'en sert)"`
 	Role         string `json:"role,omitempty" jsonschema:"invite seulement : le rôle du compte que l'invitation crée, member (par défaut) ou admin"`
 	Confirmation string `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
@@ -103,7 +103,7 @@ func addAdminCreateLink(s *mcpsdk.Server, t *tools) {
 		Title: "Créer un lien d'invitation ou de réinitialisation",
 		Description: "Membres → « Inviter », « Régénérer l'invitation », « Lien de réinitialisation » : c'est ainsi qu'un compte se crée, comme sur le site. " +
 			"kind invite, pour un coureur sans compte : la personne choisit son email et son mot de passe en ouvrant le lien (role : member par défaut, ou admin). " +
-			"kind reset, pour un coureur qui a un compte : la personne choisit un nouveau mot de passe, et ses sessions ouvertes sont fermées. " +
+			"kind reset, pour un coureur qui a un compte : la personne choisit un nouveau mot de passe ; ses sessions ouvertes sont alors fermées, et ses jetons d'assistant (MCP) supprimés. " +
 			"Le lien vaut 7 jours, et remplace celui du même genre qui attendait pour ce coureur. " +
 			"Une réinitialisation demande toujours une confirmation ; une invitation, quand elle remplace un lien en attente ou donne le rôle admin. " +
 			"Le lien donne l'accès au compte : ne le transmets qu'à la personne concernée, et ne l'écris nulle part ailleurs.",
@@ -168,7 +168,7 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	var lines []string
 	if kind == linkReset {
 		lines = append(lines, fmt.Sprintf("Ce lien permet à qui l'ouvre de choisir un nouveau mot de passe pour le compte de %s, donc de se connecter en tant que %s : ne le donne qu'à %s. "+
-			"Les sessions ouvertes de ce compte seront fermées dès qu'il servira.", plain(runner.Name), plain(runner.Name), plain(runner.Name)))
+			"Dès qu'il servira, les sessions ouvertes de ce compte seront fermées, et ses jetons d'assistant (MCP) supprimés.", plain(runner.Name), plain(runner.Name), plain(runner.Name)))
 	} else if len(waiting) > 0 || role == accountAdmin {
 		line := fmt.Sprintf("Ce lien permet à qui l'ouvre de créer le compte de %s, avec le rôle %s", plain(runner.Name), roleWords[role])
 		if role == accountAdmin {
@@ -216,7 +216,7 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 
 	what := fmt.Sprintf("%s crée son compte (rôle %s) en l'ouvrant", plain(runner.Name), roleWords[role])
 	if kind == linkReset {
-		what = fmt.Sprintf("%s choisit un nouveau mot de passe en l'ouvrant, et ses sessions ouvertes sont alors fermées", plain(runner.Name))
+		what = fmt.Sprintf("%s choisit un nouveau mot de passe en l'ouvrant ; ses sessions ouvertes sont alors fermées, et ses jetons d'assistant (MCP) supprimés", plain(runner.Name))
 	}
 	summary := fmt.Sprintf("%s pour %s, valable jusqu'au %s : %s. Ce lien donne l'accès au compte : ne le transmets qu'à %s, et ne l'écris nulle part ailleurs.",
 		upperFirst(linkNouns[kind]), plain(runner.Name), expiryDay(made.ExpiresAt), what, plain(runner.Name))

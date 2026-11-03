@@ -168,10 +168,14 @@ func TestAdmin_CreateLink_Reset(t *testing.T) {
 	writesNothing(t, app, func() {
 		_, message, details = asked(t, callTool(t, app, admin, "admin_create_link", args))
 	})
-	mentions(t, message, details, "nouveau mot de passe pour le compte de Bob", "se connecter en tant que Bob", "sessions ouvertes")
+	mentions(t, message, details, "nouveau mot de passe pour le compte de Bob", "se connecter en tant que Bob", "sessions ouvertes",
+		"ses jetons d'assistant (MCP) supprimés")
 	result := confirmAndCall(t, app, admin, "admin_create_link", args)
 	linkIn(t, result)
 	expiresIn7Days(t, result)
+	if summary, _ := result.Structured["summary"].(string); !strings.Contains(summary, "ses jetons d'assistant (MCP) supprimés") {
+		t.Errorf("the summary of a reset says %q, want that the tokens of the account go", summary)
+	}
 	if links := linksOf(t, app, fx.BobRunner); len(links) != 1 || links[0].GetString("kind") != "reset" || links[0].GetString("role") != "" {
 		t.Errorf("Bob's links: %v, want a reset", links)
 	}

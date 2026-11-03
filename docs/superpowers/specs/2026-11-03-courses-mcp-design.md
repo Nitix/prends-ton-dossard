@@ -106,7 +106,7 @@ ptd_<id de l'enregistrement, 15 caractères>_<secret, 43 caractères>
 - Le préfixe `ptd_` dit d'où vient un jeton (à un humain, à un outil qui cherche des secrets dans un dépôt).
 - L'identifiant n'est pas secret : il sert à retrouver l'enregistrement sans chercher par empreinte.
 - **Seule l'empreinte SHA-256 du secret est gardée.** Contrairement au lien d'agenda (v3.1), qui garde son jeton pour le remontrer, un jeton MCP **ne se montre qu'une fois**, à sa création. Perdu, il se révoque et se refait. Une copie de la base ne donne donc aucun jeton qui marche.
-- **Pas d'expiration** (choix de l'utilisateur) : un jeton vit jusqu'à sa révocation, la désactivation du compte ou sa suppression (§ 4.6).
+- **Pas d'expiration** (choix de l'utilisateur) : un jeton vit jusqu'à sa révocation, la désactivation du compte, un nouveau mot de passe ou un nouvel email du compte, ou sa suppression (§ 4.6).
 
 ### 4.3 Vérification
 
@@ -149,7 +149,7 @@ Toutes demandent une session du site (`apis.RequireAuth("users")`) et ne concern
 | Révocation dans Réglages, ou par l'outil `mcp_tokens` | supprimé, refusé dès la requête suivante |
 | **Compte désactivé** par un admin | **tous ses jetons sont supprimés**, par un hook de modèle sur `users` (après la mise à jour, dans la même application ou transaction). Comme les sessions, que la désactivation ferme pour de bon (`RefreshTokenKey`), ils ne reviennent pas si le compte est réactivé : la personne en refait. La vérification du § 4.3 refuse aussi un compte désactivé, au cas où. |
 | Compte supprimé (tableau de bord) | supprimés par la cascade de `user` |
-| Mot de passe réinitialisé, email changé | **gardés** : ce ne sont pas des signes de vol, et la liste de Réglages permet de révoquer |
+| Nouveau mot de passe (Réglages, lien de réinitialisation, tableau de bord) ou nouvel email | **tous ses jetons sont supprimés**, par le même hook, après la mise à jour : ce qui ferme les sessions (PocketBase renouvelle la clé des jetons de session, `tokenKey`, à chaque nouveau mot de passe ou nouvel email ; un lien de réinitialisation le fait lui-même) ferme aussi les jetons. Un jeton se crée avec une simple session du site : sans cela, une session volée une minute ferait un jeton durable, que le remède au vol (changer son mot de passe, un lien de réinitialisation d'un admin) laisserait en place. La personne en refait dans les Réglages. Redonner le même email ne change pas la clé, ni les jetons. (Décidé après la revue finale : la première version les gardait.) |
 | Changement de rôle | le jeton agit avec le rôle du moment (les règles lisent le compte à chaque requête, et la liste des outils suit, § 6.3) |
 
 ### 4.7 Jamais en clair ailleurs
@@ -793,7 +793,7 @@ Comme les autres outils d'écriture (§ 6.5), un appel qui ne changerait rien n'
 | Entrée | Type | Obligatoire | Sens |
 |---|---|---|---|
 | `runner` | texte | oui | id ou nom du coureur |
-| `kind` | `invite` \| `reset` | oui | `invite` pour un coureur sans compte (la personne crée son compte en ouvrant le lien) ; `reset` pour un coureur qui en a un (la personne choisit un nouveau mot de passe ; ses sessions sont fermées quand elle s'en sert) |
+| `kind` | `invite` \| `reset` | oui | `invite` pour un coureur sans compte (la personne crée son compte en ouvrant le lien) ; `reset` pour un coureur qui en a un (la personne choisit un nouveau mot de passe ; ses sessions sont fermées et ses jetons MCP supprimés quand elle s'en sert, § 4.6) |
 | `role` | `member` \| `admin` | non | le rôle du compte que l'invitation crée ; `member` par défaut ; rien pour `reset` |
 | `confirmation` | texte | non | § 6.13 |
 
@@ -880,7 +880,7 @@ Une demande qui supprimerait ou effacerait ce qu'une personne a saisi, ou qui to
 | `calendar_link` | `renew`, `delete` | que l'ancien lien cessera de marcher (jamais son adresse) ; pour `renew`, la langue des textes du nouveau |
 | `mcp_tokens` | `revoke` | le jeton (nom, dernière utilisation) ; si c'est celui de l'appel, que l'assistant perd l'accès et que cet appel est son dernier |
 | `admin_delete_runner` | toujours | le coureur, et le lien qui l'attend, qui part avec lui (et sa date d'expiration) ; le site refuse s'il a des participations ou un compte : c'est alors un refus, annoncé sans confirmation |
-| `admin_create_link` | une réinitialisation, toujours ; une invitation qui remplacerait un lien en attente, ou qui donnerait le rôle admin | à qui le lien donne accès et à quoi ; le lien en attente qui cesserait de marcher (et sa date d'expiration) ; le rôle donné ; pour la réinitialisation d'un compte désactivé, que le lien ne servira qu'une fois le compte réactivé (le site le fait, puis le refuse à la personne, `account_disabled`) |
+| `admin_create_link` | une réinitialisation, toujours ; une invitation qui remplacerait un lien en attente, ou qui donnerait le rôle admin | à qui le lien donne accès et à quoi ; pour une réinitialisation, que les sessions du compte seront fermées et ses jetons MCP supprimés quand le lien servira ; le lien en attente qui cesserait de marcher (et sa date d'expiration) ; le rôle donné ; pour la réinitialisation d'un compte désactivé, que le lien ne servira qu'une fois le compte réactivé (le site le fait, puis le refuse à la personne, `account_disabled`) |
 | `admin_revoke_link` | toujours | le lien qui cesserait de marcher, pour qui, et sa date d'expiration |
 | `admin_set_role` | toujours, quand le rôle change (un rôle déjà le bon : « Rien à changer ») | le compte, son rôle actuel et le nouveau ; ce qu'un admin peut faire de plus ; pour une promotion, que les assistants qui ont un jeton de ce compte ont aussi les outils `admin_…` dès leur requête suivante |
 | `admin_set_disabled` | désactiver | le compte ; ses sessions fermées, ses jetons MCP supprimés ; il ne pourra plus se connecter. Réactiver ne demande rien |
@@ -1007,7 +1007,7 @@ Sur une instance de démo (`DEMO_LOGIN_EMAIL` défini), **le serveur MCP est abs
 
 - **Serveur** (`go test`, avec `testutil`) :
   - migration 9k : table, champs cachés, règles `null`, index, règle `/mcp` de 1 500 par minute, que `FindRateLimitRule` retrouve ; retour arrière puis réapplication ;
-  - jetons : forme, empreinte seule, comparaison, identifiant inconnu, mauvais secret, en-tête mal formé, jeton de session refusé, compte désactivé, cinquième et sixième jeton, nom vide ou trop long, révocation immédiate, jetons supprimés à la désactivation, routes réservées à l'appelant, liste sans secret, absentes sur la démo ;
+  - jetons : forme, empreinte seule, comparaison, identifiant inconnu, mauvais secret, en-tête mal formé, jeton de session refusé, compte désactivé, cinquième et sixième jeton, nom vide ou trop long, révocation immédiate, jetons supprimés à la désactivation et à un nouveau mot de passe (Réglages, lien de réinitialisation, code) ou un nouvel email, gardés par une mise à jour qui ne change pas la clé, routes réservées à l'appelant, liste sans secret, absentes sur la démo ;
   - `/mcp` : 401 et son en-tête, `GET` et `DELETE` en 405, `initialize`, `tools/list` et leurs annotations, 300 requêtes par minute et par jeton (la 301e en 429, un autre jeton passe), `last_used_at` au plus une fois par minute, jeton absent du journal (niveau Debug), `meta` du journal, absent sur la démo, `/.well-known/…` en 404 JSON ;
   - outils selon le rôle : le `tools/list` d'un membre a les trente-deux outils de membre et aucun outil `admin_…` ; celui d'un admin les quarante-trois ; un membre qui appelle un outil d'admin reçoit exactement la réponse d'un outil qui n'existe pas (`-32602`, `unknown tool "…"`), et rien n'est écrit ; un admin rétrogradé perd ces outils à la requête suivante, un membre promu les gagne ; chaque outil d'admin refuse aussi un appelant qui n'est pas admin ;
   - requête interne : règles et hooks de requête appliqués (`added_by`, `confirmed`, `created_by`, `author`, `owner`), refus d'une règle, adresse du client transmise, fichier en `multipart` ;
@@ -1043,7 +1043,7 @@ Ce que le site permet mais qui reste sans outil, et pourquoi :
 1. **Droits** : le serveur MCP fait exactement ce que le site permet au propriétaire du jeton ; c'est un autre point d'entrée, pas d'autres droits. Les refus viennent de l'API, enregistrement par enregistrement.
 2. **Tout le site** : chaque action que le site permet a son outil (§ 6.3), sauf celles du § 10.
 3. **Administration** : le jeton d'un admin a aussi les onze outils d'admin (la partie Admin du site) ; le jeton d'un membre ne les voit pas, et les appeler répond comme un outil inconnu. Le rôle est relu à chaque requête.
-4. **Jetons sans expiration**, cinq par compte, dernière utilisation affichée, supprimés quand le compte est désactivé (une réinitialisation du mot de passe les garde).
+4. **Jetons sans expiration**, cinq par compte, dernière utilisation affichée, supprimés quand le compte est désactivé, et quand son mot de passe ou son email change (ce qui ferme les sessions ferme les jetons : tranché après la revue finale, dans le sens le plus sûr ; la première version les gardait à une réinitialisation).
 5. **300 requêtes par minute et par jeton.**
 6. **Confirmation** des demandes qui suppriment ou effacent, par un jeton de confirmation renvoyé au second appel (§ 6.13) ; côté admin : fusions, désactivation, changement de rôle, suppressions.
 7. **Pas de MCP sur la démo.**
@@ -1063,7 +1063,7 @@ Ce que ni tes réponses ni le code ne tranchaient ; dis lesquelles revoir, par l
 9. **Encore plus strict que le site, sans confirmation possible** : la dernière épreuve d'une course ne se supprime pas (comme dans le formulaire) ; pas de « format à choisir » sur une course à une épreuve ; statut toujours explicite ; 20 épreuves au plus à la création d'une course (`add_format` en ajoute d'autres ensuite).
 10. **La date de fin suit les épreuves à chaque modification**, comme le formulaire ; quand cela raccourcit une vieille course de plusieurs jours, c'est une confirmation.
 11. **Traces** : `last_used_at` et le journal des requêtes de PocketBase (5 jours) ; pas d'historique par course, pas de marque « via un assistant » sur les enregistrements.
-12. **Liste des jetons réservée à leur propriétaire** : un admin ne voit pas ceux des autres (pas comme les clés d'accès) ; il désactive le compte.
+12. **Liste des jetons réservée à leur propriétaire** : un admin ne voit pas ceux des autres (pas comme les clés d'accès) ; pour les couper, il désactive le compte, ou fait un lien de réinitialisation, qui les supprime quand il sert.
 13. **Section « Assistant IA (MCP) »** de Réglages, après « Agenda », avec la commande `claude mcp add … --scope user` toute prête.
 14. **Coureurs et types donnés par id ou par nom**, pour épargner des appels à l'assistant.
 15. **Pas d'email** dans `admin_list_members`, alors que la page Membres le montre à un admin : aucune action n'en a besoin, et il partirait chez le fournisseur de l'assistant.

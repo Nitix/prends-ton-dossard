@@ -1,6 +1,7 @@
 package mcpauth_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -157,7 +158,7 @@ func TestMCPTokens_DisablingTheAccountDeletesItsTokens(t *testing.T) {
 		patchAccount(t, w.app, w.fx.Admin, w.fx.Bob.Id, `{"disabled":false}`, http.StatusOK, `"disabled":false`)
 
 		if got := tokenCount(t, w.app, w.fx.Bob); got != 2 {
-			t.Errorf("Bob has %d tokens, want his 2: only disabling removes them", got)
+			t.Errorf("Bob has %d tokens, want his 2: a change of role removes none", got)
 		}
 		if !accepted(w.app, w.bob[0], w.fx.Bob) {
 			t.Error("Bob's token is refused after a change of role")
@@ -270,6 +271,110 @@ func TestMCPTokens_DisablingTheAccountDeletesItsTokens(t *testing.T) {
 		if got := tokenCount(t, w.app, w.fx.Bob); got != 0 {
 			t.Errorf("Bob has %d tokens after a committed disabling, want none", got)
 		}
+	})
+}
+
+// Whatever ends the sessions of an account ends its tokens: a new password (from
+// the settings, a reset link, or the Go code as the dashboard does it) or a new
+// email renews its token key, and its MCP tokens are deleted with the update. A
+// stolen session could otherwise make a token that outlives the remedy for it. An
+// update that leaves the key keeps them.
+func TestMCPTokens_ANewTokenKeyDeletesThem(t *testing.T) {
+	const newPassword = "a-brand-new-password-123"
+
+	// gone checks that the account lost its tokens, and that the others kept theirs.
+	gone := func(t *testing.T, w world, user *core.Record, tokens []string) {
+		t.Helper()
+		if got := tokenCount(t, w.app, user); got != 0 {
+			t.Errorf("%s has %d tokens, want none", user.Email(), got)
+		}
+		for _, token := range tokens {
+			if accepted(w.app, token, user) {
+				t.Errorf("the token %s... is still accepted", first8(token))
+			}
+		}
+		for _, other := range []struct {
+			user   *core.Record
+			tokens []string
+		}{{w.fx.Admin, w.admin}, {w.fx.Alice, w.alice}, {w.fx.Bob, w.bob}} {
+			if other.user.Id == user.Id {
+				continue
+			}
+			if got := tokenCount(t, w.app, other.user); got != len(other.tokens) {
+				t.Errorf("%s has %d tokens, want their %d", other.user.Email(), got, len(other.tokens))
+			}
+		}
+	}
+	// kept checks that the account has all its tokens, and that they work.
+	kept := func(t *testing.T, w world, user *core.Record, tokens []string) {
+		t.Helper()
+		if got := tokenCount(t, w.app, user); got != len(tokens) {
+			t.Errorf("%s has %d tokens, want their %d", user.Email(), got, len(tokens))
+		}
+		for _, token := range tokens {
+			if !accepted(w.app, token, user) {
+				t.Errorf("the token %s... is refused", first8(token))
+			}
+		}
+	}
+
+	t.Run("a new password, from the settings", func(t *testing.T) {
+		w := newWorld(t)
+		patchAccount(t, w.app, w.fx.Alice, w.fx.Alice.Id,
+			`{"oldPassword":"`+testutil.Password+`","password":"`+newPassword+`","passwordConfirm":"`+newPassword+`"}`, http.StatusOK, `"id"`)
+		gone(t, w, w.fx.Alice, w.alice)
+	})
+
+	t.Run("a new password, from a reset link", func(t *testing.T) {
+		w := newWorld(t)
+		seq := testutil.NewSequence(t, w.app)
+		created := seq.Step("the admin makes a reset link", http.MethodPost, "/api/app/invitations", testutil.Token(t, w.fx.Admin),
+			`{"runnerId":"`+w.fx.BobRunner.Id+`","kind":"reset"}`, http.StatusOK, `"url"`)
+		var link struct {
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal([]byte(created), &link); err != nil {
+			t.Fatal(err)
+		}
+		_, secret, ok := strings.Cut(link.URL, "#")
+		if !ok || secret == "" {
+			t.Fatal("the reset link has no token")
+		}
+		accept, _ := json.Marshal(map[string]string{"token": secret, "password": newPassword, "passwordConfirm": newPassword})
+		seq.Step("Bob chooses a password", http.MethodPost, "/api/app/invitations/accept", "", string(accept), http.StatusOK, `"token"`)
+		gone(t, w, w.fx.Bob, w.bob)
+	})
+
+	t.Run("a new email, from the settings", func(t *testing.T) {
+		w := newWorld(t)
+		testutil.NewSequence(t, w.app).Step("Alice changes her email", http.MethodPost, "/api/app/me/email", testutil.Token(t, w.fx.Alice),
+			`{"email":"alice.new@example.test","password":"`+testutil.Password+`"}`, http.StatusOK, `"token"`)
+		gone(t, w, w.fx.Alice, w.alice)
+	})
+
+	t.Run("a new password, from the Go code as the dashboard does", func(t *testing.T) {
+		w := newWorld(t)
+		// The fixture record was never reloaded: the hook goes by what is stored.
+		w.fx.Bob.SetPassword(newPassword)
+		if err := w.app.Save(w.fx.Bob); err != nil {
+			t.Fatal(err)
+		}
+		gone(t, w, w.fx.Bob, w.bob)
+	})
+
+	t.Run("the same email again, a refused password, a theme, a name: the key stays, and the tokens", func(t *testing.T) {
+		w := newWorld(t)
+		seq := testutil.NewSequence(t, w.app)
+		alice := testutil.Token(t, w.fx.Alice)
+		seq.Step("the same email", http.MethodPost, "/api/app/me/email", alice,
+			`{"email":"`+w.fx.Alice.Email()+`","password":"`+testutil.Password+`"}`, http.StatusOK, `"token"`)
+		patchAccount(t, w.app, w.fx.Alice, w.fx.Alice.Id,
+			`{"oldPassword":"not-her-password-1","password":"`+newPassword+`","passwordConfirm":"`+newPassword+`"}`, http.StatusBadRequest, `"oldPassword"`)
+		patchAccount(t, w.app, w.fx.Alice, w.fx.Alice.Id, `{"skin":"nuit"}`, http.StatusOK, `"skin":"nuit"`)
+		seq.Step("a new name", http.MethodPatch, "/api/collections/runners/records/"+w.fx.AliceRunner.Id, alice,
+			`{"name":"Alice B."}`, http.StatusOK, `"name":"Alice B."`)
+		kept(t, w, w.fx.Alice, w.alice)
+		kept(t, w, w.fx.Bob, w.bob)
 	})
 }
 
