@@ -164,6 +164,24 @@
   opacity: 0.7;
 }
 
+/* From `md` the tabs are in the header, in a capsule at the right (it ends 4.625
+   rem from the top). The orbit must not pass beside a tab, where a dot would read
+   as a stray bullet: so the column is cut under the capsule, with a little room
+   (5.375 rem: the dot, and the pulse that swells round it), and the orbit
+   rises behind the sheet, its dots seen only there. In rem, so that it holds
+   when the text is larger and the capsule with it. */
+@media (width >= 48rem) {
+  .carnet-column {
+    overflow: hidden;
+    margin-top: 5.375rem;
+    height: calc(100% - 5.375rem);
+  }
+  .carnet-header-orbit {
+    top: -4.75rem;
+    right: -1.5rem;
+  }
+}
+
 /* The pulse: a box on the teal dot of the back ring (at 84 of the 120 from the
    middle of its box, 8 of 240 wide: 85 % across, 3.33 % wide), in the colour of
    that dot. It turns with the ring and swells from its middle (the box's own).
