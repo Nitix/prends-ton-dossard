@@ -54,6 +54,8 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           include: ["src/**/*.test.ts"],
+          // The real app, built once for the run: build.test.ts and lookFailure.test.ts read it.
+          globalSetup: ["./src/test/builtApp.setup.ts"],
         },
       },
       {

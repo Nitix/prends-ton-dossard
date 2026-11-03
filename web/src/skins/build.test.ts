@@ -1,48 +1,21 @@
-import { fileURLToPath } from "node:url";
-
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 
 import { SKINS } from ".";
+import { builtApp, textOfBuilt, type BuiltAsset, type BuiltChunk } from "../test/builtApp";
 
-// The real app, built as `pnpm build` builds it (vite.config.ts), in memory.
-// What a person who stays on « Crête » downloads is the page, the stylesheet it
-// links, the entry and the parts it preloads: none of them has anything of
-// another skin, neither a sheet nor a motif. Each other skin is a part of its
-// own (its look), with its sheets, which the table of the page names for the
-// script that links them when the skin is the one kept on the device.
+// The real app, built as `pnpm build` builds it (vite.config.ts), once for the
+// run (test/builtApp.setup.ts). What a person who stays on « Crête » downloads
+// is the page, the stylesheet it links, the entry and the parts it preloads:
+// none of them has anything of another skin, neither a sheet nor a motif. Each
+// other skin is a part of its own (its look), with its sheets, which the table
+// of the page names for the script that links them when the skin is the one
+// kept on the device.
 
-const web = fileURLToPath(new URL("../../", import.meta.url));
+type Chunk = BuiltChunk;
+type Asset = BuiltAsset;
 
-type Chunk = {
-  type: "chunk";
-  fileName: string;
-  isEntry: boolean;
-  facadeModuleId: string | null;
-  moduleIds: readonly string[];
-  imports: readonly string[];
-  code: string;
-  /** The stylesheets of its modules, as Vite emits them. */
-  viteMetadata?: { importedCss: ReadonlySet<string> };
-};
-type Asset = { type: "asset"; fileName: string; source: string | Uint8Array };
-
-let files = new Map<string, Chunk | Asset>();
-let html = "";
-
-beforeAll(async () => {
-  const { build } = await import("vite");
-  const output = await build({
-    root: web,
-    configFile: `${web}vite.config.ts`,
-    logLevel: "silent",
-    build: { write: false, emptyOutDir: false },
-  });
-  const outputs: readonly (Chunk | Asset)[] = (Array.isArray(output) ? output : [output]).flatMap(
-    (one) => ("output" in one ? one.output : []),
-  );
-  files = new Map(outputs.map((file) => [file.fileName, file]));
-  html = textOf("index.html");
-}, 120_000);
+const files: Map<string, Chunk | Asset> = builtApp();
+const html = textOfBuilt("index.html");
 
 const slashed = (path: string) => path.replaceAll("\\", "/");
 
