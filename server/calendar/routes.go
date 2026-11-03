@@ -15,6 +15,7 @@ import (
 	"courses/server/config"
 	"courses/server/events"
 	"courses/server/invitations"
+	"courses/server/wording"
 )
 
 // feedSuffix ends the last segment of the address of a feed: the calendar apps
@@ -190,7 +191,7 @@ func feedRoute(cfg config.Config) func(*core.RequestEvent) error {
 		lang := link.GetString("lang")
 		var entries []Entry
 		if runner != nil {
-			if entries, err = entriesOf(e.App, runner, cfg.AppURL, wordsOf(lang)); err != nil {
+			if entries, err = entriesOf(e.App, runner, cfg.AppURL, wording.Of(lang)); err != nil {
 				return e.InternalServerError("", err)
 			}
 		}

@@ -54,6 +54,10 @@ var (
 	// memberTools are the tools of every token.
 	memberTools = []func(*mcpsdk.Server, *tools){
 		addWhoami,
+		addListRunners,
+		addListRaceTypes,
+		addSearchEvents,
+		addGetEvent,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools.

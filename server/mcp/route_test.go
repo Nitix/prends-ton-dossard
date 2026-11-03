@@ -27,7 +27,7 @@ import (
 // row to wantHints.
 var (
 	// wantMemberTools are the tools that every token sees.
-	wantMemberTools = []string{"whoami"}
+	wantMemberTools = []string{"whoami", "list_runners", "list_race_types", "search_events", "get_event"}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
 	wantAdminTools = []string{}
@@ -45,7 +45,11 @@ type hints struct {
 
 // wantHints has a row for every tool.
 var wantHints = map[string]hints{
-	"whoami": {readOnly: true},
+	"whoami":          {readOnly: true},
+	"list_runners":    {readOnly: true},
+	"list_race_types": {readOnly: true},
+	"search_events":   {readOnly: true},
+	"get_event":       {readOnly: true},
 }
 
 // realm is the challenge of a refused token.

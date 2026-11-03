@@ -172,3 +172,18 @@ func QuoteEscape(s string) string { return quoteEscaper.Replace(s) }
 
 // InputSchema is inputSchema.
 func InputSchema[T any](enums map[string][]string) *jsonschema.Schema { return inputSchema[T](enums) }
+
+// The runners and the race types, as the reads have them, and how a name or an
+// id is resolved to one.
+type (
+	RunnerRecord   = runnerRecord
+	RaceTypeRecord = raceTypeRecord
+)
+
+func ResolveRunner(all []RunnerRecord, idOrName, me string) (RunnerRecord, error) {
+	return resolveRunner(all, idOrName, me)
+}
+
+func ResolveRaceType(all []RaceTypeRecord, idOrName string) (RaceTypeRecord, error) {
+	return resolveRaceType(all, idOrName)
+}

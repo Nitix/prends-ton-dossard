@@ -10,6 +10,7 @@ import (
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 
 	"courses/server/events"
+	"courses/server/wording"
 )
 
 const (
@@ -35,7 +36,7 @@ const (
 //
 // A day that is not a real one (the hooks of the events do not let one in) is
 // left out rather than written: a calendar app refuses the whole file for it.
-func entriesOf(app core.App, runner *core.Record, appURL string, w words) ([]Entry, error) {
+func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words) ([]Entry, error) {
 	participations, err := app.FindAllRecords("participations", dbx.HashExp{"runner": runner.Id})
 	if err != nil {
 		return nil, err
@@ -59,7 +60,7 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w words) ([]Ent
 			if deadline, ok := dayEntry(event.GetString("registration_deadline"), ""); ok {
 				entries = append(entries, Entry{
 					UID:         "deadline-" + event.Id + "-" + runner.Id + uidSuffix,
-					Summary:     w.deadline + separator + event.GetString("name"),
+					Summary:     w.Deadline() + wording.Separator + event.GetString("name"),
 					Description: eventURL,
 					URL:         eventURL,
 					Start:       deadline.Start,
@@ -71,7 +72,7 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w words) ([]Ent
 		entry := Entry{
 			UID:         "participation-" + p.Id + uidSuffix,
 			Summary:     event.GetString("name"),
-			Description: w.statusText(status, p.GetBool("confirmed")) + "\n" + eventURL,
+			Description: w.StatusText(status, p.GetBool("confirmed")) + "\n" + eventURL,
 			Location:    event.GetString("location"),
 			URL:         eventURL,
 		}
@@ -82,7 +83,7 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w words) ([]Ent
 			// has none.
 			first := cmp.Or(format.GetString("date"), event.GetString("start_date"))
 			days, ok = dayEntry(first, "")
-			entry.Summary += separator + w.raceName(
+			entry.Summary += wording.Separator + w.RaceName(
 				format.GetString("name"),
 				raceTypeLabel(format),
 				format.GetFloat("distance_km"),
