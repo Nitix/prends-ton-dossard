@@ -448,7 +448,7 @@ func TestTools_Confirmation_StateChanged(t *testing.T) {
 	}
 }
 
-// / The participation that was asked about changed in the meantime: the token is
+// The participation that was asked about changed in the meantime: the token is
 // refused, and the new confirmation says how it is now.
 func TestTools_Confirmation_StateChangedForAParticipation(t *testing.T) {
 	app := testutil.NewApp(t)
