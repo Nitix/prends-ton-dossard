@@ -454,7 +454,7 @@ Le jour qui range une course au mois et dit si elle est passée est le **dernier
 - **Au toucher** : un doigt déplace le curseur (comme avant) ; **deux doigts qui s'écartent** zooment autour de leur milieu, qui se resserrent dézooment.
 - **Boutons**, sous le profil, pour tous (et pour le clavier, WCAG 2.5.7) : « Zoomer » (la portion deux fois plus courte, autour du curseur ou du milieu), « Dézoomer » (deux fois plus longue), « Vue entière ». « Vue entière » et « Dézoomer » sont en `aria-disabled` sur le profil entier.
 - **Clavier**, le profil focalisé : `+` zoome, `−` dézoome (les flèches, Début, Fin et Échap gardent leur rôle).
-- **Zoomé**, le profil redessine la portion : ses points relus dans la trace entière et réduits à 1 000 (le détail apparaît), l'échelle des altitudes de la portion, les graduations en km de la portion (`distanceTicks(from, to)`). La pente d'un point se lit sur la même longueur qu'en vue entière (1 % de la trace) : une couleur ne change pas avec le zoom, seule la finesse des bandes augmente.
+- **Zoomé**, le profil redessine la portion : ses points relus dans la trace entière et réduits à 1 000 (le détail apparaît), l'échelle des altitudes de la portion, les graduations en km de la portion (`distanceTicks(from, to)`). La pente d'un point se lit de chaque côté sur `max(portion / 100, 25 m, l'écart entre les points)` : en vue entière, 1 % de la trace comme avant ; zoomé, les couleurs changent à l'échelle de la vue (changé à la demande de l'utilisateur : une couleur fixe ne montrait aucun détail). **Ctrl ou ⌘ + molette** sur le profil zoome autour du pointeur, du même pas que les boutons, et ne zoome jamais la page ; la molette seule défile la page. La carte a `zoomSnap: 0.5`.
 - Une ligne `<output>` (polie) dit la portion : « Du km 12,4 au km 18,0 » ; le nom accessible du profil la reprend.
 - Le curseur ne sort pas de la portion ; un point de la carte touché hors de la portion n'y met pas de curseur.
 - L'aide sous le profil : « Glisse sur le profil pour zoomer sur une portion. » (pointeur fin) ou « Écarte deux doigts sur le profil pour zoomer. » (pointeur grossier).
@@ -870,7 +870,7 @@ Ce que ni tes réponses ni les arbitrages ne tranchaient ; dis lesquelles revoir
 
 19. Titres « `Page` · Prends ton dossard », dans la langue de l'interface, le mois et l'année dans ceux de l'agenda et des statistiques.
 20. **Sur un écran tactile, un doigt fait défiler la page**, deux doigts déplacent la carte ; un ordinateur à écran tactile garde le glisser.
-21. **Zoom du profil : glisser, pincer, boutons et touches + et −** ; 200 m au moins ; les couleurs de pente ne changent pas avec le zoom.
+21. **Zoom du profil : glisser, pincer, boutons et touches + et −** ; 200 m au moins ; les couleurs de pente se lisent sur la portion (1 % de la portion, 25 m au moins), pas sur la trace ; Ctrl ou ⌘ + molette zoome le profil.
 22. **Partage : un texte seul** (l'adresse dedans), sans aucun nom de participant ; sans Web Share, une fenêtre « Copier le texte » et « Envoyer sur WhatsApp ».
 
 **Le flux du groupe**

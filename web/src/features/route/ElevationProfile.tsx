@@ -40,18 +40,35 @@ const CURSOR_BLEED = 4;
 const MIN_DRAG_PX = 8;
 /** What a button of zoom, a key or a spread of fingers does to the length of the portion: twice shorter, twice longer. */
 const ZOOM_FACTOR = 0.5;
+/** The least time between two steps of zoom by the wheel, in milliseconds. */
+const WHEEL_STEP_MS = 120;
 
 type WithAltitude = TrackPoint & { ele: number };
 
 /** The coordinates of a point of the path, to a tenth of a unit. */
 const coordinates = (x: number, y: number): string => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
+/** The shortest half-length over which a slope is read, in kilometers: 25 m. */
+const MIN_SLOPE_HALF_KM = 0.025;
+
 /**
- * Half the length over which a slope is read, in kilometers: 1 % of the track
- * (at least 75 m), a band and a half, so that the noise of the GPS does not
- * stripe the profile. It depends on the track only, never on the screen.
+ * Half the length over which a slope is read around a kilometer, in kilometers:
+ * 1 % of the portion shown, at least 25 m and at least the gap between the points
+ * there (a slope needs two of them), so that the noise of the GPS does not stripe
+ * the profile while the colours get finer as one zooms. On the whole track it is
+ * 1 % of the track, as it always was; on 200 m it is 25 m.
  */
-const slopeHalf = (lastKm: number) => Math.max(lastKm / 100, 0.075);
+function slopeHalf(points: WithAltitude[], km: number, span: number): number {
+  let low = 0;
+  let high = points.length - 1;
+  while (high - low > 1) {
+    const middle = (low + high) >> 1;
+    if ((points[middle]?.km ?? 0) <= km) low = middle;
+    else high = middle;
+  }
+  const gap = (points[high]?.km ?? 0) - (points[low]?.km ?? 0);
+  return Math.max(span / 100, MIN_SLOPE_HALF_KM, Number.isFinite(gap) ? gap : 0);
+}
 
 /**
  * The altitude at a distance, between the two points around it: a mean of the
@@ -85,10 +102,9 @@ function slopeRuns(
 ): { from: number; to: number; zone: SlopeZone }[] {
   const count = RUNS;
   const band = (view.to - view.from) / count;
-  // A slope is read over the same length whatever the zoom: only the bands get finer.
-  const half = slopeHalf(lastKm);
   const zones = Array.from({ length: count }, (_, i) => {
     const middle = view.from + band * (i + 0.5);
+    const half = slopeHalf(points, middle, view.to - view.from);
     const from = Math.max(0, middle - half);
     const to = Math.min(lastKm, middle + half);
     const percent =
@@ -371,7 +387,7 @@ function Profile({
   const reading = (at: number) => {
     const km = clamp(at);
     const ele = altitudeAt(all, km);
-    const half = slopeHalf(lastKm);
+    const half = slopeHalf(all, km, span);
     const from = Math.max(0, km - half);
     const to = Math.min(lastKm, km + half);
     const slope = ((altitudeAt(all, to) - altitudeAt(all, from)) / ((to - from) * 1000)) * 100;
@@ -416,6 +432,39 @@ function Profile({
     setRange(zoomAround(latest.current, centre, factor, lastKm));
   };
   const canZoomIn = span > MIN_SPAN_KM + 1e-9;
+
+  // Ctrl or ⌘ + wheel zooms the profile around the pointer, by the step of the
+  // buttons, as it does on the map; it never zooms the page, which is why the
+  // listener is not passive. The wheel alone is the page's: it scrolls it. A
+  // trackpad's pinch sends a stream of them: one step each WHEEL_STEP_MS at most.
+  const onWheel = useRef<(event: WheelEvent) => void>(() => undefined);
+  const lastWheel = useRef(-Infinity);
+  useLayoutEffect(() => {
+    onWheel.current = (event) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      if (event.deltaY === 0 || event.timeStamp - lastWheel.current < WHEEL_STEP_MS) return;
+      const zoomIn = event.deltaY < 0;
+      if (zoomIn ? !canZoomIn : !zoomed) return;
+      lastWheel.current = event.timeStamp;
+      const rect = box.current?.querySelector(".profile-cursor")?.getBoundingClientRect();
+      const around = rect
+        ? kmUnder(event.clientX, rect, latest.current ?? { from: 0, to: lastKm })
+        : undefined;
+      zoomBy(zoomIn ? ZOOM_FACTOR : 1 / ZOOM_FACTOR, around);
+    };
+  });
+  useEffect(() => {
+    const element = box.current;
+    if (!element) return undefined;
+    const listener = (event: WheelEvent) => {
+      onWheel.current(event);
+    };
+    element.addEventListener("wheel", listener, { passive: false });
+    return () => {
+      element.removeEventListener("wheel", listener);
+    };
+  }, [box]);
 
   // A drag with a mouse or a pen draws a band, which becomes the portion when
   // it is long enough; fingers: one moves the cursor, two spread to zoom.

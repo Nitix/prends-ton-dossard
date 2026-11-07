@@ -755,16 +755,79 @@ test("ElevationProfile — la portion est dite : « Du km 12,4 au km 18,0 »", a
   expect(Number(slider.max)).toBeLessThan(18.6);
 });
 
-test("ElevationProfile — la couleur d'un point ne change pas avec le zoom", async () => {
-  // The middle of each kilometer: its zone, whole and zoomed (the bands are finer, the colour is not).
+/** 42 km flat at 500 m, a point every 15 m, with one ramp of 150 m at 20 % at km 20. */
+function flatWithARamp(): TrackPoint[] {
+  return Array.from({ length: 2801 }, (_, i) => {
+    const km = (i * 15) / 1000;
+    const ele = 500 + 200 * Math.min(0.15, Math.max(0, km - 20));
+    return { lat: 45 + km / 111, lon: 6, km, ele };
+  });
+}
+
+/** The zones of the bands drawn, from the first to the last, as the painted bands say them. */
+const zonesDrawn = (container: Element) => paintedBands(container).map((band) => band.zone);
+
+test("ElevationProfile — zoomé sur une rampe de 150 m à 20 %, la bande ≥ 15 % apparaît", async () => {
+  const track = flatWithARamp();
+  // Whole: a slope is read over 846 m, which turns the ramp into 3,5 %.
+  const whole = await renderZoom(track);
+  expect(Math.max(...zonesDrawn(whole.screen.container))).toBe(1);
+  // Zoomed on it, the slope is read over 50 m: the ramp has its own colour.
+  const zoomed = await renderZoom(track, { range: { from: 19.9, to: 20.3 } });
+  expect(zonesDrawn(zoomed.screen.container)).toContain(4);
+  expect(zonesDrawn(zoomed.screen.container)).toContain(1);
+});
+
+test("ElevationProfile — la couleur de la vue entière est celle d'une pente lue sur 1 % de la trace", async () => {
+  // A kilometer in each zone, a point every 100 m: the middle of each, whole.
   for (const [i, km] of [0.5, 1.5, 2.5, 3.5, 4.5].entries()) {
-    const whole = await zoneAt(km, null);
-    const zoomed = await zoneAt(km, { from: km - 0.4, to: km + 0.4 });
-    const tight = await zoneAt(km, { from: km - 0.1, to: km + 0.1 });
-    expect(whole).toBe(SLOPE_ZONES[i]);
-    expect(zoomed).toBe(whole);
-    expect(tight).toBe(whole);
+    expect(await zoneAt(km, null)).toBe(SLOPE_ZONES[i]);
   }
+  // And zoomed on a few hundred meters, a kilometer of one slope keeps its colour.
+  for (const [i, km] of [0.5, 1.5, 2.5, 3.5, 4.5].entries()) {
+    expect(await zoneAt(km, { from: km - 0.4, to: km + 0.4 })).toBe(SLOPE_ZONES[i]);
+  }
+});
+
+test("ElevationProfile — Ctrl + molette zoome autour du pointeur, la molette seule ne fait rien", async () => {
+  const { onRange, cursor, at } = await renderZoom(mountain());
+  const lastKm = mountain().at(-1)?.km ?? 0;
+  const wheel = (init: WheelEventInit) => {
+    const event = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      clientY: 80,
+      ...init,
+    });
+    cursor.element().dispatchEvent(event);
+    return event;
+  };
+
+  // The wheel alone belongs to the page: it scrolls it.
+  const plain = wheel({ deltaY: -100, clientX: at(0.75) });
+  expect(plain.defaultPrevented).toBe(false);
+  expect(onRange).not.toHaveBeenCalled();
+
+  // Ctrl + wheel up: the step of the buttons, around the pointer, and not the page.
+  const zoomIn = wheel({ deltaY: -100, ctrlKey: true, clientX: at(0.75) });
+  expect(zoomIn.defaultPrevented).toBe(true);
+  const zoomed = lastRange(onRange);
+  expect(lengthOf(zoomed)).toBeCloseTo(lastKm / 2, 6);
+  // The kilometer under the pointer stays at the same place of the portion.
+  const under = (zoomed?.from ?? 0) + lengthOf(zoomed) * 0.75;
+  expect(Math.abs(under - lastKm * 0.75)).toBeLessThan(lastKm * 0.03);
+
+  // The ⌘ key does the same, and wheel down zooms out (after the pause between two steps).
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const zoomOut = wheel({ deltaY: 100, metaKey: true, clientX: at(0.75) });
+  expect(zoomOut.defaultPrevented).toBe(true);
+  expect(lastRange(onRange)).toBeNull();
+
+  // On the whole track there is nothing to zoom out of, and the page is still not zoomed.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const nothing = wheel({ deltaY: 100, ctrlKey: true, clientX: at(0.5) });
+  expect(nothing.defaultPrevented).toBe(true);
+  expect(lastRange(onRange)).toBeNull();
 });
 
 test("ElevationProfile — zoomé, le détail de la trace apparaît", async () => {

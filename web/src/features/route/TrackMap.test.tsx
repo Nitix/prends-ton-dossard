@@ -547,6 +547,25 @@ test("TrackMap — Ctrl + molette zoome", async () => {
   expect(hintText(screen)).toBeUndefined();
 });
 
+test("TrackMap — zoomSnap 0,5 : un cran de molette reste d'un niveau, un pincement garde son demi-niveau", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  expect(map.options.zoomSnap).toBe(0.5);
+  expect(map.options.zoomDelta).toBe(1);
+
+  // A notch of a mouse (100 px, a little more than half a level in Leaflet's curve) is one level.
+  const zoom = map.getZoom();
+  wheelOver(screen, { ctrlKey: true, deltaY: -100 });
+  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBe(zoom + 1);
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  // A zoom of 1.3 (a small pinch) lands on 1.5 levels, not back where it started.
+  const before = map.getZoom();
+  map.setZoom(before + Math.log2(1.3), { animate: false });
+  expect(map.getZoom() - before).toBe(0.5);
+});
+
 test("TrackMap — ⌘ sur Mac", async () => {
   vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
   const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");

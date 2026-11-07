@@ -296,6 +296,10 @@ export default function TrackMap({
       scrollWheelZoom: true,
       dragging: !coarsePointer(),
       maxZoom: MAX_ZOOM,
+      // Half levels: a small pinch on a phone keeps its half level instead of springing back
+      // to the one it started from. A notch of the wheel still goes one level (Leaflet
+      // rounds a notch up to the snap), and the buttons keep their whole level (zoomDelta).
+      zoomSnap: 0.5,
       zoomControl: false,
       ...(calm ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {}),
     });

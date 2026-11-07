@@ -6,7 +6,7 @@ La v7 ajoute l'ouverture des inscriptions avec ses rappels, les courses dont on 
 
 Le reste a été décidé en route, et il y a 20 décisions. Dis lesquelles revoir, par leur numéro.
 
-Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16 était la première liste de celle-ci) ; branche `feat/v7`. Rien n'est fusionné, poussé ni déployé : l'environnement de dev vient d'abord (n° 29), la production seulement après ton accord.
+Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16 était la première liste de celle-ci) ; branche `feat/v7`. Rien n'est fusionné, poussé ni déployé : l'environnement de dev vient d'abord (n° 18), la production seulement après ton accord.
 
 ## L'ouverture et les rappels
 
@@ -77,7 +77,8 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 
 ### 12. Le zoom du profil
 
-- **Décision :** glisser, pincer, boutons et touches + et − ; 200 m au moins ; les couleurs de pente ne changent pas avec le zoom ; la carte suit la portion choisie.
+- **Décision :** glisser, pincer, boutons, touches + et −, et Ctrl ou ⌘ + molette sur le profil (le même pas que les boutons) ; 200 m au moins ; la carte suit la portion choisie. La carte garde `zoomSnap: 0.5` : un petit pincement sur un téléphone garde son demi-niveau au lieu de revenir en arrière, et un cran de molette reste d'un niveau.
+- **Les couleurs de pente suivent le zoom (changé à ta demande, après « le zoom ne semble pas zoomer tant que ça… enfin avoir les détails »).** La première version les lisait sur une longueur fixe, 1 % de la trace (846 m sur 42 km), si bien qu'une portion de 200 m n'avait qu'une couleur. Une pente se lit maintenant sur `max(portion / 100, 25 m, l'écart entre les points)` de chaque côté : en vue entière rien ne change, et en zoomant les couleurs changent à l'échelle de la vue (une rampe de 150 m à 20 % a sa couleur).
 - **Nom accessible :** « Vue entière du profil » (le nom contient le texte du bouton, « Vue entière »).
 
 ### 13. Partager
