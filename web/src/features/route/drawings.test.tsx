@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest";
+import { useState } from "react";
+import { describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { userEvent } from "vitest/browser";
 
@@ -6,7 +7,8 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { ElevationProfile } from "./ElevationProfile";
-import { toTrack, type TrackPoint } from "./gpx";
+import { simplify, toTrack, type TrackPoint } from "./gpx";
+import type { KmRange } from "./range";
 import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_FILLS, SLOPE_ZONES, type SlopeZone } from "./slope";
 
 // The colours are classes of Tailwind, which the styles load.
@@ -460,4 +462,275 @@ describe("ElevationProfile", () => {
     expect(screen.container.querySelectorAll("path")).toHaveLength(2);
     expect(screen.container.innerHTML).not.toContain("NaN");
   });
+});
+
+// Zooming on a portion of the profile.
+
+/** The zone under the cursor at a kilometer, with the portion given. */
+async function zoneAt(km: number, range: KmRange | null): Promise<SlopeZone | null> {
+  const zones: (SlopeZone | null)[] = [];
+  function Probe() {
+    const [last, setLast] = useState<SlopeZone | null>(null);
+    zones.push(last);
+    return (
+      <ElevationProfile
+        points={everyZone()}
+        label="Profil"
+        range={range}
+        cursorKm={km}
+        onCursorZone={setLast}
+      />
+    );
+  }
+  await render(
+    <I18nProvider languages={["fr"]}>
+      <Probe />
+    </I18nProvider>,
+  );
+  await expect.poll(() => zones.at(-1)).not.toBeNull();
+  return zones.at(-1) ?? null;
+}
+
+/** How many points the line of the profile goes through. */
+const pathPoints = (container: Element) =>
+  (container.querySelector(".profile-line")?.getAttribute("d") ?? "").split(/[ML]/).length - 1;
+/** A pointer event on an element, as a mouse, a pen or a finger sends it. */
+function pointer(
+  element: Element,
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+  x: number,
+  { id = 1, kind = "mouse" }: { id?: number; kind?: "mouse" | "touch" | "pen" } = {},
+) {
+  element.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: 80,
+      pointerId: id,
+      pointerType: kind,
+      button: 0,
+      buttons: type === "pointerup" ? 0 : 1,
+      isPrimary: true,
+    }),
+  );
+}
+
+type OnRange = ReturnType<typeof vi.fn<(range: KmRange | null) => void>>;
+
+/** The profile of a track; it keeps its portion itself (unless `range` is given) and tells where it goes. */
+async function renderZoom(points: TrackPoint[], props: { range?: KmRange | null } = {}) {
+  const onRange: OnRange = vi.fn<(range: KmRange | null) => void>();
+  const screen = await render(
+    <I18nProvider languages={["fr"]}>
+      <ElevationProfile points={points} label="Profil" onRange={onRange} {...props} />
+    </I18nProvider>,
+  );
+  const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
+  /** The x of a fraction of the cursor's box. */
+  const at = (fraction: number) => {
+    const rect = cursor.element().getBoundingClientRect();
+    return rect.left + rect.width * fraction;
+  };
+  return { screen, onRange, cursor, at };
+}
+
+const button = (screen: Awaited<ReturnType<typeof render>>, name: string) =>
+  screen.getByRole("button", { name });
+
+const lastRange = (spy: OnRange) => spy.mock.calls.at(-1)?.[0];
+const lengthOf = (range: KmRange | null | undefined) => (range ? range.to - range.from : NaN);
+
+test("ElevationProfile — glisser choisit une portion", async () => {
+  const { screen, onRange, cursor, at } = await renderZoom(mountain());
+  const slider = cursor.element();
+  const lastKm = mountain().at(-1)?.km ?? 0;
+
+  pointer(slider, "pointerdown", at(0.25));
+  pointer(slider, "pointermove", at(0.5));
+  // The band is drawn while the pointer is down, in the colour of the theme.
+  await expect.poll(() => screen.container.querySelector(".profile-selection")).not.toBeNull();
+  const band = screen.container.querySelector<SVGRectElement>(".profile-selection");
+  expect(band?.style.fill).toBe("var(--profile-selection)");
+  expect(onRange).not.toHaveBeenCalled();
+
+  pointer(slider, "pointerup", at(0.5));
+  await expect.poll(() => onRange.mock.calls.length).toBe(1);
+  const chosen = lastRange(onRange);
+  expect(Math.abs((chosen?.from ?? 0) - lastKm * 0.25)).toBeLessThan(1.2);
+  expect(Math.abs((chosen?.to ?? 0) - lastKm * 0.5)).toBeLessThan(1.2);
+  // The band goes, the profile is limited to the portion and says it.
+  await expect.poll(() => screen.container.querySelector(".profile-selection")).toBeNull();
+  const words = seen(screen.container.querySelector("output")?.textContent);
+  expect(words).toMatch(/^Du km \d+,\d au km \d+,\d$/);
+  await expect
+    .element(screen.getByRole("img", { name: new RegExp(`^Profil, ${words}$`) }))
+    .toBeVisible();
+  // The graduations are the portion's: none beyond it.
+  const kilometers = [...screen.container.querySelectorAll("text")]
+    .map((text) => seen(text.textContent))
+    .filter((text) => /\skm$/.test(text))
+    .map((text) => Number.parseFloat(text.replace(",", ".")));
+  expect(kilometers.length).toBeGreaterThan(0);
+  for (const km of kilometers) {
+    expect(km).toBeGreaterThanOrEqual((chosen?.from ?? 0) - 0.01);
+    expect(km).toBeLessThanOrEqual((chosen?.to ?? 0) + 0.01);
+  }
+});
+
+test("ElevationProfile — un clic sans glisser place le curseur", async () => {
+  const { screen, onRange, cursor, at } = await renderZoom(flatThenWall());
+  const slider = cursor.element();
+  pointer(slider, "pointerdown", at(0.5));
+  pointer(slider, "pointerup", at(0.5));
+  await expect.poll(() => pill(screen.container)).toBe("1,5 km · 500 m · 0 %");
+  expect(onRange).not.toHaveBeenCalled();
+  await expect.poll(() => screen.container.querySelector(".profile-selection")).toBeNull();
+});
+
+test("ElevationProfile — une portion trop courte ne zoome pas", async () => {
+  // 40 km: 5 px are long enough for 200 m but not for 8 px.
+  const long = await renderZoom(mountain());
+  pointer(long.cursor.element(), "pointerdown", long.at(0.4));
+  pointer(long.cursor.element(), "pointermove", long.at(0.4) + 5);
+  pointer(long.cursor.element(), "pointerup", long.at(0.4) + 5);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(long.onRange).not.toHaveBeenCalled();
+  await long.screen.unmount();
+  // 5 km: more than 8 px, but 150 m.
+  const short = await renderZoom(everyZone());
+  const dx = (0.15 / 5) * short.cursor.element().getBoundingClientRect().width;
+  pointer(short.cursor.element(), "pointerdown", short.at(0.4));
+  pointer(short.cursor.element(), "pointermove", short.at(0.4) + dx);
+  pointer(short.cursor.element(), "pointerup", short.at(0.4) + dx);
+  // A mouse that is cancelled (the browser took the gesture) chooses nothing either.
+  pointer(short.cursor.element(), "pointerdown", short.at(0.1));
+  pointer(short.cursor.element(), "pointermove", short.at(0.9));
+  pointer(short.cursor.element(), "pointercancel", short.at(0.9));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(short.onRange).not.toHaveBeenCalled();
+});
+
+test("ElevationProfile — pincer zoome", async () => {
+  const { screen, onRange, cursor, at } = await renderZoom(mountain());
+  const slider = cursor.element();
+  const lastKm = mountain().at(-1)?.km ?? 0;
+  // Two fingers 20 % of the profile apart, which spread to 40 %: twice shorter.
+  pointer(slider, "pointerdown", at(0.4), { id: 1, kind: "touch" });
+  pointer(slider, "pointerdown", at(0.6), { id: 2, kind: "touch" });
+  pointer(slider, "pointermove", at(0.3), { id: 1, kind: "touch" });
+  pointer(slider, "pointermove", at(0.7), { id: 2, kind: "touch" });
+  await expect.poll(() => onRange.mock.calls.length).toBeGreaterThan(0);
+  const zoomed = lastRange(onRange);
+  expect(lengthOf(zoomed)).toBeGreaterThan(lastKm * 0.4);
+  expect(lengthOf(zoomed)).toBeLessThan(lastKm * 0.6);
+  // Around the middle of the fingers (the middle of the track).
+  const middle = ((zoomed?.from ?? 0) + (zoomed?.to ?? 0)) / 2;
+  expect(middle).toBeGreaterThan(lastKm * 0.4);
+  expect(middle).toBeLessThan(lastKm * 0.6);
+  pointer(slider, "pointerup", at(0.3), { id: 1, kind: "touch" });
+  pointer(slider, "pointerup", at(0.7), { id: 2, kind: "touch" });
+  expect(screen.container.querySelector(".profile-selection")).toBeNull();
+
+  // Fingers that draw together zoom out.
+  const calls = onRange.mock.calls.length;
+  pointer(slider, "pointerdown", at(0.3), { id: 3, kind: "touch" });
+  pointer(slider, "pointerdown", at(0.7), { id: 4, kind: "touch" });
+  pointer(slider, "pointermove", at(0.4), { id: 3, kind: "touch" });
+  pointer(slider, "pointermove", at(0.6), { id: 4, kind: "touch" });
+  await expect.poll(() => onRange.mock.calls.length).toBeGreaterThan(calls);
+  const out = lastRange(onRange);
+  expect(out === null || lengthOf(out) > lengthOf(zoomed)).toBe(true);
+});
+
+test("ElevationProfile — les boutons Zoomer, Dézoomer et Vue entière", async () => {
+  const { screen, onRange } = await renderZoom(mountain());
+  const zoomIn = button(screen, fr.route.zoomProfileInLabel);
+  const zoomOut = button(screen, fr.route.zoomProfileOutLabel);
+  const whole = button(screen, fr.route.zoomProfileAllLabel);
+  const lastKm = mountain().at(-1)?.km ?? 0;
+
+  // On the whole profile there is nothing to zoom out of.
+  await expect.element(zoomIn).not.toHaveAttribute("aria-disabled");
+  await expect.element(zoomOut).toHaveAttribute("aria-disabled", "true");
+  await expect.element(whole).toHaveAttribute("aria-disabled", "true");
+  // A tap on a button that says it is off does nothing (the driver would wait for it to be enabled).
+  zoomOut.element().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  whole.element().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  expect(onRange).not.toHaveBeenCalled();
+  // They are tap targets.
+  for (const target of [zoomIn, zoomOut, whole]) {
+    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  }
+
+  await zoomIn.click();
+  expect(lengthOf(lastRange(onRange))).toBeCloseTo(lastKm / 2, 6);
+  await expect.element(zoomOut).not.toHaveAttribute("aria-disabled");
+  await expect.element(whole).not.toHaveAttribute("aria-disabled");
+  await zoomIn.click();
+  expect(lengthOf(lastRange(onRange)) * 4).toBeCloseTo(lastKm, 6);
+  await zoomOut.click();
+  expect(lengthOf(lastRange(onRange)) * 2).toBeCloseTo(lastKm, 6);
+  await whole.click();
+  expect(lastRange(onRange)).toBeNull();
+  await expect.element(whole).toHaveAttribute("aria-disabled", "true");
+  expect(screen.container.querySelector("output")?.textContent).toBe("");
+});
+
+test("ElevationProfile — les touches + et −", async () => {
+  const { onRange, cursor } = await renderZoom(mountain());
+  const lastKm = mountain().at(-1)?.km ?? 0;
+  await userEvent.tab();
+  expect(document.activeElement).toBe(cursor.element());
+  await userEvent.keyboard("+");
+  // Around the cursor, which is at the start: the portion starts there too.
+  expect(lengthOf(lastRange(onRange))).toBeCloseTo(lastKm / 2, 6);
+  expect(lastRange(onRange)?.from).toBeCloseTo(0, 6);
+  await userEvent.keyboard("-");
+  expect(lastRange(onRange)).toBeNull();
+  // The true minus sign too (a keyboard can type it).
+  await userEvent.keyboard("+");
+  cursor.element().dispatchEvent(new KeyboardEvent("keydown", { key: "−", bubbles: true }));
+  await expect.poll(() => lastRange(onRange)).toBeNull();
+  // The keys that were already there keep their role.
+  await userEvent.keyboard("{End}");
+  expect(seen(cursor.element().getAttribute("aria-valuetext"))).toMatch(/^41,4 km/);
+});
+
+test("ElevationProfile — la portion est dite : « Du km 12,4 au km 18,0 »", async () => {
+  const { screen } = await renderZoom(mountain(), { range: { from: 12.4, to: 18 } });
+  expect(seen(screen.container.querySelector("output")?.textContent)).toBe("Du km 12,4 au km 18,0");
+  await expect
+    .element(screen.getByRole("img", { name: "Profil, Du km 12,4 au km 18,0" }))
+    .toBeVisible();
+  // The cursor stays in the portion.
+  const slider = screen.getByRole("slider", { name: fr.route.profileCursor }).element();
+  if (!(slider instanceof HTMLInputElement)) throw new Error("the cursor is not a range");
+  expect(Number(slider.min)).toBeGreaterThan(12);
+  expect(Number(slider.max)).toBeLessThan(18.6);
+});
+
+test("ElevationProfile — la couleur d'un point ne change pas avec le zoom", async () => {
+  // The middle of each kilometer: its zone, whole and zoomed (the bands are finer, the colour is not).
+  for (const [i, km] of [0.5, 1.5, 2.5, 3.5, 4.5].entries()) {
+    const whole = await zoneAt(km, null);
+    const zoomed = await zoneAt(km, { from: km - 0.4, to: km + 0.4 });
+    const tight = await zoneAt(km, { from: km - 0.1, to: km + 0.1 });
+    expect(whole).toBe(SLOPE_ZONES[i]);
+    expect(zoomed).toBe(whole);
+    expect(tight).toBe(whole);
+  }
+});
+
+test("ElevationProfile — zoomé, le détail de la trace apparaît", async () => {
+  // 20 000 points over about 40 km: the whole track is drawn with 1 000 of them.
+  const dense = mountain(20_000);
+  const range = { from: 10, to: 14 };
+  const whole = await renderZoom(dense);
+  expect(pathPoints(whole.screen.container)).toBeLessThanOrEqual(1000);
+  const zoomed = await renderZoom(dense, { range });
+  const inPortion = simplify(dense).filter((p) => p.km >= range.from && p.km <= range.to);
+  expect(pathPoints(zoomed.screen.container)).toBeGreaterThan(inPortion.length * 3);
+  expect(pathPoints(zoomed.screen.container)).toBeLessThanOrEqual(1000);
+  expect(zoomed.screen.container.innerHTML).not.toContain("NaN");
 });

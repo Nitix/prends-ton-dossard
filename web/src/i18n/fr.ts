@@ -574,6 +574,16 @@ export const fr = {
     profileCursor: "Position sur le profil",
     profileReading: (km: string, altitude: string, slope: string) =>
       `${km}, altitude ${altitude}, pente ${slope}`,
+    // Zooming on a portion of the profile: the three buttons (text, then accessible name), the portion in words (the kilometers already formatted: "Du km 12,4 au km 18,0"), and the help under the profile.
+    zoomProfileIn: "Zoomer",
+    zoomProfileInLabel: "Zoomer sur le profil",
+    zoomProfileOut: "Dézoomer",
+    zoomProfileOutLabel: "Dézoomer le profil",
+    zoomProfileAll: "Vue entière",
+    zoomProfileAllLabel: "Revenir au profil entier",
+    profileRange: (from: string, to: string) => `Du km ${from} au km ${to}`,
+    profileHelpFine: "Glisse sur le profil pour zoomer sur une portion.",
+    profileHelpCoarse: "Écarte deux doigts sur le profil pour zoomer.",
     // What the two marks of the map stand for.
     start: "Départ",
     finish: "Arrivée",

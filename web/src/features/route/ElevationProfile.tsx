@@ -9,8 +9,11 @@ import {
   type RefObject,
 } from "react";
 
+import { SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
+import { coarsePointer } from "./gestures";
 import { simplify, type TrackPoint } from "./gpx";
+import { clampRange, MIN_SPAN_KM, pointsIn, zoomAround, type KmRange } from "./range";
 import { SLOPE_FILLS, SLOPE_STEPS, SLOPE_ZONES, slopeZone, type SlopeZone } from "./slope";
 import { altitudeScale, distanceTicks } from "./ticks";
 
@@ -32,6 +35,10 @@ const FIRST_WIDTH = 340;
 const RUNS = 150;
 /** How far the box of the cursor goes beyond the plot on each side, in pixels. */
 const CURSOR_BLEED = 4;
+/** How far a drag has to go, in pixels, to choose a portion and not to place the cursor. */
+const MIN_DRAG_PX = 8;
+/** What a button of zoom, a key or a spread of fingers does to the length of the portion: twice shorter, twice longer. */
+const ZOOM_FACTOR = 0.5;
 
 type WithAltitude = TrackPoint & { ele: number };
 
@@ -67,19 +74,20 @@ function altitudeAt(points: WithAltitude[], km: number): number {
 }
 
 /**
- * Runs of the track in the same zone of slope: the track is cut in bands of
- * `BAND_PX`, the gradient of each band is worked out from the altitudes at its
+ * Runs of the track in the same zone of slope: the portion shown is cut in `RUNS` bands, the gradient of each band is worked out from the altitudes at its
  * two ends, and the neighbouring bands of the same zone are joined.
  */
 function slopeRuns(
   points: WithAltitude[],
+  view: KmRange,
   lastKm: number,
 ): { from: number; to: number; zone: SlopeZone }[] {
   const count = RUNS;
-  const band = lastKm / count;
+  const band = (view.to - view.from) / count;
+  // A slope is read over the same length whatever the zoom: only the bands get finer.
   const half = slopeHalf(lastKm);
   const zones = Array.from({ length: count }, (_, i) => {
-    const middle = band * (i + 0.5);
+    const middle = view.from + band * (i + 0.5);
     const from = Math.max(0, middle - half);
     const to = Math.min(lastKm, middle + half);
     const percent =
@@ -94,8 +102,8 @@ function slopeRuns(
   const runs: { from: number; to: number; zone: SlopeZone }[] = [];
   zones.forEach((zone, i) => {
     const previous = runs.at(-1);
-    if (previous && previous.zone === zone) previous.to = band * (i + 1);
-    else runs.push({ from: band * i, to: band * (i + 1), zone });
+    if (previous && previous.zone === zone) previous.to = view.from + band * (i + 1);
+    else runs.push({ from: view.from + band * i, to: view.from + band * (i + 1), zone });
   });
   return runs;
 }
@@ -159,18 +167,26 @@ function useWidth<E extends HTMLElement>(): [RefObject<E | null>, number] {
  * whatever moves it (`null` with no cursor), so that the map paints its mark in
  * the colour of the dot of the profile.
  *
+ * The profile zooms on a portion of the track (`range`, in kilometers, `null`
+ * for the whole track): a drag with a mouse or a pen, two fingers that spread
+ * or draw together, the buttons under it, or the keys + and − when it has the
+ * focus. The portion is redrawn from the points of the whole track (reduced to
+ * 1 000 again), with the altitudes and the graduations of the portion; a slope
+ * is read over the same length as in the whole view, so its colour never changes
+ * with the zoom. With `range` the page holds the portion (and `onRange` is told
+ * where it goes); without it, the profile keeps it itself.
+ *
  * Pass the whole track: it is reduced to 1 000 points here. `label` is the
  * accessible name of the drawing, which says the numbers.
  */
 export function ElevationProfile({ points, ...profile }: ProfileProps & { points: TrackPoint[] }) {
-  // The points that have an altitude, which are then at most 1 000.
-  const drawn = useMemo(
-    () => simplify(points.filter((p): p is WithAltitude => p.ele !== undefined)),
-    [points],
-  );
-  const lastKm = drawn.at(-1)?.km ?? 0;
+  // The points that have an altitude.
+  const all = useMemo(() => points.filter((p): p is WithAltitude => p.ele !== undefined), [points]);
+  // The whole track, at most 1 000 points.
+  const drawn = useMemo(() => simplify(all), [all]);
+  const lastKm = all.at(-1)?.km ?? 0;
   if (drawn.length < 2 || !(lastKm > 0)) return null;
-  return <Profile drawn={drawn} lastKm={lastKm} {...profile} />;
+  return <Profile all={all} drawn={drawn} lastKm={lastKm} {...profile} />;
 }
 
 type ProfileProps = {
@@ -178,21 +194,28 @@ type ProfileProps = {
   cursorKm?: number | null;
   onCursorKm?: (km: number | null) => void;
   onCursorZone?: (zone: SlopeZone | null) => void;
+  range?: KmRange | null;
+  onRange?: (range: KmRange | null) => void;
 };
 
 /** The drawing of `ElevationProfile`, for a track that has one: two points with an altitude at least, and a length. */
 function Profile({
+  all,
   drawn,
   lastKm,
   label,
   cursorKm,
   onCursorKm,
   onCursorZone,
-}: ProfileProps & { drawn: WithAltitude[]; lastKm: number }) {
+  range: rangeProp,
+  onRange,
+}: ProfileProps & { all: WithAltitude[]; drawn: WithAltitude[]; lastKm: number }) {
   const { t, f, formatLocale } = useI18n();
   const [box, width] = useWidth<HTMLDivElement>();
   const [ownCursor, setOwnCursor] = useState<number | null>(null);
+  const [ownRange, setOwnRange] = useState<KmRange | null>(null);
   const clipId = useId();
+  const helpId = useId();
 
   // The cursor is the page's when it drives it, the profile's otherwise; the
   // page is told whenever the cursor moves on the profile.
@@ -202,31 +225,58 @@ function Profile({
     onCursorKm?.(km);
   };
 
-  const plotWidth = Math.max(120, width - MARGIN.left - MARGIN.right);
-  const altitudes = drawn.map((p) => p.ele);
-  const scale = altitudeScale(Math.min(...altitudes), Math.max(...altitudes));
-  const kilometers = distanceTicks(lastKm);
+  // The portion shown, the same way: the page's, or the profile's own.
+  const range = rangeProp === undefined ? ownRange : rangeProp;
+  // The latest portion, for gestures that come faster than a render.
+  const latest = useRef<KmRange | null>(range);
+  useLayoutEffect(() => {
+    latest.current = range;
+  });
+  const setRange = (next: KmRange | null) => {
+    latest.current = next;
+    setOwnRange(next);
+    onRange?.(next);
+  };
+  const view: KmRange = range ?? { from: 0, to: lastKm };
+  const span = view.to - view.from;
+  const zoomed = range !== null;
 
-  const x = (km: number) => MARGIN.left + (km / lastKm) * plotWidth;
+  // What is drawn: the points of the portion, read in the whole track and reduced to 1 000 again.
+  const shown = useMemo(
+    () => (range === null ? drawn : simplify(pointsIn(all, range))),
+    [all, drawn, range],
+  );
+
+  const plotWidth = Math.max(120, width - MARGIN.left - MARGIN.right);
+  const altitudes = shown.map((p) => p.ele);
+  const scale = altitudeScale(Math.min(...altitudes), Math.max(...altitudes));
+  const kilometers = distanceTicks(view.from, view.to);
+
+  const x = (km: number) => MARGIN.left + ((km - view.from) / span) * plotWidth;
   const y = (ele: number) =>
     MARGIN.top + (1 - (ele - scale.from) / (scale.to - scale.from)) * PLOT_HEIGHT;
   const bottom = MARGIN.top + PLOT_HEIGHT;
 
-  const line = drawn
+  const line = shown
     .map((p, i) => `${i === 0 ? "M" : "L"}${coordinates(x(p.km), y(p.ele))}`)
     .join(" ");
-  const first = drawn[0];
-  const area = `${line} L${coordinates(x(lastKm), bottom)} L${coordinates(x(first?.km ?? 0), bottom)} Z`;
-  const runs = slopeRuns(drawn, lastKm);
+  const first = shown[0];
+  const area = `${line} L${coordinates(x(shown.at(-1)?.km ?? view.to), bottom)} L${coordinates(x(first?.km ?? view.from), bottom)} Z`;
+  const runs = slopeRuns(all, view, lastKm);
 
   // The labels of the kilometers stay in the drawing (the first starts at its
-  // tick, one that would pass the right edge ends at it), and one that would
-  // touch the label before it is left out: its tick stays.
+  // tick when it is at the left edge, one that would pass the right edge ends at
+  // it), and one that would touch the label before it is left out: its tick stays.
   const kmLabels: { km: number; anchor: "start" | "middle" | "end"; shown: boolean }[] = [];
   for (const [i, km] of kilometers.entries()) {
     const wide = f.km(km).length * LABEL_FONT_SIZE * 0.6;
     const centre = x(km);
-    const anchor = i === 0 ? "start" : centre + wide / 2 > width - 2 ? "end" : "middle";
+    const anchor =
+      i === 0 && centre - wide / 2 < MARGIN.left
+        ? "start"
+        : centre + wide / 2 > width - 2
+          ? "end"
+          : "middle";
     const left = anchor === "start" ? centre : anchor === "end" ? centre - wide : centre - wide / 2;
     const previous = kmLabels.findLast((mark) => mark.shown);
     const previousRight = previous
@@ -236,9 +286,9 @@ function Profile({
   }
 
   // The highest point, named on the drawing.
-  const summit = drawn.reduce(
+  const summit = shown.reduce(
     (best, p) => (p.ele > best.ele ? p : best),
-    drawn[0] ?? { km: 0, ele: 0, lat: 0, lon: 0 },
+    shown[0] ?? { km: 0, ele: 0, lat: 0, lon: 0 },
   );
 
   const percent = new Intl.NumberFormat(formatLocale, {
@@ -258,22 +308,32 @@ function Profile({
     return { zone, text };
   });
 
+  // The portion in words: "Du km 12,4 au km 18,0".
+  const oneDecimal = new Intl.NumberFormat(formatLocale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  const rangeText = range
+    ? t.route.profileRange(oneDecimal.format(range.from), oneDecimal.format(range.to))
+    : "";
+
   // The cursor: the distance, the altitude there, and the slope around it, read
-  // as the bands are; its dot takes the colour of the band under it.
+  // as the bands are; its dot takes the colour of the band under it. It stays in the portion.
+  const clamp = (km: number) => Math.min(view.to, Math.max(view.from, km));
   const reading = (at: number) => {
-    const km = Math.min(lastKm, Math.max(0, at));
-    const ele = altitudeAt(drawn, km);
+    const km = clamp(at);
+    const ele = altitudeAt(all, km);
     const half = slopeHalf(lastKm);
     const from = Math.max(0, km - half);
     const to = Math.min(lastKm, km + half);
-    const slope = ((altitudeAt(drawn, to) - altitudeAt(drawn, from)) / ((to - from) * 1000)) * 100;
+    const slope = ((altitudeAt(all, to) - altitudeAt(all, from)) / ((to - from) * 1000)) * 100;
     const zone = runs.find((run) => km <= run.to)?.zone ?? slopeZone(slope);
     // A slope that rounds to nothing is 0: not "-0 %" (a gentle descent, or the
     // noise of the floats on the flat). `+ 0` turns -0 into 0.
     return { km, ele, slope: Number.isFinite(slope) ? Math.round(slope) + 0 : 0, zone };
   };
   const at = cursor === null ? null : reading(cursor);
-  const said = at ?? reading(0);
+  const said = at ?? reading(view.from);
   const saidKm = f.km(Math.round(said.km * 10) / 10);
 
   // The zone under the cursor, told before the page is painted: the mark of the
@@ -283,21 +343,109 @@ function Profile({
     onCursorZone?.(cursorZone);
   }, [onCursorZone, cursorZone]);
 
-  // The cursor's range goes a little beyond both ends of the track, as its box beyond the plot.
-  const bleed = (CURSOR_BLEED / plotWidth) * lastKm;
-  const clamp = (km: number) => Math.min(lastKm, Math.max(0, km));
+  // The cursor's range goes a little beyond both ends of the portion, as its box beyond the plot.
+  const bleed = (CURSOR_BLEED / plotWidth) * span;
+  /** The kilometer under a pointer, by its place on the cursor's range. */
+  const kmUnder = (clientX: number, rect: DOMRect) =>
+    clamp(view.from - bleed + ((clientX - rect.left) / rect.width) * (span + 2 * bleed));
   // A pointer that moves over the profile (without a button pressed, too) puts the cursor under it.
   const follow = (event: PointerEvent<HTMLInputElement>) => {
+    setCursor(kmUnder(event.clientX, event.currentTarget.getBoundingClientRect()));
+  };
+
+  // Zooming: around the cursor when it is on the portion, around its middle otherwise.
+  const zoomBy = (factor: number, around?: number) => {
+    const centre = around ?? (cursor === null ? (view.from + view.to) / 2 : clamp(cursor));
+    setRange(zoomAround(latest.current, centre, factor, lastKm));
+  };
+  const canZoomIn = span > MIN_SPAN_KM + 1e-9;
+
+  // A drag with a mouse or a pen draws a band, which becomes the portion when
+  // it is long enough; fingers: one moves the cursor, two spread to zoom.
+  const [band, setBand] = useState<{ from: number; to: number } | null>(null);
+  const drag = useRef<{ id: number; x: number; km: number } | null>(null);
+  const fingers = useRef(new Map<number, { x: number }>());
+  const spread = useRef<number | null>(null);
+  const pressDown = (event: PointerEvent<HTMLInputElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
-    setCursor(clamp(-bleed + ratio * (lastKm + 2 * bleed)));
+    if (event.pointerType === "touch") {
+      fingers.current.set(event.pointerId, { x: event.clientX });
+      if (fingers.current.size === 2) {
+        const [a, b] = [...fingers.current.values()];
+        spread.current = Math.abs((a?.x ?? 0) - (b?.x ?? 0));
+        return;
+      }
+    } else if (event.button === 0) {
+      const km = kmUnder(event.clientX, rect);
+      drag.current = { id: event.pointerId, x: event.clientX, km };
+      setBand({ from: km, to: km });
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // No such pointer (a script's): the events still come while it is over the profile.
+      }
+    }
+    follow(event);
   };
-  // The arrows, Page Up and Down, Home and End are the range's own; Escape puts the cursor away.
+  const pressMove = (event: PointerEvent<HTMLInputElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (event.pointerType === "touch" && fingers.current.has(event.pointerId)) {
+      fingers.current.set(event.pointerId, { x: event.clientX });
+      if (fingers.current.size >= 2 && spread.current !== null) {
+        const [a, b] = [...fingers.current.values()];
+        const now = Math.abs((a?.x ?? 0) - (b?.x ?? 0));
+        if (now > 0 && spread.current > 0) {
+          // Fingers that spread make the portion shorter: the ratio of the old gap to the new.
+          const middle = ((a?.x ?? 0) + (b?.x ?? 0)) / 2;
+          zoomBy(spread.current / now, kmUnder(middle, rect));
+        }
+        if (now > 0) spread.current = now;
+        return;
+      }
+    }
+    if (drag.current?.id === event.pointerId) {
+      setBand({ from: drag.current.km, to: kmUnder(event.clientX, rect) });
+    }
+    follow(event);
+  };
+  const pressUp = (event: PointerEvent<HTMLInputElement>) => {
+    if (event.pointerType === "touch") {
+      fingers.current.delete(event.pointerId);
+      if (fingers.current.size < 2) spread.current = null;
+    }
+    const started = drag.current;
+    if (started?.id !== event.pointerId) return;
+    drag.current = null;
+    setBand(null);
+    if (event.type === "pointercancel") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const end = kmUnder(event.clientX, rect);
+    const low = Math.min(started.km, end);
+    const high = Math.max(started.km, end);
+    if (Math.abs(event.clientX - started.x) >= MIN_DRAG_PX && high - low >= MIN_SPAN_KM) {
+      const chosen = clampRange({ from: low, to: high }, lastKm);
+      setRange(chosen.from <= 0 && chosen.to >= lastKm ? null : chosen);
+    }
+  };
+
+  // The arrows, Page Up and Down, Home and End are the range's own; Escape puts
+  // the cursor away; + and − zoom.
   const press = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Escape" || cursor === null) return;
-    event.preventDefault();
-    setCursor(null);
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      if (canZoomIn) zoomBy(ZOOM_FACTOR);
+    } else if (event.key === "-" || event.key === "−") {
+      event.preventDefault();
+      if (zoomed) zoomBy(1 / ZOOM_FACTOR);
+    } else if (event.key === "Escape" && cursor !== null) {
+      event.preventDefault();
+      setCursor(null);
+    }
   };
+
+  const button = `${SECONDARY} inline-flex items-center justify-center aria-disabled:cursor-default aria-disabled:opacity-60`;
+  const fine = !coarsePointer();
 
   return (
     <div className="elevation-profile flex flex-col gap-2.5">
@@ -306,7 +454,7 @@ function Profile({
           // A drawing in SVG has no <img> to stand for it: role="img" makes it a picture.
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
           role="img"
-          aria-label={label}
+          aria-label={rangeText === "" ? label : `${label}, ${rangeText}`}
           width={width}
           height={HEIGHT}
           viewBox={`0 0 ${width} ${HEIGHT}`}
@@ -366,7 +514,7 @@ function Profile({
               {f.meters(ele)}
             </text>
           ))}
-          {kmLabels.map(({ km, anchor, shown }) => (
+          {kmLabels.map(({ km, anchor, shown: visible }) => (
             <g key={km}>
               <line
                 x1={x(km)}
@@ -377,7 +525,7 @@ function Profile({
                 strokeWidth={1}
                 shapeRendering="crispEdges"
               />
-              {shown && (
+              {visible && (
                 <text
                   x={x(km)}
                   y={bottom + TICK_LENGTH + 4}
@@ -399,6 +547,21 @@ function Profile({
             className="profile-summit fill-relief stroke-card"
             strokeWidth={2}
           />
+          {/* The band of a drag that chooses a portion: the colour of the theme, with an edge in the
+              ink, which forced colours turn into the text's. */}
+          {band && (
+            <rect
+              className="profile-selection stroke-relief forced-colors:fill-transparent forced-colors:stroke-[CanvasText]"
+              x={x(Math.min(band.from, band.to))}
+              y={MARGIN.top}
+              width={Math.abs(x(band.to) - x(band.from))}
+              height={PLOT_HEIGHT}
+              style={{ fill: "var(--profile-selection)" }}
+              strokeWidth={1.5}
+              strokeOpacity={0.7}
+              pointerEvents="none"
+            />
+          )}
           {at && (
             <g>
               <line
@@ -426,13 +589,14 @@ function Profile({
         <input
           type="range"
           aria-label={t.route.profileCursor}
+          aria-describedby={helpId}
           aria-valuetext={t.route.profileReading(
             saidKm,
             f.meters(said.ele),
             percent.format(said.slope),
           )}
-          min={-bleed}
-          max={lastKm + bleed}
+          min={view.from - bleed}
+          max={view.to + bleed}
           // No grid to snap to: an arrow moves the cursor by a hundredth of the range, Page Up and Down by a tenth.
           step="any"
           value={said.km}
@@ -445,16 +609,20 @@ function Profile({
             width: plotWidth + 2 * CURSOR_BLEED,
             height: bottom + 4,
           }}
-          onPointerMove={follow}
-          onPointerDown={follow}
+          onPointerMove={pressMove}
+          onPointerDown={pressDown}
+          onPointerUp={pressUp}
+          onPointerCancel={pressUp}
           onPointerLeave={(event) => {
-            // Away from a pointer, unless the keyboard is on it.
-            if (document.activeElement !== event.currentTarget) setCursor(null);
+            // Away from a pointer, unless the keyboard is on it or a drag is going on.
+            if (drag.current === null && document.activeElement !== event.currentTarget) {
+              setCursor(null);
+            }
           }}
           onKeyDown={press}
           onFocus={() => {
             // From the keyboard, the cursor shows at the start; a finger, a pointer or the map has already put it.
-            if (cursor === null) setCursor(0);
+            if (cursor === null) setCursor(view.from);
           }}
           onBlur={() => {
             setCursor(null);
@@ -477,6 +645,47 @@ function Profile({
             : f.meters(summit.ele)}
         </p>
       </div>
+      {/* The zoom, for everyone and for the keyboard: a drag or a pinch is never the only way. */}
+      <div className="profile-zoom flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={button}
+          aria-label={t.route.zoomProfileInLabel}
+          aria-disabled={canZoomIn ? undefined : true}
+          onClick={() => {
+            if (canZoomIn) zoomBy(ZOOM_FACTOR);
+          }}
+        >
+          {t.route.zoomProfileIn}
+        </button>
+        <button
+          type="button"
+          className={button}
+          aria-label={t.route.zoomProfileOutLabel}
+          aria-disabled={zoomed ? undefined : true}
+          onClick={() => {
+            if (zoomed) zoomBy(1 / ZOOM_FACTOR);
+          }}
+        >
+          {t.route.zoomProfileOut}
+        </button>
+        <button
+          type="button"
+          className={button}
+          aria-label={t.route.zoomProfileAllLabel}
+          aria-disabled={zoomed ? undefined : true}
+          onClick={() => {
+            if (zoomed) setRange(null);
+          }}
+        >
+          {t.route.zoomProfileAll}
+        </button>
+        {/* The portion in words, said politely when it changes. */}
+        <output className="profile-range text-sm text-neutral-700 tabular-nums">{rangeText}</output>
+      </div>
+      <p id={helpId} className="profile-help text-sm text-neutral-600">
+        {fine ? t.route.profileHelpFine : t.route.profileHelpCoarse}
+      </p>
       {/* The legend of the zones of the slope: each colour with its words. */}
       <div
         aria-hidden="true"

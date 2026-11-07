@@ -13,7 +13,7 @@ describe("distanceTicks", () => {
     const problems: string[] = [];
     // Every length from 1.5 to 5 000 km, with steps that do not favour a round number.
     for (let km = 1.5; km < 5000; km *= 1.0137) {
-      const ticks = distanceTicks(km);
+      const ticks = distanceTicks(0, km);
       const step = (ticks[1] ?? 0) - (ticks[0] ?? 0);
       const evenlySpaced = ticks.every((tick, i) => Math.abs(tick - i * step) < 1e-9);
       const ok =
@@ -29,20 +29,20 @@ describe("distanceTicks", () => {
   });
 
   test("distanceTicks — un marathon", () => {
-    expect(distanceTicks(42.2)).toEqual([0, 10, 20, 30, 40]);
-    expect(distanceTicks(100)).toEqual([0, 20, 40, 60, 80, 100]);
-    expect(distanceTicks(12)).toEqual([0, 2.5, 5, 7.5, 10]);
+    expect(distanceTicks(0, 42.2)).toEqual([0, 10, 20, 30, 40]);
+    expect(distanceTicks(0, 100)).toEqual([0, 20, 40, 60, 80, 100]);
+    expect(distanceTicks(0, 12)).toEqual([0, 2.5, 5, 7.5, 10]);
   });
 
   test("distanceTicks — rien à graduer sur une longueur nulle", () => {
-    expect(distanceTicks(0)).toEqual([0]);
-    expect(distanceTicks(Number.NaN)).toEqual([0]);
+    expect(distanceTicks(0, 0)).toEqual([0]);
+    expect(distanceTicks(0, Number.NaN)).toEqual([0]);
   });
 
   test("distanceTicks — une longueur énorme ou infinie se termine", () => {
-    expect(distanceTicks(Infinity)).toEqual([0]);
+    expect(distanceTicks(0, Infinity)).toEqual([0]);
     for (const km of [1e12, 1e100, 1e300, 1.7e308, Number.MAX_VALUE]) {
-      const ticks = distanceTicks(km);
+      const ticks = distanceTicks(0, km);
       expect(ticks.length).toBeGreaterThanOrEqual(2);
       expect(ticks.length).toBeLessThanOrEqual(6);
       expect(ticks.every(Number.isFinite)).toBe(true);
@@ -129,4 +129,31 @@ describe("altitudeScale", () => {
     expect(flat.from).toBeLessThanOrEqual(500);
     expect(flat.to).toBeGreaterThanOrEqual(500);
   });
+});
+
+test("distanceTicks — sur une portion, des repères ronds à l'intérieur", () => {
+  // The old call is the portion from 0.
+  expect(distanceTicks(0, 20)).toEqual([0, 5, 10, 15, 20]);
+  // 12.4 to 18.0: round steps inside the portion, 4 to 6 of them.
+  expect(distanceTicks(12.4, 18)).toEqual([13, 14, 15, 16, 17, 18]);
+  // A short portion has finer steps, never under 0.1 km.
+  expect(distanceTicks(3.05, 3.35)).toEqual([3.1, 3.2, 3.3]);
+  // Every tick is inside, for any portion.
+  for (const [from, to] of [
+    [0.3, 0.5],
+    [41.2, 42.2],
+    [7, 7.2],
+    [100, 380],
+  ] as const) {
+    const ticks = distanceTicks(from, to);
+    expect(ticks.length).toBeGreaterThanOrEqual(1);
+    expect(ticks.length).toBeLessThanOrEqual(6);
+    for (const tick of ticks) {
+      expect(tick).toBeGreaterThanOrEqual(from - 1e-9);
+      expect(tick).toBeLessThanOrEqual(to + 1e-9);
+    }
+  }
+  // Nonsense gives the one graduation at its start.
+  expect(distanceTicks(5, 5)).toEqual([5]);
+  expect(distanceTicks(0, Number.POSITIVE_INFINITY)).toEqual([0]);
 });

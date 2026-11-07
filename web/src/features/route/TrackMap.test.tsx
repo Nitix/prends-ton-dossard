@@ -1,4 +1,9 @@
-import { Map as LeafletMap } from "leaflet";
+import {
+  LatLngBounds,
+  latLngBounds,
+  Map as LeafletMap,
+  type LatLngBoundsExpression,
+} from "leaflet";
 import { StrictMode, type ComponentProps } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
@@ -6,6 +11,7 @@ import { page } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { emulateMedia, resetMedia } from "../../test/media";
 import { BLANK_TILE } from "../../test/tiles";
 import { gateWheel } from "./gestures";
 import { toTrack } from "./gpx";
@@ -31,6 +37,10 @@ const OTHER_TRACK = toTrack([
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/** The box that a call of `fitBounds` was given. */
+const boundsOf = (box: LatLngBoundsExpression | undefined): LatLngBounds =>
+  box instanceof LatLngBounds ? box : latLngBounds(box ?? []);
 
 type Props = Partial<ComponentProps<typeof TrackMap>>;
 
@@ -638,4 +648,55 @@ test("gateWheel — stops a plain wheel, lets Ctrl or ⌘ through, and cleans up
   wheel({ deltaY: 100 });
   expect(reached).toHaveBeenCalledTimes(3);
   expect(onPlain).toHaveBeenCalledOnce();
+});
+
+test("TrackMap — la portion est mise en avant, et la carte s'y cadre", async () => {
+  const framed = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  expect(screen.container.querySelector("path.track-portion")).toBeNull();
+  const whole = part(screen, "path.track-line");
+  expect(getComputedStyle(whole).strokeOpacity).toBe("1");
+  const calls = framed.mock.calls.length;
+
+  // The first half of the track: 1.1 km of the 2.2.
+  await screen.rerender(mapOf({ range: { from: 0, to: 1.1 } }));
+  await expect.poll(() => framed.mock.calls.length).toBe(calls + 1);
+  const bounds = boundsOf(framed.mock.calls.at(-1)?.[0]);
+  // Its points are the start, then the bend: the finish is out of the frame.
+  expect(bounds.getSouth()).toBeCloseTo(45, 6);
+  expect(bounds.getNorth()).toBeLessThan(45.0105);
+  expect(bounds.getNorth()).toBeGreaterThan(45.007);
+  // A line of its own, thicker, over the track, which goes to half.
+  const portion = part(screen, "path.track-portion");
+  expect(Number.parseFloat(getComputedStyle(portion).strokeWidth)).toBeGreaterThan(
+    Number.parseFloat(getComputedStyle(whole).strokeWidth),
+  );
+  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("0.5");
+  // The ends of the track stay over the portion's line.
+  const paths = [...screen.container.querySelectorAll(".leaflet-overlay-pane path")];
+  expect(paths.indexOf(part(screen, "path.track-start"))).toBeGreaterThan(paths.indexOf(portion));
+  expect(paths.indexOf(part(screen, "path.track-finish"))).toBeGreaterThan(paths.indexOf(portion));
+
+  // Back to the whole track: framed again, the line is alone and plain.
+  await screen.rerender(mapOf({ range: null }));
+  await expect.poll(() => framed.mock.calls.length).toBe(calls + 2);
+  expect(boundsOf(framed.mock.calls.at(-1)?.[0]).getNorth()).toBeCloseTo(45.02, 6);
+  expect(screen.container.querySelector("path.track-portion")).toBeNull();
+  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("1");
+});
+
+test("TrackMap — une portion visible en couleurs forcées : son trait est celui du texte", async () => {
+  await emulateMedia({ forcedColors: "active" });
+  try {
+    const screen = await renderMap({ range: { from: 0, to: 1.1 } });
+    const portion = part(screen, "path.track-portion");
+    const probe = document.createElement("span");
+    probe.style.color = "CanvasText";
+    document.body.append(probe);
+    const text = getComputedStyle(probe).color;
+    probe.remove();
+    expect(getComputedStyle(portion).stroke).toBe(text);
+  } finally {
+    await resetMedia();
+  }
 });
