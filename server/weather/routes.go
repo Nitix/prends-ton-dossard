@@ -194,7 +194,7 @@ func (s *service) forecast(ctx context.Context, lat, lon float64, ele *float64, 
 	if s.failed("f|" + key) {
 		err = errRecentFailure
 	} else if days, err = s.src.forecast(ctx, lat, lon, ele, from, to); err != nil {
-		s.fail("f|"+key, err)
+		s.fail(ctx, "f|"+key, err)
 	}
 	if err != nil {
 		if have && now().Sub(old.at) < forecastStale {
@@ -300,7 +300,7 @@ func (s *service) geocode(ctx context.Context, text string) (found, error) {
 	}
 	got, err := s.src.geocode(ctx, text)
 	if err != nil {
-		s.fail("g|"+key, err)
+		s.fail(ctx, "g|"+key, err)
 		return found{}, err
 	}
 	ttl := placeTTL
@@ -400,9 +400,13 @@ func (s *service) failed(key string) bool {
 	return ok && e.fresh()
 }
 
-// fail remembers a failed call. A spent budget is not one: nothing was asked.
-func (s *service) fail(key string, err error) {
-	if errors.Is(err, errBudget) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+// fail remembers a failed call. Two failures are not the call's: a spent budget
+// (nothing was asked) and the request's own context ending (its member went
+// away, which says nothing of Open-Meteo). A timeout of the client, a refused
+// connection and a 5xx are remembered, though a client timeout also is a
+// context.DeadlineExceeded: only the context of the request is looked at.
+func (s *service) fail(ctx context.Context, key string, err error) {
+	if errors.Is(err, errBudget) || ctx.Err() != nil {
 		return
 	}
 	s.failures.put(key, err.Error(), failureTTL)

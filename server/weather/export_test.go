@@ -112,3 +112,11 @@ func LockKey(ctx context.Context, k *KeyLocks, key string) (func(), error) { ret
 
 // FailureTTL is how long a failed call is remembered.
 const FailureTTL = failureTTL
+
+// SetTimeout shortens the timeout of the client that the test installed.
+func SetTimeout(t testing.TB, d time.Duration) {
+	t.Helper()
+	old := client.Timeout
+	client.Timeout = d
+	t.Cleanup(func() { client.Timeout = old })
+}

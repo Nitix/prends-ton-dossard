@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -226,4 +227,52 @@ func TestWeather_LockHonoursTheContext(t *testing.T) {
 		t.Fatalf("the key is not free after a waiter gave up: %v", err)
 	}
 	again()
+}
+
+func TestWeather_ATimeoutIsKeptAMinute(t *testing.T) {
+	// The track gives the place: only the forecast is asked.
+	w := newWorld(t, "2026-06-10")
+	w.track(t, w.fx.F42, gpxAt(45.9, 6.1, ""))
+	w.meteo.delay = 400 * time.Millisecond
+	weather.SetTimeout(t, 80*time.Millisecond)
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if status, _ := w.get(t, w.fx.Event.Id); status != http.StatusBadGateway {
+				t.Errorf("status %d, want 502", status)
+			}
+		}()
+	}
+	wg.Wait()
+	if f := w.meteo.count("/v1/forecast"); f != 1 {
+		t.Errorf("%d forecast requests for ten calls at once that time out, want 1", f)
+	}
+}
+
+func TestWeather_ACancelledRequestIsNotKept(t *testing.T) {
+	w := newWorld(t, "2026-06-10")
+	w.track(t, w.fx.F42, gpxAt(45.9, 6.1, ""))
+	w.meteo.delay = 300 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/api/app/events/"+w.fx.Event.Id+"/weather", nil).WithContext(ctx)
+	req.Header.Set("Authorization", w.token)
+	go func() {
+		time.Sleep(80 * time.Millisecond)
+		cancel()
+	}()
+	w.h.ServeHTTP(httptest.NewRecorder(), req)
+	if f := w.meteo.count("/v1/forecast"); f != 1 {
+		t.Fatalf("%d forecast requests, want the 1 that was cancelled", f)
+	}
+
+	w.meteo.delay = 0
+	if a := w.answer(t, w.fx.Event.Id); a.Status != "ok" {
+		t.Errorf("status %q: the cancelled request was remembered as a failure", a.Status)
+	}
+	if f := w.meteo.count("/v1/forecast"); f != 2 {
+		t.Errorf("%d forecast requests, want 2", f)
+	}
 }
