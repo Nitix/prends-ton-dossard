@@ -296,6 +296,20 @@ export const en = {
     addToCalendar: "Add to my calendar",
     calendarFileName: "event",
   },
+  // Sharing a race (see features/events/share.ts and ShareButton.tsx).
+  share: {
+    button: "Share",
+    title: "Share the race",
+    monthWhen: (month: string) => `${month} (date to be set)`,
+    formats: (list: string) => `Races: ${list}`,
+    textLabel: "Text to share",
+    copy: "Copy the text",
+    copied: "Text copied.",
+    copyFailed: "The browser could not copy: the text is selected, copy it by hand.",
+    whatsapp: "Send on WhatsApp",
+    newTab: "(new tab)",
+    signIn: "The link only opens after signing in: only members of the group can see the race.",
+  },
   participation: {
     join: "I'm in",
     joinTitle: "I'm in",

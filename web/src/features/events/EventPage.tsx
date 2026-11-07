@@ -48,6 +48,7 @@ import { FormatTitle } from "./FormatTitle";
 import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
 import { RegisterLink } from "./RegisterLink";
 import { openingText, registrationState } from "./registration";
+import { ShareButton } from "./ShareButton";
 
 const SEPARATOR = " · ";
 
@@ -259,6 +260,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       <CalendarPlusIcon className="size-[1.125rem] shrink-0 text-iris-600" />
       {t.event.addToCalendar}
     </button>,
+    <ShareButton key="share" view={view} className={ACTION} />,
     <Link
       key="edit"
       to="/evenements/$id/modifier"

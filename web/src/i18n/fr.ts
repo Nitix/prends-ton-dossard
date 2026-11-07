@@ -366,6 +366,21 @@ export const fr = {
     addToCalendar: "Ajouter à mon agenda",
     calendarFileName: "evenement",
   },
+  // Sharing a race (see features/events/share.ts and ShareButton.tsx).
+  share: {
+    button: "Partager",
+    title: "Partager la course",
+    // After the month of a race known by its month only, in the text that is sent.
+    monthWhen: (month: string) => `${month} (date à préciser)`,
+    formats: (list: string) => `Épreuves : ${list}`,
+    textLabel: "Texte à partager",
+    copy: "Copier le texte",
+    copied: "Texte copié.",
+    copyFailed: "Le navigateur n'a pas pu copier : le texte est sélectionné, copie-le à la main.",
+    whatsapp: "Envoyer sur WhatsApp",
+    newTab: "(nouvel onglet)",
+    signIn: "Le lien ne s'ouvre qu'après connexion : seuls les membres du groupe voient la course.",
+  },
   // What a member does with the participations of an event (see features/participations).
   participation: {
     // The button of the page, and the title of its dialog.

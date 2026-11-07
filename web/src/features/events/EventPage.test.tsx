@@ -1206,6 +1206,39 @@ test("EventPage — en anglais, le fichier .ics a le PRODID //EN", async () => {
   expect((await response.text()).split("\r\n")).toContain("PRODID:-//Prends ton dossard//EN");
 });
 
+test("EventPage — « Partager » est après « Ajouter à mon agenda » et envoie le texte de la course", async () => {
+  const share = vi.fn<(data: ShareData) => Promise<void>>().mockResolvedValue();
+  Object.defineProperty(navigator, "share", { value: share, configurable: true, writable: true });
+  Object.defineProperty(navigator, "canShare", {
+    value: () => true,
+    configurable: true,
+    writable: true,
+  });
+  try {
+    const { screen } = await renderPage();
+    await loaded(screen);
+
+    const calendar = screen.getByRole("button", { name: fr.event.addToCalendar }).element();
+    const button = screen.getByRole("button", { name: fr.share.button }).element();
+    expect(
+      calendar.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(calendar.nextElementSibling).toBe(button);
+
+    await screen.getByRole("button", { name: fr.share.button }).click();
+
+    await vi.waitFor(() => {
+      expect(share).toHaveBeenCalledOnce();
+    });
+    const [data] = share.mock.calls[0] ?? [];
+    expect(data?.title).toBe("Trail des Crêtes");
+    expect(data?.text).toContain(location.origin + "/evenements/event");
+    expect(data?.text).not.toContain("Bob");
+  } finally {
+    for (const name of ["share", "canShare"]) Reflect.deleteProperty(navigator, name);
+  }
+});
+
 test("EventPage — les boutons d'action font au moins 44 px", async () => {
   const { screen } = await renderPage();
   await loaded(screen);
@@ -1214,6 +1247,7 @@ test("EventPage — les boutons d'action font au moins 44 px", async () => {
     screen.getByRole("button", { name: fr.participation.join }),
     screen.getByRole("button", { name: fr.participation.addSomeone }),
     screen.getByRole("button", { name: fr.event.addToCalendar }),
+    screen.getByRole("button", { name: fr.share.button }),
     screen.getByRole("link", { name: fr.common.edit }),
     screen.getByRole("button", { name: fr.common.delete }),
   ]) {
@@ -1235,13 +1269,16 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
         screen.getByRole("button", { name: fr.participation.join }),
         screen.getByRole("button", { name: fr.participation.addSomeone }),
         screen.getByRole("button", { name: fr.event.addToCalendar }),
+        screen.getByRole("button", { name: fr.share.button }),
         screen.getByRole("link", { name: fr.common.edit }),
         screen.getByRole("button", { name: fr.common.delete }),
       ].map((action) => action.element());
-      const [join, add, calendar, edit, remove] = actions.map((action) =>
+      const [join, add, calendar, share, edit, remove] = actions.map((action) =>
         action.getBoundingClientRect(),
       );
-      if (!join || !add || !calendar || !edit || !remove) throw new Error("an action is missing");
+      if (!join || !add || !calendar || !share || !edit || !remove) {
+        throw new Error("an action is missing");
+      }
 
       // The main one across, then the others two by two, side by side.
       expect(join.left).toBe(add.left);
@@ -1249,9 +1286,13 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       expect(join.bottom).toBeLessThanOrEqual(add.top);
       expect(add.top).toBe(calendar.top);
       expect(add.right).toBeLessThan(calendar.left);
-      expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
-      expect(edit.top).toBe(remove.top);
-      expect(edit.right).toBeLessThan(remove.left);
+      expect(calendar.bottom).toBeLessThanOrEqual(share.top);
+      expect(share.top).toBe(edit.top);
+      expect(share.right).toBeLessThan(edit.left);
+      // The last one is alone, across both columns.
+      expect(edit.bottom).toBeLessThanOrEqual(remove.top);
+      expect(remove.left).toBe(share.left);
+      expect(remove.right).toBe(edit.right);
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();
@@ -1270,8 +1311,8 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
 });
 
 test("EventPage — sur un téléphone, une action seule au bout prend toute la ligne", async () => {
-  // Bob did not create the event: no "Delete", three actions after "I'm in".
-  signIn("bob");
+  // Its runner is not known yet: no "I'm in", no "Add someone", no "Delete", three actions.
+  mocks.myRunner.mockReturnValue(new Promise(() => {}));
   try {
     // The room the page has between the gutters of the app shell (2 × 16 px) on a phone of 320 and of 390 px.
     for (const width of [288, 358]) {
@@ -1286,19 +1327,19 @@ test("EventPage — sur un téléphone, une action seule au bout prend toute la 
         .not.toBeInTheDocument();
 
       const actions = [
-        screen.getByRole("button", { name: fr.participation.addSomeone }),
         screen.getByRole("button", { name: fr.event.addToCalendar }),
+        screen.getByRole("button", { name: fr.share.button }),
         screen.getByRole("link", { name: fr.common.edit }),
       ].map((action) => action.element());
-      const [add, calendar, edit] = actions.map((action) => action.getBoundingClientRect());
-      if (!add || !calendar || !edit) throw new Error("an action is missing");
+      const [calendar, share, edit] = actions.map((action) => action.getBoundingClientRect());
+      if (!calendar || !share || !edit) throw new Error("an action is missing");
 
       // Two side by side, then the last one alone, across both columns.
-      expect(add.top).toBe(calendar.top);
-      expect(add.right).toBeLessThan(calendar.left);
-      expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
-      expect(edit.left).toBe(add.left);
-      expect(edit.right).toBe(calendar.right);
+      expect(calendar.top).toBe(share.top);
+      expect(calendar.right).toBeLessThan(share.left);
+      expect(share.bottom).toBeLessThanOrEqual(edit.top);
+      expect(edit.left).toBe(calendar.left);
+      expect(edit.right).toBe(share.right);
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();

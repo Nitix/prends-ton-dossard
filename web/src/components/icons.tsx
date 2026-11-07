@@ -31,6 +31,17 @@ export function CalendarPlusIcon({ className = "size-4" }: IconProps) {
   );
 }
 
+export function ShareIcon({ className = "size-4" }: IconProps) {
+  return (
+    <svg {...LINE} className={className}>
+      <circle cx="17.5" cy="5.5" r="2.5" />
+      <circle cx="6.5" cy="12" r="2.5" />
+      <circle cx="17.5" cy="18.5" r="2.5" />
+      <path d="M8.7 10.8l6.6-3.9M8.7 13.2l6.6 3.9" />
+    </svg>
+  );
+}
+
 export function UserPlusIcon({ className = "size-4" }: IconProps) {
   return (
     <svg {...LINE} className={className}>
