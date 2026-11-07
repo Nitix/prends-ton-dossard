@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"maps"
@@ -9,11 +10,19 @@ import (
 	"time"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/filesystem"
 	"ganigeorgiev.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cobra"
 
 	"courses/server/config"
 )
+
+// seedTrack is the track of the 42 km of the Trail des Crêtes: a loop of about
+// 42 km to the north of Annecy, with its altitudes, made once by a throwaway
+// script and kept as it is.
+//
+//go:embed seed_track.gpx
+var seedTrack []byte
 
 const (
 	// DefaultSeedPassword is the password of the demo accounts when neither
@@ -119,7 +128,11 @@ func NewSeedCommand(app core.App, cfg config.Config) *cobra.Command {
 // one supporter.
 // Two of the events to come have a registration deadline, and three of their
 // races have a price. The first of them has two comments, Alice's then Bob's,
-// a car of Bob with Alice in it and a lodging of Alice with Bob in it.
+// a car of Bob with Alice in it and a lodging of Alice with Bob in it, and a
+// track on its 42 km: it is in five days, so that its weather shows, and its
+// registrations opened three days ago. A fifth event to come is known by its
+// month only, seven months ahead, and its registrations open in two days at
+// 10:00; the Hyrox Lyon opens tomorrow, with no time.
 //
 // Every date comes from today, so the same day gives the same data. It refuses
 // when an account exists, and writes nothing when it fails.
@@ -194,6 +207,11 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 		"registration_url":      event.url,
 		"notes":                 event.notes,
 		"created_by":            runners[event.createdBy].Id,
+		// An empty value is what an event without an opening, or with its day,
+		// has: the hooks of the model take it as such.
+		"registration_opening":      event.opening,
+		"registration_opening_time": event.openingTime,
+		"date_precision":            event.precision,
 	})
 	if err != nil {
 		return err
@@ -204,7 +222,7 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 		if err != nil {
 			return fmt.Errorf("the race type %q: %w", format.raceType, err)
 		}
-		savedFormat, err := create(app, "formats", map[string]any{
+		values := map[string]any{
 			"event":            saved.Id,
 			"name":             format.name,
 			"race_type":        raceType.Id,
@@ -214,7 +232,15 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			"elevation_gain_m": format.elevationGainM,
 			"price_eur":        format.price,
 			"date":             format.date,
-		})
+		}
+		if format.track {
+			file, err := filesystem.NewFileFromBytes(seedTrack, "boucle-des-cretes.gpx")
+			if err != nil {
+				return fmt.Errorf("the track of %q: %w", format.name, err)
+			}
+			values["gpx"] = file
+		}
+		savedFormat, err := create(app, "formats", values)
 		if err != nil {
 			return fmt.Errorf("the format %q: %w", format.name, err)
 		}
@@ -345,9 +371,15 @@ type eventSpec struct {
 	name, location string
 	start, end     string // YYYY-MM-DD, end may be empty
 	deadline       string // YYYY-MM-DD, the last day to register, on or before start; may be empty
-	url, notes     string
-	createdBy      string
-	formats        []formatSpec
+	// opening is the day the registrations open (YYYY-MM-DD) and openingTime
+	// its time in Paris (HH:MM); both may be empty, and the time only with a day.
+	opening, openingTime string
+	// precision is "month" for an event known by its month only: start is then
+	// the 1st, and its formats have no date. Empty for an event with its days.
+	precision  string
+	url, notes string
+	createdBy  string
+	formats    []formatSpec
 	// undecided are the participations to the event only, without a format:
 	// the runners who are interested in the event and have not chosen a format
 	// yet ("interested"), and the ones who come to cheer ("supporter"). None of
@@ -392,6 +424,7 @@ type formatSpec struct {
 	elevationGainM int
 	date           string  // YYYY-MM-DD, within its event; may be empty
 	price          float64 // in euros, to the cent at most; zero when the format has none
+	track          bool    // the format has the track of the demo (seedTrack)
 	entries        []entrySpec
 	// results are the results of some of the entries: a finisher's time, rank
 	// and note, or the note of a runner who gave up. Each is for a runner of
@@ -432,17 +465,23 @@ func demoEvents(today time.Time) []eventSpec {
 	turn := time.Date(later.Year(), later.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	multiStart, multiEnd := turn.AddDate(0, 0, -2).Format(dayLayout), turn.AddDate(0, 0, 1).Format(dayLayout)
 
+	// The first day of the month that is seven months after this one.
+	vercorsMonth := time.Date(year, month+7, 1, 0, 0, 0, 0, time.UTC).Format(dayLayout)
+
 	return []eventSpec{
 		// To come.
 		{
-			name: "Trail des Crêtes", location: "Annecy", start: in(9),
-			deadline:  in(5),
+			// In five days, so that its weather shows (from seven days before);
+			// its registrations opened three days ago and close in two.
+			name: "Trail des Crêtes", location: "Annecy", start: in(5),
+			opening: in(-3), openingTime: "10:00",
+			deadline:  in(2),
 			url:       "https://example.test/trail-des-cretes",
 			notes:     "Navette depuis la gare à 6h30.",
 			createdBy: runnerAlice,
 			formats: []formatSpec{
 				{
-					name: "Trail long", raceType: "Trail", distanceKm: 42, elevationGainM: 2400, price: 65,
+					name: "Trail long", raceType: "Trail", distanceKm: 42, elevationGainM: 2400, price: 65, track: true,
 					entries: []entrySpec{
 						{runnerAlice, "registered", runnerAlice},
 						{runnerBob, "interested", runnerAlice},
@@ -467,13 +506,13 @@ func demoEvents(today time.Time) []eventSpec {
 			offers: []offerSpec{
 				// Bob drives from Lyon the evening before, and Alice takes a seat.
 				{
-					kind: "ride", owner: runnerBob, place: "Lyon, Part-Dieu", seats: 3, date: in(8), time: "18:00",
+					kind: "ride", owner: runnerBob, place: "Lyon, Part-Dieu", seats: 3, date: in(4), time: "18:00",
 					places: []placeSpec{{runnerAlice, runnerAlice}},
 				},
 				// Alice has booked a lodging for the night before and the night
 				// after, and puts Bob in it.
 				{
-					kind: "lodging", owner: runnerAlice, place: "Gîte des Crêtes", seats: 4, date: in(8), endDate: in(10),
+					kind: "lodging", owner: runnerAlice, place: "Gîte des Crêtes", seats: 4, date: in(4), endDate: in(6),
 					places: []placeSpec{{runnerBob, runnerAlice}},
 				},
 			},
@@ -518,7 +557,9 @@ func demoEvents(today time.Time) []eventSpec {
 			},
 		},
 		{
+			// Its registrations open tomorrow, at a time that nobody gave.
 			name: "Hyrox Lyon", location: "Lyon", start: in(70),
+			opening:   in(1),
 			deadline:  in(40),
 			url:       "https://example.test/hyrox-lyon",
 			createdBy: runnerAlice,
@@ -536,6 +577,27 @@ func demoEvents(today time.Time) []eventSpec {
 					entries: []entrySpec{
 						{runnerBob, "interested", runnerBob},
 						{runnerJulie, "interested", runnerBob},
+					},
+				},
+			},
+		},
+
+		{
+			// Known by its month only, seven months ahead; its registrations
+			// open in two days at 10:00. Alice and Sam are interested, Bob has
+			// registered.
+			name: "Grand Trail du Vercors", location: "Villard-de-Lans", start: vercorsMonth,
+			precision: "month",
+			opening:   in(2), openingTime: "10:00",
+			url:       "https://example.test/grand-trail-du-vercors",
+			createdBy: runnerBob,
+			formats: []formatSpec{
+				{
+					name: "Grand Trail", raceType: "Trail", distanceKm: 80, elevationGainM: 4200,
+					entries: []entrySpec{
+						{runnerAlice, "interested", runnerAlice},
+						{runnerSam, "interested", runnerAlice},
+						{runnerBob, "registered", runnerBob},
 					},
 				},
 			},
