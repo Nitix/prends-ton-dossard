@@ -43,7 +43,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
 		"participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
-		"mcp_tokens", "push_subscriptions",
+		"mcp_tokens", "push_subscriptions", "reminder_deliveries",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -828,7 +828,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 
 	for _, name := range []string{
 		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
-		"mcp_tokens", "push_subscriptions",
+		"mcp_tokens", "push_subscriptions", "reminder_deliveries",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -2443,5 +2443,111 @@ func TestMigrations_PushSubscriptionsDownThenUp(t *testing.T) {
 	checkTable("after applying again")
 	if got, err := app.CountRecords("push_subscriptions"); err != nil || got != 0 {
 		t.Errorf("after applying again, %d subscriptions (error %v), want an empty table", got, err)
+	}
+}
+
+func TestMigrations_ReminderDeliveriesDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9o_reminder_deliveries.go")
+
+	checkTable := func(when string) {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("reminder_deliveries")
+		if err != nil {
+			t.Fatalf("%s: the collection reminder_deliveries is missing: %v", when, err)
+		}
+		for name, target := range map[string]string{"user": "users", "event": "events"} {
+			to, _ := app.FindCollectionByNameOrId(target)
+			rel, ok := c.Fields.GetByName(name).(*core.RelationField)
+			if !ok || rel.CollectionId != to.Id || rel.MaxSelect != 1 || !rel.Required || !rel.CascadeDelete {
+				t.Errorf("%s: reminder_deliveries.%s = %+v, want a required relation to %s, one, cascade", when, name, c.Fields.GetByName(name), target)
+			}
+		}
+		kind, ok := c.Fields.GetByName("kind").(*core.SelectField)
+		if !ok || !kind.Required || kind.MaxSelect != 1 || !slices.Equal(kind.Values, []string{"day", "hour"}) {
+			t.Errorf("%s: reminder_deliveries.kind = %+v, want a required select of day, hour", when, c.Fields.GetByName("kind"))
+		}
+		if f, ok := c.Fields.GetByName("opening_at").(*core.TextField); !ok || !f.Required {
+			t.Errorf("%s: reminder_deliveries.opening_at must be a required text field", when)
+		}
+		delivered, ok := c.Fields.GetByName("delivered").(*core.NumberField)
+		if !ok || !delivered.OnlyInt || delivered.Min == nil || *delivered.Min != 0 {
+			t.Errorf("%s: reminder_deliveries.delivered = %+v, want an integer of at least 0", when, c.Fields.GetByName("delivered"))
+		}
+		if _, ok := c.Fields.GetByName("created").(*core.AutodateField); !ok {
+			t.Errorf("%s: reminder_deliveries.created must be a date field that PocketBase fills", when)
+		}
+		wantIndexes := []string{
+			"CREATE UNIQUE INDEX idx_reminder_deliveries_once ON reminder_deliveries (user, event, kind, opening_at)",
+			"CREATE INDEX idx_reminder_deliveries_created ON reminder_deliveries (created)",
+		}
+		if !slices.Equal([]string(c.Indexes), wantIndexes) {
+			t.Errorf("%s: reminder_deliveries.indexes = %q, want %q", when, c.Indexes, wantIndexes)
+		}
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got != nil {
+				t.Errorf("%s: reminder_deliveries rule %d = %q, want null (superusers only)", when, i, *got)
+			}
+		}
+	}
+	row := func(user, event *core.Record, kind, at string) map[string]any {
+		return map[string]any{"user": user.Id, "event": event.Id, "kind": kind, "opening_at": at, "delivered": 1}
+	}
+	const at = "2026-12-01T09:00:00Z"
+	checkTable("as created")
+
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event, "day", at))
+	// Another kind, another opening, another person, another event: other rows.
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event, "hour", at))
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event, "day", "2026-12-02T09:00:00Z"))
+	mustSave(t, app, "reminder_deliveries", row(fx.Bob, fx.Event, "day", at))
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event2, "day", at))
+	noAccount := row(fx.Alice, fx.Event, "day", "2026-12-03T09:00:00Z")
+	delete(noAccount, "user")
+	noEvent := row(fx.Alice, fx.Event, "day", "2026-12-03T09:00:00Z")
+	delete(noEvent, "event")
+	noOpening := row(fx.Alice, fx.Event, "day", "")
+	for name, values := range map[string]map[string]any{
+		"the same row again":             row(fx.Alice, fx.Event, "day", at),
+		"a kind that is not day or hour": row(fx.Alice, fx.Event, "week", "2026-12-03T09:00:00Z"),
+		"no account":                     noAccount,
+		"no event":                       noEvent,
+		"no opening":                     noOpening,
+		"a negative count":               func() map[string]any { v := row(fx.Bob, fx.Event2, "day", at); v["delivered"] = -1; return v }(),
+	} {
+		if _, err := trySave(app, "reminder_deliveries", values); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+
+	// A row goes with its account, and with its event.
+	account := mustSave(t, app, "users", map[string]any{"email": "zoe@example.test", "password": testutil.Password, "role": "member"})
+	mustSave(t, app, "reminder_deliveries", row(account, fx.Event, "day", at))
+	if err := app.Delete(account); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.CountRecords("reminder_deliveries"); err != nil || got != 5 {
+		t.Errorf("after deleting an account, %d rows (error %v), want the 5 of the others", got, err)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with rows: %v", err)
+	}
+	if _, err := app.FindCollectionByNameOrId("reminder_deliveries"); err == nil {
+		t.Error("the collection reminder_deliveries must be gone after the rollback")
+	}
+	if _, err := app.FindRecordById("events", fx.Event.Id); err != nil {
+		t.Errorf("after the rollback, the event is gone: %v", err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	if got, err := app.CountRecords("reminder_deliveries"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d rows (error %v), want an empty table", got, err)
 	}
 }

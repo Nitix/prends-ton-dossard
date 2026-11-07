@@ -35,7 +35,12 @@ var kinds = []string{KindDay, KindHour}
 // and to replace their own choice. Both want a session of the site, and neither
 // exists on the demo, whose account everybody shares: nobody's warnings would
 // be the right ones.
-func Register(app core.App, cfg config.Config) {
+//
+// It also adds the scheduler (schedule.go): when the server starts and the
+// notifier is available (its keys are read), the cron job "ptd-reminders", every
+// minute, which sends the reminders that are due. The notifier is registered
+// before, so that its keys are read first.
+func Register(app core.App, cfg config.Config, notifier Notifier) {
 	if cfg.Demo() {
 		return
 	}
@@ -44,6 +49,9 @@ func Register(app core.App, cfg config.Config) {
 		e.Router.PUT(path, saveRoute).Bind(apis.RequireAuth("users"))
 		return e.Next()
 	})
+	if notifier != nil {
+		registerJob(app, notifier)
+	}
 }
 
 // Of returns the kinds of reminder that the account chose, "day" before "hour"
