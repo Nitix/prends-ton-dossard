@@ -120,3 +120,15 @@ func SetTimeout(t testing.TB, d time.Duration) {
 	client.Timeout = d
 	t.Cleanup(func() { client.Timeout = old })
 }
+
+// SetDayBudget lowers the calls a day (of a normal instance, then of a demo)
+// until the test ends.
+func SetDayBudget(t testing.TB, normal, demo int) {
+	t.Helper()
+	oldN, oldD := budgetPerDay, demoBudgetPerDay
+	budgetPerDay, demoBudgetPerDay = normal, demo
+	t.Cleanup(func() { budgetPerDay, demoBudgetPerDay = oldN, oldD })
+}
+
+// DayBudgets are the caps of a day as the program has them (normal, demo).
+func DayBudgets() (normal, demo int) { return budgetPerDay, demoBudgetPerDay }

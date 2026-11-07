@@ -600,7 +600,7 @@ Le lieu trouvé est dit (« À Annecy (Auvergne-Rhône-Alpes, France) » ou « A
   - premier point d'une trace : par nom du fichier (il change à chaque envoi), sans limite de temps.
 - **Une seule requête à la fois par clé** : deux membres qui ouvrent la fiche ensemble font un appel.
 - **En cas d'échec** (délai de 8 secondes, réponse non 200, JSON illisible) : la dernière prévision gardée de moins de 6 heures est rendue, marquée `stale` ; sinon `502 weather_unavailable`.
-- **Un budget** : 500 appels par heure au plus pour tout le programme (dix fois sous la limite d'Open-Meteo) ; au-delà, le cache, sinon `weather_unavailable`. Le journal dit quand le budget est atteint.
+- **Un budget** : 500 appels par heure au plus par instance, et 2 500 par jour de Paris (300 sur la démo), car la production, la démo et le dev partagent une IP et la limite gratuite d'Open-Meteo est de 10 000 appels par jour et par IP ; au-delà, le cache (périmé s'il y en a un), sinon `weather_unavailable`. Le journal dit quand un plafond est atteint.
 - Un redémarrage vide le cache : c'est un appel de plus par course, pas une donnée perdue.
 - Les adresses d'Open-Meteo sont des variables du paquet, remplacées par un faux serveur `httptest` dans les tests : **aucun test n'appelle Open-Meteo**.
 

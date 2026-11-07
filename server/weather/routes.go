@@ -82,14 +82,18 @@ type service struct {
 // made here, not in the OnServe closure: the closure runs again for each router
 // that is built, and what is kept must outlive them.
 func Register(app core.App, cfg config.Config) {
+	perDay := budgetPerDay
+	if cfg.Demo() {
+		perDay = demoBudgetPerDay
+	}
 	s := &service{
 		cfg: cfg,
 		pb:  app,
 		src: &source{
 			userAgent: "prends-ton-dossard (+" + cfg.AppURL + ")",
-			budget:    &budget{},
+			budget:    &budget{perDay: perDay},
 			onSpent: func() {
-				app.Logger().Warn("weather: the budget of calls to Open-Meteo is spent for this hour")
+				app.Logger().Warn("weather: the budget of calls to Open-Meteo is spent for this hour or this day")
 			},
 		},
 		forecasts: newCache[forecastValue](cacheMax),

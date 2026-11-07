@@ -276,3 +276,68 @@ func TestWeather_ACancelledRequestIsNotKept(t *testing.T) {
 		t.Errorf("%d forecast requests, want 2", f)
 	}
 }
+
+func TestWeather_DayBudget(t *testing.T) {
+	if normal, demo := weather.DayBudgets(); normal != 2500 || demo != 300 {
+		t.Errorf("caps of a day: %d and %d on the demo, want 2500 and 300", normal, demo)
+	}
+
+	t.Run("the hour has room, the day does not", func(t *testing.T) {
+		weather.SetDayBudget(t, 2, 2)
+		w := newWorld(t, "2026-06-10")
+		first := w.answer(t, w.fx.Event.Id) // a geocoding and a forecast: the day
+		if n := w.meteo.count(""); n != 2 {
+			t.Fatalf("%d requests, want 2", n)
+		}
+
+		// Two hours on, the forecast is old and the day is spent: the old
+		// forecast is served, marked stale, and no call is made.
+		weather.SetNow(t, at("2026-06-10").Add(2*time.Hour))
+		stale := w.answer(t, w.fx.Event.Id)
+		if !stale.Stale || stale.FetchedAt != first.FetchedAt {
+			t.Errorf("day spent: %+v, want the old forecast marked stale", stale)
+		}
+		// A place never asked has nothing to serve.
+		w.meteo.places["lyon"] = [2]float64{45.76, 4.84}
+		other := w.event(t, "Lyon", "2026-06-13", "2026-06-13")
+		status, body := w.get(t, other.Id)
+		if status != http.StatusBadGateway || !strings.Contains(body, `"weather_unavailable"`) {
+			t.Errorf("day spent, no cache: %d %s", status, body)
+		}
+		if n := w.meteo.count(""); n != 2 {
+			t.Errorf("%d requests, the ones over the day were made", n)
+		}
+
+		// The next day of Paris, the count starts again.
+		weather.SetNow(t, at("2026-06-11"))
+		if a := w.answer(t, other.Id); a.Status != "ok" {
+			t.Errorf("next day: status %q", a.Status)
+		}
+	})
+
+	t.Run("the demo has its own, lower cap", func(t *testing.T) {
+		weather.SetDayBudget(t, 1000, 2)
+		w := newWorldWith(t, "2026-06-10", map[string]string{"DEMO_LOGIN_EMAIL": "demo@example.org"})
+		w.answer(t, w.fx.Event.Id)
+		w.meteo.places["lyon"] = [2]float64{45.76, 4.84}
+		other := w.event(t, "Lyon", "2026-06-13", "2026-06-13")
+		status, body := w.get(t, other.Id)
+		if status != http.StatusBadGateway || !strings.Contains(body, `"weather_unavailable"`) {
+			t.Errorf("demo over its cap: %d %s", status, body)
+		}
+		if n := w.meteo.count(""); n != 2 {
+			t.Errorf("%d requests on the demo, want 2", n)
+		}
+	})
+
+	t.Run("the same cap does not stop a normal instance", func(t *testing.T) {
+		weather.SetDayBudget(t, 1000, 2)
+		w := newWorld(t, "2026-06-10")
+		w.answer(t, w.fx.Event.Id)
+		w.meteo.places["lyon"] = [2]float64{45.76, 4.84}
+		other := w.event(t, "Lyon", "2026-06-13", "2026-06-13")
+		if a := w.answer(t, other.Id); a.Status != "ok" {
+			t.Errorf("status %q", a.Status)
+		}
+	})
+}

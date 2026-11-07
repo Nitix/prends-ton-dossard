@@ -130,25 +130,50 @@ func (k *keyLocks) lock(ctx context.Context, key string) (func(), error) {
 }
 
 // budgetPerHour is the most calls that the program makes to Open-Meteo in an
-// hour, ten times under its limit.
+// hour. Open-Meteo's free limits are 10,000 calls a day, 5,000 an hour and 600
+// a minute, per IP address.
 var budgetPerHour = 500
 
-// budget counts the calls of the current hour.
+// budgetPerDay is the most calls an instance makes in a day of Paris. The
+// production, the demo and the dev instance share one IP address: three of them
+// at this cap stay under the 10,000 of a day.
+var budgetPerDay = 2500
+
+// demoBudgetPerDay is the cap of a demo instance, where anybody can sign in and
+// ask for weather: much lower, so that the demo cannot spend the IP's day.
+var demoBudgetPerDay = 300
+
+// budget counts the calls of the current hour and of the current day.
 type budget struct {
-	mu     sync.Mutex
-	hour   time.Time
-	used   int
-	logged bool
+	mu      sync.Mutex
+	perDay  int
+	hour    time.Time
+	used    int
+	logged  bool
+	day     time.Time
+	usedDay int
+	dayLog  bool
 }
 
 // take counts a call, or says that the budget is spent (ok false), and whether
-// this is the first refusal of the hour (first, for the log).
+// this is the first refusal of the hour or of the day (first, for the log).
 func (b *budget) take() (ok, first bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	hour := now().Truncate(time.Hour)
+	t := now()
+	hour := t.Truncate(time.Hour)
 	if !hour.Equal(b.hour) {
 		b.hour, b.used, b.logged = hour, 0, false
+	}
+	y, m, d := t.In(paris).Date()
+	day := time.Date(y, m, d, 0, 0, 0, 0, paris)
+	if !day.Equal(b.day) {
+		b.day, b.usedDay, b.dayLog = day, 0, false
+	}
+	if b.usedDay >= b.perDay {
+		first = !b.dayLog
+		b.dayLog = true
+		return false, first
 	}
 	if b.used >= budgetPerHour {
 		first = !b.logged
@@ -156,5 +181,6 @@ func (b *budget) take() (ok, first bool) {
 		return false, first
 	}
 	b.used++
+	b.usedDay++
 	return true, false
 }

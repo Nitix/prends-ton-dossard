@@ -172,9 +172,15 @@ func at(day string) time.Time {
 
 func newWorld(t testing.TB, today string) *world {
 	t.Helper()
+	return newWorldWith(t, today, nil)
+}
+
+// newWorldWith is newWorld with more environment variables (DEMO_LOGIN_EMAIL).
+func newWorldWith(t testing.TB, today string, env map[string]string) *world {
+	t.Helper()
 	weather.SetNow(t, at(today))
 	m := newMeteo(t)
-	app := testutil.NewApp(t)
+	app := testutil.NewAppWith(t, env)
 	fx := testutil.Seed(t, app)
 	return &world{app: app, fx: fx, meteo: m, h: weather.Serve(t, app), token: testutil.Token(t, fx.Alice)}
 }
