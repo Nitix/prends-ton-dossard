@@ -79,6 +79,8 @@ GitHub Actions lance tout cela à chaque push (`.github/workflows/ci.yml`).
 
 Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas une adresse IP : WebAuthn la refuse), et les ports 80 et 443 ouverts vers Internet pour Caddy.
 
+Depuis la v7, la machine fait aussi des appels **sortants** : elle doit pouvoir joindre en HTTPS direct (port 443, sans proxy HTTP : le programme n'en utilise aucun) les quatre services de notification (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`) et Open-Meteo (`api.open-meteo.com`, `geocoding-api.open-meteo.com`).
+
 1. **Récupérer le code et régler `APP_URL`.**
 
    ```sh
@@ -207,7 +209,7 @@ Un planificateur du programme passe chaque minute (`ptd-reminders`). Il envoie u
 La fiche d'une course montre la **« Météo prévue »** de ses jours, **de J-7 au dernier jour** (une course dont seul le mois est connu n'en a pas). Les données sont celles d'[Open-Meteo](https://open-meteo.com/) (licence CC BY 4.0, lieux GeoNames pour le géocodage). Son API gratuite est réservée à un **usage non commercial** : un site privé entre amis, sans abonnement ni publicité, en fait partie.
 
 - **Ce qui est envoyé**, toujours par le serveur (jamais par le navigateur : l'adresse des membres ne va pas chez Open-Meteo) : pour une prévision, des coordonnées **arrondies à 0,01°** (environ 1 km), une altitude arrondie à 50 m quand une trace en donne une, les jours voulus et la liste des grandeurs ; pour trouver un lieu, **le texte du lieu de la course** tel qu'il est saisi. Les coordonnées sont celles du départ de la **trace GPX** de la première épreuve qui en a une, sinon celles du lieu géocodé (le lieu trouvé est montré sur la fiche, pour qu'une erreur se voie). Jamais un nom de membre, un compte, le nom de la course ni qui y va. Open-Meteo voit l'adresse IP du serveur et garde ses journaux 90 jours.
-- **Le budget** : le programme fait **500 appels par heure au plus**, pour tous les membres ensemble (la limite d'Open-Meteo est de 5 000), et le journal dit quand il est atteint. Au-delà, le cache ; à défaut, « La météo n'a pas pu être chargée ».
+- **Le budget** : le programme fait **500 appels par heure au plus** et **2 500 par jour de Paris** (300 sur la démo), pour tous les membres ensemble. Open-Meteo limite à 10 000 appels par jour, 5 000 par heure, **par adresse IP**, et la production, la démo et le dev partagent la leur. Le journal dit quand un plafond est atteint. Au-delà, le cache (périmé s'il y en a un) ; à défaut, « La météo n'a pas pu être chargée ».
 - **Le cache** est en mémoire (un redémarrage le vide : un appel de plus par course) : une prévision une heure, un lieu 30 jours, une seule requête à la fois par clé. Si Open-Meteo ne répond pas (8 secondes), la dernière prévision de moins de 6 heures est montrée, marquée comme ancienne ; un échec est retenu une minute avant un nouvel essai.
 - **L'attribution** est sur la fiche (« Données : Open-Meteo.com », avec un lien) et dans la réponse de l'outil MCP `get_weather`.
 - La route (`GET /api/app/events/{id}/weather`) existe aussi sur la démo, où le budget borne les appels.
@@ -226,11 +228,19 @@ Un lien de chaque sorte par compte ; en renouveler un ne touche pas l'autre. Ils
 Avant de passer une version en production, on l'essaie sur un environnement à part, **`https://dev-prends-ton-dossard.ketra.fr`**, avec ses vrais services (notifications, Open-Meteo) :
 
 - son dossier `/opt/ptd-dev` (un nom différent de celui de la production : Docker Compose nomme le projet et le volume d'après le dossier), son volume `ptd-dev_pb_data` (ses données et ses clés VAPID) et son port `127.0.0.1:8130` ;
-- un `.env` à lui : son `APP_URL`, `HOST_PORT=8130`, et **sans `DEMO_LOGIN_EMAIL`** (le script de déploiement refuse s'il y est) ;
+- un `.env` à lui : son `APP_URL`, `HOST_PORT=8130`, et **sans `DEMO_LOGIN_EMAIL`** (sinon n'importe qui y entrerait avec un compte partagé : c'est la démo) ;
 - les données du `seed` (`seed --force`), avec un mot de passe au hasard gardé dans `/opt/ptd-dev-secrets/SEED_PASSWORD` (lisible par root seulement) ; comptes `alice@`, `bob@` et `admin@example.test` ;
 - un site à lui dans le Caddyfile, sur le modèle de la démo : l'en-tête `X-Robots-Tag` et un `robots.txt` qui refusent les moteurs de recherche, `/_/` en 404, un journal à part.
 
-On y redéploie avec le même script que la production ; le `seed` ne refait rien sur une base remplie. La production ne vient qu'ensuite, après la sauvegarde du volume `pb_data`.
+On y redéploie comme la production (« Mise à jour » : `git pull && docker compose up -d --build`, dans `/opt/ptd-dev`) ; le `seed` ne refait rien sur une base remplie. La production ne vient qu'ensuite, après la sauvegarde du volume `pb_data`.
+
+Pour remplir une base vide de dev (une première fois, ou après `docker compose down -v` dans `/opt/ptd-dev`, et là seulement) :
+
+```sh
+docker compose exec -e SEED_PASSWORD="$(cat /opt/ptd-dev-secrets/SEED_PASSWORD)" courses /app/courses seed --force
+```
+
+**Les dates du `seed` sont relatives au jour où il tourne, et vieillissent** : dans 5 jours, « Trail des Crêtes » est passé (et sa météo avec), dans 2 jours l'ouverture du Vercors aussi. Pour des données fraîches, il faut repartir d'un volume vide (`docker compose down -v`, toujours dans `/opt/ptd-dev`) et relancer la commande ci-dessus.
 
 Le `seed` donne de quoi essayer chaque nouveauté (les jours sont relatifs au jour où il tourne) :
 

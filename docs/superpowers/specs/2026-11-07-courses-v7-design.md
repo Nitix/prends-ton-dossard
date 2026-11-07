@@ -747,7 +747,7 @@ Les règles de la spec du MCP valent toutes : chaque outil passe par l'API du si
 - → `{ "done", "summary", "format": { "id", "title", "event" }, "items": [{ "item", "checked" }], "ready", "total" }`.
 - Pas de confirmation : la liste est celle de la personne, et décocher se refait d'un appel. `idempotentHint`.
 
-Outils : **trente-cinq** de membre, **quarante-six** pour un admin (aucun nouvel outil d'admin).
+Outils : **trente-quatre** de membre, **quarante-cinq** pour un admin (le matériel, `gear_checklist`, n'est pas construit : un de moins que prévu) (aucun nouvel outil d'admin).
 
 ### 12.3 Confirmations (ajouts au tableau du § 6.13 de la spec du MCP)
 
@@ -767,7 +767,7 @@ Remplacer une liste de matériel par une autre, une ouverture par une autre, ou 
 
 ### 12.5 Tests
 
-- `TestTools_*` des outils nouveaux et des champs nouveaux (cas nominaux, refus du site traduits, droits : la liste à cocher d'un autre est introuvable) ; les lignes du § 12.3 dans `TestTools_Confirmation_NothingWrittenFirst` ; `wantMemberTools` et `wantHints` à jour ; le test des textes de membres (« », » et ) dans un objet de matériel et dans un lieu géocodé) ; `tools/mcpcheck` attend 35 et 46 outils.
+- `TestTools_*` des outils nouveaux et des champs nouveaux (cas nominaux, refus du site traduits, droits : la liste à cocher d'un autre est introuvable) ; les lignes du § 12.3 dans `TestTools_Confirmation_NothingWrittenFirst` ; `wantMemberTools` et `wantHints` à jour ; le test des textes de membres (« », » et ) dans un objet de matériel et dans un lieu géocodé) ; `tools/mcpcheck` attend 34 et 45 outils.
 
 ## 13. L'environnement de dev
 
@@ -891,7 +891,7 @@ Ce que ni tes réponses ni les arbitrages ne tranchaient ; dis lesquelles revoir
 
 **Le MCP et le dev**
 
-30. **Trois outils de membre** : `reminders`, `get_weather`, `gear_checklist` (35 de membre, 46 d'admin) ; pas d'outil pour activer un appareil ; confirmations pour vider une ouverture ou une liste de matériel, et pour passer au mois une course aux épreuves datées.
+30. **Trois outils de membre** : `reminders`, `get_weather`, `gear_checklist` (34 de membre, 45 d'admin, sans `gear_checklist`, qui n'est pas construit) ; pas d'outil pour activer un appareil ; confirmations pour vider une ouverture ou une liste de matériel, et pour passer au mois une course aux épreuves datées.
 31. **Environnement de dev `dev-prends-ton-dossard.ketra.fr`** (`/opt/ptd-dev`, port 8130), mot de passe du `seed` dans `/opt/ptd-dev-secrets/SEED_PASSWORD`.
 
 **Vérifié** (le 2026-11-07) : les conditions, la licence et la documentation d'Open-Meteo (`open-meteo.com/en/terms`, `/en/licence`, `/en/docs`) ; Web Push sur iOS (`webkit.org/blog/13878`, et l'exigence d'un geste dans des sources secondaires) ; la prise en charge de Web Share (`caniuse.com/web-share` : Firefox sur ordinateur jamais, Firefox Android oui ; MDN `Navigator.share`) ; le sort des `VALARM` d'un abonnement (Google Agenda et Outlook les ignorent d'après des rapports d'utilisateurs, sans source officielle ; Apple Calendrier sur Mac les retire par défaut, case « supprimer les alertes »). La RFC 8291 et la RFC 8292 sont celles de l'IETF ; leur exemple sert de test.

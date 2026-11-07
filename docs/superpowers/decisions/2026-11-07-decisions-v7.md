@@ -102,7 +102,7 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 - **Décision :** les jours de la course seulement, de J-7 à son dernier jour, depuis aujourd'hui (pendant une course commencée, les jours passés sont laissés de côté). Au départ de la première trace GPX, sinon du lieu géocodé (premier résultat, avec le lieu trouvé affiché).
 - **Open-Meteo :** l'API gratuite est réservée à un usage non commercial, ce que ce site privé est. Le serveur envoie des coordonnées arrondies à 0,01° (ou le texte du lieu pour le géocodage), jamais un nom de membre ni de course. L'attribution est sur la fiche et dans l'outil MCP.
 - **Cache en mémoire :** 1 heure pour une prévision, 30 jours pour un lieu ; une prévision de moins de 6 heures est montrée (« ancienne ») si Open-Meteo ne répond pas.
-- **Budget partagé :** **500 appels par heure au plus pour tous les membres ensemble.** Au-delà, le cache, sinon « météo indisponible ».
+- **Budget partagé :** **500 appels par heure et 2 500 par jour de Paris au plus pour tous les membres ensemble, 300 par jour sur la démo** (la production, la démo et le dev partagent une IP, limitée à 10 000 appels par jour par Open-Meteo ; ajouté après la relecture finale). Au-delà, le cache (périmé s'il y en a un), sinon « météo indisponible ».
 - **Un appel raté est retenu une minute** : un Open-Meteo qui ne répond pas n'est pas rappelé à chaque ouverture de page.
 
 ### 16. Aussi sur la démo
