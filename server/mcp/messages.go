@@ -54,6 +54,9 @@ var messages = map[string]string{
 	"merge_formats_different_events": "Ces deux épreuves ne sont pas du même événement.",
 	// The files of the MCP server.
 	"upload_invalid": "Cet envoi n'est pas valide, ou il a expiré.",
+	// The notifications.
+	"push_endpoint_invalid": "Cet appareil ne peut pas être enregistré pour les notifications.",
+	"push_unavailable":      "Les notifications ne sont pas disponibles pour l'instant.",
 	// Any request.
 	"not_found": "Introuvable : il a peut-être été supprimé.",
 	"forbidden": "Tu n'as pas le droit de faire ça.",

@@ -832,10 +832,19 @@ type remindersIn struct {
 	When   []string `json:"when,omitempty" jsonschema:"set : les rappels voulus, parmi day (1 jour avant) et hour (1 heure avant), dans l'ordre et en nombre qu'on veut ; une liste vide ne veut aucun rappel"`
 }
 
+// deviceOut is a device that is subscribed to the notifications: never its address
+// or its keys, which the site does not give either.
+type deviceOut struct {
+	Label         string `json:"label" jsonschema:"comment la page appelle l'appareil"`
+	Created       string `json:"created" jsonschema:"depuis quand"`
+	LastSuccessAt string `json:"lastSuccessAt" jsonschema:"le dernier rappel reçu, vide s'il n'y en a pas"`
+}
+
 type remindersOut struct {
-	Done      bool     `json:"done" jsonschema:"toujours vrai : ce que le site refuse est une erreur"`
-	Summary   string   `json:"summary" jsonschema:"le choix, et ce qu'il fait, en quelques phrases"`
-	Reminders []string `json:"reminders" jsonschema:"le choix de la personne, day avant hour : vide quand elle ne veut aucun rappel"`
+	Done      bool        `json:"done" jsonschema:"toujours vrai : ce que le site refuse est une erreur"`
+	Summary   string      `json:"summary" jsonschema:"le choix, et ce qu'il fait, en quelques phrases"`
+	Reminders []string    `json:"reminders" jsonschema:"le choix de la personne, day avant hour : vide quand elle ne veut aucun rappel"`
+	Devices   []deviceOut `json:"devices" jsonschema:"les appareils de la personne qui reçoivent les notifications (vide : aucun n'est activé)"`
 }
 
 func addReminders(s *mcpsdk.Server, t *tools) {
@@ -879,6 +888,16 @@ func (t *tools) reminders(ctx context.Context, _ *mcpsdk.CallToolRequest, in rem
 		return refuse(errors.New("action est show ou set."))
 	}
 
+	var push struct {
+		Devices []deviceOut `json:"devices"`
+	}
+	if err := t.inner.get(ctx, "/api/app/push", &push); err != nil {
+		return fail(err)
+	}
+	devices := push.Devices
+	if devices == nil {
+		devices = []deviceOut{}
+	}
 	chosen := stored.Reminders
 	if chosen == nil {
 		chosen = []string{}
@@ -887,8 +906,14 @@ func (t *tools) reminders(ctx context.Context, _ *mcpsdk.CallToolRequest, in rem
 	if in.Action == "set" {
 		summary = "Les rappels sont changés : " + remindersOf(chosen) + "."
 	}
-	if len(chosen) > 0 {
-		summary += " " + remindersNote
+	switch {
+	case len(chosen) > 0 && len(devices) == 0:
+		summary += " " + remindersNote + " Aucun appareil n'est activé pour le moment."
+	case len(chosen) > 0:
+		summary += " " + remindersNote + fmt.Sprintf(" Appareils activés : %d.", len(devices))
+	case len(devices) == 0:
+		// Even with no reminder, the person may ask how to be warned.
+		summary += " Pour recevoir des notifications, il faut activer un appareil dans les Réglages du site : l'assistant ne peut pas le faire."
 	}
-	return nil, remindersOut{Done: true, Summary: summary, Reminders: chosen}, nil
+	return nil, remindersOut{Done: true, Summary: summary, Reminders: chosen, Devices: devices}, nil
 }

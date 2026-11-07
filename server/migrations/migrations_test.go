@@ -43,7 +43,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
 		"participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
-		"mcp_tokens",
+		"mcp_tokens", "push_subscriptions",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -828,7 +828,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 
 	for _, name := range []string{
 		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
-		"mcp_tokens",
+		"mcp_tokens", "push_subscriptions",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -2312,5 +2312,136 @@ func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
 	}
 	if err := setReminders([]string{"hour"}); err != nil {
 		t.Errorf("reminders are refused after applying again: %v", err)
+	}
+}
+
+// The migration 9n creates the subscriptions to the notifications, one per
+// device. Its rollback drops the table, and what is in it; the accounts stay.
+func TestMigrations_PushSubscriptionsDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9n_push_subscriptions.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("push_subscriptions")
+		if err != nil {
+			t.Fatalf("the collection push_subscriptions is missing: %v", err)
+		}
+		return c
+	}
+	checkTable := func(when string) {
+		t.Helper()
+		c := collection()
+		users, _ := app.FindCollectionByNameOrId("users")
+		user, ok := c.Fields.GetByName("user").(*core.RelationField)
+		if !ok || user.CollectionId != users.Id || user.MaxSelect != 1 || !user.Required || !user.CascadeDelete {
+			t.Errorf("%s: push_subscriptions.user = %+v, want a required relation to users, one, cascade", when, c.Fields.GetByName("user"))
+		}
+		for name, want := range map[string]struct {
+			required, hidden bool
+			max              int
+		}{
+			"endpoint": {true, false, 1000}, "p256dh": {true, true, 0}, "auth": {true, true, 0}, "label": {false, false, 60},
+		} {
+			f, ok := c.Fields.GetByName(name).(*core.TextField)
+			if !ok {
+				t.Fatalf("%s: push_subscriptions.%s must be a text field, got %T", when, name, c.Fields.GetByName(name))
+			}
+			if f.Required != want.required || f.Hidden != want.hidden || f.Max != want.max {
+				t.Errorf("%s: push_subscriptions.%s = required %v, hidden %v, max %d; want %v, %v, %d",
+					when, name, f.Required, f.Hidden, f.Max, want.required, want.hidden, want.max)
+			}
+		}
+		lang, ok := c.Fields.GetByName("lang").(*core.SelectField)
+		if !ok || !lang.Required || lang.MaxSelect != 1 || !slices.Equal(lang.Values, []string{"fr", "en"}) {
+			t.Errorf("%s: push_subscriptions.lang = %+v, want a required select of fr, en", when, c.Fields.GetByName("lang"))
+		}
+		if f, ok := c.Fields.GetByName("last_success_at").(*core.DateField); !ok || f.Required {
+			t.Errorf("%s: push_subscriptions.last_success_at must be an optional date field", when)
+		}
+		failures, ok := c.Fields.GetByName("failures").(*core.NumberField)
+		if !ok || !failures.OnlyInt || failures.Min == nil || *failures.Min != 0 || failures.Required {
+			t.Errorf("%s: push_subscriptions.failures = %+v, want an integer of at least 0", when, c.Fields.GetByName("failures"))
+		}
+		for _, field := range []string{"created", "updated"} {
+			if _, ok := c.Fields.GetByName(field).(*core.AutodateField); !ok {
+				t.Errorf("%s: push_subscriptions.%s must be a date field that PocketBase fills", when, field)
+			}
+		}
+		wantIndexes := []string{
+			"CREATE UNIQUE INDEX idx_push_subscriptions_endpoint ON push_subscriptions (endpoint)",
+			"CREATE INDEX idx_push_subscriptions_user ON push_subscriptions (user)",
+		}
+		if !slices.Equal([]string(c.Indexes), wantIndexes) {
+			t.Errorf("%s: push_subscriptions.indexes = %q, want %q", when, c.Indexes, wantIndexes)
+		}
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got != nil {
+				t.Errorf("%s: push_subscriptions rule %d = %q, want null (superusers only)", when, i, *got)
+			}
+		}
+	}
+	device := func(endpoint string) map[string]any {
+		return map[string]any{"user": fx.Alice.Id, "endpoint": endpoint, "p256dh": "k", "auth": "a", "lang": "fr"}
+	}
+	with := func(endpoint, key string, value any) map[string]any {
+		values := device(endpoint)
+		values[key] = value
+		return values
+	}
+
+	checkTable("as created")
+
+	mustSave(t, app, "push_subscriptions", device("https://fcm.googleapis.com/one"))
+	noKeys := device("https://fcm.googleapis.com/two")
+	delete(noKeys, "p256dh")
+	delete(noKeys, "auth")
+	noAccount := device("https://fcm.googleapis.com/two")
+	delete(noAccount, "user")
+	for name, values := range map[string]map[string]any{
+		"the same endpoint again":         device("https://fcm.googleapis.com/one"),
+		"no endpoint":                     device(""),
+		"an endpoint over 1000":           device("https://fcm.googleapis.com/" + strings.Repeat("x", 1000)),
+		"a language that is not fr or en": with("https://fcm.googleapis.com/two", "lang", "de"),
+		"no keys":                         noKeys,
+		"no account":                      noAccount,
+		"a negative count":                with("https://fcm.googleapis.com/two", "failures", -1),
+		"a label over 60":                 with("https://fcm.googleapis.com/two", "label", strings.Repeat("é", 61)),
+	} {
+		if _, err := trySave(app, "push_subscriptions", values); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+
+	// The device goes with its account.
+	account := mustSave(t, app, "users", map[string]any{"email": "zoe@example.test", "password": testutil.Password, "role": "member"})
+	mustSave(t, app, "push_subscriptions", with("https://fcm.googleapis.com/zoe", "user", account.Id))
+	if err := app.Delete(account); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.CountRecords("push_subscriptions"); err != nil || got != 1 {
+		t.Errorf("after deleting an account, %d subscriptions (error %v), want the 1 of Alice", got, err)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with subscriptions: %v", err)
+	}
+	if _, err := app.FindCollectionByNameOrId("push_subscriptions"); err == nil {
+		t.Error("the collection push_subscriptions must be gone after the rollback")
+	}
+	if _, err := app.FindRecordById("users", fx.Alice.Id); err != nil {
+		t.Errorf("after the rollback, Alice is gone: %v", err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	if got, err := app.CountRecords("push_subscriptions"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d subscriptions (error %v), want an empty table", got, err)
 	}
 }

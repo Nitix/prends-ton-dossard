@@ -20,43 +20,7 @@ func TestEndpoints_AllowList(t *testing.T) {
 		"https://fcm.googleapis.com",
 		"https://fcm.googleapis.com:443/fcm/send/x", // the default port, written out
 	}
-	refused := []string{
-		"http://fcm.googleapis.com/fcm/send/x",
-		"https://fcm.googleapis.com:8443/fcm/send/x",
-		"https://fcm.googleapis.com:/fcm/send/x",
-		"https://127.0.0.1/x",
-		"https://[::1]/x",
-		"https://[::ffff:127.0.0.1]/x",
-		"https://localhost/x",
-		"https://fcm.googleapis.com.evil.test/x",
-		"https://evilpush.apple.com.test/x",
-		"https://evilfcm.googleapis.com/x",
-		"https://evil-updates.push.services.mozilla.com/x",
-		"https://evil.test/fcm.googleapis.com",
-		"https://evil.test/?u=https://fcm.googleapis.com/",
-		"https://evil.test#@fcm.googleapis.com/",
-		"https://user@fcm.googleapis.com/x",
-		"https://user:pass@fcm.googleapis.com/x",
-		"https://fcm.googleapis.com@evil.test/x",
-		"https://evil.test\\@fcm.googleapis.com/x",
-		"https://push.apple.com/x",  // the bare domain is not one of the hosts
-		"https://.push.apple.com/x", // no label before the suffix
-		"https://notify.windows.com/x",
-		"https://fcm.googleapis.com./x", // another spelling of the same host: the list is exact
-		"https://fcm.googleapis.com\n.evil.test/x",
-		"https://fcm.googleapis.com\r\nHost: evil.test/x",
-		" https://fcm.googleapis.com/x",
-		"https://fcm.googleapis.com/x ",
-		"https://fcm.googleapis.com\x00/x",
-		"//fcm.googleapis.com/x",
-		"fcm.googleapis.com/x",
-		"ftp://fcm.googleapis.com/x",
-		"javascript:alert(1)",
-		"",
-		"not a url",
-		"https://",
-		"https:///fcm.googleapis.com/x",
-	}
+	refused := refusedEndpoints
 	for _, u := range allowed {
 		if !push.EndpointAllowed(u) {
 			t.Errorf("%q refused", u)
@@ -94,4 +58,43 @@ func TestValidKeys(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
+}
+
+// refusedEndpoints are the addresses that are not one of the push services.
+var refusedEndpoints = []string{
+	"http://fcm.googleapis.com/fcm/send/x",
+	"https://fcm.googleapis.com:8443/fcm/send/x",
+	"https://fcm.googleapis.com:/fcm/send/x",
+	"https://127.0.0.1/x",
+	"https://[::1]/x",
+	"https://[::ffff:127.0.0.1]/x",
+	"https://localhost/x",
+	"https://fcm.googleapis.com.evil.test/x",
+	"https://evilpush.apple.com.test/x",
+	"https://evilfcm.googleapis.com/x",
+	"https://evil-updates.push.services.mozilla.com/x",
+	"https://evil.test/fcm.googleapis.com",
+	"https://evil.test/?u=https://fcm.googleapis.com/",
+	"https://evil.test#@fcm.googleapis.com/",
+	"https://user@fcm.googleapis.com/x",
+	"https://user:pass@fcm.googleapis.com/x",
+	"https://fcm.googleapis.com@evil.test/x",
+	"https://evil.test\\@fcm.googleapis.com/x",
+	"https://push.apple.com/x",  // the bare domain is not one of the hosts
+	"https://.push.apple.com/x", // no label before the suffix
+	"https://notify.windows.com/x",
+	"https://fcm.googleapis.com./x", // another spelling of the same host: the list is exact
+	"https://fcm.googleapis.com\n.evil.test/x",
+	"https://fcm.googleapis.com\r\nHost: evil.test/x",
+	" https://fcm.googleapis.com/x",
+	"https://fcm.googleapis.com/x ",
+	"https://fcm.googleapis.com\x00/x",
+	"//fcm.googleapis.com/x",
+	"fcm.googleapis.com/x",
+	"ftp://fcm.googleapis.com/x",
+	"javascript:alert(1)",
+	"",
+	"not a url",
+	"https://",
+	"https:///fcm.googleapis.com/x",
 }

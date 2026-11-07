@@ -397,6 +397,8 @@ var memberRoutes = []string{
 	// reminders: the choice of the person, read and replaced.
 	"GET /api/app/me/reminders",
 	"PUT /api/app/me/reminders",
+	// reminders: the devices that receive the notifications, counted and named.
+	"GET /api/app/push",
 }
 
 // adminRoutes are the routes that only the admin tools send requests to.

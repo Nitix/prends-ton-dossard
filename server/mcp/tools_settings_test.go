@@ -1151,3 +1151,59 @@ func TestTools_Reminders(t *testing.T) {
 		assertJSON(t, shown.Structured["reminders"], []any{})
 	})
 }
+
+func TestTools_Reminders_Devices(t *testing.T) {
+	device := func(t *testing.T, app *tests.TestApp, user *core.Record, endpoint, label string) {
+		t.Helper()
+		create(t, app, "push_subscriptions", map[string]any{
+			"user": user.Id, "endpoint": "https://fcm.googleapis.com/fcm/send/" + endpoint,
+			"p256dh": "SECRET-P256DH", "auth": "SECRET-AUTH", "lang": "fr", "label": label,
+		})
+	}
+	secretsOf := func(t *testing.T, result any) {
+		t.Helper()
+		raw, _ := json.Marshal(result)
+		for _, secret := range []string{"SECRET-P256DH", "SECRET-AUTH", "fcm.googleapis.com", "endpoint"} {
+			if strings.Contains(string(raw), secret) {
+				t.Errorf("the answer holds %q: %s", secret, raw)
+			}
+		}
+	}
+
+	t.Run("no device: the summary says that one has to be activated, whatever the choice", func(t *testing.T) {
+		app, _, alice := caseApp(t)
+		for _, when := range [][]string{{}, {"day"}} {
+			result := isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": when}))
+			assertJSON(t, result.Structured["devices"], []any{})
+			summary := summaryOfResult(result)
+			if !strings.Contains(summary, "appareil") || !strings.Contains(summary, "Réglages") {
+				t.Errorf("with %v and no device the summary is %q, want it to say that a device is to be activated in the Réglages", when, summary)
+			}
+		}
+	})
+
+	t.Run("the devices of the person, and only theirs, without address or key", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		device(t, app, fx.Alice, "one", "Firefox sur Windows")
+		device(t, app, fx.Alice, "two", "iPhone")
+		device(t, app, fx.Bob, "three", "Chez Bob")
+		result := isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "show"}))
+		devices, _ := result.Structured["devices"].([]any)
+		if len(devices) != 2 {
+			t.Fatalf("%d devices, want 2: %v", len(devices), result.Structured["devices"])
+		}
+		raw, _ := json.Marshal(devices)
+		for _, want := range []string{"Firefox sur Windows", "iPhone"} {
+			if !strings.Contains(string(raw), want) {
+				t.Errorf("the devices %s lack %q", raw, want)
+			}
+		}
+		if strings.Contains(string(raw), "Chez Bob") {
+			t.Error("the devices of Bob are in the answer")
+		}
+		secretsOf(t, result.Structured)
+		if summary := summaryOfResult(result); strings.Contains(summary, "Aucun appareil") {
+			t.Errorf("the summary %q says there is no device", summary)
+		}
+	})
+}

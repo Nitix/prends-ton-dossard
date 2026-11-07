@@ -45,4 +45,6 @@ const (
 	CodeTokenInvalid                     = "token_invalid"
 	CodeTokenLimit                       = "token_limit"
 	CodeUploadInvalid                    = "upload_invalid"
+	CodePushEndpointInvalid              = "push_endpoint_invalid"
+	CodePushUnavailable                  = "push_unavailable"
 )

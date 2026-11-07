@@ -700,6 +700,8 @@ export const en = {
     token_invalid: "This token is not valid, or it was revoked.",
     token_limit: "You already have 5 tokens: revoke one to make another.",
     upload_invalid: "This upload is not valid, or it has expired.",
+    push_endpoint_invalid: "This device cannot be registered for notifications.",
+    push_unavailable: "Notifications are not available right now.",
     // PocketBase's own validation codes.
     validation_required: "This field is required.",
     validation_not_unique: "This value is already in use.",

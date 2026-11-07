@@ -67,6 +67,12 @@ function loadWorker() {
   const network = vi.fn<(input: unknown, init?: unknown) => Promise<FakeResponse>>();
   const skipWaiting = vi.fn<() => Promise<void>>(() => Promise.resolve());
   const claim = vi.fn<() => Promise<void>>(() => Promise.resolve());
+  const showNotification = vi.fn<(title: string, options: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+  const subscribe = vi.fn<(options: unknown) => Promise<unknown>>();
+  const matchAll = vi.fn<(options: unknown) => Promise<unknown[]>>(() => Promise.resolve([]));
+  const openWindow = vi.fn<(url: string) => Promise<void>>(() => Promise.resolve());
   const open = vi.fn<(name: string) => Promise<FakeCache>>((name) => {
     let store = stores.get(name);
     if (store === undefined) {
@@ -83,7 +89,8 @@ function loadWorker() {
         listeners.set(type, listener);
       },
       skipWaiting,
-      clients: { claim },
+      clients: { claim, matchAll, openWindow },
+      registration: { showNotification, pushManager: { subscribe } },
     },
     caches: {
       open,
@@ -130,6 +137,14 @@ function loadWorker() {
     network,
     skipWaiting,
     claim,
+    showNotification,
+    subscribe,
+    matchAll,
+    openWindow,
+    /** Fires any event of the worker and gives back what it waited for. */
+    async dispatch(type: string, event: Record<string, unknown>): Promise<void> {
+      await Promise.all(fire(type, event).waited);
+    },
     open,
     stores,
     /** The cache of the current version. */
@@ -495,4 +510,162 @@ test("sw — la v4 change de cache (ptd-2) : l'activation jette celui de la v3.1
   await worker.activate();
 
   expect([...worker.stores.keys()]).toEqual(["ptd-2"]);
+});
+
+/** What the browser hands a push event: the message as the server wrote it, or something unreadable. */
+function pushOf(message: unknown) {
+  return {
+    data: {
+      json: () => {
+        if (message instanceof Error) throw message;
+        return message;
+      },
+    },
+  };
+}
+
+test("sw — une notification à chaque push", async () => {
+  const worker = loadWorker();
+
+  await worker.dispatch(
+    "push",
+    pushOf({
+      title: "Ouverture des inscriptions",
+      body: "Dans une heure : Trail du Lac",
+      url: "/evenements/abc123",
+      tag: "opening-abc123",
+    }),
+  );
+  expect(worker.showNotification).toHaveBeenCalledTimes(1);
+  expect(worker.showNotification).toHaveBeenLastCalledWith("Ouverture des inscriptions", {
+    body: "Dans une heure : Trail du Lac",
+    tag: "opening-abc123",
+    icon: "/icons/icon-192.png",
+    data: { url: "/evenements/abc123" },
+  });
+
+  // Whatever arrives, one notification is shown: the browser wants it.
+  const unreadable: [string, Record<string, unknown>][] = [
+    ["a message that is not JSON", pushOf(new SyntaxError("Unexpected token"))],
+    ["a JSON that is not an object", pushOf("hello")],
+    ["null", pushOf(null)],
+    ["no data at all", { data: null }],
+    ["a push with no data property", {}],
+  ];
+  for (const [what, event] of unreadable) {
+    worker.showNotification.mockClear();
+    await worker.dispatch("push", event);
+    expect({ what, calls: worker.showNotification.mock.calls }).toEqual({
+      what,
+      calls: [["Prends ton dossard", { icon: "/icons/icon-192.png", data: { url: "/" } }]],
+    });
+  }
+
+  // An address that is not a page of the site is not kept.
+  worker.showNotification.mockClear();
+  await worker.dispatch("push", pushOf({ title: "x", url: "https://evil.example.test/" }));
+  expect(worker.showNotification).toHaveBeenLastCalledWith("x", {
+    icon: "/icons/icon-192.png",
+    data: { url: "/" },
+  });
+});
+
+function clicked(url: string | undefined) {
+  const close = vi.fn<() => void>();
+  return {
+    close,
+    event: { notification: { close, data: url === undefined ? undefined : { url } } },
+  };
+}
+
+test("sw — un clic ouvre la course", async () => {
+  // Another tab at that address is given the focus.
+  const worker = loadWorker();
+  const focus = vi.fn<() => Promise<void>>(() => Promise.resolve());
+  worker.matchAll.mockResolvedValue([
+    { url: `${ORIGIN}/liste`, focus: vi.fn<() => Promise<void>>() },
+    { url: `${ORIGIN}/evenements/abc123`, focus },
+  ]);
+  const { close, event } = clicked("/evenements/abc123");
+  await worker.dispatch("notificationclick", event);
+  expect(close).toHaveBeenCalledTimes(1);
+  expect(focus).toHaveBeenCalledTimes(1);
+  expect(worker.openWindow).not.toHaveBeenCalled();
+  expect(worker.matchAll).toHaveBeenCalledWith({ type: "window", includeUncontrolled: true });
+
+  // No tab there: one is opened.
+  const other = loadWorker();
+  other.matchAll.mockResolvedValue([
+    { url: `${ORIGIN}/liste`, focus: vi.fn<() => Promise<void>>() },
+  ]);
+  await other.dispatch("notificationclick", clicked("/evenements/abc123").event);
+  expect(other.openWindow).toHaveBeenCalledExactlyOnceWith(`${ORIGIN}/evenements/abc123`);
+
+  // The notification is closed even when there is nothing to open.
+  const bare = loadWorker();
+  const none = clicked(undefined);
+  await bare.dispatch("notificationclick", none.event);
+  expect(none.close).toHaveBeenCalledTimes(1);
+  expect(bare.openWindow).toHaveBeenCalledExactlyOnceWith(`${ORIGIN}/`);
+
+  // Another origin is refused, however it is written.
+  for (const url of [
+    "https://evil.example.test/x",
+    "//evil.example.test/x",
+    "javascript:alert(1)",
+  ]) {
+    const refusing = loadWorker();
+    await refusing.dispatch("notificationclick", clicked(url).event);
+    expect({ url, opened: refusing.openWindow.mock.calls }).toEqual({
+      url,
+      opened: [[`${ORIGIN}/`]],
+    });
+  }
+});
+
+test("sw — un abonnement changé est renouvelé", async () => {
+  const worker = loadWorker();
+  const key = new Uint8Array([4, 1, 2, 3]).buffer;
+  worker.subscribe.mockResolvedValue({
+    toJSON: () => ({
+      endpoint: "https://fcm.googleapis.com/fcm/send/new",
+      keys: { p256dh: "NEWKEY", auth: "NEWAUTH" },
+    }),
+  });
+  worker.network.mockResolvedValue(reply("renewed"));
+
+  await worker.dispatch("pushsubscriptionchange", {
+    oldSubscription: {
+      endpoint: "https://fcm.googleapis.com/fcm/send/old",
+      options: { applicationServerKey: key },
+      toJSON: () => ({
+        endpoint: "https://fcm.googleapis.com/fcm/send/old",
+        keys: { p256dh: "OLDKEY", auth: "OLDAUTH" },
+      }),
+    },
+  });
+
+  // The same key, and a notification for every push.
+  expect(worker.subscribe).toHaveBeenCalledExactlyOnceWith({
+    userVisibleOnly: true,
+    applicationServerKey: key,
+  });
+  expect(worker.network).toHaveBeenCalledTimes(1);
+  const [url, init] = worker.network.mock.calls[0] ?? [];
+  expect(url).toBe("/api/app/push/renew");
+  expect(init).toMatchObject({ method: "POST", body: expect.any(String) });
+  const sent = typeof init === "object" && init !== null && "body" in init ? init.body : "";
+  expect(JSON.parse(String(sent))).toEqual({
+    oldEndpoint: "https://fcm.googleapis.com/fcm/send/old",
+    oldAuth: "OLDAUTH",
+    endpoint: "https://fcm.googleapis.com/fcm/send/new",
+    keys: { p256dh: "NEWKEY", auth: "NEWAUTH" },
+  });
+
+  // Without the old subscription there is no proof to give: nothing is done.
+  const bare = loadWorker();
+  await bare.dispatch("pushsubscriptionchange", { oldSubscription: null });
+  await bare.dispatch("pushsubscriptionchange", {});
+  expect(bare.subscribe).not.toHaveBeenCalled();
+  expect(bare.network).not.toHaveBeenCalled();
 });

@@ -883,6 +883,8 @@ export const fr = {
     token_invalid: "Ce jeton n'est pas valide, ou il a été révoqué.",
     token_limit: "Tu as déjà 5 jetons : révoque-en un pour en créer un autre.",
     upload_invalid: "Cet envoi n'est pas valide, ou il a expiré.",
+    push_endpoint_invalid: "Cet appareil ne peut pas être enregistré pour les notifications.",
+    push_unavailable: "Les notifications ne sont pas disponibles pour l'instant.",
     // PocketBase's own validation codes.
     validation_required: "Ce champ est obligatoire.",
     validation_not_unique: "Cette valeur est déjà utilisée.",

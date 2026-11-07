@@ -1,6 +1,9 @@
 package push
 
 import (
+	"sync"
+
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"net/http"
 	"time"
 )
@@ -30,4 +33,49 @@ func NewTestSender(keys *Keys, contact string, client *http.Client, now func() t
 		s.now = now
 	}
 	return s
+}
+
+// Path is the collection of the routes.
+const Path = path
+
+// ServiceOf returns the service that Register made for app.
+func ServiceOf(app core.App) *Service {
+	registered.Lock()
+	defer registered.Unlock()
+	return registered.byApp[app]
+}
+
+var registered = struct {
+	sync.Mutex
+	byApp map[core.App]*Service
+}{byApp: map[core.App]*Service{}}
+
+func init() {
+	afterRegister = func(app core.App, s *Service) {
+		registered.Lock()
+		defer registered.Unlock()
+		registered.byApp[app] = s
+	}
+}
+
+// UseClient makes the service send through client, whatever the endpoint, with
+// the clock now (nil: the real one), as NewTestSender does.
+func (s *Service) UseClient(client *http.Client, now func() time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sender = nil
+	s.newSender = func(keys *Keys) *Sender { return NewTestSender(keys, s.cfg.PushContact, client, now) }
+}
+
+// B64 writes bytes as the table keeps keys.
+func B64(b []byte) string { return b64url.EncodeToString(b) }
+
+// Load reads or makes the keys, as the first OnServe does.
+func (s *Service) Load(app core.App) { s.load(app) }
+
+// TestClock makes the limit of the test messages read now.
+func (s *Service) TestClock(now func() time.Time) {
+	s.tests.mu.Lock()
+	defer s.tests.mu.Unlock()
+	s.tests.now = now
 }

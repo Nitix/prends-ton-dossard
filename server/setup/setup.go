@@ -21,6 +21,7 @@ import (
 	"courses/server/offers"
 	"courses/server/participations"
 	"courses/server/passkeys"
+	"courses/server/push"
 	"courses/server/reminders"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
@@ -49,6 +50,8 @@ func Register(app core.App, cfg config.Config) error {
 	mcp.Register(app, cfg)
 	calendar.Register(app, cfg)
 	reminders.Register(app, cfg)
+	// The service is what the scheduler sends with (it is wired with it later).
+	push.Register(app, cfg)
 	demo.Register(app, cfg)
 	admin.Register(app)
 	if err := passkeys.Register(app, cfg); err != nil {
