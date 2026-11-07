@@ -53,6 +53,7 @@ export const ERROR_CODES: readonly string[] = [
   "upload_invalid",
   "push_endpoint_invalid",
   "push_unavailable",
+  "weather_unavailable",
   "validation_required",
   "validation_not_unique",
   "validation_invalid_email",

@@ -49,4 +49,5 @@ const (
 	CodeUploadInvalid                    = "upload_invalid"
 	CodePushEndpointInvalid              = "push_endpoint_invalid"
 	CodePushUnavailable                  = "push_unavailable"
+	CodeWeatherUnavailable               = "weather_unavailable"
 )

@@ -94,6 +94,7 @@ var (
 		addCalendarLink,
 		addMcpTokens,
 		addReminders,
+		addGetWeather,
 	}
 	// adminTools are the tools that only the token of an admin has, besides
 	// the member tools (spec § 6.11). Each also starts with requireAdmin.

@@ -1004,6 +1004,7 @@ export const fr = {
     upload_invalid: "Cet envoi n'est pas valide, ou il a expiré.",
     push_endpoint_invalid: "Cet appareil ne peut pas être enregistré pour les notifications.",
     push_unavailable: "Les notifications ne sont pas disponibles pour l'instant.",
+    weather_unavailable: "La météo n'a pas pu être chargée. Réessaie dans un moment.",
     // PocketBase's own validation codes.
     validation_required: "Ce champ est obligatoire.",
     validation_not_unique: "Cette valeur est déjà utilisée.",

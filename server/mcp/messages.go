@@ -59,6 +59,8 @@ var messages = map[string]string{
 	// The notifications.
 	"push_endpoint_invalid": "Cet appareil ne peut pas être enregistré pour les notifications.",
 	"push_unavailable":      "Les notifications ne sont pas disponibles pour l'instant.",
+	// The weather.
+	"weather_unavailable": "La météo n'a pas pu être chargée. Réessaie dans un moment.",
 	// Any request.
 	"not_found": "Introuvable : il a peut-être été supprimé.",
 	"forbidden": "Tu n'as pas le droit de faire ça.",
@@ -178,6 +180,11 @@ func describeNamed(app core.App, err error, subject func(request int) string, na
 		// the session of an inner request is in none of them.
 		app.Logger().Error("mcp: a tool failed", "error", err)
 		return errors.New(msgSiteError)
+	}
+	// The weather that Open-Meteo could not give is a failure that the person is
+	// told, not a fault of the site: a 502 with its code, and its own words.
+	if refused.Code == "weather_unavailable" {
+		return errors.New(messages[refused.Code])
 	}
 	if refused.Status >= http.StatusInternalServerError || refused.Status < http.StatusBadRequest {
 		app.Logger().Error("mcp: the site failed a request of a tool", "error", refused.Error())

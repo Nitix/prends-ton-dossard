@@ -37,7 +37,7 @@ var (
 		"start_upload", "set_photo", "set_track",
 		"rename_runner", "passkeys", "calendar_link", "mcp_tokens",
 		// v7
-		"reminders",
+		"reminders", "get_weather",
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
@@ -106,6 +106,8 @@ var wantHints = map[string]hints{
 	// A choice of the person, replaced by another: nothing is lost, and it is set
 	// to a value.
 	"reminders": {idempotent: true},
+	// The weather is read from Open-Meteo by the site: nothing is written.
+	"get_weather": {readOnly: true},
 	// The admin tools: every one that can ask for a confirmation is destructive;
 	// adding a runner or a race type, and renaming a type, never ask. A role, an
 	// account turned off or on and a type changed are set to a value: idempotent.
@@ -450,6 +452,7 @@ func specTitles(t *testing.T) map[string]string {
 	}
 	// The tools of v7 are in § 12.2 of its spec, not in the table of § 6.3.
 	titles["reminders"] = "Rappels"
+	titles["get_weather"] = "La météo d'une course"
 	return titles
 }
 

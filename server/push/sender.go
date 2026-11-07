@@ -85,6 +85,10 @@ func publicOnlyTransport() *http.Transport {
 	return t
 }
 
+// PublicOnlyTransport is the transport of the sender, for the other outgoing
+// clients of the program (the weather): the same guard at dial time, no proxy.
+func PublicOnlyTransport() *http.Transport { return publicOnlyTransport() }
+
 // deniedV4 are the IPv4 ranges that are not the public internet: this network,
 // private, shared (carrier-grade NAT, Tailscale), loopback, link-local (cloud
 // metadata), protocol assignments, the documentation ranges, benchmarking,

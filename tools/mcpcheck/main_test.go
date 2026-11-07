@@ -231,7 +231,7 @@ var (
 		"add_comment", "update_comment", "delete_comment",
 		"add_offer", "update_offer", "delete_offer", "offer_place",
 		"start_upload", "set_photo", "set_track",
-		"rename_runner", "passkeys", "calendar_link", "mcp_tokens", "reminders",
+		"rename_runner", "passkeys", "calendar_link", "mcp_tokens", "reminders", "get_weather",
 	}
 	fakeAdminTools = []string{
 		"admin_list_members", "admin_create_runner", "admin_delete_runner", "admin_create_link", "admin_revoke_link",
@@ -893,7 +893,7 @@ func TestRun_ReadOnly(t *testing.T) {
 
 	wantLines(t, out,
 		"ok   initialize — prends-ton-dossard",
-		"ok   tools/list — 33 outils (membre)",
+		"ok   tools/list — 34 outils (membre)",
 		"ok   whoami — Alice",
 	)
 	wantPrefixes(t, out, "ok   home — ", "ok   list_race_types — 2 types", "ok   search_events — 2 courses à venir", "ok   get_stats — année 2026")
@@ -930,7 +930,7 @@ func TestRun_Write_AsAMember(t *testing.T) {
 
 	wantLines(t, out,
 		"ok   initialize — prends-ton-dossard",
-		"ok   tools/list — 33 outils (membre)",
+		"ok   tools/list — 34 outils (membre)",
 		"ok   whoami — Alice",
 		"ok   admin_merge — outil inconnu pour un membre",
 		"ok   create_event — « Course de test MCP »",
@@ -959,7 +959,7 @@ func TestRun_Write_AsAnAdmin(t *testing.T) {
 
 	wantLines(t, out,
 		"ok   initialize — prends-ton-dossard",
-		"ok   tools/list — 44 outils (admin)",
+		"ok   tools/list — 45 outils (admin)",
 		"ok   whoami — Admin",
 		"ok   create_event — « Course de test MCP »",
 		"ok   delete_event — confirmé",

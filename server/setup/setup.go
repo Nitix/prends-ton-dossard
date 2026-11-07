@@ -23,6 +23,7 @@ import (
 	"courses/server/passkeys"
 	"courses/server/push"
 	"courses/server/reminders"
+	"courses/server/weather"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
@@ -54,6 +55,7 @@ func Register(app core.App, cfg config.Config) error {
 	// registered first.
 	notifier := push.Register(app, cfg)
 	reminders.Register(app, cfg, notifier)
+	weather.Register(app, cfg)
 	demo.Register(app, cfg)
 	admin.Register(app)
 	if err := passkeys.Register(app, cfg); err != nil {
