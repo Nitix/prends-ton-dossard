@@ -281,6 +281,11 @@ test("AgendaPage — sans mois, la flèche suivante part du mois en cours", asyn
 });
 
 test("AgendaPage — changer de mois garde les filtres et oublie le jour choisi", async () => {
+  // A race in each month: July must not be empty, or it says so instead of « choisis un jour ».
+  mocks.events.mockResolvedValue([
+    eventRecord,
+    { ...eventRecord, id: "event-july", start_date: "2026-07-10", end_date: "2026-07-11" },
+  ]);
   const { screen, router } = await renderAgenda(
     `/agenda?mois=2026-06&jour=2026-06-14&personne=${bobRunner.id}`,
   );
@@ -914,4 +919,34 @@ test("AgendaPage — le bloc est celui du mois affiché : une course de juin n'e
   await expect
     .element(screen.getByRole("region", { name: fr.agenda.monthToBeSet }))
     .not.toBeInTheDocument();
+});
+
+test("AgendaPage — les mois voisins d'une course au mois disent qu'ils sont vides, pas le mois lui-même", async () => {
+  mocks.events.mockResolvedValue([monthRace]);
+
+  // The race of June overlaps the grids of May and July, and is on none of their days.
+  for (const [url, title] of [
+    ["/agenda?mois=2026-05", "mai 2026"],
+    ["/agenda?mois=2026-07", "juillet 2026"],
+  ] as const) {
+    const { screen } = await renderAgenda(url);
+    await expect.element(screen.getByRole("heading", { level: 2, name: title })).toBeVisible();
+    await expect.element(screen.getByText(fr.list.empty)).toBeVisible();
+    await screen.unmount();
+  }
+
+  const { screen } = await renderAgenda("/agenda?mois=2026-06");
+  await expect.element(screen.getByRole("region", { name: fr.agenda.monthToBeSet })).toBeVisible();
+  await expect.element(screen.getByText(fr.list.empty)).not.toBeInTheDocument();
+});
+
+test("AgendaPage — une course d'un jour de la grille, hors du mois, ne rend pas le mois vide", async () => {
+  // 31 May is a Sunday: on the grid of June when the week starts on Sunday.
+  mocks.events.mockResolvedValue([eventOn("event-may", "Course du 31 mai", "2026-05-31")]);
+
+  const { screen } = await renderAgenda("/agenda?mois=2026-06", ["en"]);
+
+  await expect.element(screen.getByRole("heading", { level: 2, name: "June 2026" })).toBeVisible();
+  await expect.element(screen.getByRole("button", { name: /31/ }).first()).toBeVisible();
+  await expect.element(screen.getByText(en.list.empty)).not.toBeInTheDocument();
 });

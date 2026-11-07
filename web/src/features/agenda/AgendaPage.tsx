@@ -49,6 +49,10 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
   const monthOnly = views.filter(
     (view) => isMonthOnly(view.event) && view.start.toPlainYearMonth().equals(month),
   );
+  // Empty is what the page shows, not what was fetched: the grid reaches into
+  // the neighbouring months, and a race known by its month there is in `views`
+  // but on no day, and not in the block either.
+  const empty = monthOnly.length === 0 && [...byDay.values()].every((day) => day.length === 0);
   // A day outside the grid cannot be chosen.
   const selected = search.jour !== undefined && byDay.has(search.jour) ? search.jour : undefined;
 
@@ -109,7 +113,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
         </div>
       ) : !loaded ? (
         <output>{t.common.loading}</output>
-      ) : views.length === 0 ? (
+      ) : empty ? (
         <EmptyState title={t.list.empty} hint={t.list.emptyHint} />
       ) : (
         <DayList
