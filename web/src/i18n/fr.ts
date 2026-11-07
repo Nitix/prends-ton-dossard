@@ -161,6 +161,9 @@ export const fr = {
     testFailed: (failed: number) =>
       failed === 1 ? "1 appareil n'a pas répondu." : `${failed} appareils n'ont pas répondu.`,
     tooManyTests: "Trop d'essais à la suite : attends quelques secondes, puis réessaie.",
+    dismissed: "Tu n'as pas répondu à la demande du navigateur : réessaie quand tu veux.",
+    notReady:
+      "Le navigateur n'est pas encore prêt pour les notifications : réessaie dans un instant.",
     chooseFirst: "Choisis d'abord quand être prévenu.",
     needsInstall:
       "Sur iPhone et iPad, les notifications ne marchent que dans l'appli installée (iOS 16.4 ou plus) : touche Partager, puis « Sur l'écran d'accueil », ouvre l'appli et reviens ici.",

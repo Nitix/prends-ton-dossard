@@ -11,7 +11,13 @@ import { day } from "../profile/PasskeyList";
 import { useReminders } from "../reminders/api";
 import { deleteDevice, pushKey, sendTest, usePush, type PushDevice } from "./api";
 import { deviceLabel } from "./deviceLabel";
-import { disableOnThisDevice, enableOnThisDevice, thisDeviceEndpoint } from "./subscribe";
+import {
+  NoWorkerError,
+  disableOnThisDevice,
+  enableOnThisDevice,
+  thisDeviceEndpoint,
+  unsubscribeThisDevice,
+} from "./subscribe";
 import { pushSupport } from "./support";
 import { rememberedDevice } from "./thisDevice";
 
@@ -93,6 +99,7 @@ export function PushSection({ headingRef }: { headingRef: RefObject<HTMLHeadingE
   function describeFailure(err: unknown): string {
     // The test route answers a bare 429, with no code, when it was used a moment ago.
     if (err instanceof ClientResponseError && err.status === 429) return t.push.tooManyTests;
+    if (err instanceof NoWorkerError) return t.push.notReady;
     return describeError(t, err);
   }
 
@@ -118,8 +125,10 @@ export function PushSection({ headingRef }: { headingRef: RefObject<HTMLHeadingE
           return { ok: true, text: t.push.enabled };
         }
         // Refused for good, or the prompt was closed: the page says which.
-        setSupport(pushSupport());
-        return null;
+        const now = pushSupport();
+        setSupport(now);
+        // A closed prompt leaves the permission as it was: say so, the button is back.
+        return now === "ready" ? { ok: true, text: t.push.dismissed } : null;
       } catch (err) {
         setSupport(pushSupport());
         throw err;
@@ -150,9 +159,14 @@ export function PushSection({ headingRef }: { headingRef: RefObject<HTMLHeadingE
   function remove(device: PushDevice) {
     void run(async () => {
       if (device.id === rememberedDevice()) {
-        // This one: the browser lets go of its subscription too.
+        // This one: the row goes whatever the browser has (it may have no
+        // subscription any more), and the browser lets go of its own if it has one.
         try {
-          await disableOnThisDevice();
+          await deleteDevice(device.id).catch((err: unknown) => {
+            // Already gone from the server: that is what was asked.
+            if (!(err instanceof ClientResponseError && err.status === 404)) throw err;
+          });
+          await unsubscribeThisDevice();
         } finally {
           await refresh();
         }

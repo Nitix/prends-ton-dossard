@@ -2,6 +2,13 @@ import type { Lang } from "../../i18n/detect";
 import { deleteSubscription, postSubscription } from "./api";
 import { applicationKey, forgetDevice, registration, rememberDevice, sameKey } from "./thisDevice";
 
+/** The service worker is not active yet: the page cannot subscribe for now. */
+export class NoWorkerError extends Error {
+  constructor() {
+    super("no active service worker");
+  }
+}
+
 /** How long a click waits for the service worker to be active. */
 const READY_MS = 10_000;
 
@@ -25,7 +32,7 @@ export async function enableOnThisDevice(
   if (permission !== "granted") return "denied";
 
   const worker = await registration(READY_MS);
-  if (worker === null) throw new Error("no active service worker");
+  if (worker === null) throw new NoWorkerError();
   const key = applicationKey(publicKey);
   let subscription = await worker.pushManager.getSubscription();
   // A subscription made with another key of the server is of no use.
@@ -63,6 +70,16 @@ export async function disableOnThisDevice(): Promise<void> {
   } finally {
     await subscription.unsubscribe();
   }
+}
+
+/**
+ * Lets the browser go of its subscription, without the server (the row of the
+ * device is deleted by its id): used when the person removes this device from the list.
+ */
+export async function unsubscribeThisDevice(): Promise<void> {
+  forgetDevice();
+  const worker = await registration(2000);
+  await (await worker?.pushManager.getSubscription())?.unsubscribe();
 }
 
 /** The address of this device's subscription, null when the browser has none. */

@@ -371,3 +371,35 @@ test("PushSection — un choix fait : pas de « Choisis d'abord »", async () =>
   await expect.element(button(screen, fr.push.enable)).toBeVisible();
   await expect.element(screen.getByText(fr.push.chooseFirst)).not.toBeInTheDocument();
 });
+
+test("PushSection — retirer cet appareil sans abonnement dans le navigateur : la ligne part quand même", async () => {
+  alreadyOn();
+  // The permission was taken away or the site data cleared: the browser has nothing.
+  fakes.current = null;
+  const screen = await mount();
+  await expect.element(screen.getByText(`(${fr.push.thisDevice})`)).toBeVisible();
+
+  await button(screen, fr.push.removeLabel("Firefox sur Windows")).click();
+
+  await expect
+    .element(button(screen, fr.push.removeLabel("Firefox sur Windows")))
+    .not.toBeInTheDocument();
+  expect(mocks.send).toHaveBeenCalledWith("/api/app/push/subscriptions/dev-this", {
+    method: "DELETE",
+  });
+  // The other device stays, and this one is no longer remembered.
+  await expect.element(button(screen, fr.push.removeLabel("iPhone"))).toBeVisible();
+  expect(localStorage.getItem("ptd-push-device")).toBeNull();
+});
+
+test("PushSection — l'invite fermée sans réponse : un message, et le bouton reste", async () => {
+  restoreFakes();
+  fakes = installFakes({ answer: "default" });
+  const screen = await mount();
+
+  await button(screen, fr.push.enable).click();
+
+  await expect.element(screen.getByRole("status")).toHaveTextContent(fr.push.dismissed);
+  await expect.element(button(screen, fr.push.enable)).toBeVisible();
+  expect(fakes.subscribe).not.toHaveBeenCalled();
+});

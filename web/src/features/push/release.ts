@@ -12,8 +12,10 @@ const LET_GO_MS = 2000;
  * over already.
  */
 export async function releaseThisDevice(token: string): Promise<void> {
+  // One deadline for the whole release: the wait for the worker, then the request.
+  const end = Date.now() + LET_GO_MS;
   try {
-    const worker = await registration(LET_GO_MS);
+    const worker = await registration(Math.max(1, end - Date.now()));
     const subscription = await worker?.pushManager.getSubscription();
     if (subscription === undefined || subscription === null) return;
     try {
@@ -22,14 +24,16 @@ export async function releaseThisDevice(token: string): Promise<void> {
         headers: { Authorization: token, "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: subscription.endpoint }),
         keepalive: true,
-        signal: AbortSignal.timeout(LET_GO_MS),
+        signal: AbortSignal.timeout(Math.max(1, end - Date.now())),
       });
     } catch {
       // The server keeps a device that will answer 410 one day: it goes then.
     }
     await subscription.unsubscribe();
-    forgetDevice();
   } catch {
     // Nothing to do: the session is over.
+  } finally {
+    // Whatever happened, this device is no longer the one of the person who left.
+    forgetDevice();
   }
 }

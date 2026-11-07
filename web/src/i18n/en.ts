@@ -142,6 +142,8 @@ export const en = {
     testFailed: (failed: number) =>
       failed === 1 ? "1 device did not answer." : `${failed} devices did not answer.`,
     tooManyTests: "Too many tests in a row: wait a few seconds, then try again.",
+    dismissed: "You did not answer the browser's request: try again whenever you like.",
+    notReady: "The browser is not ready for notifications yet: try again in a moment.",
     chooseFirst: "First choose when to be warned.",
     needsInstall:
       "On iPhone and iPad, notifications only work in the installed app (iOS 16.4 or later): tap Share, then “Add to Home Screen”, open the app and come back here.",
