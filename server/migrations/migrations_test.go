@@ -2151,7 +2151,28 @@ func mustFind(t testing.TB, app core.App, collection, id string) *core.Record {
 // and an optional time. Its rollback removes both fields, and what they hold.
 func TestMigrations_RegistrationOpeningDownThenUp(t *testing.T) {
 	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
 	migration := migrationFile(t, "9l_registration_opening.go")
+
+	// An event that was there before: it stays valid through the rollback and
+	// through applying again, and the values go with the fields.
+	event := func() *core.Record {
+		t.Helper()
+		return mustFind(t, app, "events", fx.Event.Id)
+	}
+	// stillSaves saves the event again, as an edit of its name does, and checks
+	// what it holds of the opening.
+	stillSaves := func(when, day, hhmm string) {
+		t.Helper()
+		e := event()
+		e.Set("notes", when)
+		if err := app.Save(e); err != nil {
+			t.Fatalf("%s: the event does not save: %v", when, err)
+		}
+		if got, got2 := event().GetString("registration_opening"), event().GetString("registration_opening_time"); got != day || got2 != hhmm {
+			t.Errorf("%s: the event opens on %q at %q, want %q at %q", when, got, got2, day, hhmm)
+		}
+	}
 
 	field := func(name string) core.Field {
 		t.Helper()
@@ -2175,6 +2196,14 @@ func TestMigrations_RegistrationOpeningDownThenUp(t *testing.T) {
 	}
 
 	check("as created")
+	stillSaves("as created", "", "")
+	opened := event()
+	opened.Set("registration_opening", "2026-05-01")
+	opened.Set("registration_opening_time", "10:00")
+	if err := app.Save(opened); err != nil {
+		t.Fatalf("an opening is refused: %v", err)
+	}
+	stillSaves("with an opening", "2026-05-01", "10:00")
 
 	if err := migration.Down(app); err != nil {
 		t.Fatal(err)
@@ -2184,11 +2213,18 @@ func TestMigrations_RegistrationOpeningDownThenUp(t *testing.T) {
 			t.Errorf("events.%s must be gone after the rollback", name)
 		}
 	}
+	// The event is still there, and valid, without the values.
+	if event().GetString("name") != fx.Event.GetString("name") {
+		t.Error("the event changed beyond its opening")
+	}
+	stillSaves("after the rollback", "", "")
 
 	if err := migration.Up(app); err != nil {
 		t.Fatal(err)
 	}
 	check("after applying again")
+	// The values went with the fields: the event starts over with none, and saves.
+	stillSaves("after applying again", "", "")
 }
 
 // The migration 9m adds the reminders to the accounts: a choice of at most two

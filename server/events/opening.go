@@ -2,6 +2,7 @@ package events
 
 import (
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,12 @@ func ValidTime(s string) bool {
 	return timePattern.MatchString(s)
 }
 
+// parisLocation is the time zone of Paris, loaded once: it does not change, and
+// the reminders ask for an instant for every event at every pass.
+var parisLocation = sync.OnceValues(func() (*time.Location, error) {
+	return time.LoadLocation("Europe/Paris")
+})
+
 // OpeningInstant is the instant at which registration opens: the day
 // (YYYY-MM-DD) at hhmm (HH:MM, or "" for DefaultOpeningTime), Paris time. ok is
 // false for a day or a time that is not real.
@@ -31,9 +38,14 @@ func ValidTime(s string) bool {
 // instant (UTC) is made here, at the edge, only for what needs one: a reminder
 // to send at a given moment, an entry in a calendar.
 //
-// A wall time that does not exist, such as 02:30 on the last Sunday of March,
-// when the clocks go from 02:00 to 03:00, is normalized by Go (03:30, summer
-// time), which is the nearest thing that the clock of that day ever showed.
+// Two wall times of the year are not one instant, and Go leaves the choice
+// unspecified (time.Date): 02:30 on the last Sunday of March does not exist (the
+// clocks go from 02:00 to 03:00), and 02:30 on the last Sunday of October is read
+// twice (they go from 03:00 back to 02:00). What this gives is what the Go of the
+// build gives, which the tests pin: the first is 03:30 summer time, the second the
+// later of its two readings, in winter time. Either way the instant is within an
+// hour of what the organizers meant, and a person who sets such a time has a
+// reminder that comes at one of the two readings.
 func OpeningInstant(day, hhmm string) (at time.Time, ok bool) {
 	d, ok := ParseDay(day)
 	if !ok {
@@ -45,7 +57,7 @@ func OpeningInstant(day, hhmm string) (at time.Time, ok bool) {
 	if !ValidTime(hhmm) {
 		return time.Time{}, false
 	}
-	paris, err := time.LoadLocation("Europe/Paris")
+	paris, err := parisLocation()
 	if err != nil {
 		// The program embeds time/tzdata, so this is a build that does not.
 		return time.Time{}, false

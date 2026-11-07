@@ -493,22 +493,82 @@ func TestTools_CreateEvent_Opening(t *testing.T) {
 	})
 
 	t.Run("an opening after the start", func(t *testing.T) {
-		refused(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_opening"] = "2026-12-21" }),
+		announced(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_opening"] = "2026-12-21" }),
 			"La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard le jour du début. (registration_opening_after_start)")
 	})
 
 	t.Run("an opening after the deadline", func(t *testing.T) {
-		refused(t, app, alice, "create_event", base(func(a map[string]any) {
+		announced(t, app, alice, "create_event", base(func(a map[string]any) {
 			a["registration_deadline"] = "2026-12-01"
 			a["registration_opening"] = "2026-12-02"
 		}), "La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard la date limite. (registration_opening_after_deadline)")
 	})
 
 	t.Run("a time that is not a time", func(t *testing.T) {
-		refused(t, app, alice, "create_event", base(func(a map[string]any) {
+		announced(t, app, alice, "create_event", base(func(a map[string]any) {
 			a["registration_opening"] = "2026-11-10"
 			a["registration_opening_time"] = "24:00"
 		}), "La course, heure d'ouverture : l'heure doit être de la forme 06:30. (time_invalid)")
+	})
+}
+
+// What the site refuses of an opening is said before anything is asked: not
+// after a confirmation that the person gave for nothing.
+func TestTools_OpeningRefusedBeforeAnyConfirmation(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "10:00"})
+
+	const afterStart = "La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard le jour du début. (registration_opening_after_start)"
+	const afterDeadline = "La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard la date limite. (registration_opening_after_deadline)"
+	const badTime = "La course, heure d'ouverture : l'heure doit être de la forme 06:30. (time_invalid)"
+
+	t.Run("create_event: a duplicate, which asks first, with an opening after the start", func(t *testing.T) {
+		// Same name and start as the race of the fixture: it asks to confirm.
+		args := map[string]any{
+			"name": "Trail des Crêtes", "location": "Annecy", "start_date": "2026-06-13",
+			"formats":              []any{map[string]any{"race_type": "Trail", "distance_km": 42}},
+			"registration_opening": "2026-06-14",
+		}
+		announced(t, app, alice, "create_event", args, afterStart)
+		delete(args, "registration_opening")
+		if result := callTool(t, app, alice, "create_event", args); result.IsError || result.Structured["confirmation"] == nil {
+			t.Fatalf("without the opening, the duplicate is not asked about: %.300s", redact(result.Text))
+		}
+	})
+
+	t.Run("update_event: a time cleared, which asks first, with an opening after the start", func(t *testing.T) {
+		announced(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_opening": "2026-07-01", "registration_opening_time": "",
+		}, afterStart)
+	})
+
+	t.Run("update_event: after the deadline", func(t *testing.T) {
+		announced(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_deadline": "2026-06-01", "registration_opening": "2026-06-02",
+		}, afterDeadline)
+		// A deadline moved before the opening that the race already has.
+		announced(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_deadline": "2026-05-03",
+		}, afterDeadline)
+	})
+
+	t.Run("update_event: a time that is not one", func(t *testing.T) {
+		announced(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_opening_time": "24:00",
+		}, badTime)
+	})
+
+	t.Run("the opening on the first day, or on the deadline, is fine", func(t *testing.T) {
+		isDone(t, callTool(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_deadline": "2026-06-10", "registration_opening": "2026-06-10",
+		}))
+		isDone(t, callTool(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_deadline": "2026-06-22", "registration_opening": "2026-06-22",
+		}))
 	})
 }
 

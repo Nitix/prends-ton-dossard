@@ -18,6 +18,8 @@ func TestOpeningInstant(t *testing.T) {
 		{"summer", "2027-07-12", "10:00", "2027-07-12T08:00:00Z"},
 		{"no time counts 9 h", "2027-01-12", "", "2027-01-12T08:00:00Z"},
 		{"the hour that does not exist", "2027-03-28", "02:30", "2027-03-28T01:30:00Z"},
+		// Read twice (03:00 summer time goes back to 02:00): Go gives the winter reading.
+		{"the hour that is read twice", "2027-10-31", "02:30", "2027-10-31T01:30:00Z"},
 		{"midnight", "2027-01-12", "00:00", "2027-01-11T23:00:00Z"},
 		{"a day that is not real", "2027-02-31", "10:00", ""},
 		{"a day that is not a day", "12/01/2027", "10:00", ""},

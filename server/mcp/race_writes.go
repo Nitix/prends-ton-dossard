@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"courses/server/events"
 	"courses/server/wording"
 )
 
@@ -208,13 +209,40 @@ func dateRefusal(w wording.Words, draft eventDraft, labels map[string]string, hi
 	return nil
 }
 
-// openingRefusal is the refusal of the site for a draft that has a time of
-// opening and no day (validation_required on registration_opening): the form
-// does not send a time without a day (toEventDraft of formDraft.ts), and a tool
-// has no field to be left alone, so it says so before any write.
+// openingRefusal is the refusal of the site for the opening of the registration
+// of a draft, in the site's own words and in its own order (validateEvent of the
+// events package): an opening after the first day or after the deadline
+// (registration_opening_after_start, registration_opening_after_deadline), a
+// time that is not HH:MM (time_invalid), and a time without a day
+// (validation_required on registration_opening). The form does not send a time
+// without a day (toEventDraft of formDraft.ts), and a tool has no field to be
+// left alone, so it says so before any write. It says all of them before a
+// confirmation too: a person is not asked to agree to what the site then
+// refuses.
+//
+// The days are compared as text, as the site does (they were checked to be days).
 func openingRefusal(draft eventDraft) error {
-	if draft.RegistrationOpeningTime != "" && draft.RegistrationOpening == "" {
-		return errors.New("La course, " + fieldText("registration_opening", "validation_required"))
+	refuse := func(field, code string) error {
+		return errors.New("La course, " + fieldText(field, code))
+	}
+	if opening := draft.RegistrationOpening; opening != "" {
+		if _, ok := events.ParseDay(opening); !ok {
+			return refuse("registration_opening", "date_invalid")
+		}
+		if draft.StartDate != "" && opening > draft.StartDate {
+			return refuse("registration_opening", "registration_opening_after_start")
+		}
+		if deadline := draft.RegistrationDeadline; deadline != "" && opening > deadline {
+			return refuse("registration_opening", "registration_opening_after_deadline")
+		}
+	}
+	if hhmm := draft.RegistrationOpeningTime; hhmm != "" {
+		if !events.ValidTime(hhmm) {
+			return refuse("registration_opening_time", "time_invalid")
+		}
+		if draft.RegistrationOpening == "" {
+			return refuse("registration_opening", "validation_required")
+		}
 	}
 	return nil
 }
