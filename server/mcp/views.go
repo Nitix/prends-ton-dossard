@@ -536,6 +536,16 @@ const precisionMonth = "month"
 // lib/dates.ts).
 func (r eventRecord) monthOnly() bool { return r.DatePrecision == precisionMonth }
 
+// monthRank puts a race known by its month after the races of the month that have a
+// day, when they end on the same day (the sort of events, and of the races to come:
+// the site's other lists, such as the ones to confirm, do not rank them).
+func (r eventRecord) monthRank() int {
+	if r.monthOnly() {
+		return 1
+	}
+	return 0
+}
+
 // datePrecisionOf is the precision of the date to say in an answer: "month" for an
 // event known by its month, "" (left out) for a day.
 func datePrecisionOf(r eventRecord) string {
@@ -579,15 +589,9 @@ func sortEvents(views []eventView, ascending bool) {
 		}
 		return v.record.StartDate
 	}
-	monthRank := func(v eventView) int {
-		if v.record.monthOnly() {
-			return 1
-		}
-		return 0
-	}
 	slices.SortStableFunc(views, func(a, b eventView) int {
 		return cmp.Or(
-			sign*cmp.Or(cmp.Compare(orderDay(a), orderDay(b)), cmp.Compare(monthRank(a), monthRank(b))),
+			sign*cmp.Or(cmp.Compare(orderDay(a), orderDay(b)), cmp.Compare(a.record.monthRank(), b.record.monthRank())),
 			compareNames(a.record.Name, b.record.Name),
 			cmp.Compare(a.record.ID, b.record.ID),
 		)

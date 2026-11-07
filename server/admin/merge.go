@@ -152,8 +152,9 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 
 			format.Set("event", keep.Id)
 			// The date is cleared before the save: the validation of a format
-			// refuses a date outside the range of its event.
-			if day := format.GetString("date"); day != "" && !events.InRange(day, start, end) {
+			// refuses a date outside the range of its event, and any date on a race
+			// known by its month only.
+			if day := format.GetString("date"); day != "" && (events.MonthOnly(keep) || !events.InRange(day, start, end)) {
 				format.Set("date", "")
 				result.ClearedFormatDates++
 			}

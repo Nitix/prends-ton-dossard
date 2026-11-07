@@ -76,10 +76,12 @@ describe("upcomingOf, une course au mois", () => {
     expect(ids(views, "2027-07-01")).toEqual([]);
   });
 
-  test("MyUpcoming — son jour est le dernier du mois : il range la course", () => {
+  test("MyUpcoming — le jour affiché est le 1er, le dernier jour du mois range la course", () => {
     const views = toEventViews([juneEvent("june", "Trail de juin")]);
 
-    expect(upcomingOf(views, ALICE, date("2027-06-10"))[0]?.date.toString()).toBe("2027-06-30");
+    const [first] = upcomingOf(views, ALICE, date("2027-06-10"));
+    expect(first?.lastDay.toString()).toBe("2027-06-30");
+    expect(first?.date.toString()).toBe("2027-06-01");
   });
 
   test("MyUpcoming — une participation à la course seule suit la même règle", () => {

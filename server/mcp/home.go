@@ -152,15 +152,6 @@ func latestFirst(a, b participationRow) int {
 	return cmp.Or(cmp.Compare(b.Day, a.Day), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 }
 
-// monthRank puts a race known by its month after the races of the month that have a
-// day, when they end on the same day.
-func monthRank(r participationRow) int {
-	if r.Event.monthOnly() {
-		return 1
-	}
-	return 0
-}
-
 func latestEndFirst(a, b participationRow) int {
 	return cmp.Or(cmp.Compare(b.lastDay(), a.lastDay()), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 }
@@ -318,7 +309,7 @@ func upcomingOf(rows []participationRow, today string) []participationRow {
 		return day < today
 	})
 	slices.SortFunc(kept, func(a, b participationRow) int {
-		return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), cmp.Compare(monthRank(a), monthRank(b)),
+		return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), cmp.Compare(a.Event.monthRank(), b.Event.monthRank()),
 			compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 	})
 	return kept

@@ -365,6 +365,10 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	}
 	args.Formats = patches
 	labels := labelsOf(view, raceTypes)
+	// Back to a day with no day given would make up one (the 1st): the form makes the person choose.
+	if !monthOnly && view.record.monthOnly() && args.StartDate == nil {
+		return nil, eventWriteOut{}, errors.New("date_precision : pour passer de month à day, donne aussi start_date (AAAA-MM-JJ), le jour de la course.")
+	}
 	// A race that becomes a month with no start given is the month of the one it has: the form
 	// offers the month of the day (initialDraft of formDraft.ts).
 	if monthOnly && !view.record.monthOnly() && args.StartDate == nil {
@@ -429,6 +433,8 @@ type removedEvent struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	StartDate string `json:"start_date"`
+	// DatePrecision is "month" when only the month of the race was known.
+	DatePrecision string `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course était connu, start_date en est le 1er ; absent : start_date est le jour"`
 }
 
 var deleteEventSchema = sync.OnceValue(writeSchema[deleteEventOut])
@@ -534,7 +540,7 @@ func (t *tools) deleteEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 		writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("La course %s est supprimée, avec %s, %s, %s et %s.", quote(event.Name),
 			plural(len(view.formats), "épreuve", "épreuves"), plural(len(view.participations()), "participation", "participations"),
 			plural(comments, "commentaire", "commentaires"), plural(offers, "offre", "offres"))},
-		Removed: &removedEvent{ID: event.ID, Name: event.Name, StartDate: event.StartDate},
+		Removed: &removedEvent{ID: event.ID, Name: event.Name, StartDate: event.StartDate, DatePrecision: datePrecisionOf(event)},
 	}, nil
 }
 

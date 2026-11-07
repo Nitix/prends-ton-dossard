@@ -24,6 +24,7 @@ function rowOf(id: string, day: string, eventName = "Trail des Crêtes"): ToEnte
     format: f42,
     raceType: trailType,
     date: date(day),
+    lastDay: date(day),
   };
 }
 
@@ -103,7 +104,8 @@ describe("toEnterRow", () => {
     });
 
     // The race is over the day after the last day of its month, not the day after its 1st.
-    expect(row.date.toString()).toBe("2027-06-30");
+    expect(row.lastDay.toString()).toBe("2027-06-30");
+    expect(row.date.toString()).toBe("2027-06-01");
     expect(toEnterOf([row], date("2027-06-15"))).toEqual([]);
     expect(toEnterOf([row], date("2027-06-30"))).toEqual([]);
     expect(toEnterOf([row], date("2027-07-01"))).toEqual([row]);

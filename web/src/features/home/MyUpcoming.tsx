@@ -19,11 +19,13 @@ export type Upcoming = {
   /** Absent for a participation on the event alone ("format to choose", or supporter). */
   formatView?: FormatView;
   participation: ParticipationRecord;
-  /**
-   * The day of the format, or the start of the event when there is no format: the last day of the
-   * month for a race known by its month only (`lastRaceDay`).
-   */
+  /** The day of the format, or the start of the event when there is no format: as it is shown. */
   date: Temporal.PlainDate;
+  /**
+   * The day that says whether the race is behind and orders it (`lastRaceDay`): `date`, except for
+   * a race known by its month only, whose last day is the last day of the month.
+   */
+  lastDay: Temporal.PlainDate;
 };
 
 /** The starts of the runner in the list, which is theirs and not "not starting". */
@@ -53,16 +55,17 @@ export function upcomingOf(
 ): Upcoming[] {
   const notBehind = (day: Temporal.PlainDate) => Temporal.PlainDate.compare(day, today) >= 0;
   return views
-    .flatMap(({ event, formats, interested, supporters, end }) => [
+    .flatMap(({ event, formats, interested, supporters, start, end }) => [
       ...formats
-        .map((formatView) => ({ formatView, date: lastRaceDay(formatView.format, event) }))
-        .filter(({ date }) => notBehind(date))
-        .flatMap(({ formatView, date }) =>
+        .map((formatView) => ({ formatView, lastDay: lastRaceDay(formatView.format, event) }))
+        .filter(({ lastDay }) => notBehind(lastDay))
+        .flatMap(({ formatView, lastDay }) =>
           mine(formatView.participations, runnerId).map((participation) => ({
             event,
             formatView,
             participation,
-            date,
+            date: formatView.date,
+            lastDay,
           })),
         ),
       // On the event alone: the interested with no format, and the supporters.
@@ -70,13 +73,14 @@ export function upcomingOf(
         ? [...mine(interested, runnerId), ...mine(supporters, runnerId)].map((participation) => ({
             event,
             participation,
-            date: lastRaceDay({}, event),
+            date: start,
+            lastDay: lastRaceDay({}, event),
           }))
         : []),
     ])
     .toSorted(
       (a, b) =>
-        Temporal.PlainDate.compare(a.date, b.date) ||
+        Temporal.PlainDate.compare(a.lastDay, b.lastDay) ||
         Number(isMonthOnly(a.event)) - Number(isMonthOnly(b.event)) ||
         a.event.name.localeCompare(b.event.name) ||
         a.participation.id.localeCompare(b.participation.id),

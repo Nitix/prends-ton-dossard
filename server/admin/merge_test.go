@@ -459,6 +459,32 @@ func TestWinner(t *testing.T) {
 	}
 }
 
+// testRowMonth merges Event (F42 dated on the 14th of June) into Event2 made a race known by
+// its month, June 2026: the date is inside the month, but a month has no format dates.
+func testRowMonth(name string, dryRun bool) testutil.Row {
+	return testutil.Row{
+		Name: name,
+		Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			setFields(t, app, "events", fx.Event2.Id, map[string]any{"date_precision": "month", "start_date": "2026-06-01"})
+		},
+		As:       "admin",
+		Method:   http.MethodPost,
+		URL:      path(mergeEvents),
+		Body:     merge(id(event2), id(event), dryRun),
+		Status:   http.StatusOK,
+		Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1})},
+		After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			if dryRun {
+				return
+			}
+			if got := mustStore(t, app, "formats", fx.F42.Id).GetString("date"); got != "" {
+				t.Errorf("the date of F42 is %q, want it empty", got)
+			}
+			gone(t, app, "events", fx.Event)
+		},
+	}
+}
+
 func TestMergeEvents(t *testing.T) {
 	// An event whose range holds the whole of Event, for the formats that must
 	// keep their date.
@@ -575,6 +601,8 @@ func TestMergeEvents(t *testing.T) {
 				gone(t, app, "events", fx.Event2)
 			},
 		},
+		unchanged(testRowMonth("a dry run into a race known by its month counts the dates of the formats it would clear", true), nil),
+		testRowMonth("a format dated in the month of a kept race known by its month loses its date", false),
 		{
 			Name: "a format dated outside the range of the kept event loses its date",
 			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {

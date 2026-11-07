@@ -212,6 +212,27 @@ func TestTools_UpdateEvent_ToMonth(t *testing.T) {
 		}
 	})
 
+	t.Run("back to a day needs the day, before any write", func(t *testing.T) {
+		announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event2.Id, "date_precision": "day"},
+			"date_precision : pour passer de month à day, donne aussi start_date (AAAA-MM-JJ), le jour de la course.")
+		isDone(t, callTool(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "date_precision": "day", "start_date": "2026-08-12",
+		}))
+	})
+
+	t.Run("delete_event says that its race was known by its month", func(t *testing.T) {
+		june := create(t, app, "events", map[string]any{
+			"name": "Course sans jour", "location": "Annecy", "start_date": "2027-06-01", "date_precision": "month",
+			"created_by": fx.AliceRunner.Id,
+		})
+		create(t, app, "formats", map[string]any{"event": june.Id, "race_type": fx.Trail.Id, "distance_km": 10})
+		result := confirmAndCall(t, app, alice, "delete_event", map[string]any{"event_id": june.Id})
+		removed, _ := result.Structured["removed"].(map[string]any)
+		if removed["date_precision"] != "month" || removed["start_date"] != "2027-06-01" {
+			t.Errorf("the removed race is %v", removed)
+		}
+	})
+
 	t.Run("a month is not a precision that exists", func(t *testing.T) {
 		result := callTool(t, app, alice, "update_event", map[string]any{"event_id": fx.Event2.Id, "date_precision": "year"})
 		if !result.IsError {

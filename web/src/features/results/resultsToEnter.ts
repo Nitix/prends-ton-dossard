@@ -1,4 +1,4 @@
-import { daysBetween, lastRaceDay } from "../../lib/dates";
+import { daysBetween, effectiveDate, lastRaceDay } from "../../lib/dates";
 import type {
   EventRecord,
   FormatRecord,
@@ -18,9 +18,10 @@ export const RESULTS_EXPAND = "event,format.race_type";
 /**
  * A race the runner is registered for, whose result they may have to enter:
  * the participation, and what it is on, with the race type that gives the
- * format its name. `date` is the day that says whether the race is over
- * (`lastRaceDay`): its day, or the last day of its month for a race known by
- * its month only.
+ * format its name. `date` is the day of the race as it is shown (`effectiveDate`:
+ * the 1st for a race known by its month only); `lastDay` is the day that says
+ * whether it is over and orders it (`lastRaceDay`: the last day of its month for
+ * such a race).
  */
 export type ToEnter = {
   participation: ParticipationRecord;
@@ -28,6 +29,7 @@ export type ToEnter = {
   format: FormatRecord;
   raceType: RaceTypeRecord;
   date: Temporal.PlainDate;
+  lastDay: Temporal.PlainDate;
 };
 
 // What the server sends for RESULTS_EXPAND. An expand that is empty is left
@@ -54,14 +56,21 @@ export function toEnterRow(record: RegisteredRecord): ToEnter {
       `participation ${record.id}: its event, its format or the race type of its format is missing from the answer`,
     );
   }
-  return { participation: record, event, format, raceType, date: lastRaceDay(format, event) };
+  return {
+    participation: record,
+    event,
+    format,
+    raceType,
+    date: effectiveDate(format, event),
+    lastDay: lastRaceDay(format, event),
+  };
 }
 
 /**
  * Whether the result of a participation is to enter: it is « Registered » and
  * its race is over (the day of a race is not: it may still be on) for no more
- * than `RESULTS_WINDOW_DAYS` days. `date` is the day of the race
- * (`lastRaceDay`): a race known by its month only is over the day after its
+ * than `RESULTS_WINDOW_DAYS` days. `date` is the day that ends the race
+ * (`lastDay`, from `lastRaceDay`): a race known by its month only is over the day after its
  * month. « Résultats à saisir » shows these, and « À confirmer »
  * leaves them out (see `pendingOf`): both ask this, so they cannot disagree.
  */
@@ -82,10 +91,10 @@ export function isResultToEnter(
  */
 export function toEnterOf(rows: ToEnter[], today: Temporal.PlainDate): ToEnter[] {
   return rows
-    .filter(({ participation, date }) => isResultToEnter(participation.status, date, today))
+    .filter(({ participation, lastDay }) => isResultToEnter(participation.status, lastDay, today))
     .toSorted(
       (a, b) =>
-        Temporal.PlainDate.compare(b.date, a.date) ||
+        Temporal.PlainDate.compare(b.lastDay, a.lastDay) ||
         a.event.name.localeCompare(b.event.name) ||
         a.participation.id.localeCompare(b.participation.id),
     );

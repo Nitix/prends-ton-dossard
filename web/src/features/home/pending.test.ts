@@ -17,6 +17,7 @@ function pendingOn(id: string, day: string, status: PendingView["participation"]
     format: f42,
     raceType: trailType,
     date: date(day),
+    lastDay: date(day),
   } satisfies PendingView;
 }
 
@@ -60,10 +61,11 @@ describe("pendingOf, une course au mois", () => {
     const view = {
       ...pendingOn("june", "2027-06-01", "registered"),
       event: june,
-      date: lastRaceDay({}, june),
+      date: Temporal.PlainDate.from("2027-06-01"),
+      lastDay: lastRaceDay({}, june),
     };
 
-    expect(view.date.toString()).toBe("2027-06-30");
+    expect(view.lastDay.toString()).toBe("2027-06-30");
     const kept = (today: string) => pendingOf([view], date(today)).length;
     // Over from 1 July: « Résultats à saisir » has it then, and it leaves this block.
     expect(kept("2027-06-15")).toBe(1);
