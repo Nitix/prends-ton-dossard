@@ -3,7 +3,11 @@ package cmd_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"math"
+	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -969,5 +973,40 @@ func TestSeed_V7Data(t *testing.T) {
 		if record.GetString("registration_opening") != "" || record.GetString("date_precision") == "month" {
 			t.Errorf("%q has an opening or a month precision", other)
 		}
+	}
+}
+
+// The track of the seed has a point every few meters, so that zooming on the
+// profile and the map shows detail: a point every 213 m showed none.
+func TestSeedTrack_IsDense(t *testing.T) {
+	raw, err := os.ReadFile("seed_track.gpx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := regexp.MustCompile(`<trkpt lat="([-\d.]+)" lon="([-\d.]+)">`).FindAllStringSubmatch(string(raw), -1)
+	if len(matches) < 2000 {
+		t.Fatalf("%d points, want at least 2000", len(matches))
+	}
+	type point struct{ lat, lon float64 }
+	var points []point
+	for _, m := range matches {
+		var p point
+		if _, err := fmt.Sscan(m[1], &p.lat); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fmt.Sscan(m[2], &p.lon); err != nil {
+			t.Fatal(err)
+		}
+		points = append(points, p)
+	}
+	gaps := make([]float64, 0, len(points)-1)
+	for i := 1; i < len(points); i++ {
+		dLat := (points[i].lat - points[i-1].lat) * 111195
+		dLon := (points[i].lon - points[i-1].lon) * 111195 * math.Cos(points[i].lat*math.Pi/180)
+		gaps = append(gaps, math.Hypot(dLat, dLon))
+	}
+	sort.Float64s(gaps)
+	if median := gaps[len(gaps)/2]; median > 25 {
+		t.Errorf("the median gap between points is %.1f m, want 25 m or less", median)
 	}
 }

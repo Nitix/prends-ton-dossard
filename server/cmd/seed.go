@@ -18,8 +18,9 @@ import (
 )
 
 // seedTrack is the track of the 42 km of the Trail des Crêtes: a loop of about
-// 42 km to the north of Annecy, with its altitudes, made once by a throwaway
-// script and kept as it is.
+// 42 km to the north of Annecy, with its altitudes, a point every 14.5 m (about
+// 2,900 points, 2,300 m of climb), made once by a throwaway script and kept as it
+// is.
 //
 //go:embed seed_track.gpx
 var seedTrack []byte
