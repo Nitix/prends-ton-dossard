@@ -11,6 +11,7 @@ import { translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { logout, useSession } from "../auth/session";
 import { CalendarSection } from "../calendar/CalendarSection";
 import { McpSection } from "../mcp/McpSection";
@@ -34,6 +35,7 @@ const BUTTON = `${PRIMARY} self-start`;
  */
 export function SettingsPage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.settings);
   const { user, runner, signedIn } = useSession();
 
   // The pages behind the sign-in are only shown to somebody signed in: this

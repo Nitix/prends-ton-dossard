@@ -30,6 +30,30 @@ export const fr = {
     // The accessible name of the tab bar.
     main: "Navigation principale",
   },
+  // The title of each page, in the tab and for screen readers (see lib/usePageTitle): « <title> · Prends ton dossard ».
+  titles: {
+    home: "Accueil",
+    listUpcoming: "Courses à venir",
+    listPast: "Courses passées",
+    calendar: (month: string) => `Agenda · ${month}`,
+    stats: (year: number) => `Statistiques ${year}`,
+    newEvent: "Nouvelle course",
+    // The page of a race while it loads (and if it fails), and when there is no such race.
+    race: "Course",
+    raceNotFound: "Course introuvable",
+    // The form of a race while it loads, and once it is there (the name is the race's).
+    editLoading: "Modifier",
+    edit: (name: string) => `Modifier · ${name}`,
+    runner: "Coureur",
+    profile: "Profil",
+    settings: "Réglages",
+    members: "Membres · Admin",
+    raceTypes: "Types de course · Admin",
+    duplicates: "Doublons · Admin",
+    signIn: "Connexion",
+    invitation: "Invitation",
+    notFound: "Page introuvable",
+  },
   auth: {
     signIn: "Se connecter",
     signingIn: "Connexion…",

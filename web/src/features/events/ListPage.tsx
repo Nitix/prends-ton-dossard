@@ -5,6 +5,7 @@ import { SECONDARY } from "../../components/buttons";
 import { EmptyState } from "../../components/EmptyState";
 import { useI18n } from "../../i18n/I18nProvider";
 import { groupByMonth } from "../../lib/dates";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { applyFilters, sortEvents, useEvents, type EventView } from "./api";
 import { EventCard } from "./EventCard";
@@ -20,6 +21,7 @@ export function ListPage({ search }: { search: ListSearch }) {
   const { t } = useI18n();
   const today = useToday();
   const period = search.periode ?? "a-venir";
+  usePageTitle(period === "passees" ? t.titles.listPast : t.titles.listUpcoming);
   const { criteria, ready } = useFilterCriteria(search);
   const events = useEvents({ period, today });
 

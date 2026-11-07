@@ -8,6 +8,7 @@ import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { isMonthOnly } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useEvent, type FormatView } from "../events/api";
 import { formatMeasures } from "../events/formatName";
@@ -40,6 +41,7 @@ type Plan = {
  */
 export function DuplicatesPage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.duplicates);
   const toast = useToast();
   const actions = useMergeActions();
   const title = useRef<HTMLHeadingElement>(null);

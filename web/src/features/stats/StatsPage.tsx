@@ -3,6 +3,7 @@ import { useRef } from "react";
 
 import { LoadFailure } from "../../components/LoadFailure";
 import { useI18n } from "../../i18n/I18nProvider";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import type { StatsSearch } from "./search";
 import { byRunner, useResults, type ResultRow } from "./stats";
@@ -22,6 +23,7 @@ export function StatsPage({ search }: { search: StatsSearch }) {
   const { t } = useI18n();
   const today = useToday();
   const year = search.annee ?? today.year;
+  usePageTitle(t.titles.stats(year));
   const results = useResults();
   const heading = useRef<HTMLHeadingElement>(null);
 

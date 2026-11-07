@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { useEvents, useRunners } from "../events/api";
 import { UpcomingSection } from "../home/MyUpcoming";
@@ -17,6 +18,7 @@ export function RunnerPage({ id }: { id: string }) {
   const { t } = useI18n();
   const runners = useRunners();
   const runner = runners.data?.find((candidate) => candidate.id === id);
+  usePageTitle(runner?.name ?? t.titles.runner);
 
   // The list is kept for a few minutes (see `useRunners`): a runner who joined
   // since is not in the copy that was kept, and every name on the site is a link

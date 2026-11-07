@@ -11,6 +11,7 @@ import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n
 import { useI18n } from "../../i18n/I18nProvider";
 import { parseDate } from "../../lib/dates";
 import type { RaceTypeRecord } from "../../lib/types";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { allowedStatus } from "../participations/api";
@@ -127,6 +128,7 @@ function refusal(err: unknown, rows: FormatRow[]): Errors {
  */
 export function EventForm({ existing }: { existing?: EventView }) {
   const { t } = useI18n();
+  usePageTitle(existing ? t.titles.edit(existing.event.name) : t.titles.newEvent);
   const raceTypes = useRaceTypes();
 
   if (raceTypes.data) return <EventFields existing={existing} raceTypes={raceTypes.data} />;
@@ -154,6 +156,14 @@ export function EventForm({ existing }: { existing?: EventView }) {
 export function EditEventPage({ id }: { id: string }) {
   const { t } = useI18n();
   const query = useEvent(id);
+  // The form sets the title once the event is there (the same one, as this does).
+  usePageTitle(
+    query.data
+      ? t.titles.edit(query.data.event.name)
+      : query.error instanceof ClientResponseError && query.error.status === 404
+        ? t.titles.raceNotFound
+        : t.titles.editLoading,
+  );
 
   // The key starts the form over for another event.
   if (query.data) return <EventForm key={id} existing={query.data} />;

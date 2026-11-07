@@ -6,6 +6,7 @@ import { SECONDARY } from "../../components/buttons";
 import { EmptyState } from "../../components/EmptyState";
 import { useI18n } from "../../i18n/I18nProvider";
 import { isMonthOnly, monthGrid } from "../../lib/dates";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { applyFilters, sortEvents, useEvents, type EventView } from "../events/api";
 import { Filters, useFilterCriteria } from "../events/Filters";
@@ -32,6 +33,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
   // Anything that is not a month was dropped from the search (see
   // `validateAgendaSearch`): the month is the current one then.
   const month = search.mois ? Temporal.PlainYearMonth.from(search.mois) : today.toPlainYearMonth();
+  usePageTitle(t.titles.calendar(f.monthTitle(month)));
   const weeks = monthGrid(month, f.firstDayOfWeek());
   const days = weeks.flat();
   // The grid reaches into the neighbouring months: so do the events asked for.

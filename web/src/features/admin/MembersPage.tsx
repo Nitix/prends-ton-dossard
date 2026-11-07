@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { useI18n } from "../../i18n/I18nProvider";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useSession } from "../auth/session";
 import { useMembers } from "./api";
@@ -22,6 +23,7 @@ import { MemberRow, memberHeadingId } from "./MemberRow";
  */
 export function MembersPage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.members);
   const { user, isAdmin } = useSession();
   const navigate = useNavigate();
   const members = useMembers();

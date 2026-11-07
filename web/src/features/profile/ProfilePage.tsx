@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { SECONDARY } from "../../components/buttons";
 import { LoadFailure } from "../../components/LoadFailure";
 import { useI18n } from "../../i18n/I18nProvider";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useSession } from "../auth/session";
 import { RunnerProfile } from "../runners/RunnerProfile";
 import { UpcomingRaces } from "./UpcomingRaces";
@@ -22,6 +23,7 @@ const LINK = `${SECONDARY} inline-flex items-center self-start`;
  */
 export function ProfilePage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.profile);
   const { runner, runnerMissing, runnerFailed, refetchRunner, signedIn } = useSession();
   const heading = useRef<HTMLHeadingElement>(null);
 

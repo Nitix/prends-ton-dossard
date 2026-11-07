@@ -20,6 +20,7 @@ import { isMonthOnly, raceStarted } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventRecord, ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { downloadEventIcs } from "../calendar/eventIcs";
@@ -104,6 +105,14 @@ function titleOfParticipation(view: EventView, id: string): string | undefined {
 export function EventPage({ id }: { id: string }) {
   const { t } = useI18n();
   const query = useEvent(id);
+  // The name of the race once it is there; a race that is not there says so.
+  usePageTitle(
+    query.data
+      ? query.data.event.name
+      : query.error instanceof ClientResponseError && query.error.status === 404
+        ? t.titles.raceNotFound
+        : t.titles.race,
+  );
   // The comments and the offers are asked for with the event, not once it has arrived: the
   // sections at the bottom of the page read these same queries (same keys), which are there
   // by the time they appear, and the page makes one round trip instead of two.
