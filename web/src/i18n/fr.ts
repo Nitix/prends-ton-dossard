@@ -147,6 +147,44 @@ export const fr = {
     where:
       "En notification sur les appareils activés ci-dessous, et en alarme dans ton agenda abonné (section « Agenda »). Google Agenda et Outlook ignorent souvent les alarmes d'un agenda abonné : les notifications sont plus sûres.",
   },
+  // Notifications on this device, inside the "Rappels" section (see features/push).
+  push: {
+    title: "Notifications sur cet appareil",
+    enable: "Activer sur cet appareil",
+    enabled: "Notifications activées sur cet appareil.",
+    disable: "Désactiver sur cet appareil",
+    disabled: "Notifications désactivées sur cet appareil.",
+    test: "Envoyer un essai",
+    testSent: (sent: number) =>
+      sent === 1 ? "Essai envoyé à 1 appareil." : `Essai envoyé à ${sent} appareils.`,
+    testNone: "Aucun appareil n'a reçu l'essai.",
+    testFailed: (failed: number) =>
+      failed === 1 ? "1 appareil n'a pas répondu." : `${failed} appareils n'ont pas répondu.`,
+    tooManyTests: "Trop d'essais à la suite : attends quelques secondes, puis réessaie.",
+    chooseFirst: "Choisis d'abord quand être prévenu.",
+    needsInstall:
+      "Sur iPhone et iPad, les notifications ne marchent que dans l'appli installée (iOS 16.4 ou plus) : touche Partager, puis « Sur l'écran d'accueil », ouvre l'appli et reviens ici.",
+    denied:
+      "Les notifications sont bloquées pour ce site sur cet appareil : autorise-les dans les réglages du navigateur (ou de l'iPhone), puis reviens ici.",
+    unsupported: "Ce navigateur ne peut pas recevoir de notifications.",
+    unavailable: "Les notifications ne sont pas disponibles pour l'instant.",
+    devicesTitle: "Mes appareils",
+    noDevices: "Aucun appareil n'est activé pour l'instant.",
+    thisDevice: "cet appareil",
+    since: (date: string) => `depuis le ${date}`,
+    lastReminder: (date: string) => `dernier rappel le ${date}`,
+    neverReminded: "aucun rappel reçu",
+    remove: "Retirer",
+    // The name of the device is in the accessible name only, after the visible text.
+    removeLabel: (label: string) => `Retirer ${label}`,
+    // What a device is called in the list (see features/push/deviceLabel.ts).
+    device: {
+      iphone: "iPhone",
+      ipad: "iPad",
+      unknown: "Appareil",
+      browserOn: (browser: string, system: string) => `${browser} sur ${system}`,
+    },
+  },
   // The "AI assistant" section of the settings page (see features/mcp): the personal tokens with which an assistant acts on the site as the member.
   mcp: {
     title: "Assistant IA (MCP)",

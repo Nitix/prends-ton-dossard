@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { Reminder } from "../../lib/types";
 import { describeError } from "../profile/forms";
 import { Section } from "../profile/Section";
+import { PushSection } from "../push/PushSection";
 import { useReminders, useSaveReminders } from "./api";
 
 /** What the four radio buttons say: the reminders that are chosen, as one value. */
@@ -127,6 +128,7 @@ export function RemindersSection() {
       <p className="text-sm text-neutral-600">{t.reminders.noTime}</p>
       <h3 className="eyebrow">{t.reminders.whereTitle}</h3>
       <p className="text-sm text-neutral-600">{t.reminders.where}</p>
+      <PushSection headingRef={heading} />
     </Section>
   );
 }

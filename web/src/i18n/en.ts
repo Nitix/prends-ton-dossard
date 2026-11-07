@@ -129,6 +129,41 @@ export const en = {
     where:
       "As a notification on the devices turned on below, and as an alarm in your subscribed calendar (the “Calendar” section). Google Calendar and Outlook often ignore the alarms of a subscribed calendar: notifications are more reliable.",
   },
+  push: {
+    title: "Notifications on this device",
+    enable: "Turn on for this device",
+    enabled: "Notifications are on for this device.",
+    disable: "Turn off for this device",
+    disabled: "Notifications are off for this device.",
+    test: "Send a test",
+    testSent: (sent: number) =>
+      sent === 1 ? "Test sent to 1 device." : `Test sent to ${sent} devices.`,
+    testNone: "No device received the test.",
+    testFailed: (failed: number) =>
+      failed === 1 ? "1 device did not answer." : `${failed} devices did not answer.`,
+    tooManyTests: "Too many tests in a row: wait a few seconds, then try again.",
+    chooseFirst: "First choose when to be warned.",
+    needsInstall:
+      "On iPhone and iPad, notifications only work in the installed app (iOS 16.4 or later): tap Share, then “Add to Home Screen”, open the app and come back here.",
+    denied:
+      "Notifications are blocked for this site on this device: allow them in the settings of the browser (or of the iPhone), then come back here.",
+    unsupported: "This browser cannot receive notifications.",
+    unavailable: "Notifications are not available right now.",
+    devicesTitle: "My devices",
+    noDevices: "No device is turned on yet.",
+    thisDevice: "this device",
+    since: (date: string) => `since ${date}`,
+    lastReminder: (date: string) => `last reminder on ${date}`,
+    neverReminded: "no reminder received",
+    remove: "Remove",
+    removeLabel: (label: string) => `Remove ${label}`,
+    device: {
+      iphone: "iPhone",
+      ipad: "iPad",
+      unknown: "Device",
+      browserOn: (browser: string, system: string) => `${browser} on ${system}`,
+    },
+  },
   mcp: {
     title: "AI assistant (MCP)",
     intro:

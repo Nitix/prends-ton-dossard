@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import { ToastProvider } from "./components/Toast";
 import { connectSession, restoreSession } from "./features/auth/session";
+import { startPushSync } from "./features/push/sync";
 import { captureInstallPrompt } from "./features/pwa/installPrompt";
 import { registerServiceWorker } from "./features/pwa/register";
 import { I18nProvider } from "./i18n/I18nProvider";
@@ -66,6 +67,8 @@ await skinShown;
 // the login page; the session is checked again whenever the app comes back to
 // the foreground.
 connectSession(router, queryClient);
+// Whoever is signed in, with the permission granted, has this device sent again to the server once.
+startPushSync();
 
 createRoot(rootElement).render(
   <StrictMode>

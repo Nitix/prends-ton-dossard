@@ -89,7 +89,9 @@ vi.mock("../lib/pb", () => ({
       Promise.resolve(
         path === "/api/app/mcp-tokens"
           ? { url: "http://localhost:5173/mcp", max: 5, tokens: [] }
-          : {},
+          : path === "/api/app/push"
+            ? { available: true, publicKey: "key", devices: [] }
+            : {},
       ),
     collection: (name: string) => ({
       getFullList: () => Promise.resolve(lists[name] ?? []),

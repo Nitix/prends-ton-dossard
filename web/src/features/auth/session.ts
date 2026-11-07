@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { pb } from "../../lib/pb";
 import { onResume } from "../../lib/resume";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
+import { releaseThisDevice } from "../push/release";
 import { syncAccountSkin } from "./accountSkin";
 
 /** The pages anybody can open, signed in or not. */
@@ -167,8 +168,15 @@ export function requireSession(location: { pathname: string; href: string }): vo
   });
 }
 
+/**
+ * Signs out: the session is cleared at once, and this device is let go of in the
+ * background (see releaseThisDevice: the server forgets its subscription with the
+ * token that was just dropped, then the browser does). Nothing waits for that.
+ */
 export function logout(): void {
+  const token = pb.authStore.token;
   pb.authStore.clear();
+  if (typeof token === "string" && token !== "") void releaseThisDevice(token);
 }
 
 function subscribe(onChange: () => void): () => void {

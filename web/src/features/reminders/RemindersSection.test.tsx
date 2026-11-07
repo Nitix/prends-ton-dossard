@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn<(path: string, options: Rec) => Promise<unknown>>(),
 }));
 
+// The notifications of this device have their own tests (features/push).
+vi.mock("../push/PushSection", () => ({ PushSection: () => null }));
+
 vi.mock("../../lib/pb", () => ({
   pb: {
     authStore: {
