@@ -19,11 +19,7 @@ function daysLine(view: EventView, f: Formatters, t: Messages): string {
   if (start.equals(end)) return f.dateLong(start);
   const sameYear = start.year === end.year;
   const sameMonth = sameYear && start.month === end.month;
-  const from = sameMonth
-    ? `${f.weekday(start, "short")} ${start.day}`
-    : sameYear
-      ? f.date(start)
-      : f.dateLong(start);
+  const from = sameMonth ? f.dateToDay(start) : sameYear ? f.date(start) : f.dateLong(start);
   const range = t.event.dateRange(from, f.dateLong(end));
   return range.charAt(0).toLocaleUpperCase() + range.slice(1);
 }

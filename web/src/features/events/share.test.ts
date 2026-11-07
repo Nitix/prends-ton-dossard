@@ -193,7 +193,7 @@ describe("shareText", () => {
 
     expect(lines(shareText(view, APP, today, GB, en))).toEqual([
       "Trail des Crêtes",
-      "Sat 13 to Sun, 14 Jun 2026 · Annecy",
+      "Sat, 13 to Sun, 14 Jun 2026 · Annecy",
       "Races: Trail 15 km · 700 m gain ; Trail 42 km · 2,400 m gain · max 10h",
       "Registration opens on Mon 12 Jan at 10:00",
       "Registration until Sun 31 May",

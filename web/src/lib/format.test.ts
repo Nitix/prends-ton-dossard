@@ -273,3 +273,13 @@ describe("time", () => {
     expect(createFormatters("en-GB").time(instant)).toBe("14:05");
   });
 });
+
+describe("dateToDay", () => {
+  test.each([
+    { locale: "fr-FR", expected: "sam. 13" },
+    { locale: "en-GB", expected: "Sat, 13" },
+    { locale: "en-US", expected: "Sat, Jun 13" },
+  ])("dateToDay, $locale: $expected", ({ locale, expected }) => {
+    expect(plain(createFormatters(locale).dateToDay(date("2026-06-13")))).toBe(expected);
+  });
+});

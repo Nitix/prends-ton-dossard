@@ -13,6 +13,8 @@ export type Formatters = {
   dayMonth(d: Temporal.PlainDate): string;
   /** Like `date`, with the year. */
   dateLong(d: Temporal.PlainDate): string;
+  /** A date up to its day, with the same punctuation as `dateLong`, for the start of a range in one month: "sam. 13", "Sat, 13". */
+  dateToDay(d: Temporal.PlainDate): string;
   /** The weekday of a date, alone: "lun." ("short"), "lundi" ("long"), "L" ("narrow"). */
   weekday(d: Temporal.PlainDate, style: "narrow" | "short" | "long"): string;
   /** Month and year: "juin 2026". */
@@ -106,11 +108,25 @@ export function createFormatters(locale: string): Formatters {
   // The date goes through `toLocaleString`, which works with the native
   // Temporal as well as with the polyfill.
   const dayOptions = { weekday: "short", day: "numeric", month: "short" } as const;
+  const dateParts = new Intl.DateTimeFormat(locale, {
+    ...dayOptions,
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
   return {
     date: (d) => d.toLocaleString(locale, dayOptions),
     dayMonth: (d) => d.toLocaleString(locale, { day: "numeric", month: "short" }),
     dateLong: (d) => d.toLocaleString(locale, { ...dayOptions, year: "numeric" }),
+    dateToDay: (d) => {
+      // A civil date as the UTC day of a `Date`, which is what `formatToParts` takes.
+      const parts = dateParts.formatToParts(Date.UTC(d.year, d.month - 1, d.day));
+      const day = parts.findIndex((part) => part.type === "day");
+      return parts
+        .slice(0, day + 1)
+        .map((part) => part.value)
+        .join("");
+    },
     weekday: (d, style) => d.toLocaleString(locale, { weekday: style }),
     // A year and month in the ISO calendar cannot be formatted with the
     // calendar of the locale ("Mismatched calendars"), a date can.
