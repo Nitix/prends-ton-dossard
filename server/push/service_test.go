@@ -368,7 +368,8 @@ func TestService_SendToUser_Unavailable(t *testing.T) {
 }
 
 // A message refused before any request (a bad option, a key that cannot be
-// used) is not the device answering: no failure counted, nothing deleted.
+// used) is not the device answering: no failure counted, nothing deleted. A key
+// that cannot be decoded never will be: that device is deleted.
 func TestService_SendToUser_RefusedBeforeTheRequest(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
@@ -398,8 +399,8 @@ func TestService_SendToUser_RefusedBeforeTheRequest(t *testing.T) {
 	if fake.total() != 1 {
 		t.Errorf("%d requests, want 1: the broken key sends nothing", fake.total())
 	}
-	if d := mustFind2(app, broken.Id); d == nil || d.GetInt("failures") != 9 {
-		t.Errorf("the device with the broken key holds %v, want it kept at 9 failures", d)
+	if d := mustFind2(app, broken.Id); d != nil {
+		t.Errorf("the device with the broken key holds %v, want it deleted", d)
 	}
 
 	// A TTL under a minute is refused by the sender for every device.
@@ -407,20 +408,165 @@ func TestService_SendToUser_RefusedBeforeTheRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (push.Delivery{Sent: 0, Failed: 2}); got != want {
+	if want := (push.Delivery{Sent: 0, Failed: 1}); got != want {
 		t.Errorf("delivery = %+v, want %+v", got, want)
 	}
 	if fake.total() != 1 {
 		t.Error("a request was made with a bad TTL")
 	}
-	for _, d := range []*core.Record{good, broken} {
-		stored := mustFind2(app, d.Id)
-		want := 9
-		if d == good {
-			want = 0 // reset by the first delivery
+	// The good one was reset by the first delivery and the refused option leaves it.
+	if stored := mustFind2(app, good.Id); stored == nil || stored.GetInt("failures") != 0 {
+		t.Errorf("the device holds %v after a refused option, want it kept with 0 failures", stored)
+	}
+}
+
+// A request that our own context ends (the page closed, the time out) says
+// nothing about the device: no failure, no deletion, neither sent nor failed.
+func TestService_SendToUser_CancelledIsNotAFailure(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	fake := useFake(t, app)
+	svc := push.ServiceOf(app)
+	svc.Load(app)
+	_, device := addDevice(t, app, fx.Alice, "/fcm/send/a", "fr")
+	device.Set("failures", 9)
+	if err := app.Save(device); err != nil {
+		t.Fatal(err)
+	}
+	message := func(string) push.Message { return push.Message{Title: "x"} }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	fake.answer("/fcm/send/a", http.StatusInternalServerError)
+	fake.whenReached("/fcm/send/a", cancel)
+	got, err := svc.SendToUser(ctx, app, fx.Alice.Id, message, push.Options{TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (push.Delivery{}) {
+		t.Errorf("delivery = %+v, want nothing counted", got)
+	}
+	if d := mustFind2(app, device.Id); d == nil || d.GetInt("failures") != 9 {
+		t.Errorf("the device holds %v after a cancelled sending, want it kept at 9 failures", d)
+	}
+
+	// The time out of a context is the same.
+	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	fake.answer("/fcm/send/a", http.StatusCreated)
+	fake.whenReached("/fcm/send/a", func() { time.Sleep(300 * time.Millisecond) })
+	got, err = svc.SendToUser(ctx, app, fx.Alice.Id, message, push.Options{TTL: time.Hour})
+	if err != nil || got != (push.Delivery{}) {
+		t.Errorf("after a time out: %+v, %v; want nothing counted", got, err)
+	}
+	if d := mustFind2(app, device.Id); d == nil || d.GetInt("failures") != 9 {
+		t.Errorf("the device holds %v after a time out, want it kept at 9 failures", d)
+	}
+}
+
+// The devices of an account are sent to together: a push service that is slow
+// holds the sending for its own time, not for the sum of ten.
+func TestService_SendToUser_Together(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	fake := useFake(t, app)
+	svc := push.ServiceOf(app)
+	svc.Load(app)
+	const devices = 8
+	for i := range devices {
+		path := "/fcm/send/slow" + string(rune('a'+i))
+		addDevice(t, app, fx.Alice, path, "fr")
+		fake.whenReached(path, func() { time.Sleep(400 * time.Millisecond) })
+	}
+	start := time.Now()
+	got, err := svc.SendToUser(context.Background(), app, fx.Alice.Id,
+		func(string) push.Message { return push.Message{Title: "x"} }, push.Options{TTL: time.Hour})
+	took := time.Since(start)
+	if err != nil || got != (push.Delivery{Sent: devices}) {
+		t.Fatalf("SendToUser = %+v, %v", got, err)
+	}
+	// One after the other it would be 3.2 s.
+	if took > 2*time.Second {
+		t.Errorf("sending to %d slow devices took %v, want them in parallel", devices, took)
+	}
+}
+
+// A device that is renewed while a message is on its way keeps its new
+// subscription: the outcome of the old one touches neither its values nor its row.
+func TestService_SendToUser_RenewedDuringTheSending(t *testing.T) {
+	for _, status := range []int{http.StatusGone, http.StatusCreated, http.StatusForbidden} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			app := testutil.NewApp(t)
+			fx := testutil.Seed(t, app)
+			fake := useFake(t, app)
+			svc := push.ServiceOf(app)
+			svc.Load(app)
+			_, device := addDevice(t, app, fx.Alice, "/fcm/send/old", "fr")
+			fake.answer("/fcm/send/old", status)
+			fake.whenReached("/fcm/send/old", func() {
+				renewed, err := app.FindRecordById("push_subscriptions", device.Id)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				renewed.Set("endpoint", fcm+"/fcm/send/new")
+				renewed.Set("p256dh", "NEWP256DH")
+				if err := app.Save(renewed); err != nil {
+					t.Error(err)
+				}
+			})
+			if _, err := svc.SendToUser(context.Background(), app, fx.Alice.Id,
+				func(string) push.Message { return push.Message{Title: "x"} }, push.Options{TTL: time.Hour}); err != nil {
+				t.Fatal(err)
+			}
+			d := mustFind2(app, device.Id)
+			if d == nil {
+				t.Fatal("the renewed device was deleted")
+			}
+			if d.GetString("endpoint") != fcm+"/fcm/send/new" || d.GetString("p256dh") != "NEWP256DH" {
+				t.Errorf("the renewed device was written back with its old values: %q", strings.TrimPrefix(d.GetString("endpoint"), fcm))
+			}
+			if d.GetInt("failures") != 0 || !d.GetDateTime("last_success_at").IsZero() {
+				t.Errorf("the outcome of the old subscription was counted on the new one: failures %d, date %v",
+					d.GetInt("failures"), d.GetDateTime("last_success_at"))
+			}
+		})
+	}
+}
+
+// The save, the count and the drop of the oldest commit together: if the drop
+// fails, the new device is not stored behind an error.
+func TestPush_TenDevicesThroughTheRoute_DropFailsRollsBack(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	for i := range 10 {
+		addDevice(t, app, fx.Alice, "/fcm/send/alice-"+string(rune('a'+i)), "fr")
+	}
+	app.OnRecordDelete("push_subscriptions").BindFunc(func(*core.RecordEvent) error {
+		return errors.New("the delete is refused")
+	})
+	r := newRecipient(t, fcm+"/fcm/send/the-eleventh")
+	s := apiScenario(t, app, http.MethodPost, push.Path+"/subscriptions", testutil.Token(t, fx.Alice),
+		body(r.sub.Endpoint, r.sub.P256dh, r.sub.Auth, "fr", "")(testutil.Fixture{}), http.StatusInternalServerError)
+	s.Test(t)
+	if got := count(t, app); got != 10 {
+		t.Errorf("%d devices after a drop that failed, want the 10 of before: the new one must not stay", got)
+	}
+	if _, err := app.FindFirstRecordByData("push_subscriptions", "endpoint", r.sub.Endpoint); err == nil {
+		t.Error("the new device was stored although the request failed")
+	}
+}
+
+// The seam that finds the service of an application does not keep the
+// application of a test that is over.
+func TestServiceOf_ForgetsAnEndedApp(t *testing.T) {
+	var app core.App
+	t.Run("a test", func(t *testing.T) {
+		app = testutil.NewApp(t)
+		if push.ServiceOf(app) == nil {
+			t.Fatal("no service while the test runs")
 		}
-		if stored == nil || stored.GetInt("failures") != want {
-			t.Errorf("%s holds %v after a refused option, want it kept with %d failures", d.GetString("label"), stored, want)
-		}
+	})
+	if push.ServiceOf(app) != nil {
+		t.Error("the service of an application that was cleaned up is still kept")
 	}
 }

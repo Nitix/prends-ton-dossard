@@ -2,6 +2,7 @@ package push
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -122,71 +123,125 @@ func (s *Service) SendToUser(ctx context.Context, app core.App, userID string,
 		return Delivery{}, errors.New("push: the devices cannot be read")
 	}
 
-	var out Delivery
-	for _, device := range devices {
-		if ctx.Err() != nil {
-			// Not tried: neither sent nor failed.
-			break
+	// What each device is sent is made here, one after the other (the message
+	// function is the caller's); the requests then go out together, so that a
+	// slow push service holds the sending for one timeout and not for ten.
+	type job struct {
+		device  *core.Record
+		sub     Subscription
+		body    []byte
+		outcome Outcome
+		// answered: the push service answered. skipped: our own context ended
+		// first, which says nothing about the device.
+		answered, skipped bool
+	}
+	jobs := make([]*job, len(devices))
+	for i, device := range devices {
+		jobs[i] = &job{device: device}
+		jobs[i].sub, jobs[i].body = prepare(device, message)
+	}
+	var wg sync.WaitGroup
+	for _, j := range jobs {
+		if j.body == nil {
+			j.outcome = Rejected // refused before any request: a key that cannot be used
+			continue
 		}
-		outcome, answered := s.sendTo(ctx, sender, device, message, opts)
-		if outcome == Delivered {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			outcome, err := sender.Send(ctx, j.sub, j.body, opts)
+			if ctx.Err() != nil {
+				// Cancelled, or out of time, in the course of the request: that is
+				// our doing, not the device's.
+				j.skipped = true
+				return
+			}
+			j.outcome = outcome
+			// A Rejected with an error never reached the push service. Any other
+			// error is a request that failed on the way (Failed), which does count.
+			j.answered = !(outcome == Rejected && err != nil)
+		}()
+	}
+	wg.Wait()
+
+	var out Delivery
+	for _, j := range jobs {
+		switch {
+		case j.skipped:
+			continue // not tried to the end: neither sent nor failed
+		case j.outcome == Delivered:
 			out.Sent++
-		} else {
+		default:
 			out.Failed++
 		}
-		if !answered {
-			// Refused before any request (a bad option, a key that cannot be used):
-			// the device did not answer, so it is neither counted nor deleted.
+		if j.body == nil {
+			// Stored keys that cannot be decoded will never work: the device goes.
+			if err := app.Delete(j.device); err != nil {
+				app.Logger().Error("push: a delivery could not be recorded", "error", errors.New("the database refused it"))
+			}
+			continue
+		}
+		if !j.answered {
+			// Refused before any request (a bad option): the device did not answer,
+			// so it is neither counted nor deleted.
 			app.Logger().Warn("push: a message was not sent: it was refused before the request")
 			continue
 		}
-		record(app, device, outcome)
+		record(app, j.device, j.sub.Endpoint, j.outcome)
 	}
 	app.Logger().Debug("push: devices reached", "sent", out.Sent, "failed", out.Failed)
 	return out, nil
 }
 
-// sendTo posts the message to one device. A device whose stored keys cannot be
-// used is refused before any request; answered says whether the push service
-// answered (a Rejected with no answer is not the device's doing).
-func (s *Service) sendTo(ctx context.Context, sender *Sender, device *core.Record,
-	message func(lang string) Message, opts Options) (outcome Outcome, answered bool) {
+// prepare reads the subscription of a device and makes its message. A nil body
+// says that the stored keys cannot be decoded or the message cannot be written.
+func prepare(device *core.Record, message func(lang string) Message) (Subscription, []byte) {
 	p256dh, err1 := b64url.DecodeString(device.GetString("p256dh"))
 	auth, err2 := b64url.DecodeString(device.GetString("auth"))
 	if err1 != nil || err2 != nil {
-		return Rejected, false
+		return Subscription{}, nil
 	}
 	m := message(device.GetString("lang"))
 	body, err := json.Marshal(payload{Title: m.Title, Body: m.Body, URL: m.URL, Tag: m.Tag})
 	if err != nil {
-		return Rejected, false
+		return Subscription{}, nil
 	}
-	outcome, err = sender.Send(ctx, Subscription{Endpoint: device.GetString("endpoint"), P256dh: p256dh, Auth: auth}, body, opts)
-	// A Rejected with an error never reached the push service. Any other error is
-	// a request that failed on the way (Failed), which does count.
-	return outcome, !(outcome == Rejected && err != nil)
+	return Subscription{Endpoint: device.GetString("endpoint"), P256dh: p256dh, Auth: auth}, body
 }
 
-// record writes what a delivery came to. A write that fails is logged without
-// the device, and does not stop the others.
-func record(app core.App, device *core.Record, outcome Outcome) {
-	var err error
-	switch outcome {
-	case Delivered:
-		device.Set("last_success_at", types.NowDateTime())
-		device.Set("failures", 0)
-		err = app.Save(device)
-	case Gone:
-		err = app.Delete(device)
-	default:
+// record writes what a delivery came to, on a fresh read of the row, in one
+// transaction: the device may have been renewed (a new endpoint) or moved while
+// the message was on its way, and a copy read before would put the old values
+// back, or delete the row that now holds the new subscription. Such a row is
+// left alone. Only the counter and the date are written. A write that fails is
+// logged without the device, and does not stop the others.
+func record(app core.App, sent *core.Record, endpoint string, outcome Outcome) {
+	err := app.RunInTransaction(func(tx core.App) error {
+		device, err := tx.FindRecordById("push_subscriptions", sent.Id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil // gone already
+		}
+		if err != nil {
+			return err
+		}
+		if device.GetString("endpoint") != endpoint || device.GetString("user") != sent.GetString("user") {
+			return nil // renewed or moved: this outcome is about the old subscription
+		}
+		switch outcome {
+		case Delivered:
+			device.Set("last_success_at", types.NowDateTime())
+			device.Set("failures", 0)
+			return tx.Save(device)
+		case Gone:
+			return tx.Delete(device)
+		}
 		failures := device.GetInt("failures") + 1
 		if failures >= maxFailures {
-			err = app.Delete(device)
-			break
+			return tx.Delete(device)
 		}
 		device.Set("failures", failures)
-		err = app.Save(device)
-	}
+		return tx.Save(device)
+	})
 	if err != nil {
 		app.Logger().Error("push: a delivery could not be recorded", "error", errors.New("the database refused it"))
 	}

@@ -835,7 +835,7 @@ type remindersIn struct {
 // deviceOut is a device that is subscribed to the notifications: never its address
 // or its keys, which the site does not give either.
 type deviceOut struct {
-	Label         string `json:"label" jsonschema:"comment la page appelle l'appareil"`
+	Label         string `json:"label" jsonschema:"comment l'appareil se nomme, entre « » (un texte de la personne), vide s'il n'a pas de nom"`
 	Created       string `json:"created" jsonschema:"depuis quand"`
 	LastSuccessAt string `json:"lastSuccessAt" jsonschema:"le dernier rappel reçu, vide s'il n'y en a pas"`
 }
@@ -895,6 +895,12 @@ func (t *tools) reminders(ctx context.Context, _ *mcpsdk.CallToolRequest, in rem
 		return fail(err)
 	}
 	devices := push.Devices
+	for i := range devices {
+		// The label is what the device called itself: member text, so quoted.
+		if devices[i].Label != "" {
+			devices[i].Label = quote(devices[i].Label)
+		}
+	}
 	if devices == nil {
 		devices = []deviceOut{}
 	}

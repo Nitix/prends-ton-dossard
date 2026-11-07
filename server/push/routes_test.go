@@ -372,6 +372,18 @@ func TestPushRoutes_Renew(t *testing.T) {
 			Status: http.StatusBadRequest, Contains: []string{field("p256dh", "validation_invalid_value")}, After: unchanged,
 		},
 		{
+			Name: "a body over the limit is refused, and nothing moves", As: "anon", Method: http.MethodPost, URL: at(push.Path + "/renew"),
+			Before: seed,
+			Body: func(testutil.Fixture) string {
+				return jsonOf(map[string]any{
+					"oldEndpoint": old.sub.Endpoint, "oldAuth": enc(old.sub.Auth),
+					"endpoint": fresh.sub.Endpoint, "keys": map[string]string{"p256dh": enc(fresh.sub.P256dh), "auth": enc(fresh.sub.Auth)},
+					"pad": strings.Repeat("x", 64<<10),
+				})
+			},
+			Status: http.StatusBadRequest, After: unchanged,
+		},
+		{
 			Name: "the new endpoint of another device is refused, and nothing moves", As: "anon", Method: http.MethodPost, URL: at(push.Path + "/renew"),
 			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				seed(t, app, fx)
@@ -569,5 +581,23 @@ func TestPushRoutes_KeysAreMadeOnce(t *testing.T) {
 	}
 	if !push.ServiceOf(app).Available() {
 		t.Error("the service is not available")
+	}
+}
+
+// A push service that does not answer cannot hold the test route: the devices
+// are sent to together and the whole is bounded.
+func TestPushRoutes_TestWithSlowDevices(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	fake := useFake(t, app)
+	for _, path := range []string{"/fcm/send/a", "/fcm/send/b", "/fcm/send/c", "/fcm/send/d"} {
+		addDevice(t, app, fx.Alice, path, "fr")
+		fake.whenReached(path, func() { time.Sleep(500 * time.Millisecond) })
+	}
+	start := time.Now()
+	s := apiScenario(t, app, http.MethodPost, push.Path+"/test", testutil.Token(t, fx.Alice), "", http.StatusOK, `{"sent":4,"failed":0}`)
+	s.Test(t)
+	if took := time.Since(start); took > 1500*time.Millisecond {
+		t.Errorf("the test route took %v with four slow devices, want them sent together", took)
 	}
 }

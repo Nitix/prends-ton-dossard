@@ -1,6 +1,7 @@
 package push
 
 import (
+	"context"
 	"crypto/ecdh"
 	"crypto/subtle"
 	"database/sql"
@@ -25,6 +26,13 @@ const path = "/api/app/push"
 
 // testEvery is the least time between two test messages of an account.
 const testEvery = 30 * time.Second
+
+// testDeadline is how long a test message may take in all: a push service that
+// does not answer must not hold the page.
+const testDeadline = 15 * time.Second
+
+// maxRenewBody is the most that the route without a session reads.
+const maxRenewBody = 4 << 10
 
 // Register makes the service of the notifications and attaches what it needs
 // to app: the hooks of the subscriptions, and, outside the demo, the routes
@@ -197,29 +205,37 @@ func (s *Service) subscribeRoute(e *core.RequestEvent) error {
 	if err := body.checked(); err != nil {
 		return fail(e, err)
 	}
-	record, err := e.App.FindFirstRecordByData("push_subscriptions", "endpoint", body.Endpoint)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		collection, cerr := e.App.FindCollectionByNameOrId("push_subscriptions")
-		if cerr != nil {
-			return e.InternalServerError("", cerr)
-		}
-		record = core.NewRecord(collection)
-		record.Set("endpoint", body.Endpoint)
-	case err != nil:
-		return e.InternalServerError("", err)
-	}
 	p256dh, auth := body.keysOf()
-	record.Set("user", e.Auth.Id)
-	record.Set("p256dh", p256dh)
-	record.Set("auth", auth)
-	record.Set("lang", body.Lang)
-	record.Set("label", strings.TrimSpace(body.Label))
-	record.Set("failures", 0)
-	if err := e.App.Save(record); err != nil {
+	var id string
+	// The save, the count of the ten devices and the drop of the oldest commit
+	// together: two subscribes at once cannot both see room, and a drop that
+	// fails does not leave the new device stored behind a 500.
+	err := e.App.RunInTransaction(func(tx core.App) error {
+		record, err := tx.FindFirstRecordByData("push_subscriptions", "endpoint", body.Endpoint)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			collection, cerr := tx.FindCollectionByNameOrId("push_subscriptions")
+			if cerr != nil {
+				return cerr
+			}
+			record = core.NewRecord(collection)
+			record.Set("endpoint", body.Endpoint)
+		case err != nil:
+			return err
+		}
+		record.Set("user", e.Auth.Id)
+		record.Set("p256dh", p256dh)
+		record.Set("auth", auth)
+		record.Set("lang", body.Lang)
+		record.Set("label", strings.TrimSpace(body.Label))
+		record.Set("failures", 0)
+		id = record.Id
+		return tx.Save(record)
+	})
+	if err != nil {
 		return fail(e, err)
 	}
-	return e.JSON(http.StatusOK, map[string]string{"id": record.Id})
+	return e.JSON(http.StatusOK, map[string]string{"id": id})
 }
 
 // removeByEndpointRoute removes the subscription of this device. A device that
@@ -274,32 +290,41 @@ func renewRoute(e *core.RequestEvent) error {
 		OldAuth     string `json:"oldAuth"`
 		subscription
 	}
+	// No session, so no limit but the body's own: a few hundred bytes are
+	// enough for two endpoints and two pairs of keys.
+	e.Request.Body = http.MaxBytesReader(e.Response, e.Request.Body, maxRenewBody)
 	if err := e.BindBody(&body); err != nil {
 		return e.BadRequestError("", err)
 	}
-	record, err := e.App.FindFirstRecordByData("push_subscriptions", "endpoint", body.OldEndpoint)
-	if errors.Is(err, sql.ErrNoRows) {
-		return notFound
-	}
+	var id string
+	// One transaction, as for a new subscription: the save and the cap of ten.
+	err := e.App.RunInTransaction(func(tx core.App) error {
+		record, err := tx.FindFirstRecordByData("push_subscriptions", "endpoint", body.OldEndpoint)
+		if errors.Is(err, sql.ErrNoRows) {
+			return notFound
+		}
+		if err != nil {
+			return err
+		}
+		stored := []byte(record.GetString("auth"))
+		if subtle.ConstantTimeCompare(stored, []byte(strings.TrimRight(body.OldAuth, "="))) != 1 {
+			return notFound
+		}
+		if err := body.subscription.checked(); err != nil {
+			return err
+		}
+		p256dh, auth := body.keysOf()
+		record.Set("endpoint", body.Endpoint)
+		record.Set("p256dh", p256dh)
+		record.Set("auth", auth)
+		record.Set("failures", 0)
+		id = record.Id
+		return tx.Save(record)
+	})
 	if err != nil {
-		return e.InternalServerError("", err)
-	}
-	stored := []byte(record.GetString("auth"))
-	if subtle.ConstantTimeCompare(stored, []byte(strings.TrimRight(body.OldAuth, "="))) != 1 {
-		return notFound
-	}
-	if err := body.subscription.checked(); err != nil {
 		return fail(e, err)
 	}
-	p256dh, auth := body.keysOf()
-	record.Set("endpoint", body.Endpoint)
-	record.Set("p256dh", p256dh)
-	record.Set("auth", auth)
-	record.Set("failures", 0)
-	if err := e.App.Save(record); err != nil {
-		return fail(e, err)
-	}
-	return e.JSON(http.StatusOK, map[string]string{"id": record.Id})
+	return e.JSON(http.StatusOK, map[string]string{"id": id})
 }
 
 // testMessage is what the test sends, in the language of each device.
@@ -325,7 +350,9 @@ func (s *Service) testRoute(e *core.RequestEvent) error {
 	if !s.tests.allow(e.Auth.Id) {
 		return e.TooManyRequestsError("", nil)
 	}
-	delivery, err := s.SendToUser(e.Request.Context(), e.App, e.Auth.Id, testMessage,
+	ctx, cancel := context.WithTimeout(e.Request.Context(), testDeadline)
+	defer cancel()
+	delivery, err := s.SendToUser(ctx, e.App, e.Auth.Id, testMessage,
 		Options{TTL: time.Minute, Urgency: "high"})
 	if err != nil {
 		return e.InternalServerError("", err)

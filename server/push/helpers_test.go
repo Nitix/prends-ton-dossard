@@ -36,19 +36,24 @@ type seen struct {
 type fakePush struct {
 	mu     sync.Mutex
 	status map[string]int
+	// during runs when a path gets a request, before the answer.
+	during map[string]func()
 	got    map[string][]seen
 	client *http.Client
 }
 
 func newFakePush(t testing.TB) *fakePush {
 	t.Helper()
-	f := &fakePush{status: map[string]int{}, got: map[string][]seen{}}
+	f := &fakePush{status: map[string]int{}, got: map[string][]seen{}, during: map[string]func(){}}
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		f.got[r.URL.Path] = append(f.got[r.URL.Path], seen{Body: body, Headers: r.Header.Clone()})
-		code := f.status[r.URL.Path]
+		code, during := f.status[r.URL.Path], f.during[r.URL.Path]
 		f.mu.Unlock()
+		if during != nil {
+			during()
+		}
 		if code == 0 {
 			code = http.StatusCreated
 		}
@@ -181,4 +186,11 @@ func apiScenario(t testing.TB, app *tests.TestApp, method, url, token, payload s
 		s.NotExpectedContent = []string{"\x00"}
 	}
 	return s
+}
+
+// whenReached makes run happen when the path gets a request, before the answer.
+func (f *fakePush) whenReached(path string, run func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.during[path] = run
 }

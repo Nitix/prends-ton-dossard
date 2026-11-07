@@ -2,11 +2,11 @@ package push
 
 import (
 	"net"
+	"net/http"
 	"sync"
+	"time"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
-	"net/http"
-	"time"
 )
 
 // The tests of the package are external ones: this file gives them the
@@ -89,6 +89,14 @@ func init() {
 		registered.Lock()
 		defer registered.Unlock()
 		registered.byApp[app] = s
+		// The test application is cleaned up when its test ends: the entry, and the
+		// service that it keeps alive, go with it.
+		app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+			registered.Lock()
+			delete(registered.byApp, app)
+			registered.Unlock()
+			return e.Next()
+		})
 	}
 }
 
