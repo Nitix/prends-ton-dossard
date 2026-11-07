@@ -2671,3 +2671,109 @@ func TestMigrations_CalendarFeedScopeDownThenUp(t *testing.T) {
 		t.Errorf("after applying again and a group link, %d links (error %v), want 3", got, err)
 	}
 }
+
+// The six migrations of v7 (9l to 9q) roll back in order on a database that
+// holds v7 data, and apply again: what is not v7's stays whole and valid.
+func TestMigrations_V7DownThenUpWithData(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	runner := core.NewMigrationsRunner(app, core.AppMigrations)
+
+	// v7 data: an opening with a time (9l), a reminders choice (9m), a device
+	// (9n), a delivery (9o), a race known by its month (9p), and the personal and
+	// the group links (9q).
+	opened := mustFind(t, app, "events", fx.Event.Id)
+	opened.Set("registration_opening", "2026-05-10")
+	opened.Set("registration_opening_time", "10:00")
+	if err := app.Save(opened); err != nil {
+		t.Fatal(err)
+	}
+	alice := mustFind(t, app, "users", fx.Alice.Id)
+	alice.Set("reminders", []string{"day", "hour"})
+	if err := app.Save(alice); err != nil {
+		t.Fatal(err)
+	}
+	mustSave(t, app, "push_subscriptions", map[string]any{"user": fx.Alice.Id, "endpoint": "https://fcm.googleapis.com/one", "p256dh": "k", "auth": "a", "lang": "fr"})
+	mustSave(t, app, "reminder_deliveries", map[string]any{"user": fx.Alice.Id, "event": fx.Event.Id, "kind": "day", "opening_at": "2026-05-10T08:00:00Z", "delivered": 1})
+	month := mustFind(t, app, "events", fx.Event2.Id)
+	month.Set("date_precision", "month")
+	month.Set("start_date", "2026-06-01")
+	if err := app.Save(month); err != nil {
+		t.Fatal(err)
+	}
+	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "mine", "lang": "fr", "scope": "mine"})
+	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "group", "lang": "fr", "scope": "group"})
+	before := map[string]int64{}
+	for _, name := range []string{"events", "formats", "participations", "runners", "users"} {
+		n, err := app.CountRecords(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = n
+	}
+
+	reverted, err := runner.Down(6)
+	if err != nil {
+		t.Fatalf("rolling the six migrations of v7 back: %v", err)
+	}
+	want := []string{
+		"9q_calendar_feed_scope.go", "9p_event_date_precision.go", "9o_reminder_deliveries.go",
+		"9n_push_subscriptions.go", "9m_user_reminders.go", "9l_registration_opening.go",
+	}
+	if !slices.Equal(reverted, want) {
+		t.Fatalf("reverted %v, want %v in this order", reverted, want)
+	}
+
+	// Back to v6: no table of v7, no field of v7, and the group link is gone.
+	for _, name := range []string{"push_subscriptions", "reminder_deliveries"} {
+		if _, err := app.FindCollectionByNameOrId(name); err == nil {
+			t.Errorf("collection %q must be gone after the rollback", name)
+		}
+	}
+	for collection, fields := range map[string][]string{
+		"events": {"registration_opening", "registration_opening_time", "date_precision"}, "users": {"reminders"}, "calendar_feeds": {"scope"},
+	} {
+		c, err := app.FindCollectionByNameOrId(collection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range fields {
+			if c.Fields.GetByName(field) != nil {
+				t.Errorf("%s.%s must be gone after the rollback", collection, field)
+			}
+		}
+	}
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 1 {
+		t.Errorf("after the rollback, %d links (error %v), want the personal one only", got, err)
+	}
+	// A race that was known by its month is a race from the 1st to the last day.
+	back := mustFind(t, app, "events", fx.Event2.Id)
+	if back.GetString("start_date") != "2026-06-01" || back.GetString("end_date") != "2026-06-30" {
+		t.Errorf("the month race is %s to %s after the rollback, want 2026-06-01 to 2026-06-30", back.GetString("start_date"), back.GetString("end_date"))
+	}
+
+	if _, err := runner.Up(); err != nil {
+		t.Fatalf("applying the migrations again: %v", err)
+	}
+	for name, want := range before {
+		if got, err := app.CountRecords(name); err != nil || got != want {
+			t.Errorf("%s: %d records after the round trip (error %v), want %d", name, got, err, want)
+		}
+	}
+	// Every record of the base still saves: the data is valid under the schema of v7.
+	for _, name := range []string{"users", "events", "formats", "participations", "calendar_feeds"} {
+		records, err := app.FindAllRecords(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, record := range records {
+			if err := app.Save(record); err != nil {
+				t.Errorf("a record of %s is not valid after the round trip: %v", name, err)
+			}
+		}
+	}
+	// The month race keeps its dates; its precision is to be set again, as are the other v7 fields.
+	if again := mustFind(t, app, "events", fx.Event2.Id); again.GetString("start_date") != "2026-06-01" || again.GetString("end_date") != "2026-06-30" {
+		t.Errorf("the race of the month is %s to %s after the round trip", again.GetString("start_date"), again.GetString("end_date"))
+	}
+}
