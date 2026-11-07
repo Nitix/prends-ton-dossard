@@ -88,6 +88,48 @@ func TestReminderRoutes(t *testing.T) {
 			},
 		},
 		{
+			Name: "a body with no list does not clear the choice", As: "alice", Method: http.MethodPut, URL: at,
+			Body:     put(`{}`),
+			Before:   chooses("day"),
+			Status:   http.StatusBadRequest,
+			Contains: []string{`"reminders":{"code":"validation_required"`},
+			After:    stays("day"),
+		},
+		{
+			Name: "a null list does not clear it either", As: "alice", Method: http.MethodPut, URL: at,
+			Body: put(`{"reminders":null}`), Before: chooses("day"),
+			Status: http.StatusBadRequest, Contains: []string{`"reminders":{"code":"validation_required"`}, After: stays("day"),
+		},
+		{
+			Name: "nor a key with a typo", As: "alice", Method: http.MethodPut, URL: at,
+			Body: put(`{"reminder":[]}`), Before: chooses("day"),
+			Status: http.StatusBadRequest, Contains: []string{`"reminders":{"code":"validation_required"`}, After: stays("day"),
+		},
+		{
+			Name: "an empty body does not clear it", As: "alice", Method: http.MethodPut, URL: at,
+			Body: put(``), Before: chooses("hour"),
+			Status: http.StatusBadRequest, After: stays("hour"),
+		},
+		{
+			Name: "the other keys of the body are ignored", As: "alice", Method: http.MethodPut, URL: at,
+			Body:   put(`{"reminders":["day"],"role":"admin","email":"mallory@example.test","skin":"night","disabled":true,"id":"someoneelse","name":"Mallory"}`),
+			Status: http.StatusOK, Contains: []string{`{"reminders":["day"]}`},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				before, after := fx.Alice, mustUser(t, app, fx.Alice.Id)
+				for _, name := range []string{"role", "email", "skin", "disabled", "name"} {
+					if got, want := after.Get(name), before.Get(name); got != want {
+						t.Errorf("%s changed from %v to %v", name, want, got)
+					}
+				}
+				if got := chosen(t, app, fx.Alice); !slices.Equal(got, []string{"day"}) {
+					t.Errorf("stored %v, want [day]", got)
+				}
+				if got := chosen(t, app, fx.Bob); len(got) != 0 {
+					t.Errorf("Bob's choice is %v, want none", got)
+				}
+			},
+		},
+		{
 			Name: "a body that is not JSON is refused", As: "alice", Method: http.MethodPut, URL: at,
 			Body: put(`not json`), Status: http.StatusBadRequest,
 		},
@@ -166,5 +208,34 @@ func TestOf(t *testing.T) {
 				t.Errorf("Of = %#v, want %#v", got, row.want)
 			}
 		})
+	}
+}
+
+func mustUser(t testing.TB, app *tests.TestApp, id string) *core.Record {
+	t.Helper()
+	user, err := app.FindRecordById("users", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return user
+}
+
+// chooses puts a choice in the account of Alice before the request.
+func chooses(kinds ...string) func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		alice := mustUser(t, app, fx.Alice.Id)
+		alice.Set("reminders", kinds)
+		if err := app.Save(alice); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// stays checks that the choice of Alice is still the one that chooses put.
+func stays(kinds ...string) func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		if got := chosen(t, app, fx.Alice); !slices.Equal(got, kinds) {
+			t.Errorf("stored %v, want %v", got, kinds)
+		}
 	}
 }

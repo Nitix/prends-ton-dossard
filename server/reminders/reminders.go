@@ -13,6 +13,7 @@ import (
 	"ganigeorgiev.com/pocketbase/pocketbase/apis"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 
+	"courses/server/apperr"
 	"courses/server/config"
 )
 
@@ -74,20 +75,23 @@ func showRoute(e *core.RequestEvent) error {
 // is the model that validates it.
 func saveRoute(e *core.RequestEvent) error {
 	var body struct {
-		Reminders []string `json:"reminders"`
+		// A pointer: a missing key and null are not an empty list.
+		Reminders *[]string `json:"reminders"`
 	}
 	// A body that cannot be read is a request that is wrong, not a choice.
 	if err := e.BindBody(&body); err != nil {
 		return e.BadRequestError("", err)
 	}
+	// A body with no list ({}, null, a key with a typo) is a mistake of the caller,
+	// not the wish to have none: only an explicit [] clears the choice.
+	if body.Reminders == nil {
+		return apperr.Field("reminders", "validation_required")
+	}
 	user, err := e.App.FindRecordById("users", e.Auth.Id)
 	if err != nil {
 		return e.InternalServerError("", err)
 	}
-	if body.Reminders == nil {
-		body.Reminders = []string{}
-	}
-	user.Set("reminders", ordered(body.Reminders))
+	user.Set("reminders", ordered(*body.Reminders))
 	if err := e.App.Save(user); err != nil {
 		var invalid validation.Errors
 		if errors.As(err, &invalid) {
