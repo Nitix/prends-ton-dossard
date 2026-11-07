@@ -595,7 +595,8 @@ func TestReminders_Payload(t *testing.T) {
 		if row.got.bodies["fr"].Body != row.fr || row.got.bodies["en"].Body != row.en {
 			t.Errorf("%s: bodies %q / %q", row.name, row.got.bodies["fr"].Body, row.got.bodies["en"].Body)
 		}
-		if row.got.opts.TTL != row.ttl || row.got.opts.Urgency != row.urgency {
+		// The TTL is what is left at the moment of the pass, to the second.
+		if (row.got.opts.TTL-row.ttl).Abs() > time.Second || row.got.opts.Urgency != row.urgency {
 			t.Errorf("%s: TTL %v and urgency %q, want %v and %q", row.name, row.got.opts.TTL, row.got.opts.Urgency, row.ttl, row.urgency)
 		}
 	}

@@ -1,12 +1,15 @@
 package mcp_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"ganigeorgiev.com/pocketbase/dbx"
@@ -784,6 +787,93 @@ func TestTools_CalendarLink_IsNotLogged(t *testing.T) {
 			inner = true
 		}
 	}
+	// Without it, the checks above would pass on a log without the requests.
+	if !inner {
+		t.Error("no inner request that makes a link in the log")
+	}
+}
+
+// capturedLog is a slog handler that keeps what it is given, as one text: the
+// default logger of the program, which a test can see besides the request log.
+type capturedLog struct {
+	mu   *sync.Mutex
+	text *strings.Builder
+}
+
+func (c capturedLog) Enabled(context.Context, slog.Level) bool { return true }
+func (c capturedLog) Handle(_ context.Context, r slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.text.WriteString(r.Message)
+	r.Attrs(func(a slog.Attr) bool { c.text.WriteString(" " + a.Key + "=" + a.Value.String()); return true })
+	c.text.WriteString("\n")
+	return nil
+}
+func (c capturedLog) WithAttrs([]slog.Attr) slog.Handler { return c }
+func (c capturedLog) WithGroup(string) slog.Handler      { return c }
+
+// The same for the link of the group, whose feed has the names of those who go:
+// creating, showing, renewing and deleting it leaves its address and its secret
+// in no entry of the request log, nor in the default logger.
+func TestTools_CalendarLink_Group_IsNotLogged(t *testing.T) {
+	var mu sync.Mutex
+	var seen strings.Builder
+	previous := slog.Default()
+	slog.SetDefault(slog.New(capturedLog{mu: &mu, text: &seen}))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	app, _, alice := caseApp(t)
+	app.Settings().Logs.MaxDays = 5
+	app.Settings().Logs.MinLevel = int(slog.LevelDebug)
+	handler, ok := app.Logger().Handler().(*logger.BatchHandler)
+	if !ok {
+		t.Fatalf("the logger is a %T, want PocketBase's batch handler", app.Logger().Handler())
+	}
+	handler.SetLevel(slog.LevelDebug) // what a reload of the settings does
+
+	call := func(args map[string]any) toolResult {
+		t.Helper()
+		args["scope"] = "group"
+		return callTool(t, app, alice, "calendar_link", args)
+	}
+	var addresses []string
+	addresses = append(addresses, calendarURL(isDone(t, call(map[string]any{"action": "create"}))))
+	addresses = append(addresses, calendarURL(isDone(t, call(map[string]any{"action": "show"}))))
+	addresses = append(addresses, calendarURL(confirmAndCall(t, app, alice, "calendar_link", map[string]any{"action": "renew", "scope": "group"})))
+	confirmAndCall(t, app, alice, "calendar_link", map[string]any{"action": "delete", "scope": "group"})
+	for _, address := range addresses {
+		if address == "" {
+			t.Fatal("an answer without an address")
+		}
+	}
+
+	logs := waitForRequests(t, app, 8)
+	var inner bool
+	check := func(where, text string) {
+		for _, address := range addresses {
+			for name, secret := range map[string]string{"the address": address, "its secret": feedToken(address)} {
+				if strings.Contains(text, secret) {
+					t.Errorf("%s holds %s (%s)", where, name, prefix(secret))
+				}
+			}
+		}
+		if strings.Contains(text, ".ics") {
+			t.Errorf("%s holds the end of an address of a feed", where)
+		}
+	}
+	for _, entry := range logs {
+		data, err := json.Marshal(entry.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check("the log, in the entry "+strconv.Quote(entry.Message), entry.Message+" "+string(data))
+		if entry.Message == "POST /api/app/calendar" && entry.Data["userAgent"] == "prends-ton-dossard-mcp" {
+			inner = true
+		}
+	}
+	mu.Lock()
+	check("the default logger", seen.String())
+	mu.Unlock()
 	// Without it, the checks above would pass on a log without the requests.
 	if !inner {
 		t.Error("no inner request that makes a link in the log")

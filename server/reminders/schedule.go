@@ -127,7 +127,9 @@ func due(T, now time.Time, kinds []string) (kind string, ok bool) {
 // not available: the pass is a no-op that the next minute tries again.
 //
 // For each event whose opening is today, tomorrow or the day after in Paris and
-// within the next 24 hours, for each person who gets its reminders (§ 4.2), the
+// that is due from the same wall-clock time of Paris the day before (see
+// dayOpens; not 24 hours of the clock, which two nights of the year are not
+// the same hour), for each person who gets its reminders (§ 4.2), the
 // kind that is due: a row of reminder_deliveries is inserted first, and a row that
 // the unique index refuses means that the reminder is already done; then the
 // message is sent to the devices of the person. A person with no device has no
@@ -150,11 +152,7 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 		}
 	}
 
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		return report, err
-	}
-	local := at.In(paris)
+	local := at.In(parisZone())
 	days := make([]any, 3)
 	for i := range days {
 		days[i] = local.AddDate(0, 0, i).Format("2006-01-02")
