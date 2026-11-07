@@ -188,7 +188,11 @@ export function eventIcs(
       line("DTSTART;VALUE=DATE", dateValue(day));
       line("DTEND;VALUE=DATE", dateValue(day.add({ days: 1 })));
     } else {
-      const starts = day.toZonedDateTime({ timeZone: PARIS, plainTime: time }).toInstant();
+      // The later reading of a time that Paris has twice (the October change), as the server takes it.
+      const starts = day
+        .toPlainDateTime(time)
+        .toZonedDateTime(PARIS, { disambiguation: "later" })
+        .toInstant();
       line("DTSTART", stampValue(starts));
       line("DTEND", stampValue(starts.add({ minutes: OPENING_MINUTES })));
     }

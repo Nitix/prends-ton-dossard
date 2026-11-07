@@ -301,6 +301,22 @@ describe("eventIcs — l'ouverture des inscriptions", () => {
     expect(summer?.SUMMARY).toBe("Registration opens: Trail des Crêtes");
   });
 
+  test("eventIcs — dans l'heure répétée d'octobre, l'instant est celui du serveur (la lecture d'hiver)", () => {
+    // 2027-10-31, 02:30 happens twice in Paris (02:30 CEST then 02:30 CET). The server
+    // (server/events/opening.go) takes the second, 01:30Z; the file says the same instant.
+    const [, opening] = events(
+      eventIcs(
+        viewOf({ registration_opening: "2027-10-31", registration_opening_time: "02:30" }),
+        APP_URL,
+        now(),
+        "fr",
+        fr,
+      ),
+    );
+    expect(opening?.DTSTART).toBe("20271031T013000Z");
+    expect(opening?.DTEND).toBe("20271031T020000Z");
+  });
+
   test("eventIcs — sans heure, un jour entier", () => {
     const [, opening] = events(
       eventIcs(viewOf({ registration_opening: "2026-05-12" }), APP_URL, now(), "fr", fr),
