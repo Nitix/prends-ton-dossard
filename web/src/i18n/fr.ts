@@ -697,6 +697,10 @@ export const fr = {
     dayUnknown: "Le jour n'est pas encore connu",
     month: "Mois",
     periodMonth: (month: string) => `${month}, date à préciser`,
+    deadlineAfterMonthEnd:
+      "La date limite d'inscription ne peut pas être après la fin du mois de la course.",
+    openingAfterMonthEnd:
+      "L'ouverture des inscriptions ne peut pas être après la fin du mois de la course.",
     formatDatesLater: "Les épreuves auront leur date quand le jour sera connu.",
     notes: "Notes",
     formatsTitle: "Épreuves",

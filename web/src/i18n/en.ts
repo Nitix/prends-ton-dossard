@@ -546,6 +546,8 @@ export const en = {
     dayUnknown: "The day is not known yet",
     month: "Month",
     periodMonth: (month: string) => `${month}, date to be set`,
+    deadlineAfterMonthEnd: "The registration deadline cannot be after the end of the race month.",
+    openingAfterMonthEnd: "Registration cannot open after the end of the race month.",
     formatDatesLater: "The races will have their date once the day is known.",
     notes: "Notes",
     formatsTitle: "Races",

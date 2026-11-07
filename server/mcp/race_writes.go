@@ -251,7 +251,7 @@ const monthHint = " Donne la date de la course (date_precision: day) pour dater 
 // The days are compared as text, as the site does (they were checked to be days).
 func openingRefusal(draft eventDraft) error {
 	refuse := func(field, code string) error {
-		return errors.New("La course, " + fieldText(field, code))
+		return errors.New("La course, " + fieldTextFor(field, code, draft.monthOnly()))
 	}
 	firstDay := draft.StartDate
 	if draft.monthOnly() {

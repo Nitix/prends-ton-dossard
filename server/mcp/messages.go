@@ -278,3 +278,24 @@ func lowerFirst(s string) string {
 	}
 	return string(unicode.ToLower(r)) + s[size:]
 }
+
+// monthEndMessages say the two « after the start » refusals of a race known by
+// its month in the words of the form (fr.form.deadlineAfterMonthEnd and
+// openingAfterMonthEnd): its first day is the last day of the month, so « le jour
+// du début » would mislead.
+var monthEndMessages = map[string]string{
+	"registration_deadline_after_start": "la date limite d'inscription ne peut pas être après la fin du mois de la course.",
+	"registration_opening_after_start":  "l'ouverture des inscriptions ne peut pas être après la fin du mois de la course.",
+}
+
+// fieldTextFor is fieldText for a race that is known by its month or not.
+func fieldTextFor(field, code string, monthOnly bool) string {
+	if message, ok := monthEndMessages[code]; ok && monthOnly {
+		name, known := fieldNames[field]
+		if !known {
+			name = field
+		}
+		return name + " : " + message + " (" + code + ")"
+	}
+	return fieldText(field, code)
+}

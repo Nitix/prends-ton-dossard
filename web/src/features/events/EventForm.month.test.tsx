@@ -3,11 +3,14 @@ import { expect, test, vi } from "vitest";
 import { fr } from "../../i18n/fr";
 import {
   distance,
+  field,
+  fillEvent,
   format,
   formatDate,
   location,
   name,
   raceType,
+  refused,
   renderEdit,
   renderForm,
   save,
@@ -170,4 +173,23 @@ test("EventForm — une année à moitié tapée n'est jamais prise pour un mois
   );
   expect(options).not.toContain("0020-06");
   await expect.element(monthSelect(screen)).toHaveValue("2026-06");
+});
+
+test("EventForm — pour une course au mois, une ouverture refusée après le début parle de la fin du mois", async () => {
+  mocks.send.mockRejectedValue(
+    refused(0, 400, { registration_opening: field("registration_opening_after_start") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await unknownDay(screen).click();
+  await monthSelect(screen).selectOptions("2027-06");
+  await screen.getByLabelText(fr.form.registrationOpening, { exact: true }).fill("2027-07-02");
+
+  await save(screen).click();
+
+  await expect.element(screen.getByText(fr.form.openingAfterMonthEnd)).toBeVisible();
+  expect(fr.form.openingAfterMonthEnd).toContain("après la fin du mois de la course");
+  await expect
+    .element(screen.getByText(fr.errors.registration_opening_after_start))
+    .not.toBeInTheDocument();
 });

@@ -74,7 +74,12 @@ func TestTools_CreateEvent_MonthPrecision(t *testing.T) {
 
 	t.Run("an opening after the month", func(t *testing.T) {
 		announced(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_opening"] = "2027-07-01" }),
-			"La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard le jour du début. (registration_opening_after_start)")
+			"La course, ouverture des inscriptions : l'ouverture des inscriptions ne peut pas être après la fin du mois de la course. (registration_opening_after_start)")
+	})
+
+	t.Run("a deadline after the month", func(t *testing.T) {
+		announced(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_deadline"] = "2027-07-01" }),
+			"La course, date limite d'inscription : la date limite d'inscription ne peut pas être après la fin du mois de la course. (registration_deadline_after_start)")
 	})
 
 	t.Run("a day that is not the 1st", func(t *testing.T) {

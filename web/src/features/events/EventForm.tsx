@@ -409,7 +409,13 @@ function EventFields({
 
   const eventError = (field: string): string | null => {
     const code = errors.event[field];
-    return code === undefined ? null : translateError(t, code);
+    if (code === undefined) return null;
+    // A race known by its month ends with it: « le jour du début » would mislead.
+    if (draft.monthOnly) {
+      if (code === "registration_deadline_after_start") return t.form.deadlineAfterMonthEnd;
+      if (code === "registration_opening_after_start") return t.form.openingAfterMonthEnd;
+    }
+    return translateError(t, code);
   };
 
   /**
