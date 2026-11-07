@@ -28,6 +28,13 @@ type Words struct {
 	opening string
 	// dateToBeSet is what a race known by its month only says of its day.
 	dateToBeSet string
+	// undecided, supporters and groupName are the texts of the group calendar:
+	// the line of those interested who have not chosen a race, the line of the
+	// supporters, and the name of the calendar.
+	undecided, supporters, groupName string
+	// colon is what follows the name of a race, or of a group of people, before
+	// those it holds (a space comes before it in French).
+	colon string
 	// reminder holds the pieces of the body of a reminder of an opening.
 	reminder reminderWords
 	// decimal is the separator of the decimals of a distance.
@@ -57,6 +64,10 @@ var texts = map[string]Words{
 		deadline:    "Clôture des inscriptions",
 		opening:     "Ouverture des inscriptions",
 		dateToBeSet: "date à préciser",
+		undecided:   "Intéressés, format à choisir",
+		supporters:  "Supporteurs",
+		groupName:   "Prends ton dossard · groupe",
+		colon:       " : ",
 		reminder:    reminderWords{opens: "Les inscriptions ouvrent", today: "aujourd'hui", tomorrow: "demain", at: "à", in: "dans", min: "min"},
 		decimal:     ",",
 		minute:      "min",
@@ -82,6 +93,10 @@ var texts = map[string]Words{
 		deadline:    "Registration closes",
 		opening:     "Registration opens",
 		dateToBeSet: "date to be set",
+		undecided:   "Interested, format to be chosen",
+		supporters:  "Supporters",
+		groupName:   "Prends ton dossard · group",
+		colon:       ": ",
 		reminder:    reminderWords{opens: "Registration opens", today: "today", tomorrow: "tomorrow", at: "at", in: "in", min: "min"},
 		decimal:     ".",
 		minute:      "m",
@@ -294,4 +309,28 @@ func (w Words) ReminderBody(T time.Time, timeKnown bool, now time.Time) string {
 // préciser", "date to be set".
 func (w Words) DateToBeSet() string {
 	return w.dateToBeSet
+}
+
+// GroupName is the name of the calendar of the group: "Prends ton dossard ·
+// groupe".
+func (w Words) GroupName() string {
+	return w.groupName
+}
+
+// Undecided is the label of those who are interested in a race and have not
+// chosen a format: "Intéressés, format à choisir".
+func (w Words) Undecided() string {
+	return w.undecided
+}
+
+// Supporters is the label of those who come to support: "Supporteurs".
+func (w Words) Supporters() string {
+	return w.supporters
+}
+
+// Roster is a line of the description of a race in the group calendar: the label,
+// the colon of the language, then the people, which are written as they are given
+// and joined by a comma and a space ("Trail 42 km : Alice (Inscrit), Bob").
+func (w Words) Roster(label string, people []string) string {
+	return label + w.colon + strings.Join(people, ", ")
 }

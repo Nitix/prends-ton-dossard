@@ -1501,7 +1501,7 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 		return c
 	}
 	// checkTable checks the fields, the index and the rules of the collection.
-	checkTable := func(when string) {
+	checkTable := func(when, index string) {
 		t.Helper()
 		c := collection()
 
@@ -1544,7 +1544,6 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 		}
 
 		// An account has one link: a new one replaces the old.
-		const index = "CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"
 		if len(c.Indexes) != 1 || c.Indexes[0] != index {
 			t.Errorf("%s: calendar_feeds.indexes = %q, want [%q]", when, c.Indexes, index)
 		}
@@ -1559,15 +1558,24 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 	}
 	saveFeed := func(user *core.Record) *core.Record {
 		t.Helper()
-		return mustSave(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": "a1b2", "lang": "fr"})
+		values := map[string]any{"user": user.Id, "token_hash": "a1b2", "lang": "fr"}
+		// The scope is there, but in the table that this migration makes again,
+		// which is the one from before 9q.
+		if collection().Fields.GetByName("scope") != nil {
+			values["scope"] = "mine"
+		}
+		return mustSave(t, app, "calendar_feeds", values)
 	}
 
-	checkTable("as created")
+	const indexOf9g = "CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"
+	const indexOf9q = "CREATE UNIQUE INDEX idx_calendar_feeds_user_scope ON calendar_feeds (user, scope)"
+
+	checkTable("as created", indexOf9q)
 	saveFeed(fx.Alice)
 
 	// The index: a second link for the same account is refused, and one for
 	// another account is not.
-	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "c3d4", "lang": "en"}); err == nil {
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "c3d4", "lang": "en", "scope": "mine"}); err == nil {
 		t.Error("a second calendar link for the same account must be refused")
 	} else {
 		var invalid validation.Errors
@@ -1607,7 +1615,7 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 	if err := migration.Up(app); err != nil {
 		t.Fatal(err)
 	}
-	checkTable("after applying again")
+	checkTable("after applying again", indexOf9g)
 	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 0 {
 		t.Errorf("after applying again, %d links (error %v), want an empty table", got, err)
 	}
@@ -1648,7 +1656,7 @@ func TestMigrations_CalendarTokenDownThenUp(t *testing.T) {
 	hashes := map[string]string{}
 	saveLink := func(user *core.Record, hash, token string) {
 		t.Helper()
-		values := map[string]any{"user": user.Id, "token_hash": hash, "lang": "fr"}
+		values := map[string]any{"user": user.Id, "token_hash": hash, "lang": "fr", "scope": "mine"}
 		if token != "" {
 			values["token"] = token
 		}
@@ -2558,5 +2566,108 @@ func TestMigrations_ReminderDeliveriesDownThenUp(t *testing.T) {
 	checkTable("after applying again")
 	if got, err := app.CountRecords("reminder_deliveries"); err != nil || got != 0 {
 		t.Errorf("after applying again, %d rows (error %v), want an empty table", got, err)
+	}
+}
+
+// The migration 9q gives the calendar link a scope, "mine" or "group", and an
+// account one link of each. The links that exist become "mine" and go on working;
+// the rollback deletes the group links, drops the field and puts the index of 9g
+// back.
+func TestMigrations_CalendarFeedScopeDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9q_calendar_feed_scope.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("calendar_feeds")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	checkField := func(when string) {
+		t.Helper()
+		c := collection()
+		scope, ok := c.Fields.GetByName("scope").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: calendar_feeds.scope must be a select field, got %T", when, c.Fields.GetByName("scope"))
+		}
+		if !slices.Equal(scope.Values, []string{"mine", "group"}) || scope.MaxSelect != 1 || !scope.Required || scope.Hidden {
+			t.Errorf("%s: calendar_feeds.scope = values %q, max %d, required %v, hidden %v; want [mine group], 1, required, visible",
+				when, scope.Values, scope.MaxSelect, scope.Required, scope.Hidden)
+		}
+		want := []string{"CREATE UNIQUE INDEX idx_calendar_feeds_user_scope ON calendar_feeds (user, scope)"}
+		if !slices.Equal([]string(c.Indexes), want) {
+			t.Errorf("%s: calendar_feeds.indexes = %q, want %q", when, c.Indexes, want)
+		}
+	}
+	save := func(user *core.Record, scope string) {
+		t.Helper()
+		mustSave(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": scope + "-of-" + user.Id, "lang": "fr", "scope": scope})
+	}
+
+	checkField("as created")
+
+	// Two links for an account, one of each scope; a second of a scope is refused.
+	save(fx.Alice, "mine")
+	save(fx.Alice, "group")
+	save(fx.Bob, "group")
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "again", "lang": "fr", "scope": "group"}); err == nil {
+		t.Error("a second group link for an account must be refused")
+	}
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "other", "lang": "fr", "scope": "team"}); err == nil {
+		t.Error("a scope that is not one must be refused")
+	}
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Admin.Id, "token_hash": "none", "lang": "fr"}); err == nil {
+		t.Error("a link without a scope must be refused")
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with links of both scopes: %v", err)
+	}
+	if collection().Fields.GetByName("scope") != nil {
+		t.Error("calendar_feeds.scope must be gone after the rollback")
+	}
+	if got := []string(collection().Indexes); !slices.Equal(got, []string{"CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"}) {
+		t.Errorf("after the rollback the indexes are %q, want the one of 9g", got)
+	}
+	if _, err := app.FindFirstRecordByData("calendar_feeds", "token_hash", "mine-of-"+fx.Alice.Id); err != nil {
+		t.Errorf("after the rollback, the personal link of Alice is gone: %v", err)
+	}
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 1 {
+		t.Errorf("after the rollback, %d links (error %v), want the personal one only", got, err)
+	}
+	// Back to one link per account.
+	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Bob.Id, "token_hash": "bobs", "lang": "fr"})
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Bob.Id, "token_hash": "bobs-again", "lang": "fr"}); err == nil {
+		t.Error("after the rollback, a second link for an account must be refused")
+	}
+	// Rolling back again is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	// Applying it again: the links made without a scope become personal ones, and
+	// still work.
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	for _, hash := range []string{"bobs", "mine-of-" + fx.Alice.Id} {
+		link, err := app.FindFirstRecordByData("calendar_feeds", "token_hash", hash)
+		if err != nil {
+			t.Fatalf("the link %q is gone: %v", hash, err)
+		}
+		if got := link.GetString("scope"); got != "mine" {
+			t.Errorf("the existing link %q has scope %q, want mine", hash, got)
+		}
+		if err := app.Save(link); err != nil {
+			t.Errorf("the existing link %q no longer saves: %v", hash, err)
+		}
+	}
+	save(fx.Bob, "group")
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 3 {
+		t.Errorf("after applying again and a group link, %d links (error %v), want 3", got, err)
 	}
 }

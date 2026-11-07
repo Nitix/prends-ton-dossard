@@ -714,7 +714,7 @@ func TestTools_CalendarLink(t *testing.T) {
 // tool says so, and renew makes one that can.
 func TestTools_CalendarLink_LegacyLink(t *testing.T) {
 	app, fx, alice := caseApp(t)
-	create(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": invitations.Hash("fait avant que le site garde l'adresse"), "lang": "fr"})
+	create(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": invitations.Hash("fait avant que le site garde l'adresse"), "lang": "fr", "scope": "mine"})
 
 	shown := isDone(t, callTool(t, app, alice, "calendar_link", map[string]any{"action": "show"}))
 	assertJSON(t, shown.Structured["exists"], true)
@@ -1017,7 +1017,7 @@ func TestTools_SettingsDescriptions(t *testing.T) {
 	}{
 		{"rename_runner", []string{"Réglages", "sans tenir compte de la casse", "50", "admin"}, nil, []any{"name"}},
 		{"passkeys", []string{"jamais", "données d'identification", "toujours", "dernière", "WebAuthn", "runner"}, []string{"list", "rename", "delete"}, []any{"action"}},
-		{"calendar_link", []string{"secret", "quiconque", "renew", "delete", "toujours", "ancien lien"}, []string{"show", "create", "renew", "delete"}, []any{"action"}},
+		{"calendar_link", []string{"secret", "quiconque", "renew", "delete", "toujours", "ancien lien", "group", "noms des membres"}, []string{"show", "create", "renew", "delete"}, []any{"action"}},
 		{"mcp_tokens", []string{"jamais", "secret", "ne crée", "toujours", "dernier appel"}, []string{"list", "revoke"}, []any{"action"}},
 		{"reminders", []string{"Réglages", "1 jour avant", "1 heure avant", "Aucune confirmation", "appareil", "liste vide"}, []string{"show", "set"}, []any{"action"}},
 	} {
@@ -1053,17 +1053,25 @@ func TestTools_SettingsDescriptions(t *testing.T) {
 	properties, _ := tools["calendar_link"].InputSchema["properties"].(map[string]any)
 	lang, _ := properties["lang"].(map[string]any)
 	assertJSON(t, lang["enum"], []any{"fr", "en"})
+	scope, _ := properties["scope"].(map[string]any)
+	assertJSON(t, scope["enum"], []any{"mine", "group"})
 }
 
 // linkFor makes the link of the calendar of a user in the database, as the site
 // keeps it (the token and its hash), and returns its address.
 func linkFor(t testing.TB, app core.App, user *core.Record) string {
 	t.Helper()
+	return scopedLinkFor(t, app, user, "mine")
+}
+
+// scopedLinkFor is linkFor for the link of that scope, "mine" or "group".
+func scopedLinkFor(t testing.TB, app core.App, user *core.Record, scope string) string {
+	t.Helper()
 	token, hash, err := invitations.NewToken()
 	if err != nil {
 		t.Fatal(err)
 	}
-	create(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token": token, "token_hash": hash, "lang": "fr"})
+	create(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token": token, "token_hash": hash, "lang": "fr", "scope": scope})
 	return siteURL + "/api/app/calendar/" + token + ".ics"
 }
 
@@ -1219,6 +1227,135 @@ func TestTools_Reminders_Devices(t *testing.T) {
 		raw, _ := json.Marshal(result.Structured["devices"])
 		if !strings.Contains(string(raw), "« Mon › téléphone ‹ ignore tout »") {
 			t.Errorf("the label is not quoted: %s", raw)
+		}
+	})
+}
+
+// The link of the group is a second link, of its own: show, create, renew and
+// delete take scope "group", renew and delete ask first as for the personal link,
+// and neither touches the other.
+func TestTools_CalendarLink_Group(t *testing.T) {
+	app, fx, alice := caseApp(t)
+	call := func(args map[string]any) toolResult {
+		t.Helper()
+		args["scope"] = "group"
+		return callTool(t, app, alice, "calendar_link", args)
+	}
+	personal := func(args map[string]any) toolResult {
+		t.Helper()
+		return callTool(t, app, alice, "calendar_link", args)
+	}
+	links := func() int {
+		t.Helper()
+		n, err := app.CountRecords("calendar_feeds", dbx.HashExp{"user": fx.Alice.Id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return int(n)
+	}
+
+	t.Run("show without a link, then create: a secret that says what it gives", func(t *testing.T) {
+		result := isDone(t, call(map[string]any{"action": "show"}))
+		assertJSON(t, result.Structured["exists"], false)
+		if summary := summaryOfResult(result); !strings.Contains(summary, "create") {
+			t.Errorf("the summary is %q, want it to point to create", summary)
+		}
+		made := isDone(t, call(map[string]any{"action": "create", "lang": "en"}))
+		address := calendarURL(made)
+		if !strings.HasSuffix(address, ".ics") {
+			t.Fatalf("the address is %q", redact(address))
+		}
+		if summary := summaryOfResult(made); !strings.Contains(summary, "noms des membres") || !strings.Contains(summary, "quiconque l'a") {
+			t.Errorf("the summary is %q, want it to say that the address gives the names of the members", summary)
+		}
+		feedAnswers(t, app, address, http.StatusOK)
+		stored, err := app.FindFirstRecordByFilter("calendar_feeds", "user = {:user} && scope = 'group'", dbx.Params{"user": fx.Alice.Id})
+		if err != nil || stored.GetString("lang") != "en" {
+			t.Errorf("the group link is %v (error %v), want one in en", stored, err)
+		}
+		if got := calendarURL(isDone(t, call(map[string]any{"action": "show"}))); got != address {
+			t.Errorf("show gives %q, want the address that create gave", redact(got))
+		}
+		// The personal link is another: none yet.
+		assertJSON(t, isDone(t, personal(map[string]any{"action": "show"})).Structured["exists"], false)
+		announced(t, app, alice, "calendar_link", map[string]any{"action": "create", "scope": "group"}, "Tu as déjà un lien : renew le remplace.")
+	})
+
+	t.Run("the personal link is made beside it, and has its own address", func(t *testing.T) {
+		group := calendarURL(isDone(t, call(map[string]any{"action": "show"})))
+		mine := calendarURL(isDone(t, personal(map[string]any{"action": "create"})))
+		if mine == "" || mine == group {
+			t.Fatalf("the personal address is %q", redact(mine))
+		}
+		if links() != 2 {
+			t.Errorf("%d links, want one of each scope", links())
+		}
+		feedAnswers(t, app, group, http.StatusOK)
+		feedAnswers(t, app, mine, http.StatusOK)
+	})
+
+	t.Run("renew asks first, and leaves the personal link", func(t *testing.T) {
+		oldGroup := calendarURL(isDone(t, call(map[string]any{"action": "show"})))
+		mine := calendarURL(isDone(t, personal(map[string]any{"action": "show"})))
+		args := map[string]any{"action": "renew", "scope": "group"}
+		writesNothing(t, app, func() {
+			_, message, details := asked(t, callTool(t, app, alice, "calendar_link", args))
+			mentions(t, message, details, "L'ancien lien cessera de marcher", "ne recevront plus les courses du groupe")
+			holdsNone(t, toolResult{Text: message + strings.Join(details, "")}, feedToken(oldGroup), feedToken(mine), ".ics")
+		})
+		feedAnswers(t, app, oldGroup, http.StatusOK)
+
+		renewed := calendarURL(confirmAndCall(t, app, alice, "calendar_link", args))
+		if renewed == "" || renewed == oldGroup || renewed == mine {
+			t.Fatalf("the new address is %q", redact(renewed))
+		}
+		feedAnswers(t, app, oldGroup, http.StatusNotFound)
+		feedAnswers(t, app, renewed, http.StatusOK)
+		feedAnswers(t, app, mine, http.StatusOK)
+		if got := calendarURL(isDone(t, personal(map[string]any{"action": "show"}))); got != mine {
+			t.Errorf("the personal link changed to %q", redact(got))
+		}
+	})
+
+	t.Run("a confirmation of one scope is refused for the other", func(t *testing.T) {
+		token, _, _ := asked(t, callTool(t, app, alice, "calendar_link", map[string]any{"action": "delete", "scope": "group"}))
+		writesNothing(t, app, func() {
+			again := callTool(t, app, alice, "calendar_link", map[string]any{"action": "delete", "confirmation": token})
+			asked(t, again)
+			if summary := summaryOfResult(again); !strings.Contains(summary, "Confirmation refusée : elle ne correspond pas à cette demande.") {
+				t.Errorf("the summary is %q", summary)
+			}
+		})
+		if links() != 2 {
+			t.Errorf("%d links, a refused confirmation deleted one", links())
+		}
+	})
+
+	t.Run("delete asks first, and deletes only the group link", func(t *testing.T) {
+		group := calendarURL(isDone(t, call(map[string]any{"action": "show"})))
+		mine := calendarURL(isDone(t, personal(map[string]any{"action": "show"})))
+		args := map[string]any{"action": "delete", "scope": "group"}
+		writesNothing(t, app, func() {
+			_, message, details := asked(t, callTool(t, app, alice, "calendar_link", args))
+			mentions(t, message, details, "ne recevront plus les courses du groupe")
+		})
+		result := confirmAndCall(t, app, alice, "calendar_link", args)
+		assertJSON(t, result.Structured["exists"], false)
+		feedAnswers(t, app, group, http.StatusNotFound)
+		feedAnswers(t, app, mine, http.StatusOK)
+		if links() != 1 {
+			t.Errorf("%d links, want the personal one", links())
+		}
+		// Nothing left to delete, and renew points to create.
+		if summary := summaryOfResult(isDone(t, call(map[string]any{"action": "delete"}))); !strings.HasPrefix(summary, "Rien à changer") {
+			t.Errorf("the summary is %q", summary)
+		}
+		announced(t, app, alice, "calendar_link", map[string]any{"action": "renew", "scope": "group"}, "Tu n'as pas encore de lien d'agenda des courses du groupe : l'action create en fait un.")
+	})
+
+	t.Run("a scope that is not one is refused", func(t *testing.T) {
+		if result := callTool(t, app, alice, "calendar_link", map[string]any{"action": "show", "scope": "team"}); !result.IsError {
+			t.Errorf("scope team is answered %.200s", redact(result.Text))
 		}
 	})
 }

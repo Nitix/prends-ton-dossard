@@ -76,7 +76,7 @@ var hashOf = invitations.Hash
 // cannot be shown again.
 func linkOf(t testing.TB, app core.App, user *core.Record, token, lang string) *core.Record {
 	t.Helper()
-	return save(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": hashOf(token), "lang": lang})
+	return save(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": hashOf(token), "lang": lang, "scope": "mine"})
 }
 
 // keptLinkOf stores a calendar link for the user, whose token is token, as the
@@ -84,7 +84,7 @@ func linkOf(t testing.TB, app core.App, user *core.Record, token, lang string) *
 func keptLinkOf(t testing.TB, app core.App, user *core.Record, token, lang string) *core.Record {
 	t.Helper()
 	return save(t, app, "calendar_feeds", map[string]any{
-		"user": user.Id, "token": token, "token_hash": hashOf(token), "lang": lang,
+		"user": user.Id, "token": token, "token_hash": hashOf(token), "lang": lang, "scope": "mine",
 	})
 }
 
@@ -445,7 +445,7 @@ func TestCalendarRoutes_Show(t *testing.T) {
 		// the hash, which opens the feed, and not the token next to it. The
 		// address that the token makes opens nothing.
 		save(t, app, "calendar_feeds", map[string]any{
-			"user": fx.Alice.Id, "token": "stale", "token_hash": hashOf("fresh"), "lang": "fr",
+			"user": fx.Alice.Id, "token": "stale", "token_hash": hashOf("fresh"), "lang": "fr", "scope": "mine",
 		})
 
 		if exists, url := shown(t, app, fx.Alice); !exists || url != "" {

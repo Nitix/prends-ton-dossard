@@ -37,7 +37,7 @@ func unfold(feed string) []string {
 
 func TestFeed_Structure(t *testing.T) {
 	t.Run("an empty feed is a valid calendar with no event", func(t *testing.T) {
-		got := calendar.Feed(nil, "fr", now)
+		got := calendar.Feed(nil, "fr", "Prends ton dossard", now)
 		want := "BEGIN:VCALENDAR\r\n" +
 			"VERSION:2.0\r\n" +
 			"PRODID:-//Prends ton dossard//FR\r\n" +
@@ -60,7 +60,7 @@ func TestFeed_Structure(t *testing.T) {
 			URL:         "https://example.test/evenements/e1",
 			Start:       "2026-06-14",
 			End:         "2026-06-15",
-		}}, "en", now)
+		}}, "en", "Prends ton dossard", now)
 		want := "BEGIN:VCALENDAR\r\n" +
 			"VERSION:2.0\r\n" +
 			"PRODID:-//Prends ton dossard//EN\r\n" +
@@ -87,7 +87,7 @@ func TestFeed_Structure(t *testing.T) {
 	t.Run("what is empty is left out", func(t *testing.T) {
 		got := calendar.Feed([]calendar.Entry{{
 			UID: "u@prends-ton-dossard", Summary: "Course", Start: "2026-06-14", End: "2026-06-15",
-		}}, "fr", now)
+		}}, "fr", "Prends ton dossard", now)
 		for _, property := range []string{"DESCRIPTION", "LOCATION", "URL"} {
 			if strings.Contains(got, property) {
 				t.Errorf("the feed has a %s that is empty:\n%q", property, got)
@@ -101,7 +101,7 @@ func TestFeed_Structure(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := calendar.Feed([]calendar.Entry{{UID: "u", Summary: "s", Start: "2026-06-14", End: "2026-06-15"}},
-			"fr", time.Date(2026, time.November, 1, 10, 30, 15, 0, paris))
+			"fr", "Prends ton dossard", time.Date(2026, time.November, 1, 10, 30, 15, 0, paris))
 		if !strings.Contains(got, "\r\nDTSTAMP:20261101T093015Z\r\n") {
 			t.Errorf("the stamp must be 20261101T093015Z (9:30:15 UTC), got:\n%q", got)
 		}
@@ -123,7 +123,7 @@ func TestFeed_Escaping(t *testing.T) {
 		Start: "2026-06-14",
 		End:   "2026-06-15",
 	}
-	feed := calendar.Feed([]calendar.Entry{entry}, "fr", now)
+	feed := calendar.Feed([]calendar.Entry{entry}, "fr", "Prends ton dossard", now)
 	lines(t, feed) // CRLF at the end of every line, and nowhere else
 
 	got := map[string]string{}
@@ -161,7 +161,7 @@ func TestFeed_Folding(t *testing.T) {
 			text := strings.Repeat(char, (200-len("SUMMARY:"))/len(char))
 			feed := calendar.Feed([]calendar.Entry{{
 				UID: "u@prends-ton-dossard", Summary: text, Start: "2026-06-14", End: "2026-06-15",
-			}}, "fr", now)
+			}}, "fr", "Prends ton dossard", now)
 
 			var pieces int
 			for _, line := range lines(t, feed) {
@@ -195,7 +195,7 @@ func TestFeed_Folding(t *testing.T) {
 		feedOf := func(octets int) string {
 			return calendar.Feed([]calendar.Entry{{
 				UID: "u", Summary: strings.Repeat("x", octets-len("SUMMARY:")), Start: "2026-06-14", End: "2026-06-15",
-			}}, "fr", now)
+			}}, "fr", "Prends ton dossard", now)
 		}
 		whole := "SUMMARY:" + strings.Repeat("x", 75-len("SUMMARY:"))
 		if got := feedOf(75); !strings.Contains(got, "\r\n"+whole+"\r\n") {
@@ -228,7 +228,7 @@ func TestFeed_Folding(t *testing.T) {
 					UID: "u\x00@prends-ton-dossard", Summary: tt.text, Description: tt.text, Location: tt.text,
 					URL:   "https://example.test/\x80a\x00b\x0bc\td",
 					Start: "2026-06-14", End: "2026-06-15",
-				}}, "fr", now)
+				}}, "fr", "Prends ton dossard", now)
 
 				if !utf8.ValidString(feed) {
 					t.Errorf("the feed is not valid UTF-8:\n%q", feed)
@@ -275,7 +275,7 @@ func TestFeed_AllDay(t *testing.T) {
 		{UID: "one-day@prends-ton-dossard", Summary: "Un jour", Start: "2026-06-14", End: "2026-06-15"},
 		{UID: "two-days@prends-ton-dossard", Summary: "Deux jours", Start: "2026-06-13", End: "2026-06-15"},
 		{UID: "year-end@prends-ton-dossard", Summary: "Fin d'année", Start: "2026-12-31", End: "2027-01-01"},
-	}, "fr", now)
+	}, "fr", "Prends ton dossard", now)
 
 	var starts, ends []string
 	for _, line := range lines(t, feed) {
@@ -310,7 +310,7 @@ func TestFeed_TimedEntriesAndAlarms(t *testing.T) {
 	}
 
 	t.Run("a timed entry is in UTC, lasts 30 minutes and has its alarms after its properties", func(t *testing.T) {
-		got := calendar.Feed([]calendar.Entry{opening}, "fr", now)
+		got := calendar.Feed([]calendar.Entry{opening}, "fr", "Prends ton dossard", now)
 		want := "BEGIN:VCALENDAR\r\n" +
 			"VERSION:2.0\r\n" +
 			"PRODID:-//Prends ton dossard//FR\r\n" +
@@ -346,7 +346,7 @@ func TestFeed_TimedEntriesAndAlarms(t *testing.T) {
 	t.Run("the end crosses midnight", func(t *testing.T) {
 		late := opening
 		late.At = time.Date(2027, time.January, 12, 23, 45, 0, 0, time.UTC)
-		got := calendar.Feed([]calendar.Entry{late}, "fr", now)
+		got := calendar.Feed([]calendar.Entry{late}, "fr", "Prends ton dossard", now)
 		if !strings.Contains(got, "\r\nDTSTART:20270112T234500Z\r\nDTEND:20270113T001500Z\r\n") {
 			t.Errorf("the times are wrong:\n%q", got)
 		}
@@ -357,7 +357,7 @@ func TestFeed_TimedEntriesAndAlarms(t *testing.T) {
 			UID: "opening-e1-r1@prends-ton-dossard", Summary: "Ouverture", Start: "2027-01-12", End: "2027-01-13",
 			Alarms: []calendar.Alarm{{Trigger: "-PT15H", Description: "Ouverture"}, {Trigger: "PT8H", Description: "Ouverture"}},
 		}
-		got := calendar.Feed([]calendar.Entry{day}, "fr", now)
+		got := calendar.Feed([]calendar.Entry{day}, "fr", "Prends ton dossard", now)
 		for _, want := range []string{
 			"\r\nDTSTART;VALUE=DATE:20270112\r\nDTEND;VALUE=DATE:20270113\r\n",
 			"\r\nTRIGGER:-PT15H\r\n", "\r\nTRIGGER:PT8H\r\n",
@@ -374,7 +374,7 @@ func TestFeed_TimedEntriesAndAlarms(t *testing.T) {
 			Trigger:     "-PT1H\r\nATTENDEE:evil",
 			Description: `Ouverture, des; inscriptions \ ` + strings.Repeat("é", 60) + "\nfin",
 		}}
-		feed := calendar.Feed([]calendar.Entry{long}, "fr", now)
+		feed := calendar.Feed([]calendar.Entry{long}, "fr", "Prends ton dossard", now)
 		for _, line := range lines(t, feed) {
 			if len(line) > 75 || strings.HasPrefix(line, "ATTENDEE") {
 				t.Errorf("the line %q is too long, or is a property of its own", line)
@@ -406,7 +406,7 @@ func TestFeed_TimedEntriesAndAlarms(t *testing.T) {
 	})
 
 	t.Run("a feed has both refresh hints", func(t *testing.T) {
-		got := calendar.Feed(nil, "en", now)
+		got := calendar.Feed(nil, "en", "Prends ton dossard", now)
 		for _, want := range []string{"\r\nREFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n", "\r\nX-PUBLISHED-TTL:PT1H\r\n"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("the feed lacks %q", want)

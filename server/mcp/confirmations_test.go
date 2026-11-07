@@ -167,6 +167,7 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	update(t, app, phone, map[string]any{"last_used_at": "2026-04-02 23:30:00.000Z"}) // 1:30 on the 3rd in Paris
 	passkeyFor(t, app, fx.Alice, "PC du boulot")
 	linkFor(t, app, fx.Alice)
+	scopedLinkFor(t, app, fx.Alice, "group")
 	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
 	update(t, app, storedRecord(t, app, "mcp_tokens", desktopID), map[string]any{"last_used_at": "2026-04-20 08:00:00.000Z"})
 
@@ -334,6 +335,16 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			"calendar_link: deleted", "calendar_link",
 			map[string]any{"action": "delete"},
 			[]string{"Le lien cessera de marcher", "ne recevront plus tes courses", "Un nouveau lien aurait une autre adresse"},
+		},
+		{
+			"calendar_link: the group link renewed", "calendar_link",
+			map[string]any{"action": "renew", "scope": "group"},
+			[]string{"L'ancien lien cessera de marcher", "ne recevront plus les courses du groupe", "Les textes du nouveau lien seront en français"},
+		},
+		{
+			"calendar_link: the group link deleted", "calendar_link",
+			map[string]any{"action": "delete", "scope": "group"},
+			[]string{"Le lien cessera de marcher", "ne recevront plus les courses du groupe", "Un nouveau lien aurait une autre adresse"},
 		},
 		{
 			"mcp_tokens: another token revoked", "mcp_tokens",
@@ -605,6 +616,7 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	// Two passkeys, a link of the calendar and a second token of Alice.
 	phone, pc := passkeyFor(t, app, fx.Alice, "iPhone"), passkeyFor(t, app, fx.Alice, "PC du boulot")
 	linkFor(t, app, fx.Alice)
+	scopedLinkFor(t, app, fx.Alice, "group")
 	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
 
 	const other = "Confirmation refusée : elle ne correspond pas à cette demande."
@@ -629,6 +641,9 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 		{"passkeys: another key", "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": pc.Id}},
 		{"calendar_link: the renewal for the deletion", "calendar_link", map[string]any{"action": "renew"}, alice, "calendar_link", map[string]any{"action": "delete"}},
 		{"calendar_link: another language", "calendar_link", map[string]any{"action": "renew", "lang": "fr"}, alice, "calendar_link", map[string]any{"action": "renew", "lang": "en"}},
+		{"calendar_link: the renewal of the group link for the personal one", "calendar_link", map[string]any{"action": "renew", "scope": "group"}, alice, "calendar_link", map[string]any{"action": "renew"}},
+		{"calendar_link: the renewal of the personal link for the group one", "calendar_link", map[string]any{"action": "renew"}, alice, "calendar_link", map[string]any{"action": "renew", "scope": "group"}},
+		{"calendar_link: the deletion of the group link for the renewal of the same", "calendar_link", map[string]any{"action": "delete", "scope": "group"}, alice, "calendar_link", map[string]any{"action": "renew", "scope": "group"}},
 		{"mcp_tokens: another token", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, alice, "mcp_tokens", map[string]any{"action": "revoke", "token_id": idOfToken(alice)}},
 		{"mcp_tokens: the token of Alice, through another tool", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}},
 	} {

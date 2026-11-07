@@ -134,6 +134,12 @@ export const en = {
     renew: "New link",
     renewHint: "The old link will stop working.",
     remove: "Delete the link",
+    mine: "My races",
+    group: "The group's races",
+    groupCreate: "Create the group races link",
+    groupHelp:
+      "Every race where at least one member is going, with who is going. This link is secret: it gives the names of the members.",
+    groupExists: "The group races link is active.",
   },
   reminders: {
     title: "Reminders",

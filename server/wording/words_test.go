@@ -348,3 +348,27 @@ func TestWords_DateToBeSet(t *testing.T) {
 		}
 	}
 }
+
+func TestWords_Group(t *testing.T) {
+	for _, row := range []struct {
+		lang, name, undecided, supporters, roster string
+	}{
+		{"fr", "Prends ton dossard · groupe", "Intéressés, format à choisir", "Supporteurs", "Trail 42 km : Alice (Inscrit), Bob"},
+		{"en", "Prends ton dossard · group", "Interested, format to be chosen", "Supporters", "Trail 42 km: Alice (Inscrit), Bob"},
+		{"de", "Prends ton dossard · groupe", "Intéressés, format à choisir", "Supporteurs", "Trail 42 km : Alice (Inscrit), Bob"},
+	} {
+		w := Of(row.lang)
+		if got := w.GroupName(); got != row.name {
+			t.Errorf("Of(%q).GroupName() = %q, want %q", row.lang, got, row.name)
+		}
+		if got := w.Undecided(); got != row.undecided {
+			t.Errorf("Of(%q).Undecided() = %q, want %q", row.lang, got, row.undecided)
+		}
+		if got := w.Supporters(); got != row.supporters {
+			t.Errorf("Of(%q).Supporters() = %q, want %q", row.lang, got, row.supporters)
+		}
+		if got := w.Roster("Trail 42 km", []string{"Alice (Inscrit)", "Bob"}); got != row.roster {
+			t.Errorf("Of(%q).Roster() = %q, want %q", row.lang, got, row.roster)
+		}
+	}
+}

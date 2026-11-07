@@ -104,13 +104,14 @@ func uriValue(v string) string {
 	return printable(v, "")
 }
 
-// Feed returns the iCalendar file of the entries, in the order they are given,
+// Feed returns the iCalendar file of the entries, named name (the X-WR-CALNAME of the
+// calendar), in the order they are given,
 // as of the moment now, which is the DTSTAMP of every event. The texts of the
 // entries are already in the language lang ("fr" or "en"), which the file
 // declares with its product, as RFC 5545 has it (3.7.3). An empty value is
 // left out, except for the dates and the summary. The texts are cleaned of what
 // a file cannot hold (see printable), whatever the entries hold.
-func Feed(entries []Entry, lang string, now time.Time) string {
+func Feed(entries []Entry, lang, name string, now time.Time) string {
 	var b strings.Builder
 	line := func(name, value string) {
 		b.WriteString(fold(name + ":" + value))
@@ -125,7 +126,7 @@ func Feed(entries []Entry, lang string, now time.Time) string {
 	line("BEGIN", "VCALENDAR")
 	line("VERSION", "2.0")
 	line("PRODID", "-//Prends ton dossard//"+strings.ToUpper(lang))
-	line("X-WR-CALNAME", "Prends ton dossard")
+	line("X-WR-CALNAME", textValue(name))
 	line("CALSCALE", "GREGORIAN")
 	line("REFRESH-INTERVAL;VALUE=DURATION", refresh)
 	line("X-PUBLISHED-TTL", refresh)

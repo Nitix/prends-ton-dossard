@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"ganigeorgiev.com/pocketbase/dbx"
@@ -208,4 +209,168 @@ func dayEntry(first, last string) (Entry, bool) {
 		Start: start.Format(time.DateOnly),
 		End:   end.AddDate(0, 0, 1).Format(time.DateOnly),
 	}, true
+}
+
+// groupHorizon is how far back the group feed goes: a race whose last day is more
+// than this many days before today is left out.
+const groupHorizon = 365
+
+// statusSupporter is the status of someone who comes to support.
+const statusSupporter = "supporter"
+
+// groupEntriesOf returns the events of the group feed: one for each event whose
+// last day is at most groupHorizon days before today (YYYY-MM-DD, Paris) and that
+// has at least one participation other than "dns", by first day, then UID.
+//
+// The description says who goes, a line for each race that somebody is in, then
+// the line of those interested who have not chosen a race, the line of the
+// supporters, and the address of the event. Those who do not start are nowhere,
+// and so is an event that only they are in. The feed has no opening, no deadline
+// and no alarm: they are in the personal feed, which knows who they matter to.
+//
+// A race known by its month is the 1st alone, with "(date à préciser)", as in the
+// personal feed. A day that is not a real one is left out, as there.
+//
+// The names are those of the members, and the lines are text: the feed escapes
+// them as it does every value, and a name is written on one line, whatever it holds.
+func groupEntriesOf(app core.App, appURL string, w wording.Words, today string) ([]Entry, error) {
+	now, ok := events.ParseDay(today)
+	if !ok {
+		return nil, fmt.Errorf("today is not a day: %q", today)
+	}
+	oldest := now.AddDate(0, 0, -groupHorizon).Format(time.DateOnly)
+
+	participations, err := app.FindAllRecords("participations", dbx.NewExp("status != {:dns}", dbx.Params{"dns": statusDNS}))
+	if err != nil {
+		return nil, err
+	}
+	if failed := app.ExpandRecords(participations, []string{"event", "runner", "format.race_type"}, nil); len(failed) > 0 {
+		return nil, fmt.Errorf("expanding the participations: %v", failed)
+	}
+
+	// who is one person going to an event, as the description names them.
+	type who struct {
+		sortKey, id, text string
+	}
+	// race is one race of an event, with those who are in it.
+	type race struct {
+		first, name, id string
+		people          []who
+	}
+	// gathering is what the description of an event is made of.
+	type gathering struct {
+		event      *core.Record
+		races      map[string]*race
+		undecided  []who
+		supporters []who
+	}
+	byEvent := map[string]*gathering{}
+
+	for _, p := range participations {
+		event, runner := p.ExpandedOne("event"), p.ExpandedOne("runner")
+		if event == nil || runner == nil {
+			continue
+		}
+		if last := cmp.Or(event.GetString("end_date"), event.GetString("start_date")); last < oldest {
+			continue
+		}
+		g := byEvent[event.Id]
+		if g == nil {
+			g = &gathering{event: event, races: map[string]*race{}}
+			byEvent[event.Id] = g
+		}
+
+		name := strings.Join(strings.Fields(runner.GetString("name")), " ")
+		person := who{sortKey: wording.Fold(name), id: p.Id, text: name}
+		status := p.GetString("status")
+		format := p.ExpandedOne("format")
+		switch {
+		case status == statusSupporter:
+			g.supporters = append(g.supporters, person)
+		case format == nil:
+			g.undecided = append(g.undecided, person)
+		default:
+			r := g.races[format.Id]
+			if r == nil {
+				r = &race{
+					id:    format.Id,
+					first: cmp.Or(format.GetString("date"), event.GetString("start_date")),
+					name: w.RaceName(
+						format.GetString("name"),
+						raceTypeLabel(format),
+						format.GetFloat("distance_km"),
+						format.GetInt("duration_min"),
+						format.GetInt("time_limit_min"),
+					),
+				}
+				g.races[format.Id] = r
+			}
+			person.text += " (" + w.StatusText(status, p.GetBool("confirmed")) + ")"
+			r.people = append(r.people, person)
+		}
+	}
+
+	byName := func(a, b who) int {
+		return cmp.Or(cmp.Compare(a.sortKey, b.sortKey), cmp.Compare(a.id, b.id))
+	}
+	texts := func(people []who) []string {
+		slices.SortFunc(people, byName)
+		out := make([]string, len(people))
+		for i, person := range people {
+			out[i] = person.text
+		}
+		return out
+	}
+
+	var entries []Entry
+	for _, g := range byEvent {
+		event := g.event
+		eventURL := appURL + "/evenements/" + event.Id
+		monthOnly := events.MonthOnly(event)
+		end := event.GetString("end_date")
+		if monthOnly {
+			end = ""
+		}
+		days, ok := dayEntry(event.GetString("start_date"), end)
+		if !ok {
+			continue
+		}
+
+		races := make([]*race, 0, len(g.races))
+		for _, r := range g.races {
+			races = append(races, r)
+		}
+		slices.SortFunc(races, func(a, b *race) int {
+			return cmp.Or(cmp.Compare(a.first, b.first), cmp.Compare(a.name, b.name), cmp.Compare(a.id, b.id))
+		})
+		var lines []string
+		for _, r := range races {
+			lines = append(lines, w.Roster(r.name, texts(r.people)))
+		}
+		if len(g.undecided) > 0 {
+			lines = append(lines, w.Roster(w.Undecided(), texts(g.undecided)))
+		}
+		if len(g.supporters) > 0 {
+			lines = append(lines, w.Roster(w.Supporters(), texts(g.supporters)))
+		}
+		lines = append(lines, eventURL)
+
+		entry := Entry{
+			UID:         "group-" + event.Id + uidSuffix,
+			Summary:     event.GetString("name"),
+			Description: strings.Join(lines, "\n"),
+			Location:    event.GetString("location"),
+			URL:         eventURL,
+			Start:       days.Start,
+			End:         days.End,
+		}
+		if monthOnly {
+			entry.Summary += " (" + w.DateToBeSet() + ")"
+		}
+		entries = append(entries, entry)
+	}
+	slices.SortFunc(entries, func(a, b Entry) int {
+		return cmp.Or(cmp.Compare(a.Start, b.Start), cmp.Compare(a.UID, b.UID))
+	})
+	return entries, nil
 }

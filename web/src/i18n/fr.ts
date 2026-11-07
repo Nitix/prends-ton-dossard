@@ -154,6 +154,13 @@ export const fr = {
     renew: "Nouveau lien",
     renewHint: "L'ancien lien cessera de marcher.",
     remove: "Supprimer le lien",
+    // The two links of the section: the races of the member, and the races of the group (with who goes).
+    mine: "Mes courses",
+    group: "Les courses du groupe",
+    groupCreate: "Créer le lien des courses du groupe",
+    groupHelp:
+      "Toutes les courses où au moins un membre va, avec qui y va. Ce lien est secret : il donne les noms des membres.",
+    groupExists: "Le lien des courses du groupe est actif.",
   },
   // The "Rappels" section of the settings page (see features/reminders): when to be warned before the registrations of a race open.
   reminders: {
