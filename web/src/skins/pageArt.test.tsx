@@ -252,6 +252,15 @@ for (const [path, width, empty, least] of [
     await expect
       .element(screen.getByRole("heading", { level: 1 }), { timeout: 10_000 })
       .toBeVisible();
+    // The title is there before the page's data is (the profile shows its title and a
+    // « loading » line until its runner has come): wait for the words the page ends up with,
+    // as long as it takes, then check them as before.
+    await vi.waitFor(
+      () => {
+        expect(textOnPaper().length, "the words on the paper").toBeGreaterThanOrEqual(least);
+      },
+      { timeout: 10_000 },
+    );
     await fontsReady();
     const art = sheet().firstElementChild;
     if (!art) throw new Error("no art");
