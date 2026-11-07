@@ -56,6 +56,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   remove: vi.fn<(id: string) => Promise<unknown>>(),
   getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
+  // The weather of the event, a custom route: only asked for in the days before the race.
+  send: vi.fn<(path: string, options: Rec) => Promise<unknown>>(),
   // The comments at the bottom of the page: it only asks for the list of the event.
   comments: {
     getFullList: vi.fn<(options: Rec) => Promise<unknown>>(),
@@ -96,6 +98,7 @@ vi.mock("../../lib/pb", () => ({
       })[name],
     // Only called for a runner who has a photo: none has, unless a test says so.
     files: { getURL: mocks.getURL },
+    send: mocks.send,
   },
 }));
 
@@ -133,6 +136,7 @@ beforeEach(() => {
     mocks.update,
     mocks.remove,
     mocks.getURL,
+    mocks.send,
     ...Object.values(mocks.comments),
     ...Object.values(mocks.offers),
     ...Object.values(mocks.offerMembers),
@@ -2750,4 +2754,56 @@ test("EventPage — un intéressé voit « Les inscriptions ouvrent le … »", 
   );
   expect(box.element().textContent).not.toContain("Pense à t'inscrire");
   await expect.element(box.getByRole("link", { name: fr.event.register })).toBeVisible();
+});
+
+/** The requests for the weather of an event (the page asks for the reminders by the same way). */
+const weatherRequests = () =>
+  mocks.send.mock.calls.map(([path]) => path).filter((path) => path.endsWith("/weather"));
+
+// The weather (see features/weather): from seven days before the race to its last day, never beyond.
+test("EventPage — pas de météo hors de la fenêtre", async () => {
+  // The event is on 13 and 14 June: on the 5th it is 8 days away, on the 15th it is over.
+  for (const today of ["2026-06-05", "2026-06-15"]) {
+    const { screen } = await renderPage({ today });
+    await loaded(screen);
+    expect(screen.getByRole("heading", { name: fr.weather.title }).elements()).toHaveLength(0);
+    await screen.unmount();
+  }
+  expect(weatherRequests()).toEqual([]);
+});
+
+test("EventPage — la météo, après les actions", async () => {
+  mocks.send.mockResolvedValue({
+    status: "ok",
+    place: { source: "place", name: "Annecy", detail: "Auvergne-Rhône-Alpes, France" },
+    days: [
+      {
+        date: "2026-06-13",
+        code: 80,
+        tMin: 9.1,
+        tMax: 17.3,
+        rainChance: 60,
+        rainMm: 2.1,
+        windKmh: 20,
+        gustKmh: 35,
+      },
+    ],
+    fetchedAt: "2026-06-08T12:05:00Z",
+    stale: false,
+  });
+  const { screen } = await renderPage({ today: "2026-06-08" });
+  await loaded(screen);
+  const title = screen.getByRole("heading", { level: 2, name: fr.weather.title });
+  await expect.element(title).toBeVisible();
+  expect(weatherRequests()).toEqual(["/api/app/events/event/weather"]);
+  // After the actions, before the formats.
+  const actions = document.querySelector(".event-actions");
+  const section = title.element().closest("section");
+  const firstFormat = document.querySelector(".format-section");
+  expect(actions?.compareDocumentPosition(section ?? document) ?? 0).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  expect(section?.compareDocumentPosition(firstFormat ?? document) ?? 0).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
 });

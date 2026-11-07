@@ -162,6 +162,55 @@ export const fr = {
       "Toutes les courses où au moins un membre va, avec qui y va. Ce lien est secret : il donne les noms des membres.",
     groupExists: "Le lien des courses du groupe est actif.",
   },
+  // The weather of the page of an event (see features/weather): from seven days before the race to its last day.
+  weather: {
+    title: "Météo prévue",
+    loading: "Chargement de la météo…",
+    failed: "La météo n'a pas pu être chargée.",
+    // The place the forecast is for, said so that a mistake of the geocoding shows (`detail` may be empty).
+    atPlace: (name: string, detail: string) => (detail ? `À ${name} (${detail})` : `À ${name}`),
+    atTrack: (format: string) => `Au départ de la trace de « ${format} »`,
+    noPlace: (query: string) => `Pas de météo : le lieu « ${query} » n'a pas été trouvé.`,
+    // The time is already formatted; a forecast that is not the last one the server could get says so.
+    forecastAt: (time: string, stale: boolean) =>
+      stale ? `Prévision de ${time}, pas à jour` : `Prévision de ${time}`,
+    // « Données : Open-Meteo.com (CC BY 4.0) · lieu : GeoNames »: the name is a link.
+    sourceBefore: "Données : ",
+    sourceName: "Open-Meteo.com",
+    sourceAfter: " (CC BY 4.0)",
+    geonames: " · lieu : GeoNames",
+    // One day, all already formatted: its date, the weather in words, the temperatures, the rain, the gusts.
+    day: (
+      date: string,
+      label: string,
+      tMin: string,
+      tMax: string,
+      chance: string,
+      mm: string,
+      gust: string,
+    ) =>
+      `${date} · ${label} · ${tMin} à ${tMax} °C · pluie ${chance} %, ${mm} mm · rafales ${gust} km/h`,
+    // Under a millimetre: a few drops are not none.
+    lessThanOneMm: "< 1",
+    // The WMO codes in words (see labels.ts).
+    kinds: {
+      clear: "Ciel dégagé",
+      partly: "Peu nuageux",
+      overcast: "Couvert",
+      fog: "Brouillard",
+      drizzle: "Bruine",
+      rain: "Pluie",
+      heavyRain: "Forte pluie",
+      freezingRain: "Pluie verglaçante",
+      snow: "Neige",
+      showers: "Averses",
+      heavyShowers: "Fortes averses",
+      snowShowers: "Averses de neige",
+      storm: "Orage",
+      hail: "Orage et grêle",
+      unknown: "Temps inconnu",
+    },
+  },
   // The "Rappels" section of the settings page (see features/reminders): when to be warned before the registrations of a race open.
   reminders: {
     title: "Rappels",

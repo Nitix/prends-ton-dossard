@@ -264,3 +264,12 @@ describe("dateTime", () => {
     expect(plain(createFormatters("fr-FR").dateTime(summer))).toBe("15 juin 2026 à 00:30");
   });
 });
+
+describe("time", () => {
+  test("time — l'heure de Paris", () => {
+    // 12:05 UTC in June is 14:05 in Paris (UTC+2).
+    const instant = Temporal.Instant.from("2026-06-08T12:05:00Z");
+    expect(createFormatters("fr-FR").time(instant)).toBe("14:05");
+    expect(createFormatters("en-GB").time(instant)).toBe("14:05");
+  });
+});

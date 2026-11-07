@@ -40,6 +40,7 @@ import {
 import { useReminders } from "../reminders/api";
 import { resultParts } from "../results/resultText";
 import { RouteSection } from "../route/RouteSection";
+import { WeatherSection } from "../weather/WeatherSection";
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { EventHero } from "./EventHero";
@@ -336,6 +337,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
 
       {/* The actions: the main one across, the others two by two on a phone, each a visible button. */}
       <div className="event-actions grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions}</div>
+
+      {/* The weather, from seven days before the race to its last day (nothing outside, see WeatherSection). */}
+      <WeatherSection view={view} />
 
       <div className="event-sections flex flex-col gap-3">
         {view.interested.length > 0 && (

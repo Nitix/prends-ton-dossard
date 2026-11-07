@@ -28,6 +28,8 @@ export type Formatters = {
   ago(value: number, unit: Intl.RelativeTimeFormatUnit): string;
   /** An instant as a long date and the time, in Paris: "1 novembre 2026 à 05:30". */
   dateTime(instant: Temporal.Instant): string;
+  /** The time of an instant, in Paris: "14:05". */
+  time(instant: Temporal.Instant): string;
   /** Kilometers, at most one decimal: "42,2 km". */
   km(n: number): string;
   /** Meters, no decimal: "2 400 m". */
@@ -119,6 +121,7 @@ export function createFormatters(locale: string): Formatters {
       (unit === "month" || unit === "year" ? counted : relativeTime).format(value, unit),
     dateTime: (instant) =>
       instant.toLocaleString(locale, { dateStyle: "long", timeStyle: "short", timeZone: PARIS }),
+    time: (instant) => instant.toLocaleString(locale, { timeStyle: "short", timeZone: PARIS }),
     km: (n) => kilometers.format(n),
     meters: (n) => meters.format(n),
     price: (eur) => euros.format(eur),
