@@ -494,15 +494,21 @@ export default function TrackMap({
       }
     };
     const onEnd = (event: PointerEvent) => void down.delete(event.pointerId);
+    // The browser that takes a finger for a scroll cancels its pointer, sometimes before it
+    // has moved by `FINGER_MOVE_PX` (iOS): a lone finger that is cancelled says why too.
+    const onCancel = (event: PointerEvent) => {
+      if (down.has(event.pointerId) && down.size === 1) showHint(fingersHint);
+      onEnd(event);
+    };
     container.addEventListener("pointerdown", onDown);
     container.addEventListener("pointermove", onMove);
     container.addEventListener("pointerup", onEnd);
-    container.addEventListener("pointercancel", onEnd);
+    container.addEventListener("pointercancel", onCancel);
     return () => {
       container.removeEventListener("pointerdown", onDown);
       container.removeEventListener("pointermove", onMove);
       container.removeEventListener("pointerup", onEnd);
-      container.removeEventListener("pointercancel", onEnd);
+      container.removeEventListener("pointercancel", onCancel);
     };
   }, [showHint, fingersHint]);
 

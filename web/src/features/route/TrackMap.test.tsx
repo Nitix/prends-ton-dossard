@@ -578,6 +578,11 @@ test("TrackMap — un appareil tactile n'a pas le glisser à un doigt", async ()
   expect(map.touchZoom.enabled()).toBe(true);
 
   const region = part(screen, ".leaflet-container");
+  // One finger really scrolls the page: the browser is left to pan vertically (Leaflet sets
+  // the touch-action from the handlers it has; with dragging off, it is not "none").
+  const touchAction = getComputedStyle(region).touchAction;
+  expect(touchAction).not.toBe("none");
+  expect(touchAction).toMatch(/pan-y|manipulation|auto/);
   const touch = (type: string, id: number, x: number, y: number) =>
     region.dispatchEvent(
       new PointerEvent(type, {
@@ -600,6 +605,58 @@ test("TrackMap — un appareil tactile n'a pas le glisser à un doigt", async ()
   // One finger that moves scrolls the page, and says so.
   touch("pointerdown", 3, 100, 100);
   touch("pointermove", 3, 100, 130);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+});
+
+test("TrackMap — sur un téléphone, un doigt que le navigateur reprend (pointercancel) montre l'aide", async () => {
+  touchScreen();
+  const screen = await renderMap();
+  const region = part(screen, ".leaflet-container");
+  const touch = (type: string, id: number, x: number, y: number) =>
+    region.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "touch",
+        pointerId: id,
+        clientX: x,
+        clientY: y,
+        buttons: type === "pointercancel" ? 0 : 1,
+      }),
+    );
+  // iOS can cancel the pointer before it has moved 4 px: the page scrolls, the map says why.
+  touch("pointerdown", 1, 100, 100);
+  touch("pointermove", 1, 100, 101);
+  expect(hintText(screen)).toBeUndefined();
+  touch("pointercancel", 1, 100, 101);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+
+  // Two fingers that are cancelled are no scroll: nothing to say.
+  await expect.poll(() => hintText(screen), { timeout: 4000 }).toBeUndefined();
+  touch("pointerdown", 2, 100, 100);
+  touch("pointerdown", 3, 140, 100);
+  touch("pointercancel", 2, 100, 100);
+  touch("pointercancel", 3, 140, 100);
+  expect(hintText(screen)).toBeUndefined();
+});
+
+test("TrackMap — un doigt qui commence sur un bouton de zoom fait défiler la page, et l'aide le dit aussi", async () => {
+  touchScreen();
+  const screen = await renderMap();
+  const button = part(screen, ".leaflet-control-zoom-in");
+  expect(button.closest(".leaflet-control")).not.toBeNull();
+  const touch = (type: string, x: number, y: number) =>
+    button.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "touch",
+        pointerId: 7,
+        clientX: x,
+        clientY: y,
+        buttons: 1,
+      }),
+    );
+  touch("pointerdown", 20, 20);
+  touch("pointermove", 20, 50);
   await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
 });
 
