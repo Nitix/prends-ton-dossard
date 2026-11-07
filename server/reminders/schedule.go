@@ -22,6 +22,10 @@ import (
 // jobName is the cron job that sends the reminders, every minute.
 const jobName = "ptd-reminders"
 
+// stopGrace is how long the end of the program waits for a pass that is running
+// (Docker gives a container 10 seconds).
+var stopGrace = 5 * time.Second
+
 // retention is how long a delivery is remembered. An opening is over long before.
 const retention = 60 * 24 * time.Hour
 
@@ -45,15 +49,26 @@ type Report struct{ Due, Sent, Failed, Skipped int }
 // the server, after the keys of the push service were read (which is also at the
 // start of the server): a service whose keys cannot be read has no job.
 func registerJob(app core.App, notifier Notifier) {
-	// Cancelled when the program ends, so that a pass that is sending stops
-	// without counting the devices it did not reach.
+	// Cancelled when the program ends, but only after a pass that is running has
+	// had a few seconds to finish: a request cut short may already be at the push
+	// service, and the reminder is then not sent again after the restart.
 	ctx, cancel := context.WithCancel(context.Background())
+	var running sync.Mutex
 	app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		finished := make(chan struct{})
+		go func() {
+			running.Lock()
+			running.Unlock() //nolint:staticcheck // waiting is the point
+			close(finished)
+		}()
+		select {
+		case <-finished:
+		case <-time.After(stopGrace):
+		}
 		cancel()
 		return e.Next()
 	})
 
-	var running sync.Mutex
 	run := func() {
 		// A pass that is still going makes the next tick return at once.
 		if !running.TryLock() {
@@ -89,7 +104,8 @@ func registerJob(app core.App, notifier Notifier) {
 
 // due is the kind of reminder due at now for an opening at T and a choice
 // (kinds), if any (spec § 4.3). "hour" is due from T - 1 h to T, "day" from
-// T - 24 h to T, except that "day" gives way when "hour" is due and chosen: two
+// the same wall time of Paris the day before (T - 24 h, but for the two nights of
+// the change of hour) to T, except that "day" gives way when "hour" is due and chosen: two
 // notifications in an hour would be too many. Both windows end at T, and the one
 // that is late is still sent (a program that was stopped catches up).
 func due(T, now time.Time, kinds []string) (kind string, ok bool) {
@@ -100,7 +116,7 @@ func due(T, now time.Time, kinds []string) (kind string, ok bool) {
 	if left <= time.Hour && slices.Contains(kinds, KindHour) {
 		return KindHour, true
 	}
-	if left <= 24*time.Hour && slices.Contains(kinds, KindDay) {
+	if slices.Contains(kinds, KindDay) && !now.Before(dayOpens(T)) {
 		return KindDay, true
 	}
 	return "", false
@@ -148,13 +164,39 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 		return report, err
 	}
 
-	var firstErr error
+	// The openings that can be due, with their instant, and what was already done
+	// for them: one query for the whole pass, so that a minute with nothing new
+	// makes no failing insert. The unique index stays the real guard.
+	type candidate struct {
+		event *core.Record
+		T     time.Time
+	}
+	var candidates []candidate
+	var ids []any
 	for _, event := range opening {
 		T, ok := events.OpeningInstant(event.GetString("registration_opening"), event.GetString("registration_opening_time"))
-		if !ok || !at.Before(T) || T.Sub(at) > 24*time.Hour {
+		// The day window opens at the wall clock of the day before, which is up to
+		// 25 hours before T across the change of hour.
+		if !ok || !at.Before(T) || T.Sub(at) > 25*time.Hour {
 			continue
 		}
-		recipients, err := recipientsOf(app, event.Id)
+		candidates = append(candidates, candidate{event, T})
+		ids = append(ids, event.Id)
+	}
+	if len(candidates) == 0 {
+		return report, nil
+	}
+	done, err := doneOf(app, ids)
+	if err != nil {
+		return report, err
+	}
+
+	// The clock moves during a pass, and a send can take seconds: each person is
+	// handled at the instant when their turn comes, never after T.
+	start := time.Now()
+	var firstErr error
+	for _, c := range candidates {
+		recipients, err := recipientsOf(app, c.event.Id)
 		if err != nil {
 			firstErr = errors.Join(firstErr, err)
 			continue
@@ -163,17 +205,41 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 			if ctx.Err() != nil {
 				return report, ctx.Err()
 			}
-			kind, ok := due(T, at, Of(user))
+			current := at.Add(time.Since(start))
+			kind, ok := due(c.T, current, Of(user))
 			if !ok {
 				continue
 			}
-			remind(ctx, app, notifier, &report, event, user, kind, T, at)
+			if done[deliveryKey(user.Id, c.event.Id, kind, c.T)] {
+				report.Skipped++
+				continue
+			}
+			remind(ctx, app, notifier, &report, c.event, user, kind, c.T, current)
 		}
 	}
 	return report, firstErr
 }
 
-// remind does the reminder of one person for one event, and counts it in report.
+// deliveryKey is what the unique index of reminder_deliveries holds.
+func deliveryKey(userID, eventID, kind string, T time.Time) string {
+	return userID + "|" + eventID + "|" + kind + "|" + T.UTC().Format(time.RFC3339)
+}
+
+// doneOf returns the keys of the deliveries of the events.
+func doneOf(app core.App, eventIDs []any) (map[string]bool, error) {
+	rows, err := app.FindAllRecords("reminder_deliveries", dbx.In("event", eventIDs...))
+	if err != nil {
+		return nil, err
+	}
+	done := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		done[strings.Join([]string{row.GetString("user"), row.GetString("event"), row.GetString("kind"), row.GetString("opening_at")}, "|")] = true
+	}
+	return done, nil
+}
+
+// remind does the reminder of one person for one event at the instant at, and
+// counts it in report.
 func remind(ctx context.Context, app core.App, notifier Notifier, report *Report,
 	event, user *core.Record, kind string, T, at time.Time) {
 	devices, err := app.CountRecords("push_subscriptions", dbx.HashExp{"user": user.Id})
@@ -185,7 +251,6 @@ func remind(ctx context.Context, app core.App, notifier Notifier, report *Report
 		report.Skipped++
 		return
 	}
-	report.Due++
 
 	collection, err := app.FindCollectionByNameOrId("reminder_deliveries")
 	if err != nil {
@@ -200,13 +265,14 @@ func remind(ctx context.Context, app core.App, notifier Notifier, report *Report
 	row.Set("delivered", 0)
 	if err := app.Save(row); err != nil {
 		if notUnique(err) {
-			report.Skipped++ // already done
+			report.Skipped++ // done by another program since the pass began
 			return
 		}
 		app.Logger().Error("reminders: a delivery could not be recorded")
 		report.Failed++
 		return
 	}
+	report.Due++
 
 	timeKnown := events.ValidTime(event.GetString("registration_opening_time"))
 	name, url := event.GetString("name"), "/evenements/"+event.Id
@@ -218,15 +284,17 @@ func remind(ctx context.Context, app core.App, notifier Notifier, report *Report
 			Tag:   "opening-" + event.Id,
 		}
 	}
-	opts := push.Options{TTL: max(T.Sub(at), time.Minute), Urgency: "normal", Topic: "opening-" + event.Id}
+	opts := push.Options{TTL: max(T.Sub(at).Round(time.Second), time.Minute), Urgency: "normal", Topic: "opening-" + event.Id}
 	if kind == KindHour {
 		opts.Urgency = "high"
 	}
 	out, err := notifier.SendToUser(ctx, app, user.Id, message, opts)
-	if err != nil || (out.Sent+out.Failed == 0 && ctx.Err() != nil) {
-		// Nothing was tried (the service is not ready, the devices cannot be read, the
-		// program is stopping): the row is taken back, so that the next minute tries
-		// again, and the reminder is not lost.
+	if err != nil {
+		// An error means that no device was tried (the service is not ready, the
+		// devices cannot be read): the row is taken back, so that the next minute
+		// tries again and the reminder is not lost. A sending that was cut short by
+		// the end of the program is no error: some device may already have the
+		// message, and the row stays (spec § 4.6: lose rather than send twice).
 		if delErr := app.Delete(row); delErr != nil {
 			app.Logger().Error("reminders: a delivery could not be taken back")
 		}
@@ -305,4 +373,20 @@ func notUnique(err error) bool {
 		}
 	}
 	return strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+// parisZone is Paris, loaded once.
+var parisZone = sync.OnceValue(func() *time.Location {
+	zone, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		return time.UTC // a build without time/tzdata; the program embeds it
+	}
+	return zone
+})
+
+// dayOpens is the instant from which the "day" reminder is due: the wall clock
+// of Paris of the day before, so that "la veille à 9 h" stays 9 h across the two
+// changes of hour of the year (it is T - 24 h on every other day).
+func dayOpens(T time.Time) time.Time {
+	return T.In(parisZone()).AddDate(0, 0, -1)
 }

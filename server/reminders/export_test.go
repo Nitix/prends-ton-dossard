@@ -42,4 +42,10 @@ func Serve(t testing.TB, app core.App) {
 	if err := app.OnServe().Trigger(event, func(*core.ServeEvent) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
+	// The handlers of OnServe include the start of the cron of PocketBase: stop it.
+	// The tests run the job themselves, and SetNow must not race with a tick.
+	app.Cron().Stop()
 }
+
+// RegisterJob is the registration of the cron job with a notifier of the tests.
+func RegisterJob(app core.App, notifier Notifier) { registerJob(app, notifier) }

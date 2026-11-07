@@ -229,8 +229,12 @@ func (s *Service) subscribeRoute(e *core.RequestEvent) error {
 		record.Set("lang", body.Lang)
 		record.Set("label", strings.TrimSpace(body.Label))
 		record.Set("failures", 0)
+		// A new record gets its id when it is saved.
+		if err := tx.Save(record); err != nil {
+			return err
+		}
 		id = record.Id
-		return tx.Save(record)
+		return nil
 	})
 	if err != nil {
 		return fail(e, err)
@@ -296,30 +300,48 @@ func renewRoute(e *core.RequestEvent) error {
 	if err := e.BindBody(&body); err != nil {
 		return e.BadRequestError("", err)
 	}
-	var id string
-	// One transaction, as for a new subscription: the save and the cap of ten.
-	err := e.App.RunInTransaction(func(tx core.App) error {
-		record, err := tx.FindFirstRecordByData("push_subscriptions", "endpoint", body.OldEndpoint)
+	// The proof is checked outside any transaction: this route has no session, and
+	// a request that is only guessing must not hold the writer connection of the
+	// database while it is compared.
+	proved := func(app core.App) (*core.Record, error) {
+		record, err := app.FindFirstRecordByData("push_subscriptions", "endpoint", body.OldEndpoint)
 		if errors.Is(err, sql.ErrNoRows) {
-			return notFound
+			return nil, notFound
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		stored := []byte(record.GetString("auth"))
 		if subtle.ConstantTimeCompare(stored, []byte(strings.TrimRight(body.OldAuth, "="))) != 1 {
-			return notFound
+			return nil, notFound
 		}
-		if err := body.subscription.checked(); err != nil {
+		return record, nil
+	}
+	if _, err := proved(e.App); err != nil {
+		return fail(e, err)
+	}
+	if err := body.subscription.checked(); err != nil {
+		return fail(e, err)
+	}
+	p256dh, auth := body.keysOf()
+	var id string
+	// Then one transaction, as for a new subscription: the save and the cap of
+	// ten. The row is read again there, and the proof with it, in case the device
+	// was renewed or removed in between.
+	err := e.App.RunInTransaction(func(tx core.App) error {
+		record, err := proved(tx)
+		if err != nil {
 			return err
 		}
-		p256dh, auth := body.keysOf()
 		record.Set("endpoint", body.Endpoint)
 		record.Set("p256dh", p256dh)
 		record.Set("auth", auth)
 		record.Set("failures", 0)
+		if err := tx.Save(record); err != nil {
+			return err
+		}
 		id = record.Id
-		return tx.Save(record)
+		return nil
 	})
 	if err != nil {
 		return fail(e, err)

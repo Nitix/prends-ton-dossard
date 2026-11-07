@@ -55,6 +55,8 @@ type notifier struct {
 	delivery  *push.Delivery
 	sendings  []sending
 	beforeEnd func()
+	// sendCtxErr is the state of the context of the last sending, once it ended.
+	sendCtxErr error
 }
 
 func (n *notifier) Available() bool {
@@ -82,6 +84,7 @@ func (n *notifier) SendToUser(ctx context.Context, app core.App, userID string,
 	if n.beforeEnd != nil {
 		n.beforeEnd()
 	}
+	n.sendCtxErr = ctx.Err()
 	if n.delivery != nil {
 		return *n.delivery, nil
 	}
@@ -345,6 +348,28 @@ func TestReminders_Windows(t *testing.T) {
 		})
 	}
 
+	// § 4.1 promises « la veille à 9 h »: across the two changes of hour, the day
+	// reminder of an opening with no time still comes at 9:00 in Paris (it would
+	// be 8:00 or 10:00 if the window were counted as 24 hours of the clock).
+	for _, row := range []struct{ name, day, eve string }{
+		{"the eve of the change to summer time", "2027-03-28", "2027-03-27"},
+		{"the eve of the change to winter time", "2027-10-31", "2027-10-30"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			w := newWorld(t)
+			event := w.event("Trail du Jour", row.day, "")
+			w.choose(w.fx.Alice, "day")
+			w.device(w.fx.Alice, "fr")
+			w.take(w.fx.AliceRunner, event, "interested")
+			for _, early := range []string{"08:00", "08:59", "09:00"} {
+				w.run(parisAt(row.eve, early))
+				if sent := len(w.n.users()); (early == "09:00") != (sent == 1) {
+					t.Fatalf("at %s the day before: %d sendings, want one from 09:00 and none before", early, sent)
+				}
+			}
+		})
+	}
+
 	t.Run("an opening with no time is at 9:00: the day before at 9:00, the day at 8:00", func(t *testing.T) {
 		w := newWorld(t)
 		event := w.event("Trail du Jour", "2027-02-03", "")
@@ -393,6 +418,9 @@ func TestReminders_OncePerOpening(t *testing.T) {
 		second := w.run(T.Add(-3*time.Hour + time.Minute))
 		if n := len(w.n.users()); n != 1 {
 			t.Errorf("%d sendings, want 1", n)
+		}
+		if second.Due != 0 {
+			t.Errorf("a reminder that was done counts as due again: %+v", second)
 		}
 		if first.Sent != 1 || second.Sent != 0 || second.Skipped != 1 {
 			t.Errorf("reports %+v then %+v, want 1 sent then 1 skipped", first, second)
@@ -678,8 +706,9 @@ func TestReminders_FailedDevicesAreNotRetried(t *testing.T) {
 	}
 }
 
-// A program that is stopping loses no reminder: the row of a reminder that
-// nobody tried is taken back.
+// A program that stops in the middle of a sending may already have handed the
+// message to a push service: the row stays, and the reminder is not sent again
+// after the restart (spec § 4.6: lose rather than send twice).
 func TestReminders_StoppingKeepsTheReminder(t *testing.T) {
 	w := newWorld(t)
 	event := w.event("Trail", "2027-01-12", "10:05")
@@ -689,18 +718,61 @@ func TestReminders_StoppingKeepsTheReminder(t *testing.T) {
 	T := parisAt("2027-01-12", "10:05")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	w.n.delivery = &push.Delivery{} // nobody reached: the sending was cancelled
+	w.n.delivery = &push.Delivery{} // the sending was cut short: nobody counted
 	w.n.beforeEnd = cancel
 	if _, err := reminders.Run(ctx, w.app, T.Add(-3*time.Hour), w.n); err != nil {
 		t.Fatal(err)
 	}
-	if w.deliveries() != 0 {
-		t.Error("the row of a reminder that nobody tried stayed: it would never be sent")
+	if w.deliveries() != 1 {
+		t.Fatal("the row of a cut-short sending was taken back: the reminder would be sent twice")
 	}
+	// The restart, a minute later and before T.
 	w.n.delivery, w.n.beforeEnd = nil, nil
 	w.run(T.Add(-3*time.Hour + time.Minute))
-	if w.deliveries() != 1 || len(w.n.users()) != 2 { // the cancelled try is a call too
-		t.Errorf("%d calls, %d rows, want the cancelled call, the one that worked and 1 row", len(w.n.users()), w.deliveries())
+	if len(w.n.users()) != 1 {
+		t.Errorf("%d sendings after the restart, want the one that was cut short and no other", len(w.n.users()))
+	}
+}
+
+// The end of the program waits for a pass that is running, so that its sending
+// is not cut short.
+func TestReminders_StopWaitsForARunningPass(t *testing.T) {
+	w := newWorld(t)
+	event := w.event("Trail", "2027-01-12", "10:05")
+	w.choose(w.fx.Alice, "day")
+	w.device(w.fx.Alice, "fr")
+	w.take(w.fx.AliceRunner, event, "interested")
+	reminders.SetNow(t, parisAt("2027-01-12", "10:05").Add(-3*time.Hour))
+	reminders.RegisterJob(w.app, w.n)
+	reminders.Serve(t, w.app)
+
+	started := make(chan struct{})
+	w.n.beforeEnd = func() {
+		close(started)
+		time.Sleep(400 * time.Millisecond)
+	}
+	var job interface{ Run() }
+	for _, j := range w.app.Cron().Jobs() {
+		if j.Id() == reminders.JobName {
+			job = j
+		}
+	}
+	if job == nil {
+		t.Fatal("no job")
+	}
+	finished := make(chan struct{})
+	go func() { job.Run(); close(finished) }()
+	<-started
+	begun := time.Now()
+	if err := w.app.OnTerminate().Trigger(&core.TerminateEvent{App: w.app}, func(*core.TerminateEvent) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(begun) < 300*time.Millisecond {
+		t.Error("the end of the program did not wait for the running pass")
+	}
+	<-finished
+	if w.n.sendCtxErr != nil {
+		t.Errorf("the sending was cancelled while it ran: %v", w.n.sendCtxErr)
 	}
 }
 
@@ -754,4 +826,24 @@ func hasJob(app core.App) bool {
 		}
 	}
 	return false
+}
+
+// A pass that is long does not send after T: each person is handled at the
+// instant of their turn, with the text and the TTL of that instant.
+func TestReminders_LongPassStopsAtT(t *testing.T) {
+	w := newWorld(t)
+	event := w.event("Trail", "2027-01-12", "10:05")
+	for _, runner := range []*core.Record{w.fx.AliceRunner, w.fx.BobRunner} {
+		w.take(runner, event, "interested")
+	}
+	for _, user := range []*core.Record{w.fx.Alice, w.fx.Bob} {
+		w.choose(user, "hour")
+		w.device(user, "fr")
+	}
+	w.n.beforeEnd = func() { time.Sleep(1500 * time.Millisecond) }
+	// A second before T: the first send takes longer than that.
+	w.run(parisAt("2027-01-12", "10:05").Add(-time.Second))
+	if n := len(w.n.users()); n != 1 {
+		t.Errorf("%d sendings, want 1: the second person was reached after T", n)
+	}
 }

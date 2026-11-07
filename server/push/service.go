@@ -150,9 +150,10 @@ func (s *Service) SendToUser(ctx context.Context, app core.App, userID string,
 		go func() {
 			defer wg.Done()
 			outcome, err := sender.Send(ctx, j.sub, j.body, opts)
-			if ctx.Err() != nil {
-				// Cancelled, or out of time, in the course of the request: that is
-				// our doing, not the device's.
+			if err != nil && ctx.Err() != nil {
+				// Cancelled, or out of time, before the push service answered: that is
+				// our doing, not the device's. An answer that came is about the device,
+				// whatever our context does after it.
 				j.skipped = true
 				return
 			}

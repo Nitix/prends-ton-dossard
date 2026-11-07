@@ -1,12 +1,15 @@
 package push_test
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -599,5 +602,65 @@ func TestPushRoutes_TestWithSlowDevices(t *testing.T) {
 	s.Test(t)
 	if took := time.Since(start); took > 1500*time.Millisecond {
 		t.Errorf("the test route took %v with four slow devices, want them sent together", took)
+	}
+}
+
+// capture records what a route wrote, so that a test can read the answer that
+// a scenario would only match by text.
+type capture struct {
+	http.ResponseWriter
+	mu   *sync.Mutex
+	body *bytes.Buffer
+}
+
+func (c capture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	c.body.Write(p)
+	c.mu.Unlock()
+	return c.ResponseWriter.Write(p)
+}
+
+// The id that subscribing answers is the one of the stored row, for a new device
+// and for one that is updated: the page remembers it to tell which device is this one.
+func TestPushRoutes_SubscribeAnswersTheStoredID(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		name := map[bool]string{false: "a new device", true: "an update"}[existing]
+		t.Run(name, func(t *testing.T) {
+			app := testutil.NewApp(t)
+			fx := testutil.Seed(t, app)
+			r := newRecipient(t, fcm+"/fcm/send/one")
+			var known *core.Record
+			if existing {
+				_, known = addDevice(t, app, fx.Alice, "/fcm/send/one", "fr")
+			}
+			var mu sync.Mutex
+			written := &bytes.Buffer{}
+			s := apiScenario(t, app, http.MethodPost, push.Path+"/subscriptions", testutil.Token(t, fx.Alice),
+				body(r.sub.Endpoint, r.sub.P256dh, r.sub.Auth, "fr", "")(testutil.Fixture{}), http.StatusOK)
+			s.BeforeTestFunc = func(_ testing.TB, _ *tests.TestApp, e *core.ServeEvent) {
+				e.Router.BindFunc(func(re *core.RequestEvent) error {
+					re.Response = capture{ResponseWriter: re.Response, mu: &mu, body: written}
+					return re.Next()
+				})
+			}
+			s.Test(t)
+			var answer struct{ ID string }
+			mu.Lock()
+			err := json.Unmarshal(written.Bytes(), &answer)
+			mu.Unlock()
+			if err != nil {
+				t.Fatalf("the answer %q is not JSON: %v", written.String(), err)
+			}
+			stored := devicesOf(t, app, fx.Alice)
+			if len(stored) != 1 {
+				t.Fatalf("%d devices, want 1", len(stored))
+			}
+			if answer.ID == "" || answer.ID != stored[0].Id {
+				t.Errorf("answered id %q, stored id %q", answer.ID, stored[0].Id)
+			}
+			if known != nil && known.Id != stored[0].Id {
+				t.Error("the update made another row")
+			}
+		})
 	}
 }
