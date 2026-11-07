@@ -778,6 +778,22 @@ test("ElevationProfile — zoomé sur une rampe de 150 m à 20 %, la bande ≥ 1
   expect(zonesDrawn(zoomed.screen.container)).toContain(1);
 });
 
+test("ElevationProfile — sur une trace de 5 km, la vue entière lit la pente sur 75 m de chaque côté, comme avant", async () => {
+  // 5 km flat, a point every 5 m, with a ramp of 60 m at 20 % in the middle (12 m up).
+  const track: TrackPoint[] = Array.from({ length: 1001 }, (_, i) => {
+    const km = i / 200;
+    const ele = 500 + 200 * Math.min(0.06, Math.max(0, km - 2.47));
+    return { lat: 45 + km / 111, lon: 6, km, ele };
+  });
+  // Whole: read over 150 m, the 12 m make 8 % at most (5–10 %, zone 2). Read over
+  // 100 m, as the 25 m floor alone would, they would make 12 % (zone 3).
+  const whole = await renderZoom(track);
+  expect(Math.max(...zonesDrawn(whole.screen.container))).toBe(2);
+  // Zoomed on it, the slope is read over 50 m, and the ramp is steeper.
+  const zoomed = await renderZoom(track, { range: { from: 2.3, to: 2.7 } });
+  expect(Math.max(...zonesDrawn(zoomed.screen.container))).toBeGreaterThanOrEqual(4);
+});
+
 test("ElevationProfile — la couleur de la vue entière est celle d'une pente lue sur 1 % de la trace", async () => {
   // A kilometer in each zone, a point every 100 m: the middle of each, whole.
   for (const [i, km] of [0.5, 1.5, 2.5, 3.5, 4.5].entries()) {

@@ -232,7 +232,7 @@ Avant de passer une version en production, on l'essaie sur un environnement à p
 - les données du `seed` (`seed --force`), avec un mot de passe au hasard gardé dans `/opt/ptd-dev-secrets/SEED_PASSWORD` (lisible par root seulement) ; comptes `alice@`, `bob@` et `admin@example.test` ;
 - un site à lui dans le Caddyfile, sur le modèle de la démo : l'en-tête `X-Robots-Tag` et un `robots.txt` qui refusent les moteurs de recherche, `/_/` en 404, un journal à part.
 
-On y redéploie comme la production (« Mise à jour » : `git pull && docker compose up -d --build`, dans `/opt/ptd-dev`) ; le `seed` ne refait rien sur une base remplie. La production ne vient qu'ensuite, après la sauvegarde du volume `pb_data`.
+On y redéploie depuis une archive de la version (`git archive`), pas avec `git pull` : le dossier n'a pas de `.git`. L'archive du commit est copiée sur le serveur et extraite dans `/opt/ptd-dev.new`, le `.env` est gardé, les deux dossiers sont échangés, puis `docker compose build && docker compose up -d` tourne dans `/opt/ptd-dev`. Le `seed` ne refait rien sur une base remplie. La production ne vient qu'ensuite, après la sauvegarde du volume `pb_data`.
 
 Pour remplir une base vide de dev (une première fois, ou après `docker compose down -v` dans `/opt/ptd-dev`, et là seulement) :
 

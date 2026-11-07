@@ -315,6 +315,29 @@ func TestWeather_DayBudget(t *testing.T) {
 		}
 	})
 
+	t.Run("the day ends at midnight in Paris, not in UTC", func(t *testing.T) {
+		weather.SetDayBudget(t, 2, 2)
+		w := newWorld(t, "2026-01-10")
+		// 22:59 UTC is 23:59 in Paris (winter): still the 10th. The day is spent.
+		weather.SetNow(t, at("2026-01-10").Add(12*time.Hour+59*time.Minute))
+		first := w.event(t, "Annecy", "2026-01-12", "2026-01-12")
+		if a := w.answer(t, first.Id); a.Status != "ok" {
+			t.Fatalf("first: status %q", a.Status)
+		}
+		w.meteo.places["lyon"] = [2]float64{45.76, 4.84}
+		other := w.event(t, "Lyon", "2026-01-12", "2026-01-12")
+		status, body := w.get(t, other.Id)
+		if status != http.StatusBadGateway || !strings.Contains(body, `"weather_unavailable"`) {
+			t.Fatalf("23:59 in Paris, day spent: %d %s", status, body)
+		}
+		// 23:01 UTC is 00:01 in Paris: the 11th, the count starts again, though
+		// it is still the 10th in UTC.
+		weather.SetNow(t, at("2026-01-10").Add(13*time.Hour+1*time.Minute))
+		if a := w.answer(t, other.Id); a.Status != "ok" {
+			t.Errorf("00:01 in Paris: status %q, want a new day", a.Status)
+		}
+	})
+
 	t.Run("the demo has its own, lower cap", func(t *testing.T) {
 		weather.SetDayBudget(t, 1000, 2)
 		w := newWorldWith(t, "2026-06-10", map[string]string{"DEMO_LOGIN_EMAIL": "demo@example.org"})

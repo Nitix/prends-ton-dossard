@@ -78,7 +78,7 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 ### 12. Le zoom du profil
 
 - **Décision :** glisser, pincer, boutons, touches + et −, et Ctrl ou ⌘ + molette sur le profil (le même pas que les boutons) ; 200 m au moins ; la carte suit la portion choisie. La carte garde `zoomSnap: 0.5` : un petit pincement sur un téléphone garde son demi-niveau au lieu de revenir en arrière, et un cran de molette reste d'un niveau.
-- **Les couleurs de pente suivent le zoom (changé à ta demande, après « le zoom ne semble pas zoomer tant que ça… enfin avoir les détails »).** La première version les lisait sur une longueur fixe, 1 % de la trace (846 m sur 42 km), si bien qu'une portion de 200 m n'avait qu'une couleur. Une pente se lit maintenant sur `max(portion / 100, 25 m, l'écart entre les points)` de chaque côté : en vue entière rien ne change, et en zoomant les couleurs changent à l'échelle de la vue (une rampe de 150 m à 20 % a sa couleur).
+- **Les couleurs de pente suivent le zoom (changé à ta demande, après « le zoom ne semble pas zoomer tant que ça… enfin avoir les détails »).** La première version les lisait sur une longueur fixe, 1 % de la trace (846 m sur 42 km), si bien qu'une portion de 200 m n'avait qu'une couleur. Une pente se lit maintenant sur `max(portion / 100, 25 m, l'écart entre les points)` de chaque côté (75 m au lieu de 25 m en vue entière) : en vue entière rien ne change, et en zoomant les couleurs changent à l'échelle de la vue (une rampe de 150 m à 20 % a sa couleur).
 - **Nom accessible :** « Vue entière du profil » (le nom contient le texte du bouton, « Vue entière »).
 
 ### 13. Partager
@@ -100,6 +100,7 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 ### 15. Où, quand, combien
 
 - **Décision :** les jours de la course seulement, de J-7 à son dernier jour, depuis aujourd'hui (pendant une course commencée, les jours passés sont laissés de côté). Au départ de la première trace GPX, sinon du lieu géocodé (premier résultat, avec le lieu trouvé affiché).
+- **Changé après le test de l'utilisateur :** avant J-7 (et pour une course au mois), la fiche ne se tait plus : la section « Météo prévue » dit « La météo sera là à partir du … , une semaine avant la course » (ou « La météo viendra quand le jour de la course sera connu »), sans requête. Le silence se lisait comme une panne.
 - **Open-Meteo :** l'API gratuite est réservée à un usage non commercial, ce que ce site privé est. Le serveur envoie des coordonnées arrondies à 0,01° (ou le texte du lieu pour le géocodage), jamais un nom de membre ni de course. L'attribution est sur la fiche et dans l'outil MCP.
 - **Cache en mémoire :** 1 heure pour une prévision, 30 jours pour un lieu ; une prévision de moins de 6 heures est montrée (« ancienne ») si Open-Meteo ne répond pas.
 - **Budget partagé :** **500 appels par heure et 2 500 par jour de Paris au plus pour tous les membres ensemble, 300 par jour sur la démo** (la production, la démo et le dev partagent une IP, limitée à 10 000 appels par jour par Open-Meteo ; ajouté après la relecture finale). Au-delà, le cache (périmé s'il y en a un), sinon « météo indisponible ».

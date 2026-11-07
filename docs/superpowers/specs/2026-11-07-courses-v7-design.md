@@ -454,7 +454,7 @@ Le jour qui range une course au mois et dit si elle est passée est le **dernier
 - **Au toucher** : un doigt déplace le curseur (comme avant) ; **deux doigts qui s'écartent** zooment autour de leur milieu, qui se resserrent dézooment.
 - **Boutons**, sous le profil, pour tous (et pour le clavier, WCAG 2.5.7) : « Zoomer » (la portion deux fois plus courte, autour du curseur ou du milieu), « Dézoomer » (deux fois plus longue), « Vue entière ». « Vue entière » et « Dézoomer » sont en `aria-disabled` sur le profil entier.
 - **Clavier**, le profil focalisé : `+` zoome, `−` dézoome (les flèches, Début, Fin et Échap gardent leur rôle).
-- **Zoomé**, le profil redessine la portion : ses points relus dans la trace entière et réduits à 1 000 (le détail apparaît), l'échelle des altitudes de la portion, les graduations en km de la portion (`distanceTicks(from, to)`). La pente d'un point se lit de chaque côté sur `max(portion / 100, 25 m, l'écart entre les points)` : en vue entière, 1 % de la trace comme avant ; zoomé, les couleurs changent à l'échelle de la vue (changé à la demande de l'utilisateur : une couleur fixe ne montrait aucun détail). **Ctrl ou ⌘ + molette** sur le profil zoome autour du pointeur, du même pas que les boutons, et ne zoome jamais la page ; la molette seule défile la page. La carte a `zoomSnap: 0.5`.
+- **Zoomé**, le profil redessine la portion : ses points relus dans la trace entière et réduits à 1 000 (le détail apparaît), l'échelle des altitudes de la portion, les graduations en km de la portion (`distanceTicks(from, to)`). La pente d'un point se lit de chaque côté sur `max(portion / 100, 25 m, l'écart entre les points)` (75 m au lieu de 25 m en vue entière) : en vue entière, 1 % de la trace et 75 m au moins, comme avant ; zoomé, les couleurs changent à l'échelle de la vue (changé à la demande de l'utilisateur : une couleur fixe ne montrait aucun détail). **Ctrl ou ⌘ + molette** sur le profil zoome autour du pointeur, du même pas que les boutons, et ne zoome jamais la page ; la molette seule défile la page. La carte a `zoomSnap: 0.5`.
 - Une ligne `<output>` (polie) dit la portion : « Du km 12,4 au km 18,0 » ; le nom accessible du profil la reprend.
 - Le curseur ne sort pas de la portion ; un point de la carte touché hors de la portion n'y met pas de curseur.
 - L'aide sous le profil : « Glisse sur le profil pour zoomer sur une portion. » (pointeur fin) ou « Écarte deux doigts sur le profil pour zoomer. » (pointeur grossier).
@@ -622,7 +622,7 @@ Le lieu trouvé est dit (« À Annecy (Auvergne-Rhône-Alpes, France) » ou « A
 
 ### 10.6 Sur la fiche
 
-- Une section **« Météo prévue »**, après les actions, seulement quand la page sait qu'on est dans la fenêtre (§ 10.3) ; elle demande la route (`["weather", id]`, gardée 30 minutes).
+- Une section **« Météo prévue »**, après les actions. Elle demande la route (`["weather", id]`, gardée 30 minutes) seulement quand la page sait qu'on est dans la fenêtre (§ 10.3). Avant la fenêtre, et pour une course au mois, elle ne se tait pas : elle garde son titre et une ligne, sans requête (**changé après le test de l'utilisateur** : le silence se lisait comme une panne). Avant J-7 : « La météo sera là à partir du sam. 22 nov., une semaine avant la course. » (la date est celle du `from` du serveur, que la page calcule elle-même : J-7, à Paris). Course au mois (`no_day`) : « La météo viendra quand le jour de la course sera connu. » Après la course (`over`) : rien.
 - Une ligne par jour de course :
   « sam. 13 juin · Averses · 9 à 17 °C · pluie 60 %, 2 mm · rafales 35 km/h », avec une icône du temps (décorative).
 - Le lieu (§ 10.2), et « Prévision de 14:05 » (« Prévision de 14:05, pas à jour » quand `stale`).
@@ -891,7 +891,7 @@ Ce que ni tes réponses ni les arbitrages ne tranchaient ; dis lesquelles revoir
 
 **Le MCP et le dev**
 
-30. **Trois outils de membre** : `reminders`, `get_weather`, `gear_checklist` (34 de membre, 45 d'admin, sans `gear_checklist`, qui n'est pas construit) ; pas d'outil pour activer un appareil ; confirmations pour vider une ouverture ou une liste de matériel, et pour passer au mois une course aux épreuves datées.
+30. **Deux outils de membre** : `reminders` et `get_weather` (34 de membre, 45 d'admin ; `gear_checklist` n'est pas construit) ; pas d'outil pour activer un appareil ; confirmations pour vider une ouverture ou une liste de matériel, et pour passer au mois une course aux épreuves datées.
 31. **Environnement de dev `dev-prends-ton-dossard.ketra.fr`** (`/opt/ptd-dev`, port 8130), mot de passe du `seed` dans `/opt/ptd-dev-secrets/SEED_PASSWORD`.
 
 **Vérifié** (le 2026-11-07) : les conditions, la licence et la documentation d'Open-Meteo (`open-meteo.com/en/terms`, `/en/licence`, `/en/docs`) ; Web Push sur iOS (`webkit.org/blog/13878`, et l'exigence d'un geste dans des sources secondaires) ; la prise en charge de Web Share (`caniuse.com/web-share` : Firefox sur ordinateur jamais, Firefox Android oui ; MDN `Navigator.share`) ; le sort des `VALARM` d'un abonnement (Google Agenda et Outlook les ignorent d'après des rapports d'utilisateurs, sans source officielle ; Apple Calendrier sur Mac les retire par défaut, case « supprimer les alertes »). La RFC 8291 et la RFC 8292 sont celles de l'IETF ; leur exemple sert de test.

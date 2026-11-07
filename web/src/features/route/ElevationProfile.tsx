@@ -48,17 +48,20 @@ type WithAltitude = TrackPoint & { ele: number };
 /** The coordinates of a point of the path, to a tenth of a unit. */
 const coordinates = (x: number, y: number): string => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
-/** The shortest half-length over which a slope is read, in kilometers: 25 m. */
+/** The shortest half-length over which a slope is read once zoomed, in kilometers: 25 m. */
 const MIN_SLOPE_HALF_KM = 0.025;
+/** The same on the whole track, as it was before the zoom: 75 m, so a short track is read as it always was. */
+const MIN_WHOLE_SLOPE_HALF_KM = 0.075;
 
 /**
  * Half the length over which a slope is read around a kilometer, in kilometers:
- * 1 % of the portion shown, at least 25 m and at least the gap between the points
- * there (a slope needs two of them), so that the noise of the GPS does not stripe
- * the profile while the colours get finer as one zooms. On the whole track it is
- * 1 % of the track, as it always was; on 200 m it is 25 m.
+ * 1 % of the portion shown, at least 25 m (75 m on the whole track, `whole`) and at
+ * least the gap between the points there (a slope needs two of them), so that the
+ * noise of the GPS does not stripe the profile while the colours get finer as one
+ * zooms. On the whole track it is as it always was, 1 % of the track and at least
+ * 75 m (so the same on any track); on 200 m it is 25 m.
  */
-function slopeHalf(points: WithAltitude[], km: number, span: number): number {
+function slopeHalf(points: WithAltitude[], km: number, span: number, whole: boolean): number {
   let low = 0;
   let high = points.length - 1;
   while (high - low > 1) {
@@ -67,7 +70,8 @@ function slopeHalf(points: WithAltitude[], km: number, span: number): number {
     else high = middle;
   }
   const gap = (points[high]?.km ?? 0) - (points[low]?.km ?? 0);
-  return Math.max(span / 100, MIN_SLOPE_HALF_KM, Number.isFinite(gap) ? gap : 0);
+  const floor = whole ? MIN_WHOLE_SLOPE_HALF_KM : MIN_SLOPE_HALF_KM;
+  return Math.max(span / 100, floor, Number.isFinite(gap) ? gap : 0);
 }
 
 /**
@@ -99,12 +103,13 @@ function slopeRuns(
   points: WithAltitude[],
   view: KmRange,
   lastKm: number,
+  whole: boolean,
 ): { from: number; to: number; zone: SlopeZone }[] {
   const count = RUNS;
   const band = (view.to - view.from) / count;
   const zones = Array.from({ length: count }, (_, i) => {
     const middle = view.from + band * (i + 0.5);
-    const half = slopeHalf(points, middle, view.to - view.from);
+    const half = slopeHalf(points, middle, view.to - view.from, whole);
     const from = Math.max(0, middle - half);
     const to = Math.min(lastKm, middle + half);
     const percent =
@@ -315,8 +320,8 @@ function Profile({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, viewFrom, viewTo, plotWidth, scale.from, scale.to]);
   const runs = useMemo(
-    () => slopeRuns(all, { from: viewFrom, to: viewTo }, lastKm),
-    [all, viewFrom, viewTo, lastKm],
+    () => slopeRuns(all, { from: viewFrom, to: viewTo }, lastKm, !zoomed),
+    [all, viewFrom, viewTo, lastKm, zoomed],
   );
 
   // The labels of the kilometers stay in the drawing (the first starts at its
@@ -387,7 +392,7 @@ function Profile({
   const reading = (at: number) => {
     const km = clamp(at);
     const ele = altitudeAt(all, km);
-    const half = slopeHalf(all, km, span);
+    const half = slopeHalf(all, km, span, !zoomed);
     const from = Math.max(0, km - half);
     const to = Math.min(lastKm, km + half);
     const slope = ((altitudeAt(all, to) - altitudeAt(all, from)) / ((to - from) * 1000)) * 100;
