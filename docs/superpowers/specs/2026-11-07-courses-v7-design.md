@@ -166,7 +166,7 @@ La même règle choisit les ouvertures du flux d'agenda personnel (§ 4.4).
 Soit `T` l'instant de l'ouverture (§ 3.2 ; 9 h sans heure).
 
 - **« 1 heure avant »** est dû de `T − 1 h` à `T`.
-- **« 1 jour avant »** est dû de `T − 24 h` à `T`, sauf quand « 1 heure avant » est dû et choisi : la personne ne reçoit alors que le rappel d'une heure (deux notifications en une heure seraient de trop).
+- **« 1 jour avant »** est dû de **la veille à la même heure de Paris que `T`** (la même heure sur l'horloge de Paris : 23 h ou 25 h avant `T` les deux nuits du changement d'heure, et non `T − 24 h`) à `T`, sauf quand « 1 heure avant » est dû et choisi : la personne ne reçoit alors que le rappel d'une heure (deux notifications en une heure seraient de trop).
 - Après `T`, plus rien : les inscriptions sont ouvertes.
 - Le texte dit ce qui reste, à l'heure de l'envoi :
   - plus de 2 heures, la veille : « Les inscriptions ouvrent demain à 10:00. » ;
@@ -305,7 +305,7 @@ Dans la section « Rappels », module `features/push` :
 
 **Où** : dans le programme, par le cron de PocketBase (`app.Cron()`, démarré par `serve`, fuseau de Paris réglé par `setup`), tâche `ptd-reminders`, **chaque minute** (`* * * * *`). Un passage qui dure plus d'une minute n'en lance pas un second (`sync.Mutex.TryLock`).
 
-**Quelles courses** : celles dont `registration_opening` est aujourd'hui, demain ou après-demain (à Paris ; filtre par paramètres sur le texte du jour), et dont `T` est dans les 24 heures à venir.
+**Quelles courses** : celles dont `registration_opening` est aujourd'hui, demain ou après-demain (à Paris ; filtre par paramètres sur le texte du jour), et dont `T` est dans les prochaines 25 heures (la veille à la même heure de Paris est, au plus, 25 h avant `T`).
 
 **Pour qui** : § 4.2, par personne (compte), une fois par course.
 
@@ -326,7 +326,7 @@ Dans la section « Rappels », module `features/push` :
 - Une personne qui n'a **aucun appareil** n'a pas de ligne : il n'y a rien à ne pas renvoyer, et un appareil activé avant `T` reçoit encore le rappel dû.
 - Les lignes de plus de 60 jours sont supprimées (au premier passage de chaque heure).
 
-**Après un redémarrage** : chaque fenêtre dure jusqu'à `T` (§ 4.3). Un programme arrêté pendant `T − 24 h` envoie « 1 jour avant » à son premier passage, s'il est encore avant `T`, avec le texte de ce moment ; arrêté pendant `T − 1 h`, il envoie « 1 heure avant » s'il redémarre avant `T`. Après `T`, rien. Un redémarrage n'efface rien : les lignes sont en base.
+**Après un redémarrage** : chaque fenêtre dure jusqu'à `T` (§ 4.3). Un programme arrêté pendant la fenêtre de « 1 jour avant » (de la veille à la même heure de Paris, § 4.3, à `T`) envoie « 1 jour avant » à son premier passage, s'il est encore avant `T`, avec le texte de ce moment ; arrêté pendant `T − 1 h`, il envoie « 1 heure avant » s'il redémarre avant `T`. Après `T`, rien. Un redémarrage n'efface rien : les lignes sont en base.
 
 **Ce qui écrit** : le paquet `reminders` écrit `reminder_deliveries` ; le paquet `push` met à jour et supprime `push_subscriptions`. Aucun des deux n'écrit ailleurs.
 
@@ -468,7 +468,7 @@ Le jour qui range une course au mois et dit si elle est passée est le **dernier
 ### 7.4 Accessibilité
 
 - Toute action de zoom a son bouton : glisser et pincer ne sont jamais le seul moyen.
-- Les boutons ont un nom complet (« Zoomer sur le profil », « Dézoomer le profil », « Revenir au profil entier »), 44 px.
+- Les boutons ont un nom complet (« Zoomer sur le profil », « Dézoomer le profil », « Vue entière du profil » ; en anglais « Zoom in on the profile », « Zoom out of the profile », « Whole view of the profile »), 44 px. Le nom de « Vue entière » contient son texte visible (WCAG 2.5.3).
 - La bande de sélection et la portion mise en avant sur la carte se voient en couleurs forcées (contour `CanvasText`).
 
 ### 7.5 Tests
@@ -484,13 +484,13 @@ Le jour qui range une course au mois et dit si elle est passée est le **dernier
   ```
   Trail des Crêtes
   Du sam. 13 au dim. 14 juin 2026 · Annecy
-  Épreuves : Trail 42 km · 2 400 m D+ ; Trail 15 km · 800 m D+
+  Épreuves : Trail 42 km · 2 400 m D+ · max 10h · 65 € ; Trail 15 km · 800 m D+
   Ouverture des inscriptions le lun. 12 janv. à 10:00
   Inscriptions jusqu'au dim. 31 mai
   https://prends-ton-dossard.ketra.fr/evenements/abc123
   ```
 
-  - le nom ; les jours (ou « juin 2027 (date à préciser) ») et le lieu ; les épreuves comme la fiche les nomme, avec leurs mesures ; l'ouverture à venir ; la date limite ; l'adresse de la course ;
+  - le nom ; les jours (ou « juin 2027 (date à préciser) ») et le lieu ; les épreuves comme la fiche les nomme, avec leurs mesures, leur limite de temps et leur prix quand elles en ont (« max 10h », « 65 € », comme la fiche) ; l'ouverture à venir ; la date limite ; l'adresse de la course ;
   - **jamais qui y va** : ni participant, ni commentaire, ni covoiturage ;
   - une ligne absente quand la course n'a pas la donnée.
 - **Avec `navigator.share`** (téléphones, Safari, Chrome et Edge récents sur ordinateur) : `navigator.share({ title: nom, text })`, l'adresse dans le texte (pas dans `url` : certaines applis la mettraient deux fois, d'autres perdent le texte). Annulé par la personne (`AbortError`) : rien. Autre refus : la fenêtre ci-dessous.
@@ -521,6 +521,8 @@ Celui de la v3.1 : un jeton aléatoire dans l'adresse (`…/api/app/calendar/<je
 - `GET /api/app/calendar?scope=group`, `DELETE /api/app/calendar?scope=group` ;
 - `POST /api/app/calendar`, corps `{ "lang", "scope": "group" }` ;
 - sans `scope` : `mine`, comme aujourd'hui (le site et le MCP existants ne changent pas) ; une autre valeur : `400` avec le code de PocketBase sur `scope`.
+
+Sur la démo, le lien du groupe n'existe pas (`404` pour les trois routes, et le flux d'une telle ligne n'est jamais servi) : tout le monde y partage le même compte, et ce lien donne les noms des membres.
 
 La route du flux est la même : le lien trouvé dit sa sorte. Renouveler ou supprimer l'un ne touche pas l'autre. Caddy ne journalise déjà pas `/api/app/calendar/*`.
 
@@ -587,7 +589,7 @@ Le lieu trouvé est dit (« À Annecy (Auvergne-Rhône-Alpes, France) » ou « A
 ### 10.3 Quand
 
 - **De J-7 au dernier jour** de la course (aujourd'hui à Paris entre `start_date − 7 jours` et `end_date`) ; avant et après, pas de météo.
-- **Les jours de la course seulement**, ceux de l'horizon d'Open-Meteo (16 jours) ; une course au mois : aucune.
+- **Les jours de la course seulement**, ceux de l'horizon d'Open-Meteo (16 jours) ; une course au mois : aucune. Les jours partent d'**aujourd'hui** : pendant une course déjà commencée, les jours passés sont laissés de côté (le premier jour de la réponse n'est pas toujours le premier jour de la course).
 - Par jour : le temps (code WMO), les températures minimale et maximale, la probabilité et la hauteur de pluie, le vent maximal et les rafales, à l'heure locale du lieu.
 
 ### 10.4 Cache et limites (paquet `server/weather`)
@@ -656,6 +658,8 @@ Les codes WMO deviennent des mots (fr / en) :
 
 ## 11. Le matériel obligatoire
 
+> **Reporté (décision de l'utilisateur, 2026-11-07) : le matériel n'est pas construit en v7.** Ni `formats.gear`, ni `gear_checks`, ni migration `9r`, ni outil `gear_checklist`, ni mention dans les instructions du MCP ; l'idée reste dans `docs/TODO.md`. Ce qui parle de matériel dans ce document (§ 2, 11, 12, 14, 16) est gardé comme il a été écrit, pour plus tard ; les nombres d'outils réels sont **trente-quatre** de membre et **quarante-cinq** d'admin.
+
 ### 11.1 Données (migration `9r_gear.go`)
 
 - `formats.gear` : JSON, une liste de textes (« Frontale », « Couverture de survie »…). Vide ou absent : pas de matériel.
@@ -719,7 +723,7 @@ Les règles de la spec du MCP valent toutes : chaque outil passe par l'API du si
 - **Avec `date_precision: "month"`**, `start_date` est le 1er du mois et `end_date` le dernier jour (le serveur la pose) ; `day` d'une épreuve est le 1er. Les descriptions le disent : « le jour n'est pas connu ».
 - Les dates de fin et l'ordre du batch suivent le formulaire (§ 5.1) : `planBatch` porte les nouveaux cas de `buildBatch`, et `eventEndDate` ceux de la course au mois.
 - `calendar_link` avec `scope: "group"` : son `summary` rappelle que ce lien secret donne les noms des membres ; l'état de sa confirmation est l'empreinte de l'adresse **de cette sorte** de lien.
-- Les instructions du serveur gagnent une ligne : « Une course peut avoir une ouverture des inscriptions (jour, heure de Paris), une précision au mois quand le jour n'est pas connu, et du matériel obligatoire par épreuve. »
+- Les instructions du serveur gagnent une ligne : « Une course peut avoir une ouverture des inscriptions (jour, heure de Paris), une précision au mois quand le jour n'est pas connu. »
 
 ### 12.2 Les outils nouveaux (membre)
 
