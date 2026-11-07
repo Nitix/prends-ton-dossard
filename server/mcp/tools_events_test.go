@@ -583,7 +583,7 @@ func TestTools_OpeningRefusedBeforeAnyConfirmation(t *testing.T) {
 			"name": "Trail de juin", "location": "Annecy", "start_date": "2027-06", "date_precision": "month",
 			"formats":               []any{map[string]any{"race_type": "Trail", "distance_km": 42}},
 			"registration_deadline": "2027-07-01",
-		}, deadlineAfterStart)
+		}, "La course, date limite d'inscription : la date limite d'inscription ne peut pas être après la fin du mois de la course. (registration_deadline_after_start)")
 	})
 
 	t.Run("update_event: a time that is not one", func(t *testing.T) {
