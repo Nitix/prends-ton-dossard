@@ -2631,3 +2631,56 @@ test("EventPage — sans trace ni lien, aucune partie Parcours", async () => {
     .not.toBeInTheDocument();
   expect(fetching).not.toHaveBeenCalled();
 });
+
+// --- The opening of the registration ---
+
+const withOpening = {
+  ...withDeadline,
+  registration_opening: "2026-05-12",
+  registration_opening_time: "10:00",
+};
+
+test("EventHero — l'ouverture et la date limite sur une ligne", async () => {
+  const { screen } = await renderPage({ event: withOpening, today: "2026-05-01" });
+
+  await loaded(screen);
+  const line = screen.getByText(/^Ouverture des inscriptions/);
+  await expect.element(line).toBeVisible();
+  expect(plain(line.element().textContent)).toBe(
+    "Ouverture des inscriptions le mar. 12 mai à 10:00 · jusqu'au mer. 10 juin",
+  );
+  expect(line.element().closest("[data-kind]")?.getAttribute("data-kind")).toBe("soon");
+  await screen.unmount();
+
+  // The day itself: « aujourd'hui », and still one line.
+  const same = await renderPage({ event: withOpening, today: "2026-05-12" });
+  await loaded(same.screen);
+  expect(plain(same.screen.getByText(/^Ouverture des inscriptions/).element().textContent)).toBe(
+    "Ouverture des inscriptions aujourd'hui à 10:00 · jusqu'au mer. 10 juin",
+  );
+  await same.screen.unmount();
+
+  // Once it is open, the line is the deadline's.
+  const open = await renderPage({ event: withOpening, today: "2026-05-13" });
+  await loaded(open.screen);
+  expect(plain(registrationLine(open.screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin",
+  );
+});
+
+test("EventPage — un intéressé voit « Les inscriptions ouvrent le … »", async () => {
+  signIn("bob");
+  const { screen } = await renderPage({
+    event: { ...withOpening, registration_url: "https://inscriptions.example.test/trail" },
+    today: "2026-05-01",
+  });
+
+  await loaded(screen);
+  const box = reminder(screen);
+  await expect.element(box).toBeVisible();
+  expect(plain(box.element().textContent)).toContain(
+    "Les inscriptions ouvrent le mar. 12 mai à 10:00.",
+  );
+  expect(box.element().textContent).not.toContain("Pense à t'inscrire");
+  await expect.element(box.getByRole("link", { name: fr.event.register })).toBeVisible();
+});

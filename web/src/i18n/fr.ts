@@ -262,6 +262,19 @@ export const fr = {
     // The box that reminds a runner who is only interested to register, and its text: the date is already formatted.
     reminderTitle: "Rappel",
     reminder: (date: string) => `Pense à t'inscrire avant le ${date}.`,
+    // The opening of the registration, before it: a start (said in the page's line, the chip of a card, the box of a runner who is
+    // interested, and the home page), then the day (« le lun. 12 janv. » or « aujourd'hui »), then the time when there is one («  à 10:00 »).
+    openingHero: "Ouverture des inscriptions",
+    openingCard: "Ouverture",
+    openingAside: "Les inscriptions ouvrent",
+    openingTodo: "ouvre",
+    openingToday: "aujourd'hui",
+    openingOnDate: (date: string) => `le ${date}`,
+    openingAt: (time: string) => `à ${time}`,
+    // After the opening, in the page's line, when the event has a deadline: the date is already formatted.
+    openingDeadline: (date: string) => `jusqu'au ${date}`,
+    // The title of the opening in a calendar file: the name of the event is its own.
+    openingCalendarTitle: (name: string) => `Ouverture des inscriptions : ${name}`,
     // The button that downloads a calendar file of the event, and the name of that file when the event's own name
     // has nothing left once the characters a file name cannot have are taken out (the extension is added).
     addToCalendar: "Ajouter à mon agenda",
@@ -502,6 +515,9 @@ export const fr = {
     registrationUrl: "Lien pour s'inscrire",
     registrationUrlHint: "Facultatif : l'adresse de la page d'inscription.",
     registrationDeadline: "Date limite d'inscription",
+    registrationOpening: "Ouverture des inscriptions",
+    registrationOpeningTime: "Heure d'ouverture",
+    registrationOpeningTimeHint: "Facultative, à l'heure de Paris.",
     notes: "Notes",
     formatsTitle: "Épreuves",
     // The title of the group of fields of a format, from 1.

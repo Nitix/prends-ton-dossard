@@ -25,6 +25,15 @@ describe("date", () => {
   });
 });
 
+describe("dayMonth", () => {
+  test.each([
+    { locale: "fr-FR", expected: "12 janv." },
+    { locale: "en-GB", expected: "12 Jan" },
+  ])("$locale: $expected", ({ locale, expected }) => {
+    expect(plain(createFormatters(locale).dayMonth(date("2026-01-12")))).toBe(expected);
+  });
+});
+
 describe("monthTitle", () => {
   test.each([
     { locale: "fr-FR", expected: "juin 2026" },

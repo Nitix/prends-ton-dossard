@@ -11,6 +11,7 @@ import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import { invalidateEvents, type EventView } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
+import { openingText } from "../events/registration";
 import { useUpdateParticipation } from "../participations/api";
 import { participationError } from "../participations/errors";
 import { todosOf, type TodoRow } from "./registrationTodo";
@@ -77,6 +78,9 @@ export function RegistrationTodoBlock({
  * One registration to do: the event (a link to its page), the format (or
  * « Format à choisir »), the deadline and the days left, in words.
  *
+ * Before the opening (`soon`) the row says when it opens and has no « Je suis inscrit »: the
+ * link to the official site only. The day of the opening it has both.
+ *
  * « Je suis inscrit » changes the status to « Inscrit »; it is for a format
  * only, as a participation on the event alone has no format to be registered
  * on (the page of the event is where it is chosen). It is off while the
@@ -100,7 +104,8 @@ function TodoItem({
   const toast = useToast();
   const queryClient = useQueryClient();
   const titleId = useId();
-  const { view, formatView, participation, deadline, daysLeft } = row;
+  const { view, formatView, participation, state } = row;
+  const daysLeft = state.kind === "today" ? 0 : state.daysLeft;
   const { event } = view;
   const update = useUpdateParticipation(event.id);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,6 +114,9 @@ function TodoItem({
   const what = formatView
     ? formatDisplayName(formatView.format, formatView.raceType.label, f, t)
     : t.event.formatToChoose;
+
+  // Before the opening one cannot be registered yet: only the official site is left, when there is one.
+  const canRegister = formatView !== undefined && state.kind !== "soon";
 
   const pressed = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -149,7 +157,11 @@ function TodoItem({
             </Link>
           </h3>
           <p className="text-sm">{what}</p>
-          <p className="text-sm text-neutral-600">{t.home.todoBefore(f.date(deadline))}</p>
+          <p className="text-sm text-neutral-600">
+            {state.kind === "open"
+              ? t.home.todoBefore(f.date(state.deadline))
+              : openingText(state, f, t, "todo")}
+          </p>
         </div>
         {/* The words are the countdown: nothing here is told by a colour. The ring only shows it. */}
         <div className="todo-countdown flex shrink-0 flex-col items-center gap-1 pt-1">
@@ -157,7 +169,7 @@ function TodoItem({
           <p className="days-left text-xs font-semibold text-neutral-700">{f.inDays(daysLeft)}</p>
         </div>
       </div>
-      {(site || formatView) && (
+      {(site || canRegister) && (
         // The name of the event describes the actions, which the rows repeat.
         <div className="flex flex-wrap gap-2">
           {site && (
@@ -171,7 +183,7 @@ function TodoItem({
               {t.home.todoRegister}
             </a>
           )}
-          {formatView && (
+          {canRegister && (
             <button
               type="button"
               disabled={busy}

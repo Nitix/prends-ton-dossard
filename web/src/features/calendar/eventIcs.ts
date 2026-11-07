@@ -1,4 +1,7 @@
 import type { Lang } from "../../i18n/detect";
+import { en } from "../../i18n/en";
+import { fr } from "../../i18n/fr";
+import { PARIS } from "../../lib/dates";
 import type { EventView } from "../events/api";
 
 // The calendar file of one event, made in the browser for a calendar app to
@@ -17,6 +20,12 @@ const MAX_LINE_OCTETS = 75;
  * some of them lose it if it is revoked at once.
  */
 const REVOKE_AFTER_MS = 1000;
+
+/** How long the opening of the registration lasts in a calendar, when it has a time. */
+const OPENING_MINUTES = 30;
+
+/** The UID of the opening of the registration of an event: its own, beside the event's. */
+const openingUid = (eventId: string) => `opening-${eventId}@prends-ton-dossard`;
 
 /** The UID of the event in a calendar: the same each time the file is downloaded, so that an app that imports it again does not add it twice. */
 const uid = (eventId: string) => `event-${eventId}@prends-ton-dossard`;
@@ -113,7 +122,11 @@ function stampValue(instant: Temporal.Instant): string {
  * the address of its page on the site at `appURL`, as of the moment `now`,
  * which is its `DTSTAMP`. An empty place is left out. `lang` is the language
  * of the site, which the `PRODID` says (`FR` or `EN`), as the feed of the
- * server does.
+ * server does, and the one of the title of the opening.
+ *
+ * An event with an opening of its registration has a second `VEVENT` for it:
+ * with a time, thirty minutes in UTC (the time is Paris time, so the instant
+ * moves with summer time); without, the whole day.
  */
 export function eventIcs(
   view: EventView,
@@ -146,6 +159,26 @@ export function eventIcs(
   optional("LOCATION", textValue(event.location));
   optional("URL", uriValue(address));
   line("END", "VEVENT");
+  if (event.registration_opening) {
+    const day = Temporal.PlainDate.from(event.registration_opening);
+    const time = event.registration_opening_time ?? "";
+    line("BEGIN", "VEVENT");
+    line("UID", textValue(openingUid(event.id)));
+    line("DTSTAMP", stampValue(now));
+    if (time === "") {
+      line("DTSTART;VALUE=DATE", dateValue(day));
+      line("DTEND;VALUE=DATE", dateValue(day.add({ days: 1 })));
+    } else {
+      const starts = day.toZonedDateTime({ timeZone: PARIS, plainTime: time }).toInstant();
+      line("DTSTART", stampValue(starts));
+      line("DTEND", stampValue(starts.add({ minutes: OPENING_MINUTES })));
+    }
+    const title = (lang === "fr" ? fr : en).event.openingCalendarTitle(event.name);
+    line("SUMMARY", textValue(title));
+    optional("DESCRIPTION", textValue(address));
+    optional("URL", uriValue(address));
+    line("END", "VEVENT");
+  }
   line("END", "VCALENDAR");
   return lines.join("");
 }

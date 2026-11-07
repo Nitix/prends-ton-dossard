@@ -173,37 +173,86 @@ func pendingOf(rows []participationRow, today string) []participationRow {
 	})
 }
 
+// The states of a registration to make (the kinds of RegistrationState of
+// features/events/registration.ts that are to do): it opens later (soon), it opens
+// today, or it is open.
+const (
+	stateSoon  = "soon"
+	stateToday = "today"
+	stateOpen  = "open"
+)
+
 // registrationTodo is a registration that the runner has to make: a participation
-// they are only interested in, in an event whose registration is still open.
+// they are only interested in, in an event whose registration is open or about to be.
 type registrationTodo struct {
-	Row      participationRow
+	Row participationRow
+	// State is "soon", "today" or "open".
+	State string
+	// Day is the day that orders it: the opening for "soon" and "today", the deadline
+	// for "open".
+	Day string
+	// Opening and OpeningTime are the day and the time (HH:MM, "" when there is none)
+	// of the opening, for "soon" and "today".
+	Opening, OpeningTime string
+	// Deadline is the last day to register, "" for "soon" and "today" of an event that
+	// has none.
 	Deadline string
-	// DaysLeft is 0 on the day of the deadline, on which one can still register.
+	// DaysLeft is the days to the opening for "soon", 0 on the day of the opening
+	// ("today") and on the day of the deadline, on which one can still register
+	// ("open"), the days to the deadline otherwise.
 	DaysLeft int
+}
+
+// registrationStateOf ports registrationState of features/events/registration.ts, for
+// the states that are to do: "" for the others (closed, or nothing to say). An opening
+// after today is "soon", on today it is "today" (to the day, not to the hour); once it
+// is behind, only the deadline counts. A deadline today or later is open.
+func registrationStateOf(event eventRecord, today string) (todo registrationTodo, ok bool) {
+	deadline := event.RegistrationDeadline
+	if opening := event.RegistrationOpening; opening != "" {
+		if daysLeft, ok := daysBetween(today, opening); ok && daysLeft >= 0 {
+			state := stateSoon
+			if daysLeft == 0 {
+				state = stateToday
+			}
+			return registrationTodo{
+				State: state, Day: opening, Opening: opening, OpeningTime: event.RegistrationOpeningTime,
+				Deadline: deadline, DaysLeft: daysLeft,
+			}, true
+		}
+	}
+	if deadline == "" {
+		return registrationTodo{}, false
+	}
+	if daysLeft, ok := daysBetween(today, deadline); ok && daysLeft >= 0 {
+		return registrationTodo{State: stateOpen, Day: deadline, Deadline: deadline, DaysLeft: daysLeft}, true
+	}
+	return registrationTodo{}, false
 }
 
 // todosOf ports todosOf of features/home/registrationTodo.ts, with
 // registrationState of features/events/registration.ts: what the runner has to
 // register for, which is their "Interested" participations (on a race, or on the
-// event alone) in the events whose registration is open, the deadline being today
-// or later. An event with no deadline, or whose registration is closed, has
-// nothing to do. rows are the runner's own (the site's function is given the
-// events and the runner). The nearest deadline comes first, then the name of the
-// event, then the id of the participation.
+// event alone) in the events whose registration is open (the deadline being today
+// or later) or opens today or later. An event with no deadline and no opening to
+// come, or whose registration is closed, has nothing to do. rows are the runner's
+// own (the site's function is given the events and the runner). The nearest day
+// comes first (the opening of one that is not open yet, the deadline of the
+// others), then the name of the event, then the id of the participation.
 func todosOf(rows []participationRow, today string) []registrationTodo {
 	var todos []registrationTodo
 	for _, row := range rows {
-		deadline := row.Event.RegistrationDeadline
-		if row.Participation.Status != "interested" || deadline == "" {
+		if row.Participation.Status != "interested" {
 			continue
 		}
-		if daysLeft, ok := daysBetween(today, deadline); ok && daysLeft >= 0 {
-			todos = append(todos, registrationTodo{Row: row, Deadline: deadline, DaysLeft: daysLeft})
+		if todo, ok := registrationStateOf(row.Event, today); ok {
+			todo.Row = row
+			todos = append(todos, todo)
 		}
 	}
 	slices.SortFunc(todos, func(a, b registrationTodo) int {
 		return cmp.Or(
-			cmp.Compare(a.Deadline, b.Deadline),
+			cmp.Compare(a.Day, b.Day),
 			compareNames(a.Row.Event.Name, b.Row.Event.Name),
 			cmp.Compare(a.Row.Participation.ID, b.Row.Participation.ID),
 		)
@@ -298,8 +347,11 @@ type registrationToDoOut struct {
 	ParticipationID string   `json:"participation_id"`
 	Event           eventRef `json:"event"`
 	FormatTitle     string   `json:"format_title,omitempty" jsonschema:"l'épreuve, comme le site l'écrit ; absent pour une participation à la course seule"`
-	Deadline        string   `json:"deadline" jsonschema:"le dernier jour pour s'inscrire, ce jour compris"`
-	DaysLeft        int      `json:"days_left" jsonschema:"les jours qu'il reste : 0 le jour de la date limite"`
+	State           string   `json:"state" jsonschema:"open : les inscriptions sont ouvertes ; soon : elles ouvrent un autre jour (opening) ; today : elles ouvrent aujourd'hui (le site le dit toute la journée, avant comme après l'heure)"`
+	Opening         string   `json:"opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'ouverture des inscriptions, pour soon et today"`
+	OpeningTime     string   `json:"opening_time,omitempty" jsonschema:"HH:MM, à l'heure de Paris : l'heure de l'ouverture, absente quand la course n'en a pas"`
+	Deadline        string   `json:"deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absent quand la course n'a pas de date limite (une ouverture à venir)"`
+	DaysLeft        *int     `json:"days_left,omitempty" jsonschema:"pour open : les jours qu'il reste, 0 le jour de la date limite ; absent pour soon et today"`
 	RegistrationURL string   `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course ; absent quand le site n'en connaît pas"`
 }
 
@@ -333,7 +385,7 @@ type latestCommentOut struct {
 
 type homeOut struct {
 	ToConfirm         []toConfirmOut        `json:"to_confirm" jsonschema:"ses participations ajoutées par d'autres et qu'il n'a pas encore confirmées, par jour (« À confirmer » du site)"`
-	RegistrationsToDo []registrationToDoOut `json:"registrations_to_do" jsonschema:"ses participations « Intéressé » dont la course a une date limite d'inscription pas passée (le jour même compte), la plus proche d'abord"`
+	RegistrationsToDo []registrationToDoOut `json:"registrations_to_do" jsonschema:"ses participations « Intéressé » dont les inscriptions sont ouvertes (date limite pas passée, le jour même compte) ou ouvrent bientôt (state soon ou today : le site les range à l'ouverture, et n'y propose pas « Je suis inscrit » avant le jour), la plus proche d'abord"`
 	ResultsToEnter    []resultToEnterOut    `json:"results_to_enter" jsonschema:"ses participations « Inscrit » dont la course est passée depuis 60 jours au plus, la plus récente d'abord"`
 	MyUpcoming        []upcomingOut         `json:"my_upcoming" jsonschema:"ses prochaines courses, sauf « Non partant », la plus proche d'abord"`
 	GroupSoon         []eventSummary        `json:"group_soon" jsonschema:"les 5 prochaines courses qui ont des participants autres que « Non partant » et supporteurs"`
@@ -345,7 +397,7 @@ func addHome(s *mcpsdk.Server, t *tools) {
 		Name:  "home",
 		Title: "Accueil",
 		Description: "Donne ce que la personne au nom de qui tu agis voit sur son accueil, avec les mêmes règles que le site : " +
-			"ses participations à confirmer (ajoutées par d'autres), ses inscriptions à faire avant leur date limite, " +
+			"ses participations à confirmer (ajoutées par d'autres), ses inscriptions à faire (avant leur date limite, ou à l'ouverture), " +
 			"les résultats à saisir (courses où elle est inscrite, passées depuis 60 jours au plus), ses prochaines courses, " +
 			"les 5 prochaines courses du groupe et les 5 derniers commentaires (le début du texte). " +
 			"Une participation de my_upcoming ou de to_confirm qui a confirmed: false n'est pas confirmée par son coureur (le site écrit « Non confirmé ») : ne la présente pas comme un fait acquis. " +
@@ -430,10 +482,15 @@ func (t *tools) home(ctx context.Context, _ *mcpsdk.CallToolRequest, _ struct{})
 		})
 	}
 	for _, todo := range todosOf(rows, day) {
-		out.RegistrationsToDo = append(out.RegistrationsToDo, registrationToDoOut{
+		item := registrationToDoOut{
 			ParticipationID: todo.Row.Participation.ID, Event: todo.Row.eventRef(t.cfg), FormatTitle: todo.Row.formatTitle(w),
-			Deadline: todo.Deadline, DaysLeft: todo.DaysLeft, RegistrationURL: todo.Row.Event.RegistrationURL,
-		})
+			State: todo.State, Opening: todo.Opening, OpeningTime: todo.OpeningTime, Deadline: todo.Deadline,
+			RegistrationURL: todo.Row.Event.RegistrationURL,
+		}
+		if todo.State == stateOpen {
+			item.DaysLeft = &todo.DaysLeft
+		}
+		out.RegistrationsToDo = append(out.RegistrationsToDo, item)
 	}
 	for _, row := range toEnterOf(rows, day) {
 		out.ResultsToEnter = append(out.ResultsToEnter, resultToEnterOut{

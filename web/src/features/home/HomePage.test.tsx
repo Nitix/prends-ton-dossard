@@ -2365,3 +2365,48 @@ test("HomePage — zones tactiles d'au moins 44 px", async () => {
   }
   await page.viewport(414, 896);
 });
+
+// ---- Inscriptions à faire, avant et le jour de l'ouverture
+
+/** The trail, whose registration opens on this day at 10:00 (the deadline is 10 June), and its site. */
+const openingOn = (day: string) => ({
+  ...withDeadline(eventRecord, "2026-06-10", "https://example.org/inscription"),
+  registration_opening: day,
+  registration_opening_time: "10:00",
+});
+
+test("RegistrationTodoBlock — avant l'ouverture, pas de « Je suis inscrit »", async () => {
+  // Today is 30 April: the opening is on 12 May, which one cannot register before.
+  mocks.events.mockResolvedValue([openingOn("2026-05-12")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const row = todoRows(screen);
+  expect(plain(row.element().textContent)).toContain("ouvre le mar. 12 mai à 10:00");
+  expect(plain(row.element().textContent)).not.toContain("avant le");
+  await expect.element(doneButton(row)).not.toBeInTheDocument();
+  // The official site, when the event has one, is still a tap away.
+  await expect.element(row.getByRole("link", { name: fr.home.todoRegister })).toBeVisible();
+});
+
+test("RegistrationTodoBlock — la veille, « ouvre demain à 10:00 »", async () => {
+  mocks.events.mockResolvedValue([openingOn("2026-05-01")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  expect(plain(todoRows(screen).element().textContent)).toContain("ouvre demain à 10:00");
+});
+
+test("RegistrationTodoBlock — le jour même, les deux", async () => {
+  mocks.events.mockResolvedValue([openingOn("2026-04-30")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const row = todoRows(screen);
+  expect(plain(row.element().textContent)).toContain("ouvre aujourd'hui à 10:00");
+  await expect.element(doneButton(row)).toBeVisible();
+  await expect.element(row.getByRole("link", { name: fr.home.todoRegister })).toBeVisible();
+});

@@ -9,6 +9,8 @@ import { PARIS } from "./dates";
 export type Formatters = {
   /** Short weekday, day and short month: "dim. 14 juin", "Sun 14 Jun". */
   date(d: Temporal.PlainDate): string;
+  /** Day and short month, with no weekday: "12 janv.", "12 Jan". */
+  dayMonth(d: Temporal.PlainDate): string;
   /** Like `date`, with the year. */
   dateLong(d: Temporal.PlainDate): string;
   /** The weekday of a date, alone: "lun." ("short"), "lundi" ("long"), "L" ("narrow"). */
@@ -105,6 +107,7 @@ export function createFormatters(locale: string): Formatters {
 
   return {
     date: (d) => d.toLocaleString(locale, dayOptions),
+    dayMonth: (d) => d.toLocaleString(locale, { day: "numeric", month: "short" }),
     dateLong: (d) => d.toLocaleString(locale, { ...dayOptions, year: "numeric" }),
     weekday: (d, style) => d.toLocaleString(locale, { weekday: style }),
     // A year and month in the ISO calendar cannot be formatted with the

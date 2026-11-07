@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
-import { deadlineText, registrationLabel, registrationState } from "./registration";
+import { deadlineText, openingText, registrationLabel, registrationState } from "./registration";
 
 const date = (s: string) => Temporal.PlainDate.from(s);
 
@@ -49,6 +49,65 @@ describe("registrationState", () => {
   test("registrationState — passée, événement passé : null", () => {
     expect(registrationState(event, date("2026-06-21"))).toBeNull();
     expect(registrationState({ ...event, end_date: "2026-06-22" }, date("2026-06-23"))).toBeNull();
+  });
+});
+
+describe("registrationState — l'ouverture", () => {
+  // The opening is on 12 January, at 10:00; the deadline on 31 May; the event on 20 June.
+  const opening = {
+    ...event,
+    registration_deadline: "2026-05-31",
+    registration_opening: "2026-01-12",
+    registration_opening_time: "10:00",
+  };
+
+  test("registrationState — ouverture demain : soon", () => {
+    expect(registrationState(opening, date("2026-01-11"))).toEqual({
+      kind: "soon",
+      opening: date("2026-01-12"),
+      time: "10:00",
+      daysLeft: 1,
+      deadline: date("2026-05-31"),
+    });
+  });
+
+  test("registrationState — ouverture aujourd'hui : today", () => {
+    expect(registrationState(opening, date("2026-01-12"))).toEqual({
+      kind: "today",
+      opening: date("2026-01-12"),
+      time: "10:00",
+      deadline: date("2026-05-31"),
+    });
+  });
+
+  test("registrationState — ouverture passée et date limite : open", () => {
+    expect(registrationState(opening, date("2026-01-13"))).toEqual({
+      kind: "open",
+      deadline: date("2026-05-31"),
+      daysLeft: 138,
+    });
+  });
+
+  test("registrationState — ouverture sans heure", () => {
+    const untimed = { ...opening, registration_opening_time: "" };
+    expect(registrationState(untimed, date("2026-01-01"))).toMatchObject({
+      kind: "soon",
+      time: "",
+      daysLeft: 11,
+    });
+    // A record that has not got the fields at all is the same as an empty one.
+    expect(
+      registrationState({ ...untimed, registration_opening_time: undefined }, date("2026-01-12")),
+    ).toMatchObject({ kind: "today", time: "" });
+  });
+
+  test("registrationState — ouverture sans date limite, passée : rien", () => {
+    const noDeadline = { ...opening, registration_deadline: "" };
+    expect(registrationState(noDeadline, date("2026-01-13"))).toBeNull();
+    // To come, it is told, with no deadline after it.
+    const soon = registrationState(noDeadline, date("2026-01-01"));
+    expect(soon).toMatchObject({ kind: "soon" });
+    expect(soon).not.toHaveProperty("deadline");
   });
 });
 
@@ -111,5 +170,65 @@ describe("deadlineText", () => {
 
   test("deadlineText — close : « Inscriptions closes », sans jours", () => {
     expect(deadlineText({ kind: "closed" }, inFrench, fr)).toBe("Inscriptions closes");
+  });
+});
+
+describe("openingText", () => {
+  const inFrench = createFormatters("fr-FR");
+  const soon = {
+    kind: "soon",
+    opening: date("2026-01-12"),
+    time: "10:00",
+    daysLeft: 5,
+    deadline: date("2026-05-31"),
+  } as const;
+  const today = { kind: "today", opening: date("2026-01-12"), time: "10:00" } as const;
+
+  test("deadlineText — l'ouverture puis la date limite", () => {
+    expect(plain(deadlineText(soon, inFrench, fr))).toBe(
+      "Ouverture des inscriptions le lun. 12 janv. à 10:00 · jusqu'au dim. 31 mai",
+    );
+    expect(plain(deadlineText({ ...soon, deadline: undefined }, inFrench, fr))).toBe(
+      "Ouverture des inscriptions le lun. 12 janv. à 10:00",
+    );
+    expect(plain(deadlineText({ ...soon, time: "", deadline: undefined }, inFrench, fr))).toBe(
+      "Ouverture des inscriptions le lun. 12 janv.",
+    );
+    expect(plain(deadlineText(today, inFrench, fr))).toBe(
+      "Ouverture des inscriptions aujourd'hui à 10:00",
+    );
+    expect(plain(deadlineText({ ...today, time: "" }, inFrench, fr))).toBe(
+      "Ouverture des inscriptions aujourd'hui",
+    );
+  });
+
+  test("registrationLabel — la pastille de la carte", () => {
+    expect(plain(registrationLabel(soon, inFrench, fr))).toBe("Ouverture le 12 janv. à 10:00");
+    expect(plain(registrationLabel(today, inFrench, fr))).toBe("Ouverture aujourd'hui à 10:00");
+    expect(plain(registrationLabel({ ...today, time: "" }, inFrench, fr))).toBe(
+      "Ouverture aujourd'hui",
+    );
+  });
+
+  test("openingText — l'encadré et la ligne de l'accueil", () => {
+    expect(plain(openingText(soon, inFrench, fr, "aside"))).toBe(
+      "Les inscriptions ouvrent le lun. 12 janv. à 10:00.",
+    );
+    expect(plain(openingText(today, inFrench, fr, "aside"))).toBe(
+      "Les inscriptions ouvrent aujourd'hui à 10:00.",
+    );
+    expect(plain(openingText(soon, inFrench, fr, "todo"))).toBe("ouvre le lun. 12 janv. à 10:00");
+    expect(plain(openingText({ ...soon, daysLeft: 1 }, inFrench, fr, "todo"))).toBe(
+      "ouvre demain à 10:00",
+    );
+    expect(plain(openingText(today, inFrench, fr, "todo"))).toBe("ouvre aujourd'hui à 10:00");
+  });
+
+  test("openingText — en anglais", () => {
+    const inEnglish = createFormatters("en-GB");
+    expect(plain(deadlineText(soon, inEnglish, en))).toBe(
+      "Registration opens on Mon 12 Jan at 10:00 · until Sun 31 May",
+    );
+    expect(plain(openingText(today, inEnglish, en, "todo"))).toBe("opens today at 10:00");
   });
 });

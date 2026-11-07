@@ -45,7 +45,7 @@ import { formatDisplayName, formatMeasures } from "./formatName";
 import { FormatTitle } from "./FormatTitle";
 import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
 import { RegisterLink } from "./RegisterLink";
-import { registrationState } from "./registration";
+import { openingText, registrationState } from "./registration";
 
 const SEPARATOR = " · ";
 
@@ -209,7 +209,8 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
   // A runner who is only interested is told to register before it is too late.
-  const reminded = deadline?.kind === "open" && !!me && isInterested(view, me.runnerId);
+  const reminded =
+    deadline !== null && deadline.kind !== "closed" && !!me && isInterested(view, me.runnerId);
   // "I'm in" is for what is left to choose: a format where the member has no
   // participation yet, or "not decided yet".
   const options = me && joinOptions(view, me.runnerId);
@@ -310,7 +311,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
         >
           <p className="flex items-start gap-2.5 text-neutral-900">
             <ClockIcon className="mt-0.5 size-5 shrink-0 text-peach-700" />
-            {t.event.reminder(f.date(deadline.deadline))}
+            {deadline.kind === "open"
+              ? t.event.reminder(f.date(deadline.deadline))
+              : openingText(deadline, f, t, "aside")}
           </p>
           {registration && <RegisterLink href={registration} />}
         </aside>

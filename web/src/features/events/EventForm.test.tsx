@@ -58,6 +58,10 @@ setUpFormTests();
 
 const registrationDeadline = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationDeadline);
+const registrationOpening = (screen: Screen) =>
+  screen.getByLabelText(fr.form.registrationOpening, { exact: true });
+const registrationOpeningTime = (screen: Screen) =>
+  screen.getByLabelText(fr.form.registrationOpeningTime, { exact: true });
 const notes = (screen: Screen) => screen.getByLabelText(fr.form.notes);
 const removes = (screen: Screen) => screen.getByRole("button", { name: fr.common.remove });
 const joinBox = (screen: Screen) => screen.getByRole("checkbox", { name: fr.form.join });
@@ -311,6 +315,85 @@ test("EventForm — la date limite et le prix sont envoyés", async () => {
   expect(one?.body).toMatchObject({ price_eur: 42.5 });
   // A format with no price sends 0, which is how it is cleared.
   expect(two?.body).toMatchObject({ price_eur: 0 });
+});
+
+test("EventForm — l'ouverture et son heure sont envoyées", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await registrationDeadline(screen).fill("2026-06-10");
+  await registrationOpening(screen).fill("2026-05-12");
+  await registrationOpeningTime(screen).fill("10:00");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+  expect(mocks.calls[0]?.body).toMatchObject({
+    registration_opening: "2026-05-12",
+    registration_opening_time: "10:00",
+  });
+});
+
+test("EventForm — l'heure n'est active qu'avec un jour", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+
+  // No day: the time cannot be typed, and the hint says what it is.
+  await expect.element(registrationOpeningTime(screen)).toBeDisabled();
+  await expect.element(screen.getByText(fr.form.registrationOpeningTimeHint)).toBeVisible();
+  expect(registrationOpeningTime(screen).element().getAttribute("aria-describedby")).toContain(
+    screen.getByText(fr.form.registrationOpeningTimeHint).element().id,
+  );
+  await expect.element(registrationOpeningTime(screen)).toHaveAttribute("type", "time");
+
+  await registrationOpening(screen).fill("2026-05-12");
+  await expect.element(registrationOpeningTime(screen)).toBeEnabled();
+  await registrationOpeningTime(screen).fill("10:00");
+
+  // Emptying the day empties the time: what is typed stays in the field, but is not sent.
+  await registrationOpening(screen).fill("");
+  await expect.element(registrationOpeningTime(screen)).toBeDisabled();
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+  expect(mocks.calls[0]?.body).toMatchObject({
+    registration_opening: "",
+    registration_opening_time: "",
+  });
+});
+
+test("EventForm — l'erreur du serveur sous le champ", async () => {
+  mocks.send.mockRejectedValue(
+    refused(0, 400, {
+      registration_opening: field("registration_opening_after_deadline"),
+      registration_opening_time: field("time_invalid"),
+    }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await registrationDeadline(screen).fill("2026-05-01");
+  await registrationOpening(screen).fill("2026-05-12");
+  await registrationOpeningTime(screen).fill("10:00");
+
+  await save(screen).click();
+
+  const day = screen.getByText(fr.errors.registration_opening_after_deadline);
+  await expect.element(day).toBeVisible();
+  expect(registrationOpening(screen).element().getAttribute("aria-describedby")).toContain(
+    day.element().id,
+  );
+  expect(registrationOpening(screen).element().getAttribute("aria-invalid")).toBe("true");
+  const time = screen.getByText(fr.errors.time_invalid);
+  await expect.element(time).toBeVisible();
+  expect(registrationOpeningTime(screen).element().getAttribute("aria-describedby")).toContain(
+    time.element().id,
+  );
+  // What was typed stays.
+  await expect.element(registrationOpening(screen)).toHaveValue("2026-05-12");
+  await expect.element(registrationOpeningTime(screen)).toHaveValue("10:00");
 });
 
 test("EventForm — « Je participe » décoché : pas de participation", async () => {

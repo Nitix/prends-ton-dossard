@@ -903,3 +903,36 @@ test("ListPage — les événements d'un mois sont sur deux colonnes dès `md` (
     await page.viewport(414, 896);
   }
 });
+
+test("EventCard — la pastille d'ouverture", async () => {
+  const opening = {
+    ...withDeadline,
+    registration_opening: "2026-06-05",
+    registration_opening_time: "10:00",
+  };
+  mocks.events.mockResolvedValue([opening]);
+
+  // Before the day: the date and the time, in words.
+  const soon = await renderList("/liste", ["fr"], "2026-06-01");
+  await expect.element(soon.screen.getByText("Trail des Crêtes")).toBeVisible();
+  const chip = soon.screen.getByText(/^Ouverture le/);
+  await expect.element(chip).toBeVisible();
+  expect(plain(chip.element().textContent)).toBe("Ouverture le 5 juin à 10:00");
+  expect(chip.element().getAttribute("data-kind")).toBe("soon");
+  const soonLook = getComputedStyle(chip.element()).backgroundColor;
+  await soon.screen.unmount();
+
+  // The day itself.
+  const today = await renderList("/liste", ["fr"], "2026-06-05");
+  const chipToday = today.screen.getByText(/^Ouverture aujourd/);
+  await expect.element(chipToday).toBeVisible();
+  expect(plain(chipToday.element().textContent)).toBe("Ouverture aujourd'hui à 10:00");
+  expect(chipToday.element().getAttribute("data-kind")).toBe("today");
+  await today.screen.unmount();
+
+  // It has the peach look of an open registration.
+  const open = await renderList("/liste", ["fr"], "2026-06-06");
+  const until = open.screen.getByText(/^Inscriptions jusqu/);
+  await expect.element(until).toBeVisible();
+  expect(getComputedStyle(until.element()).backgroundColor).toBe(soonLook);
+});

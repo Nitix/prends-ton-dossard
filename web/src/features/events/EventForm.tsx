@@ -61,6 +61,8 @@ const EVENT_FIELDS: readonly string[] = [
   "start_date",
   "registration_url",
   "registration_deadline",
+  "registration_opening",
+  "registration_opening_time",
   "notes",
 ];
 const FORMAT_FIELDS: readonly string[] = [
@@ -492,6 +494,40 @@ function EventFields({
               value={draft.registrationDeadline}
               onChange={(event) => {
                 change({ registrationDeadline: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+        <Field label={t.form.registrationOpening} error={eventError("registration_opening")}>
+          {(control) => (
+            <input
+              {...control}
+              name="registration_opening"
+              type="date"
+              value={draft.registrationOpening}
+              onChange={(event) => {
+                change({ registrationOpening: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+        <Field
+          label={t.form.registrationOpeningTime}
+          hint={t.form.registrationOpeningTimeHint}
+          error={eventError("registration_opening_time")}
+        >
+          {(control) => (
+            <input
+              {...control}
+              name="registration_opening_time"
+              type="time"
+              // A time needs a day: the draft keeps what was typed until it is sent, and the day gives the field back.
+              disabled={draft.registrationOpening === ""}
+              value={draft.registrationOpeningTime}
+              onChange={(event) => {
+                change({ registrationOpeningTime: event.target.value });
               }}
               className={INPUT}
             />

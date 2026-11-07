@@ -52,7 +52,7 @@ export function EventCard({ view }: { view: EventView }) {
             <p
               data-kind={registration.kind}
               className={`event-card-deadline mt-1 self-start rounded-full px-2.5 py-1 text-xs font-semibold ${
-                registration.kind === "open"
+                registration.kind !== "closed"
                   ? "bg-peach-50 text-peach-800 ring-1 ring-peach-200"
                   : "bg-neutral-100 text-neutral-700 ring-1 ring-neutral-200"
               }`}

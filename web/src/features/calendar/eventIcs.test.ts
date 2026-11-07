@@ -214,3 +214,65 @@ describe("icsFileName", () => {
     expect(icsFileName(' / : * ? " < > | \\ ', "event")).toBe("event.ics");
   });
 });
+
+/** The properties of each VEVENT of the file, by name. */
+function events(ics: string): Record<string, string>[] {
+  return ics
+    .split("BEGIN:VEVENT\r\n")
+    .slice(1)
+    .map((part) => properties(part.split("END:VEVENT")[0] ?? ""));
+}
+
+describe("eventIcs — l'ouverture des inscriptions", () => {
+  test("eventIcs — l'ouverture est un second événement, en UTC", () => {
+    // In winter, Paris is one hour ahead of UTC: 10:00 is 09:00Z.
+    const winter = eventIcs(
+      viewOf({ registration_opening: "2026-01-12", registration_opening_time: "10:00" }),
+      APP_URL,
+      now(),
+      "fr",
+    );
+    const [race, opening] = events(winter);
+    expect(race?.UID).toBe("event-event@prends-ton-dossard");
+    expect(opening).toEqual({
+      UID: "opening-event@prends-ton-dossard",
+      DTSTAMP: "20261101T093015Z",
+      DTSTART: "20260112T090000Z",
+      DTEND: "20260112T093000Z",
+      SUMMARY: "Ouverture des inscriptions : Trail des Crêtes",
+      DESCRIPTION: "https://courses.example.test/evenements/event",
+      URL: "https://courses.example.test/evenements/event",
+    });
+    // Still one calendar, every line ended by CRLF.
+    lines(winter);
+    expect(unfold(winter).filter((line) => line === "BEGIN:VEVENT")).toHaveLength(2);
+
+    // In summer, two hours ahead: 10:00 is 08:00Z.
+    const summer = events(
+      eventIcs(
+        viewOf({ registration_opening: "2026-05-12", registration_opening_time: "10:00" }),
+        APP_URL,
+        now(),
+        "en",
+      ),
+    )[1];
+    expect(summer?.DTSTART).toBe("20260512T080000Z");
+    expect(summer?.DTEND).toBe("20260512T083000Z");
+    expect(summer?.SUMMARY).toBe("Registration opens: Trail des Crêtes");
+  });
+
+  test("eventIcs — sans heure, un jour entier", () => {
+    const [, opening] = events(
+      eventIcs(viewOf({ registration_opening: "2026-05-12" }), APP_URL, now(), "fr"),
+    );
+
+    expect(opening?.UID).toBe("opening-event@prends-ton-dossard");
+    expect(opening?.["DTSTART;VALUE=DATE"]).toBe("20260512");
+    expect(opening?.["DTEND;VALUE=DATE"]).toBe("20260513");
+    expect(opening).not.toHaveProperty("DTSTART");
+  });
+
+  test("eventIcs — sans ouverture, un seul événement", () => {
+    expect(events(eventIcs(viewOf(), APP_URL, now(), "fr"))).toHaveLength(1);
+  });
+});
