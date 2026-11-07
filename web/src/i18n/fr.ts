@@ -189,7 +189,7 @@ export const fr = {
       mm: string,
       gust: string,
     ) =>
-      `${date} · ${label} · ${tMin} à ${tMax} °C · pluie ${chance} %, ${mm} mm · rafales ${gust} km/h`,
+      `${date} · ${label} · ${tMin} à ${tMax} °C · pluie ${chance} %, ${mm} mm · rafales ${gust} km/h`,
     // Under a millimetre: a few drops are not none.
     lessThanOneMm: "< 1",
     // The WMO codes in words (see labels.ts).

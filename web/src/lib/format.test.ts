@@ -283,3 +283,14 @@ describe("dateToDay", () => {
     expect(plain(createFormatters(locale).dateToDay(date("2026-06-13")))).toBe(expected);
   });
 });
+
+describe("integer", () => {
+  test("integer — arrondi, dans la langue, jamais « -0 »", () => {
+    const fr = createFormatters("fr-FR");
+    expect(fr.integer(17.3)).toBe("17");
+    expect(fr.integer(-0.4)).toBe("0");
+    expect(fr.integer(-2.6)).toBe("-3");
+    expect(plain(fr.integer(1234.5))).toBe("1 235");
+    expect(createFormatters("en-GB").integer(1234.4)).toBe("1,234");
+  });
+});

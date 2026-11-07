@@ -142,7 +142,7 @@ export const en = {
     groupExists: "The group races link is active.",
   },
   weather: {
-    title: "Forecast",
+    title: "Weather forecast",
     loading: "Loading the weather…",
     failed: "The weather could not be loaded.",
     atPlace: (name: string, detail: string) => (detail ? `In ${name} (${detail})` : `In ${name}`),
@@ -163,7 +163,7 @@ export const en = {
       mm: string,
       gust: string,
     ) =>
-      `${date} · ${label} · ${tMin} to ${tMax} °C · rain ${chance}%, ${mm} mm · gusts ${gust} km/h`,
+      `${date} · ${label} · ${tMin} to ${tMax} °C · rain ${chance}%, ${mm} mm · gusts ${gust} km/h`,
     lessThanOneMm: "< 1",
     kinds: {
       clear: "Clear sky",

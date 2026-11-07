@@ -32,6 +32,8 @@ export type Formatters = {
   dateTime(instant: Temporal.Instant): string;
   /** The time of an instant, in Paris: "14:05". */
   time(instant: Temporal.Instant): string;
+  /** A whole number in the language of the site, rounded; a small negative one is "0", never "-0". */
+  integer(n: number): string;
   /** Kilometers, at most one decimal: "42,2 km". */
   km(n: number): string;
   /** Meters, no decimal: "2 400 m". */
@@ -83,6 +85,10 @@ export function createFormatters(locale: string): Formatters {
     style: "unit",
     unit: "kilometer",
     maximumFractionDigits: 1,
+  });
+  const integers = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    signDisplay: "negative",
   });
   const meters = new Intl.NumberFormat(locale, {
     style: "unit",
@@ -138,6 +144,7 @@ export function createFormatters(locale: string): Formatters {
     dateTime: (instant) =>
       instant.toLocaleString(locale, { dateStyle: "long", timeStyle: "short", timeZone: PARIS }),
     time: (instant) => instant.toLocaleString(locale, { timeStyle: "short", timeZone: PARIS }),
+    integer: (n) => integers.format(n),
     km: (n) => kilometers.format(n),
     meters: (n) => meters.format(n),
     price: (eur) => euros.format(eur),

@@ -38,21 +38,17 @@ const ICONS: Record<WeatherKind, (props: { className?: string }) => ReactNode> =
   unknown: UnknownWeatherIcon,
 };
 
-/** Whole degrees; never "-0" (adding zero turns it into 0). */
-const degrees = (n: number) => String(Math.round(n) + 0);
-
 /** The line of a day, readable on its own: « sam. 13 juin · Averses · 9 à 17 °C · pluie 60 %, 2 mm · rafales 35 km/h ». */
 function dayLine(day: WeatherDay, f: Formatters, t: Messages): string {
-  const mm =
-    day.rainMm > 0 && day.rainMm < 0.5 ? t.weather.lessThanOneMm : String(Math.round(day.rainMm));
+  const mm = day.rainMm > 0 && day.rainMm < 0.5 ? t.weather.lessThanOneMm : f.integer(day.rainMm);
   return t.weather.day(
     f.date(parseDate(day.date)),
     weatherLabel(day.code, t),
-    degrees(day.tMin),
-    degrees(day.tMax),
-    String(Math.round(day.rainChance)),
+    f.integer(day.tMin),
+    f.integer(day.tMax),
+    f.integer(day.rainChance),
     mm,
-    String(Math.round(day.gustKmh)),
+    f.integer(day.gustKmh),
   );
 }
 
@@ -114,6 +110,7 @@ export function WeatherSection({ view }: { view: EventView }) {
             className="underline underline-offset-2"
           >
             {t.weather.sourceName}
+            <span className="sr-only"> {t.share.newTab}</span>
           </a>
           {t.weather.sourceAfter}
           {weather.place.source === "place" && t.weather.geonames}

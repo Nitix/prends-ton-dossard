@@ -49,6 +49,8 @@ export function useWeather(eventId: string, enabled: boolean): UseQueryResult<We
     queryFn: () =>
       pb.send<Weather>(`/api/app/events/${encodeURIComponent(eventId)}/weather`, { method: "GET" }),
     enabled,
+    // An outage of Open-Meteo answers 502 after up to 8 s: one more try, not three (the page says it failed, and has a button).
+    retry: 1,
     staleTime: STALE_MS,
   });
 }

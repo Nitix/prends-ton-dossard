@@ -64,7 +64,7 @@ async function renderSection(
   if (answer === "pending") mocks.send.mockReturnValue(new Promise(() => {}));
   else if (answer instanceof Error) mocks.send.mockRejectedValue(answer);
   else mocks.send.mockResolvedValue(answer);
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
@@ -108,6 +108,30 @@ describe("WeatherSection", () => {
     );
   });
 
+  test("WeatherSection — un peu de pluie n'est pas pas de pluie, et pas de « -0 »", async () => {
+    const drops = { ...SHOWERS, tMin: -0.4, tMax: 0.2, rainMm: 0.3 };
+    const half = { ...SHOWERS, date: "2026-06-14", tMin: -2.6, rainMm: 0.5 };
+    const screen = await renderSection({ ...FOUND_PLACE, days: [drops, half] });
+    const items = screen.getByRole("list").getByRole("listitem");
+    await expect.poll(() => items.elements().length).toBe(2);
+    expect(plain(items.nth(0).element().textContent)).toBe(
+      "sam. 13 juin · Averses · 0 à 0 °C · pluie 60 %, < 1 mm · rafales 35 km/h",
+    );
+    expect(plain(items.nth(1).element().textContent)).toBe(
+      "dim. 14 juin · Averses · -3 à 17 °C · pluie 60 %, 1 mm · rafales 35 km/h",
+    );
+  });
+
+  test("WeatherSection — les unités ne se coupent pas de leur nombre", async () => {
+    const screen = await renderSection(FOUND_PLACE);
+    const item = screen.getByRole("list").getByRole("listitem").nth(0);
+    await expect.poll(() => item.element().textContent).toContain("°C");
+    const text = item.element().textContent;
+    for (const unit of ["°C", "%", "mm", "km/h"]) {
+      expect(text).toContain(" " + unit);
+    }
+  });
+
   test("WeatherSection — en anglais", async () => {
     const screen = await renderSection(FOUND_PLACE, { languages: ["en-GB"] });
     const items = screen.getByRole("list").getByRole("listitem");
@@ -149,24 +173,24 @@ describe("WeatherSection", () => {
 
   test("WeatherSection — la source et son lien", async () => {
     const screen = await renderSection(FOUND_TRACK);
-    const link = screen.getByRole("link", { name: "Open-Meteo.com" });
+    const link = screen.getByRole("link", { name: `Open-Meteo.com ${fr.share.newTab}` });
     await expect.element(link).toBeVisible();
     expect(link.element().getAttribute("href")).toBe("https://open-meteo.com/");
     expect(link.element().getAttribute("rel")).toContain("noopener");
     expect(plain(link.element().parentElement?.textContent)).toBe(
-      "Données : Open-Meteo.com (CC BY 4.0)",
+      "Données : Open-Meteo.com (nouvel onglet) (CC BY 4.0)",
     );
   });
 
   test("WeatherSection — « lieu : GeoNames » pour un lieu géocodé", async () => {
     const geocoded = await renderSection(FOUND_PLACE);
-    await expect
-      .element(geocoded.getByText("Données : Open-Meteo.com (CC BY 4.0) · lieu : GeoNames"))
-      .toBeVisible();
+    await expect.element(geocoded.getByText(/ · lieu : GeoNames$/)).toBeVisible();
     await geocoded.unmount();
 
     const track = await renderSection(FOUND_TRACK);
-    await expect.element(track.getByRole("link", { name: "Open-Meteo.com" })).toBeVisible();
+    await expect
+      .element(track.getByRole("link", { name: `Open-Meteo.com ${fr.share.newTab}` }))
+      .toBeVisible();
     expect(document.body.textContent).not.toContain("GeoNames");
   });
 
@@ -184,7 +208,8 @@ describe("WeatherSection", () => {
     mocks.send.mockResolvedValue(FOUND_PLACE);
     await screen.getByRole("button", { name: "Réessayer" }).click();
     await expect.element(screen.getByText("sam. 13 juin", { exact: false })).toBeVisible();
-    expect(mocks.send).toHaveBeenCalledTimes(2);
+    // The query tries once more by itself (an outage is not waited out three times), then the button asks again.
+    expect(mocks.send).toHaveBeenCalledTimes(3);
     // The page was never left on the <body>: the title took the focus as the button was tapped.
     expect(document.activeElement).not.toBe(document.body);
   });
