@@ -143,7 +143,12 @@ func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, s
 		return *p
 	}
 	days := []Day{}
+	firstDay, lastDay := start, end
 	for i, date := range d.Time {
+		// A date that is not a day, or not one asked for, is not kept.
+		if parsed, err := time.Parse(time.DateOnly, date); err != nil || parsed.Format(time.DateOnly) != date || date < firstDay || date > lastDay {
+			continue
+		}
 		// A day without a code or a temperature says nothing worth showing.
 		if d.Code[i] == nil || d.TMax[i] == nil || d.TMin[i] == nil {
 			continue
@@ -158,6 +163,9 @@ func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, s
 			WindKmh:    or0(d.Wind[i]),
 			GustKmh:    or0(d.Gusts[i]),
 		})
+	}
+	if len(days) == 0 {
+		return nil, fmt.Errorf("%w: no usable day", errService)
 	}
 	return days, nil
 }

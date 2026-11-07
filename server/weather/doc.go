@@ -17,6 +17,14 @@
 // of server/push does (it reuses its dial guard); the two addresses are
 // the only ones that a request may go to.
 //
+// # The days
+//
+// The answer has the days of the race from today on: a race of several days that
+// has begun does not list the days that are gone, so days[0] is not always the
+// first day of the race, and a page labels each day by its own date. At most 16
+// days (the horizon of Open-Meteo); each date is checked and kept only inside
+// the range asked, and an answer with no usable day is a failure.
+//
 // # Cache and budget
 //
 // Everything is in memory and bounded (see cache.go): a forecast is kept an

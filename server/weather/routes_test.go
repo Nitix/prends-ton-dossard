@@ -151,3 +151,31 @@ func TestWeather_Labels(t *testing.T) {
 		}
 	}
 }
+
+func TestWeather_ValidatesTheDays(t *testing.T) {
+	day := func(d string) string {
+		return `{"daily":{"time":["` + d + `"],"weather_code":[61],"temperature_2m_max":[17],"temperature_2m_min":[9],"precipitation_probability_max":[60],"precipitation_sum":[2],"wind_speed_10m_max":[20],"wind_gusts_10m_max":[35]}}`
+	}
+	t.Run("a date outside the range, or that is no day, is dropped", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		w.meteo.body = `{"daily":{"time":["2026-06-13","2026-06-14","2026-06-15","bonjour","2026-6-13"],"weather_code":[61,61,61,61,61],` +
+			`"temperature_2m_max":[17,17,17,17,17],"temperature_2m_min":[9,9,9,9,9],"precipitation_probability_max":[1,1,1,1,1],` +
+			`"precipitation_sum":[1,1,1,1,1],"wind_speed_10m_max":[1,1,1,1,1],"wind_gusts_10m_max":[1,1,1,1,1]}}`
+		a := w.answer(t, w.fx.Event.Id)
+		if len(a.Days) != 2 || a.Days[0].Date != "2026-06-13" || a.Days[1].Date != "2026-06-14" {
+			t.Errorf("days %+v", a.Days)
+		}
+	})
+	t.Run("no usable day is a failure, not ok", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		w.meteo.body = day("2027-01-01")
+		if status, body := w.get(t, w.fx.Event.Id); status != http.StatusBadGateway || !strings.Contains(body, "weather_unavailable") {
+			t.Errorf("%d %s", status, body)
+		}
+		w2 := newWorld(t, "2026-06-10")
+		w2.meteo.body = `{"daily":{"time":[],"weather_code":[],"temperature_2m_max":[],"temperature_2m_min":[],"precipitation_probability_max":[],"precipitation_sum":[],"wind_speed_10m_max":[],"wind_gusts_10m_max":[]}}`
+		if status, _ := w2.get(t, w2.fx.Event.Id); status != http.StatusBadGateway {
+			t.Errorf("an empty list: status %d", status)
+		}
+	})
+}

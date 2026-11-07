@@ -74,6 +74,7 @@ type service struct {
 	forecasts *cache[forecastValue]
 	places    *cache[found]
 	tracks    *cache[trackStart]
+	failures  *cache[string]
 }
 
 // Register adds GET /api/app/events/{id}/weather (apis.RequireAuth("users")), on
@@ -94,6 +95,7 @@ func Register(app core.App, cfg config.Config) {
 		forecasts: newCache[forecastValue](cacheMax),
 		places:    newCache[found](cacheMax),
 		tracks:    newCache[trackStart](cacheMax),
+		failures:  newCache[string](cacheMax),
 	}
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		e.Router.GET(path, s.route).Bind(apis.RequireAuth("users"))
@@ -148,13 +150,11 @@ func (s *service) answer(ctx context.Context, event *core.Record) (Answer, error
 	case today > end:
 		return Answer{Status: "over"}, nil
 	}
-	// The race days that Open-Meteo can tell, from today on.
+	// The race days that Open-Meteo can tell, from today on. Inside the window
+	// (7 days of lead, 16 of horizon) the range is never empty.
 	dayFrom := max(start, today)
 	todayDate, _ := time.Parse(time.DateOnly, today)
 	dayTo := min(end, todayDate.AddDate(0, 0, horizon-1).Format(time.DateOnly))
-	if dayFrom > dayTo {
-		return Answer{Status: "not_yet", From: from}, nil
-	}
 
 	lat, lon, ele, place, err := s.whereIs(ctx, event)
 	if err != nil {
@@ -180,14 +180,22 @@ func (s *service) answer(ctx context.Context, event *core.Record) (Answer, error
 // Open-Meteo fails, the last one under six hours old.
 func (s *service) forecast(ctx context.Context, lat, lon float64, ele *float64, from, to string) (forecastValue, time.Time, bool, error) {
 	key := fmt.Sprintf("%.2f|%.2f|%s|%s|%s", lat, lon, elevationKey(ele), from, to)
-	unlock := s.forecasts.locks.lock(key)
+	unlock, err := s.forecasts.locks.lock(ctx, key)
+	if err != nil {
+		return forecastValue{}, time.Time{}, false, err
+	}
 	defer unlock()
 
 	old, have := s.forecasts.get(key)
 	if have && old.fresh() {
 		return old.value, old.at, false, nil
 	}
-	days, err := s.src.forecast(ctx, lat, lon, ele, from, to)
+	var days []Day
+	if s.failed("f|" + key) {
+		err = errRecentFailure
+	} else if days, err = s.src.forecast(ctx, lat, lon, ele, from, to); err != nil {
+		s.fail("f|"+key, err)
+	}
 	if err != nil {
 		if have && now().Sub(old.at) < forecastStale {
 			return old.value, old.at, true, nil
@@ -217,7 +225,7 @@ func (s *service) whereIs(ctx context.Context, event *core.Record) (lat, lon flo
 		if name == "" {
 			continue
 		}
-		point, err := s.trackStart(f, name)
+		point, err := s.trackStart(ctx, f, name)
 		if err != nil {
 			return 0, 0, nil, nil, err
 		}
@@ -279,13 +287,20 @@ func tries(text string) []string {
 // geocode is the first place of text, kept 30 days, or a day when there is none.
 func (s *service) geocode(ctx context.Context, text string) (found, error) {
 	key := wording.Fold(text)
-	unlock := s.places.locks.lock(key)
+	unlock, err := s.places.locks.lock(ctx, key)
+	if err != nil {
+		return found{}, err
+	}
 	defer unlock()
 	if e, ok := s.places.get(key); ok && e.fresh() {
 		return e.value, nil
 	}
+	if s.failed("g|" + key) {
+		return found{}, errRecentFailure
+	}
 	got, err := s.src.geocode(ctx, text)
 	if err != nil {
+		s.fail("g|"+key, err)
 		return found{}, err
 	}
 	ttl := placeTTL
@@ -340,27 +355,55 @@ func (s *service) titleOf(f *core.Record) (string, error) {
 
 // trackStart is the first point of the track of a format, kept by the name of
 // its file (which changes with each upload), with no limit of time.
-func (s *service) trackStart(f *core.Record, name string) (trackStart, error) {
-	unlock := s.tracks.locks.lock(name)
+func (s *service) trackStart(ctx context.Context, f *core.Record, name string) (trackStart, error) {
+	unlock, err := s.tracks.locks.lock(ctx, name)
+	if err != nil {
+		return trackStart{}, err
+	}
 	defer unlock()
 	if e, ok := s.tracks.get(name); ok {
 		return e.value, nil
 	}
 	fsys, err := s.pb.NewFilesystem()
 	if err != nil {
-		return trackStart{}, err
+		return trackStart{}, err // the storage as a whole
 	}
 	defer fsys.Close()
+	// A file that is missing or cannot be read is not the weather's failure: it
+	// is said in the log, and the place of the race answers, as for a track with
+	// no point. Nothing is kept, so a file that comes back is read again.
 	reader, err := fsys.GetReader(f.BaseFilesPath() + "/" + name)
 	if err != nil {
-		return trackStart{}, err
+		s.pb.Logger().Warn("weather: a track could not be opened", "format", f.Id, "error", err.Error())
+		return trackStart{}, nil
 	}
 	defer reader.Close()
 	lat, lon, ele, ok, err := firstPoint(reader)
 	if err != nil {
-		return trackStart{}, err
+		s.pb.Logger().Warn("weather: a track could not be read", "format", f.Id, "error", err.Error())
+		return trackStart{}, nil
 	}
 	point := trackStart{lat: lat, lon: lon, ele: ele, ok: ok}
 	s.tracks.put(name, point, 0)
 	return point, nil
+}
+
+// failureTTL is how long a failed call is remembered for its key: the requests
+// that waited for it get its answer, and do not each call Open-Meteo again.
+const failureTTL = time.Minute
+
+var errRecentFailure = errors.New("weather: the last call for this key failed a moment ago")
+
+// failed says whether a call for key failed less than failureTTL ago.
+func (s *service) failed(key string) bool {
+	e, ok := s.failures.get(key)
+	return ok && e.fresh()
+}
+
+// fail remembers a failed call. A spent budget is not one: nothing was asked.
+func (s *service) fail(key string, err error) {
+	if errors.Is(err, errBudget) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
+	s.failures.put(key, err.Error(), failureTTL)
 }

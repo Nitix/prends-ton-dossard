@@ -2,6 +2,7 @@ package weather
 
 import (
 	"net/http"
+	"testing"
 	"time"
 )
 
@@ -11,8 +12,13 @@ import (
 // program, but for the guard against a loopback address) and, when at is not
 // nil, its clock. It returns what puts everything back.
 //
+// It panics when the program is not a test binary (testing.Testing).
+//
 // The tests of this package use export_test.go instead.
 func Override(forecast, geocoding string, at func() time.Time) (restore func()) {
+	if !testing.Testing() {
+		panic("weather: Override is for tests")
+	}
 	oldForecast, oldGeocoding, oldClient, oldNow := forecastURL, geocodingURL, client, now
 	forecastURL, geocodingURL = forecast, geocoding
 	real := newClient()

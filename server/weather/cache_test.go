@@ -1,6 +1,7 @@
 package weather_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -143,6 +144,7 @@ func TestWeather_StaleOnError(t *testing.T) {
 
 	// And it comes back.
 	w.meteo.status = 0
+	weather.SetNow(t, at("2026-06-10").Add(7*time.Hour+2*time.Minute))
 	if a := w.answer(t, w.fx.Event.Id); a.Stale || a.Status != "ok" {
 		t.Errorf("after the recovery: %+v", a)
 	}
@@ -175,4 +177,53 @@ func TestWeather_Budget(t *testing.T) {
 	if a := w.answer(t, other.Id); a.Status != "ok" {
 		t.Errorf("status %q", a.Status)
 	}
+}
+
+func TestWeather_FailureIsKeptAMinute(t *testing.T) {
+	w := newWorld(t, "2026-06-10")
+	w.meteo.status = http.StatusInternalServerError
+	w.meteo.delay = 50 * time.Millisecond
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if status, _ := w.get(t, w.fx.Event.Id); status != http.StatusBadGateway {
+				t.Errorf("status %d, want 502", status)
+			}
+		}()
+	}
+	wg.Wait()
+	if f := w.meteo.count("/v1/forecast"); f != 1 {
+		t.Errorf("%d forecast requests for ten calls at once that fail, want 1", f)
+	}
+	w.get(t, w.fx.Event.Id)
+	if f := w.meteo.count("/v1/forecast"); f != 1 {
+		t.Errorf("%d forecast requests: the failure was not kept", f)
+	}
+	w.meteo.status = 0
+	weather.SetNow(t, at("2026-06-10").Add(7*time.Hour+2*time.Minute))
+	weather.SetNow(t, at("2026-06-10").Add(weather.FailureTTL+time.Second))
+	if a := w.answer(t, w.fx.Event.Id); a.Status != "ok" {
+		t.Errorf("status %q after the minute", a.Status)
+	}
+}
+
+func TestWeather_LockHonoursTheContext(t *testing.T) {
+	var locks weather.KeyLocks
+	release, err := weather.LockKey(context.Background(), &locks, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := weather.LockKey(ctx, &locks, "k"); err == nil {
+		t.Error("a held key was taken")
+	}
+	release()
+	again, err := weather.LockKey(context.Background(), &locks, "k")
+	if err != nil {
+		t.Fatalf("the key is not free after a waiter gave up: %v", err)
+	}
+	again()
 }

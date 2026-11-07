@@ -40,6 +40,8 @@ type meteo struct {
 	status int
 	// delay slows each answer.
 	delay time.Duration
+	// body, when set, is the whole answer of the forecast.
+	body string
 	// redirect makes the forecast redirect there.
 	redirect string
 }
@@ -56,7 +58,7 @@ func newMeteo(t testing.TB) *meteo {
 func (m *meteo) serve(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	m.requests = append(m.requests, recorded{Path: r.URL.Path, Query: r.URL.Query(), Header: r.Header.Clone(), Raw: r.URL.RawQuery})
-	status, delay, redirect := m.status, m.delay, m.redirect
+	status, delay, redirect, body := m.status, m.delay, m.redirect, m.body
 	m.mu.Unlock()
 	if delay > 0 {
 		time.Sleep(delay)
@@ -73,6 +75,10 @@ func (m *meteo) serve(w http.ResponseWriter, r *http.Request) {
 	case "/v1/forecast":
 		if redirect != "" {
 			http.Redirect(w, r, redirect, http.StatusFound)
+			return
+		}
+		if body != "" {
+			fmt.Fprint(w, body)
 			return
 		}
 		if status != 0 {

@@ -115,3 +115,24 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	c.n += n
 	return n, err
 }
+
+func TestWeather_MissingTrackFallsBackToThePlace(t *testing.T) {
+	w := newWorld(t, "2026-06-10")
+	w.track(t, w.fx.F15, gpxAt(46.2, 7.2, ""))
+	record, err := w.app.FindRecordById("formats", w.fx.F15.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fsys, err := w.app.NewFilesystem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fsys.Close()
+	if err := fsys.Delete(record.BaseFilesPath() + "/" + record.GetString("gpx")); err != nil {
+		t.Fatal(err)
+	}
+	a := w.answer(t, w.fx.Event.Id)
+	if a.Status != "ok" || a.Place == nil || a.Place.Source != "place" || a.Place.Name != "Annecy" {
+		t.Errorf("answer %+v %+v", a, a.Place)
+	}
+}

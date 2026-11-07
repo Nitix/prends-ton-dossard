@@ -1,6 +1,7 @@
 package weather
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -89,27 +90,26 @@ type keyLocks struct {
 }
 
 type keyLock struct {
-	mu sync.Mutex
-	n  int
+	slot chan struct{} // holds a token while the key is held
+	n    int
 }
 
-// lock waits for the key and returns what releases it.
-func (k *keyLocks) lock(key string) func() {
+// lock waits for the key, or for ctx to end (then it gives ctx's error), and
+// returns what releases it.
+func (k *keyLocks) lock(ctx context.Context, key string) (func(), error) {
 	k.mu.Lock()
 	if k.held == nil {
 		k.held = map[string]*keyLock{}
 	}
 	l := k.held[key]
 	if l == nil {
-		l = &keyLock{}
+		l = &keyLock{slot: make(chan struct{}, 1)}
 		k.held[key] = l
 	}
 	l.n++
 	k.mu.Unlock()
 
-	l.mu.Lock()
-	return func() {
-		l.mu.Unlock()
+	release := func() {
 		k.mu.Lock()
 		l.n--
 		if l.n == 0 {
@@ -117,6 +117,16 @@ func (k *keyLocks) lock(key string) func() {
 		}
 		k.mu.Unlock()
 	}
+	select {
+	case l.slot <- struct{}{}:
+	case <-ctx.Done():
+		release()
+		return nil, ctx.Err()
+	}
+	return func() {
+		<-l.slot
+		release()
+	}, nil
 }
 
 // budgetPerHour is the most calls that the program makes to Open-Meteo in an

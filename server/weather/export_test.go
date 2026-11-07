@@ -1,6 +1,7 @@
 package weather
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -103,3 +104,11 @@ func Serve(t testing.TB, app core.App) http.Handler {
 	}
 	return mux
 }
+
+// The locks of a key.
+type KeyLocks = keyLocks
+
+func LockKey(ctx context.Context, k *KeyLocks, key string) (func(), error) { return k.lock(ctx, key) }
+
+// FailureTTL is how long a failed call is remembered.
+const FailureTTL = failureTTL

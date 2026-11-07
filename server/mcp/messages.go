@@ -12,6 +12,8 @@ import (
 	"unicode/utf8"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+
+	"courses/server/apperr"
 )
 
 // The messages of a refusal of the site, as the tools give them to the
@@ -183,8 +185,8 @@ func describeNamed(app core.App, err error, subject func(request int) string, na
 	}
 	// The weather that Open-Meteo could not give is a failure that the person is
 	// told, not a fault of the site: a 502 with its code, and its own words.
-	if refused.Code == "weather_unavailable" {
-		return errors.New(messages[refused.Code])
+	if refused.Code == apperr.CodeWeatherUnavailable {
+		return errors.New(messages[apperr.CodeWeatherUnavailable])
 	}
 	if refused.Status >= http.StatusInternalServerError || refused.Status < http.StatusBadRequest {
 		app.Logger().Error("mcp: the site failed a request of a tool", "error", refused.Error())
