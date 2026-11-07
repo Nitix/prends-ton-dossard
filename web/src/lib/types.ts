@@ -65,6 +65,10 @@ export type EventRecord = BaseRecord & {
   registration_url?: string;
   /** The last day to register, never after the start of the event: empty without a deadline. */
   registration_deadline?: string;
+  /** The day registration opens, a `YYYY-MM-DD` text, never after the deadline or the start: empty without one. */
+  registration_opening?: string;
+  /** The time it opens, `HH:MM`, Paris time: empty for no time (the site then counts 9 h). Needs a day. */
+  registration_opening_time?: string;
   notes?: string;
   /** The runner of the user who created the event (a `runners` id). */
   created_by: string;

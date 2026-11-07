@@ -23,6 +23,8 @@ export const ERROR_CODES: readonly string[] = [
   "date_invalid",
   "end_before_start",
   "registration_deadline_after_start",
+  "registration_opening_after_start",
+  "registration_opening_after_deadline",
   "format_date_out_of_range",
   "format_other_event",
   "format_measure_required",

@@ -822,6 +822,10 @@ export const fr = {
     end_before_start: "La date de fin est avant la date de début.",
     registration_deadline_after_start:
       "La date limite d'inscription doit être au plus tard le jour du début.",
+    registration_opening_after_start:
+      "L'ouverture des inscriptions doit être au plus tard le jour du début.",
+    registration_opening_after_deadline:
+      "L'ouverture des inscriptions doit être au plus tard la date limite.",
     format_date_out_of_range:
       "La date de l'épreuve doit être comprise dans les dates de l'événement.",
     format_other_event: "Cette épreuve appartient à un autre événement.",

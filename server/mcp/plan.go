@@ -26,6 +26,7 @@ type formatDraft struct {
 // eventDraft is a race as the form saves it (EventDraft of saveEvent.ts).
 type eventDraft struct {
 	ID, Name, Location, StartDate, EndDate, RegistrationURL, RegistrationDeadline, Notes string
+	RegistrationOpening, RegistrationOpeningTime                                         string
 	Formats                                                                              []formatDraft
 	Join                                                                                 *joinDraft // creation only
 }
@@ -41,6 +42,7 @@ type joinDraft struct {
 type storedEvent struct {
 	ID, StartDate, EndDate                                       string
 	Name, Location, RegistrationURL, RegistrationDeadline, Notes string
+	RegistrationOpening, RegistrationOpeningTime                 string
 	Formats                                                      []formatDraft
 }
 
@@ -68,13 +70,15 @@ const recordsOf = "/api/collections/"
 // is also how an update clears a field.
 func eventBody(draft eventDraft) map[string]any {
 	return map[string]any{
-		"name":                  draft.Name,
-		"location":              draft.Location,
-		"start_date":            draft.StartDate,
-		"end_date":              draft.EndDate,
-		"registration_url":      draft.RegistrationURL,
-		"registration_deadline": draft.RegistrationDeadline,
-		"notes":                 draft.Notes,
+		"name":                      draft.Name,
+		"location":                  draft.Location,
+		"start_date":                draft.StartDate,
+		"end_date":                  draft.EndDate,
+		"registration_url":          draft.RegistrationURL,
+		"registration_deadline":     draft.RegistrationDeadline,
+		"registration_opening":      draft.RegistrationOpening,
+		"registration_opening_time": draft.RegistrationOpeningTime,
+		"notes":                     draft.Notes,
 	}
 }
 
@@ -105,6 +109,8 @@ func changedEventBody(draft eventDraft, stored *storedEvent) map[string]any {
 		{"end_date", draft.EndDate, stored.EndDate},
 		{"registration_url", draft.RegistrationURL, stored.RegistrationURL},
 		{"registration_deadline", draft.RegistrationDeadline, stored.RegistrationDeadline},
+		{"registration_opening", draft.RegistrationOpening, stored.RegistrationOpening},
+		{"registration_opening_time", draft.RegistrationOpeningTime, stored.RegistrationOpeningTime},
 		{"notes", draft.Notes, stored.Notes},
 	} {
 		if field.now != field.was {

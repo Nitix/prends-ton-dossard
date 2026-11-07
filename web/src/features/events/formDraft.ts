@@ -40,6 +40,10 @@ export type FormDraft = {
   registrationUrl: string;
   /** A `YYYY-MM-DD` day, or empty. */
   registrationDeadline: string;
+  /** A `YYYY-MM-DD` day, or empty. */
+  registrationOpening: string;
+  /** An `HH:MM` time, or empty. It is only sent with a day. */
+  registrationOpeningTime: string;
   notes: string;
   rows: FormatRow[];
   /** Whether the member takes part (a new event only). */
@@ -80,6 +84,8 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
       startDate: "",
       registrationUrl: "",
       registrationDeadline: "",
+      registrationOpening: "",
+      registrationOpeningTime: "",
       notes: "",
       rows: [row],
       join: true,
@@ -112,6 +118,8 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     startDate: event.start_date,
     registrationUrl: event.registration_url ?? "",
     registrationDeadline: event.registration_deadline ?? "",
+    registrationOpening: event.registration_opening ?? "",
+    registrationOpeningTime: event.registration_opening_time ?? "",
     notes: event.notes ?? "",
     rows,
     join: false,
@@ -280,6 +288,13 @@ export function toEventDraft(
     ),
     registration_url: draft.registrationUrl.trim() || undefined,
     registration_deadline: draft.registrationDeadline || undefined,
+    registration_opening: draft.registrationOpening || undefined,
+    // A time without a day is dropped: the form keeps what is typed until the
+    // save, and the server refuses a time that has no day.
+    registration_opening_time:
+      draft.registrationOpening && draft.registrationOpeningTime
+        ? draft.registrationOpeningTime
+        : undefined,
     notes: draft.notes.trim() || undefined,
     formats: draft.rows.map((row, index) => ({
       id: row.id,

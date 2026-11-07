@@ -437,3 +437,131 @@ func TestTools_DeleteEvent(t *testing.T) {
 		announced(t, app, alice, "delete_event", map[string]any{"event_id": fx.Event.Id}, "Introuvable : il a peut-être été supprimé.")
 	})
 }
+
+// The opening of the registration: a day and a time, saved with the race and
+// said back by get_event. A time needs a day, which the tool says before it
+// writes anything, in the words of the site.
+func TestTools_CreateEvent_Opening(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	base := func(change func(map[string]any)) map[string]any {
+		args := map[string]any{
+			"name": "Corrida de Noël", "location": "Lyon", "start_date": "2026-12-20",
+			"formats": []any{map[string]any{"race_type": "Trail", "distance_km": 42}},
+		}
+		change(args)
+		return args
+	}
+
+	t.Run("the day and the time are saved and said", func(t *testing.T) {
+		result := isDone(t, callTool(t, app, alice, "create_event", base(func(a map[string]any) {
+			a["name"] = "Foulées du Gel"
+			a["registration_deadline"] = "2026-12-01"
+			a["registration_opening"] = " 2026-11-10 "
+			a["registration_opening_time"] = " 10:00 "
+		})))
+		if result.Structured["registration_opening"] != "2026-11-10" || result.Structured["registration_opening_time"] != "10:00" {
+			t.Errorf("the race says %v at %v", result.Structured["registration_opening"], result.Structured["registration_opening_time"])
+		}
+		record := storedRecord(t, app, "events", result.Structured["id"].(string))
+		if record.GetString("registration_opening") != "2026-11-10" || record.GetString("registration_opening_time") != "10:00" {
+			t.Errorf("the stored race opens on %q at %q", record.GetString("registration_opening"), record.GetString("registration_opening_time"))
+		}
+	})
+
+	t.Run("the day alone: no time is said", func(t *testing.T) {
+		result := isDone(t, callTool(t, app, alice, "create_event", base(func(a map[string]any) {
+			a["name"] = "Semi des Roses"
+			a["registration_opening"] = "2026-11-10"
+		})))
+		if _, ok := result.Structured["registration_opening_time"]; ok {
+			t.Errorf("a time is said: %v", result.Structured["registration_opening_time"])
+		}
+	})
+
+	t.Run("a time without a day is refused before any write, in the words of the site", func(t *testing.T) {
+		announced(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_opening_time"] = "10:00" }),
+			"La course, ouverture des inscriptions : ce champ est obligatoire. (validation_required)")
+	})
+
+	t.Run("a day that is not a day", func(t *testing.T) {
+		announced(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_opening"] = "2026-02-31" }),
+			"registration_opening : « 2026-02-31 » n'est pas un jour valide (AAAA-MM-JJ).")
+	})
+
+	t.Run("an opening after the start", func(t *testing.T) {
+		refused(t, app, alice, "create_event", base(func(a map[string]any) { a["registration_opening"] = "2026-12-21" }),
+			"La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard le jour du début. (registration_opening_after_start)")
+	})
+
+	t.Run("an opening after the deadline", func(t *testing.T) {
+		refused(t, app, alice, "create_event", base(func(a map[string]any) {
+			a["registration_deadline"] = "2026-12-01"
+			a["registration_opening"] = "2026-12-02"
+		}), "La course, ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard la date limite. (registration_opening_after_deadline)")
+	})
+
+	t.Run("a time that is not a time", func(t *testing.T) {
+		refused(t, app, alice, "create_event", base(func(a map[string]any) {
+			a["registration_opening"] = "2026-11-10"
+			a["registration_opening_time"] = "24:00"
+		}), "La course, heure d'ouverture : l'heure doit être de la forme 06:30. (time_invalid)")
+	})
+}
+
+// Clearing the opening, or its time, would lose what a person entered: the
+// tool asks first, and the day cleared takes its time with it, as the form does.
+func TestTools_UpdateEvent_ClearingTheOpeningAsksFirst(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	update(t, app, fx.Event, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "10:00"})
+	args := map[string]any{"event_id": fx.Event.Id, "registration_opening": ""}
+
+	writesNothing(t, app, func() {
+		_, message, details := asked(t, callTool(t, app, alice, "update_event", args))
+		mentions(t, message, details, "L'ouverture des inscriptions serait effacée", "2026-05-04", "L'heure d'ouverture serait effacée", "10:00")
+	})
+
+	result := confirmAndCall(t, app, alice, "update_event", args)
+	if _, ok := result.Structured["registration_opening"]; ok {
+		t.Errorf("the race still says it opens on %v", result.Structured["registration_opening"])
+	}
+	if _, ok := result.Structured["registration_opening_time"]; ok {
+		t.Errorf("the race still says it opens at %v", result.Structured["registration_opening_time"])
+	}
+	record := storedRecord(t, app, "events", fx.Event.Id)
+	if record.GetString("registration_opening") != "" || record.GetString("registration_opening_time") != "" {
+		t.Errorf("the stored race opens on %q at %q", record.GetString("registration_opening"), record.GetString("registration_opening_time"))
+	}
+}
+
+// Another opening replaces the first without asking (nothing is lost), and a
+// time alone, which needs a day, is refused when the race has none.
+func TestTools_UpdateEvent_Opening(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_opening_time": "10:00"},
+		"La course, ouverture des inscriptions : ce champ est obligatoire. (validation_required)")
+
+	result := isDone(t, callTool(t, app, alice, "update_event", map[string]any{
+		"event_id": fx.Event.Id, "registration_opening": "2026-05-04", "registration_opening_time": "10:00",
+	}))
+	if result.Structured["registration_opening"] != "2026-05-04" || result.Structured["registration_opening_time"] != "10:00" {
+		t.Errorf("the race says %v at %v", result.Structured["registration_opening"], result.Structured["registration_opening_time"])
+	}
+
+	result = isDone(t, callTool(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_opening": "2026-05-05"}))
+	if result.Structured["registration_opening"] != "2026-05-05" || result.Structured["registration_opening_time"] != "10:00" {
+		t.Errorf("the race says %v at %v", result.Structured["registration_opening"], result.Structured["registration_opening_time"])
+	}
+}

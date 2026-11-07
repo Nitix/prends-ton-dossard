@@ -46,6 +46,10 @@ export type EventDraft = {
   registration_url?: string;
   /** The last day to register, a `YYYY-MM-DD` text, never after `start_date`. */
   registration_deadline?: string;
+  /** The day registration opens, a `YYYY-MM-DD` text, never after `registration_deadline` or `start_date`. */
+  registration_opening?: string;
+  /** The time of that opening, `HH:MM`, Paris time. Needs `registration_opening`. */
+  registration_opening_time?: string;
   notes?: string;
   formats: {
     id?: string;
@@ -82,6 +86,8 @@ function eventBody(draft: EventDraft): Record<string, unknown> {
     end_date: draft.end_date ?? "",
     registration_url: draft.registration_url ?? "",
     registration_deadline: draft.registration_deadline ?? "",
+    registration_opening: draft.registration_opening ?? "",
+    registration_opening_time: draft.registration_opening_time ?? "",
     notes: draft.notes ?? "",
   };
 }

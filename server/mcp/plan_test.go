@@ -216,7 +216,8 @@ func TestPlan_Creation_NotFilledInIsEmptyOrZero(t *testing.T) {
 	ops, _, _ := mcp.PlanBatch(newDraft(func(d *mcp.EventDraft) { d.EndDate = "" }), nil, me)
 	wantExactBody(t, ops[0], map[string]any{
 		"id": idOf(ops[0]), "name": "Trail des Crêtes", "location": "Annecy", "start_date": "2026-06-13",
-		"end_date": "", "registration_url": "", "registration_deadline": "", "notes": "",
+		"end_date": "", "registration_url": "", "registration_deadline": "", "registration_opening": "",
+		"registration_opening_time": "", "notes": "",
 	})
 	// And the creator is never sent: the server sets it.
 	if _, ok := ops[0].Body["created_by"]; ok {
@@ -748,4 +749,53 @@ func TestHasMeasure(t *testing.T) {
 			t.Errorf("%s: hasMeasure = %v, want %v", row.name, got, row.want)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// The opening of the registration (eventBody and changedEventBody)
+
+// eventBody — l'ouverture et son heure: they go with the event, as text, and
+// empty when not given (which is how an update clears them).
+func TestPlan_Creation_OpeningAndItsTimeSentWhenFilled(t *testing.T) {
+	ops, _, _ := mcp.PlanBatch(newDraft(func(d *mcp.EventDraft) {
+		d.RegistrationOpening = "2026-05-01"
+		d.RegistrationOpeningTime = "10:00"
+	}), nil, me)
+	wantBody(t, ops[0], map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
+}
+
+func TestPlan_Modification_OnlyAChangedOpeningIsSent(t *testing.T) {
+	t.Run("a new opening, and its time", func(t *testing.T) {
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening = "2026-05-01"
+			d.RegistrationOpeningTime = "10:00"
+		}), existing(), me)
+		wantSummary(t, ops, "update events")
+		wantExactBody(t, ops[0], map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
+	})
+	t.Run("only the time moves", func(t *testing.T) {
+		was := existing()
+		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening, d.RegistrationOpeningTime = "2026-05-01", "11:30"
+		}), was, me)
+		wantSummary(t, ops, "update events")
+		wantExactBody(t, ops[0], map[string]any{"registration_opening_time": "11:30"})
+	})
+	t.Run("the same opening sends nothing", func(t *testing.T) {
+		was := existing()
+		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening, d.RegistrationOpeningTime = "2026-05-01", "10:00"
+		}), was, me)
+		if len(ops) != 0 {
+			t.Errorf("the plan is %v, want no operation", summaryOf(ops))
+		}
+	})
+	t.Run("emptied, they go as empty texts", func(t *testing.T) {
+		was := existing()
+		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
+		ops, _, _ := mcp.PlanBatch(editDraft(nil), was, me)
+		wantExactBody(t, ops[0], map[string]any{"registration_opening": "", "registration_opening_time": ""})
+	})
 }

@@ -818,3 +818,123 @@ func TestParseDay(t *testing.T) {
 		})
 	}
 }
+
+// withOpening is a Before that gives the fixture event an opening of the
+// registration, the way the code of the application would.
+func withOpening(day, at string) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		record := storedEvent(t, app, fx.Event.Id)
+		record.Set("registration_opening", day)
+		record.Set("registration_opening_time", at)
+		if err := app.Save(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// openingIs asserts the stored opening and time of the fixture event.
+func openingIs(day, at string) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		record := storedEvent(t, app, fx.Event.Id)
+		if got := record.GetString("registration_opening"); got != day {
+			t.Errorf("registration_opening = %q, want %q", got, day)
+		}
+		if got := record.GetString("registration_opening_time"); got != at {
+			t.Errorf("registration_opening_time = %q, want %q", got, at)
+		}
+	}
+}
+
+// The opening of the registration is a real day, on or before the deadline and
+// the first day (the 13th of June 2026 for the event of the fixture), and its
+// time, which is optional, needs a day.
+func TestEvents_RegistrationOpening(t *testing.T) {
+	patch := func(name, payload string, status int, contains string, after func(testing.TB, *tests.TestApp, testutil.Fixture)) testutil.Row {
+		row := testutil.Row{
+			Name: name, As: "alice", Method: http.MethodPatch, URL: records("events", event),
+			Body: body(payload), Status: status, After: after,
+		}
+		if contains != "" {
+			row.Contains = []string{contains}
+		}
+		return row
+	}
+	testutil.RunRows(t, []testutil.Row{
+		patch("a good opening, with a time", `{"registration_opening":"2026-05-01","registration_opening_time":"10:00"}`,
+			http.StatusOK, "", openingIs("2026-05-01", "10:00")),
+		patch("a good opening, without a time", `{"registration_opening":"2026-05-01"}`,
+			http.StatusOK, "", openingIs("2026-05-01", "")),
+		patch("the same day as the first day", `{"registration_opening":"2026-06-13"}`,
+			http.StatusOK, "", openingIs("2026-06-13", "")),
+		{
+			Name: "the same day as the deadline", As: "alice", Before: withDeadline("2026-06-10"),
+			Method: http.MethodPatch, URL: records("events", event), Body: body(`{"registration_opening":"2026-06-10"}`),
+			Status: http.StatusOK, After: openingIs("2026-06-10", ""),
+		},
+		patch("a day that is not real", `{"registration_opening":"2026-02-31"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "date_invalid"), openingIs("", "")),
+		patch("a day that is not a day", `{"registration_opening":"10/05/2026"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "date_invalid"), openingIs("", "")),
+		patch("after the first day", `{"registration_opening":"2026-06-14"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "registration_opening_after_start"), openingIs("", "")),
+		{
+			Name: "after the deadline", As: "alice", Before: withDeadline("2026-06-10"),
+			Method: http.MethodPatch, URL: records("events", event), Body: body(`{"registration_opening":"2026-06-11"}`),
+			Status: http.StatusBadRequest, Contains: []string{fieldError("registration_opening", "registration_opening_after_deadline")},
+			After: openingIs("", ""),
+		},
+		patch("24:00", `{"registration_opening":"2026-05-01","registration_opening_time":"24:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening_time", "time_invalid"), openingIs("", "")),
+		patch("9:00", `{"registration_opening":"2026-05-01","registration_opening_time":"9:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening_time", "time_invalid"), openingIs("", "")),
+		patch("10h", `{"registration_opening":"2026-05-01","registration_opening_time":"10h"}`,
+			http.StatusBadRequest, fieldError("registration_opening_time", "time_invalid"), openingIs("", "")),
+		patch("a time without a day", `{"registration_opening_time":"10:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "validation_required"), openingIs("", "")),
+		{
+			Name: "emptying the day leaves a time without a day", As: "alice", Before: withOpening("2026-05-01", "10:00"),
+			Method: http.MethodPatch, URL: records("events", event), Body: body(`{"registration_opening":""}`),
+			Status: http.StatusBadRequest, Contains: []string{fieldError("registration_opening", "validation_required")},
+			After: openingIs("2026-05-01", "10:00"),
+		},
+		{
+			Name: "the opening and its time can be emptied together", As: "alice", Before: withOpening("2026-05-01", "10:00"),
+			Method: http.MethodPatch, URL: records("events", event),
+			Body:   body(`{"registration_opening":"","registration_opening_time":""}`),
+			Status: http.StatusOK, After: openingIs("", ""),
+		},
+		{
+			Name: "an edit that leaves the opening alone still checks it against a deadline moved before it", As: "alice",
+			Before: withOpening("2026-06-08", ""), Method: http.MethodPatch, URL: records("events", event),
+			Body: body(`{"registration_deadline":"2026-06-05"}`), Status: http.StatusBadRequest,
+			Contains: []string{fieldError("registration_opening", "registration_opening_after_deadline")},
+			After:    deadlineIs(""),
+		},
+		{
+			Name: "the start cannot move before the opening", As: "alice",
+			Before: withOpening("2026-06-08", ""), Method: http.MethodPatch, URL: records("events", event),
+			Body: body(`{"start_date":"2026-06-05","end_date":"2026-06-06"}`), Status: http.StatusBadRequest,
+			Contains: []string{fieldError("registration_opening", "registration_opening_after_start")},
+			After:    eventDatesAre("2026-06-13", "2026-06-14"),
+		},
+		{
+			Name: "an event is created with an opening", As: "alice", Method: http.MethodPost, URL: records("events"),
+			Body:   body(`{"name":"Marathon d'Annecy","location":"Annecy","start_date":"2026-09-01","registration_opening":"2026-06-01","registration_opening_time":"12:00"}`),
+			Status: http.StatusOK,
+		},
+		{
+			Name: "an event cannot be created with an opening after its deadline", As: "alice", Method: http.MethodPost, URL: records("events"),
+			Body:     body(`{"name":"Marathon d'Annecy","location":"Annecy","start_date":"2026-09-01","registration_deadline":"2026-08-01","registration_opening":"2026-08-02"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("registration_opening", "registration_opening_after_deadline")},
+		},
+		{
+			Name: "an event cannot be created with a time and no day", As: "alice", Method: http.MethodPost, URL: records("events"),
+			Body:     body(`{"name":"Marathon d'Annecy","location":"Annecy","start_date":"2026-09-01","registration_opening_time":"12:00"}`),
+			Status:   http.StatusBadRequest,
+			Contains: []string{fieldError("registration_opening", "validation_required")},
+		},
+	})
+}

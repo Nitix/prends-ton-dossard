@@ -194,6 +194,8 @@ describe("buildBatch, creation", () => {
       end_date: "",
       registration_url: "",
       registration_deadline: "",
+      registration_opening: "",
+      registration_opening_time: "",
       notes: "",
     });
     expect(ops[2]?.body).toEqual({
@@ -235,6 +237,20 @@ describe("buildBatch, creation", () => {
     expect(ops[0]?.body).toMatchObject({ registration_deadline: "2026-06-10" });
     expect(ops[1]?.body).toMatchObject({ price_eur: 42.5 });
     expect(ops[2]?.body).toMatchObject({ price_eur: 0 });
+  });
+
+  test("eventBody — l'ouverture et son heure", () => {
+    const draft = newDraft({
+      registration_opening: "2026-05-01",
+      registration_opening_time: "10:00",
+    });
+
+    const { ops } = buildBatch(draft, undefined, ME);
+
+    expect(ops[0]?.body).toMatchObject({
+      registration_opening: "2026-05-01",
+      registration_opening_time: "10:00",
+    });
   });
 
   test("a format that comes with an id keeps it", () => {

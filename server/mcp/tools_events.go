@@ -41,15 +41,17 @@ type joinIn struct {
 }
 
 type createEventIn struct {
-	Name                 string     `json:"name" jsonschema:"le nom de la course, 1 à 120 caractères"`
-	Location             string     `json:"location" jsonschema:"une ville ou un lieu"`
-	StartDate            string     `json:"start_date" jsonschema:"AAAA-MM-JJ : le premier jour"`
-	RegistrationURL      string     `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle"`
-	RegistrationDeadline string     `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date"`
-	Notes                string     `json:"notes,omitempty"`
-	Formats              []formatIn `json:"formats" jsonschema:"les épreuves, de 1 à 20"`
-	Join                 *joinIn    `json:"join,omitempty" jsonschema:"« Je participe » : ajoute la personne au nom de qui tu agis à une épreuve de la course, avec ce statut"`
-	Confirmation         string     `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
+	Name                    string     `json:"name" jsonschema:"le nom de la course, 1 à 120 caractères"`
+	Location                string     `json:"location" jsonschema:"une ville ou un lieu"`
+	StartDate               string     `json:"start_date" jsonschema:"AAAA-MM-JJ : le premier jour"`
+	RegistrationURL         string     `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle"`
+	RegistrationDeadline    string     `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date"`
+	RegistrationOpening     string     `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date"`
+	RegistrationOpeningTime string     `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de l'ouverture, facultative ; sans heure, le site compte 9 h. Demande registration_opening"`
+	Notes                   string     `json:"notes,omitempty"`
+	Formats                 []formatIn `json:"formats" jsonschema:"les épreuves, de 1 à 20"`
+	Join                    *joinIn    `json:"join,omitempty" jsonschema:"« Je participe » : ajoute la personne au nom de qui tu agis à une épreuve de la course, avec ce statut"`
+	Confirmation            string     `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
 
 var createEventSchema = sync.OnceValue(func() *jsonschema.Schema {
@@ -67,6 +69,7 @@ func addCreateEvent(s *mcpsdk.Server, t *tools) {
 			"rien n'est créé au premier appel : la réponse les nomme et donne un jeton de confirmation. " +
 			"Chaque épreuve a au moins une mesure, distance_km, duration_min ou time_limit_min : de préférence celles de son type (list_race_types). " +
 			"La date de fin vient des épreuves : une épreuve datée après start_date allonge la course. " +
+			"registration_opening (AAAA-MM-JJ) et registration_opening_time (HH:MM, heure de Paris, facultative : sans heure, le site compte 9 h) disent quand les inscriptions ouvrent. " +
 			"join ajoute la personne au nom de qui tu agis à une épreuve, comme « Je participe ». La trace GPX d'une épreuve passe par set_track. " +
 			"Donne la course comme get_event.",
 		InputSchema:  createEventSchema(),
@@ -116,6 +119,10 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 	if draft.StartDate, err = checkDay("start_date", in.StartDate); err != nil {
 		return refuse(err)
 	}
+	if draft.RegistrationOpening, err = checkDay("registration_opening", in.RegistrationOpening); err != nil {
+		return refuse(err)
+	}
+	draft.RegistrationOpeningTime = strings.TrimSpace(in.RegistrationOpeningTime)
 	if draft.RegistrationDeadline, err = checkDay("registration_deadline", in.RegistrationDeadline); err != nil {
 		return refuse(err)
 	}
@@ -143,6 +150,9 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 	// What the form refuses before sending.
 	labels := labelsOf(eventView{}, raceTypes)
 	if err := measureRefusal(w, draft, labels); err != nil {
+		return refuse(err)
+	}
+	if err := openingRefusal(draft); err != nil {
 		return refuse(err)
 	}
 	if err := dateRefusal(w, draft, labels, startHint); err != nil {
@@ -198,15 +208,17 @@ func (t *tools) duplicateRisk(w wording.Words, duplicates []eventView) *risk {
 // update_event
 
 type updateEventIn struct {
-	EventID              string          `json:"event_id" jsonschema:"l'identifiant de la course, tel que search_events le donne"`
-	Name                 *string         `json:"name,omitempty" jsonschema:"le nom de la course, 1 à 120 caractères"`
-	Location             *string         `json:"location,omitempty" jsonschema:"une ville ou un lieu"`
-	StartDate            *string         `json:"start_date,omitempty" jsonschema:"AAAA-MM-JJ : le premier jour. Les épreuves sans date le suivent ; une épreuve datée se déplace avec formats"`
-	RegistrationURL      *string         `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle ; vide l'efface"`
-	RegistrationDeadline *string         `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date ; vide l'efface"`
-	Notes                *string         `json:"notes,omitempty" jsonschema:"vide les efface"`
-	Formats              []formatPatchIn `json:"formats,omitempty" jsonschema:"des modifications d'épreuves, écrites avec la course"`
-	Confirmation         string          `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
+	EventID                 string          `json:"event_id" jsonschema:"l'identifiant de la course, tel que search_events le donne"`
+	Name                    *string         `json:"name,omitempty" jsonschema:"le nom de la course, 1 à 120 caractères"`
+	Location                *string         `json:"location,omitempty" jsonschema:"une ville ou un lieu"`
+	StartDate               *string         `json:"start_date,omitempty" jsonschema:"AAAA-MM-JJ : le premier jour. Les épreuves sans date le suivent ; une épreuve datée se déplace avec formats"`
+	RegistrationURL         *string         `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle ; vide l'efface"`
+	RegistrationDeadline    *string         `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date ; vide l'efface"`
+	RegistrationOpening     *string         `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date ; vide l'efface, avec son heure"`
+	RegistrationOpeningTime *string         `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de l'ouverture ; vide l'efface ; sans heure, le site compte 9 h. Demande registration_opening"`
+	Notes                   *string         `json:"notes,omitempty" jsonschema:"vide les efface"`
+	Formats                 []formatPatchIn `json:"formats,omitempty" jsonschema:"des modifications d'épreuves, écrites avec la course"`
+	Confirmation            string          `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
 
 var updateEventSchema = sync.OnceValue(func() *jsonschema.Schema {
@@ -218,6 +230,7 @@ var updateEventSchema = sync.OnceValue(func() *jsonschema.Schema {
 type updateEventArgs struct {
 	Event                                                                   string
 	Name, Location, StartDate, RegistrationURL, RegistrationDeadline, Notes *string
+	RegistrationOpening, RegistrationOpeningTime                            *string
 	Formats                                                                 []formatPatchIn
 }
 
@@ -228,6 +241,7 @@ func addUpdateEvent(s *mcpsdk.Server, t *tools) {
 		Description: "Modifie une course, comme le formulaire « Modifier » du site (tout membre le peut, pas seulement son auteur). " +
 			"Un champ absent ne change pas ; un texte vide efface un champ facultatif. " +
 			"formats modifie des épreuves dans la même écriture (format_id obligatoire, mêmes règles) : c'est ce qui déplace une course avec ses épreuves datées en un appel. " +
+			"registration_opening et registration_opening_time (heure de Paris) disent quand les inscriptions ouvrent ; vider le jour vide aussi l'heure. " +
 			"La date de fin vient des épreuves. Ce qui effacerait ou changerait ce que des personnes ont saisi " +
 			"(un champ vidé, des notes remplacées, une course raccourcie, le jour d'une épreuve qui a des participants) " +
 			"n'est fait qu'au second appel, avec le jeton de confirmation que le premier donne. Donne la course comme get_event.",
@@ -257,6 +271,7 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	// The input, normalized.
 	args := updateEventArgs{Event: id}
 	args.Name, args.Location, args.RegistrationURL, args.Notes = trimmed(in.Name), trimmed(in.Location), trimmed(in.RegistrationURL), trimmed(in.Notes)
+	args.RegistrationOpeningTime = trimmed(in.RegistrationOpeningTime)
 	for _, day := range []struct {
 		name   string
 		in     *string
@@ -264,6 +279,7 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	}{
 		{"start_date", in.StartDate, &args.StartDate},
 		{"registration_deadline", in.RegistrationDeadline, &args.RegistrationDeadline},
+		{"registration_opening", in.RegistrationOpening, &args.RegistrationOpening},
 	} {
 		if day.in == nil {
 			continue
@@ -297,6 +313,12 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 		set(&draft.StartDate, args.StartDate)
 		set(&draft.RegistrationURL, args.RegistrationURL)
 		set(&draft.RegistrationDeadline, args.RegistrationDeadline)
+		set(&draft.RegistrationOpening, args.RegistrationOpening)
+		set(&draft.RegistrationOpeningTime, args.RegistrationOpeningTime)
+		// Emptying the day empties the time, as the form does: a time needs a day.
+		if args.RegistrationOpening != nil && *args.RegistrationOpening == "" && args.RegistrationOpeningTime == nil {
+			draft.RegistrationOpeningTime = ""
+		}
 		set(&draft.Notes, args.Notes)
 		applyPatches(draft, patches)
 	}

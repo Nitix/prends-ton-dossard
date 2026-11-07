@@ -1314,6 +1314,10 @@ func TestTools_ReadDescriptions(t *testing.T) {
 		{"search_events: registration_deadline", search.OutputSchema, []string{"events", "[]", "registration_deadline"}, []string{"absente", "pas de date limite"}},
 		{"get_event: end_date", get.OutputSchema, []string{"end_date"}, []string{"absent", "un seul jour"}},
 		{"get_event: registration_deadline", get.OutputSchema, []string{"registration_deadline"}, []string{"absente", "pas de date limite"}},
+		{"search_events: registration_opening", search.OutputSchema, []string{"events", "[]", "registration_opening"}, []string{"absente", "ouvrent"}},
+		{"search_events: registration_opening_time", search.OutputSchema, []string{"events", "[]", "registration_opening_time"}, []string{"Paris", "9 h"}},
+		{"get_event: registration_opening", get.OutputSchema, []string{"registration_opening"}, []string{"absente", "ouvrent"}},
+		{"get_event: registration_opening_time", get.OutputSchema, []string{"registration_opening_time"}, []string{"Paris", "9 h"}},
 		{"get_event: created", get.OutputSchema, []string{"comments", "[]", "created"}, []string{"UTC", "Paris"}},
 	} {
 		contains(row.what, describedAt(t, row.schema, row.path...), row.words...)
@@ -1371,5 +1375,69 @@ func TestTools_ReadDescriptions(t *testing.T) {
 	// So is every read, at 5000 records: said where it applies.
 	for _, name := range []string{"home", "get_runner", "get_stats"} {
 		contains(name, tools[name].Description, "5000 enregistrements")
+	}
+}
+
+// The opening of the registration is said by search_events and get_event, with
+// its time, and only when there is one.
+func TestTools_SearchEvents_Opening(t *testing.T) {
+	mcp.SetNow(t, at(2026, 6, 14, 10, 0))
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	alice := newToken(t, app, fx.Alice)
+	byID := func() map[string]map[string]any {
+		t.Helper()
+		out := map[string]map[string]any{}
+		for _, e := range succeeded(t, callTool(t, app, alice, "search_events", nil)).Structured["events"].([]any) {
+			event := e.(map[string]any)
+			out[event["id"].(string)] = event
+		}
+		return out
+	}
+
+	// Without an opening, a race says neither.
+	for id, e := range byID() {
+		for _, field := range []string{"registration_opening", "registration_opening_time"} {
+			if _, ok := e[field]; ok {
+				t.Errorf("the race %s without an opening says %s", id, field)
+			}
+		}
+	}
+
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "10:00"})
+	update(t, app, fx.Event, map[string]any{"registration_opening": "2026-05-05"})
+	events := byID()
+	if e := events[fx.Event2.Id]; e["registration_opening"] != "2026-05-04" || e["registration_opening_time"] != "10:00" {
+		t.Errorf("the race with a time says %v at %v", e["registration_opening"], e["registration_opening_time"])
+	}
+	e := events[fx.Event.Id]
+	if e["registration_opening"] != "2026-05-05" {
+		t.Errorf("the race with a day says %v", e["registration_opening"])
+	}
+	if _, ok := e["registration_opening_time"]; ok {
+		t.Errorf("the race without a time says %v", e["registration_opening_time"])
+	}
+}
+
+func TestTools_GetEvent_Opening(t *testing.T) {
+	mcp.SetNow(t, at(2026, 6, 14, 10, 0))
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	alice := newToken(t, app, fx.Alice)
+	get := func(id string) map[string]any {
+		t.Helper()
+		return succeeded(t, callTool(t, app, alice, "get_event", map[string]any{"event_id": id})).Structured
+	}
+
+	if s := get(fx.Event.Id); s["registration_opening"] != nil || s["registration_opening_time"] != nil {
+		t.Errorf("a race without an opening says %v at %v", s["registration_opening"], s["registration_opening_time"])
+	}
+	update(t, app, fx.Event, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "10:00"})
+	if s := get(fx.Event.Id); s["registration_opening"] != "2026-05-04" || s["registration_opening_time"] != "10:00" {
+		t.Errorf("the race says %v at %v", s["registration_opening"], s["registration_opening_time"])
+	}
+	update(t, app, fx.Event, map[string]any{"registration_opening_time": ""})
+	if s := get(fx.Event.Id); s["registration_opening"] != "2026-05-04" || s["registration_opening_time"] != nil {
+		t.Errorf("the race says %v at %v", s["registration_opening"], s["registration_opening_time"])
 	}
 }

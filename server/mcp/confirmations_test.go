@@ -131,6 +131,8 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	alice := newToken(t, app, fx.Alice)
 
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A race that opens its registration on the 1st of May at 10:00.
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	// An old race of three days, whose last day is the one of a format nobody
 	// runs yet.
 	ultra := create(t, app, "events", map[string]any{"name": "Ultra des Lacs", "location": "Annecy", "start_date": "2026-03-01", "end_date": "2026-03-03", "created_by": fx.AliceRunner.Id})
@@ -192,6 +194,16 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			"update_event: the notes replaced", "update_event",
 			map[string]any{"event_id": fx.Event.Id, "notes": "Pas de navette cette année."},
 			[]string{"Les notes seraient remplacées", "Navette depuis la gare à 6 h."},
+		},
+		{
+			"update_event: the opening cleared, and its time with it", "update_event",
+			map[string]any{"event_id": fx.Event2.Id, "registration_opening": ""},
+			[]string{"L'ouverture des inscriptions serait effacée", "2026-05-01", "L'heure d'ouverture serait effacée", "10:00"},
+		},
+		{
+			"update_event: the time of the opening cleared", "update_event",
+			map[string]any{"event_id": fx.Event2.Id, "registration_opening_time": ""},
+			[]string{"L'heure d'ouverture serait effacée", "10:00"},
 		},
 		{
 			"update_event: an old race shortened", "update_event",
@@ -575,6 +587,8 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	bob := newToken(t, app, fx.Bob)
 	admin := newToken(t, app, fx.Admin)
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A race that opens its registration on the 1st of May at 10:00.
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
 	ride := rideOf(t, app, lake, fx.AliceRunner)
 	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
@@ -991,6 +1005,8 @@ func TestTools_Confirmation_NoLongerNeeded(t *testing.T) {
 	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
 	alice := newToken(t, app, fx.Alice)
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A race that opens its registration on the 1st of May at 10:00.
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	args := map[string]any{"event_id": fx.Event.Id, "notes": ""}
 
 	token, _, _ := asked(t, callTool(t, app, alice, "update_event", args))

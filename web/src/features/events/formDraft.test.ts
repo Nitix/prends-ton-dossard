@@ -240,6 +240,21 @@ describe("initialDraft", () => {
     });
   });
 
+  test("initialDraft — l'ouverture et son heure d'une course modifiée", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        registration_opening: "2026-05-01",
+        registration_opening_time: "10:00",
+      }),
+    );
+
+    expect(draft).toMatchObject({
+      registrationOpening: "2026-05-01",
+      registrationOpeningTime: "10:00",
+    });
+  });
+
   test("the deadline and the price of an event being edited are in the fields", () => {
     const draft = initialDraft(
       toEventView({
@@ -285,6 +300,8 @@ describe("toEventDraft", () => {
       end_date: "",
       registration_url: undefined,
       registration_deadline: undefined,
+      registration_opening: undefined,
+      registration_opening_time: undefined,
       notes: undefined,
       formats: [
         {
@@ -351,6 +368,34 @@ describe("toEventDraft", () => {
 
     expect(saved.registration_deadline).toBe("2026-06-10");
     expect(saved.formats[0]?.price_eur).toBe(42.5);
+  });
+
+  test("toEventDraft — l'ouverture et son heure", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      registrationOpening: "2026-05-01",
+      registrationOpeningTime: "10:00",
+      rows: [row({ distanceKm: "42" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.registration_opening).toBe("2026-05-01");
+    expect(saved.registration_opening_time).toBe("10:00");
+  });
+
+  test("toEventDraft — une heure sans jour n'est pas envoyée", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      registrationOpening: "",
+      registrationOpeningTime: "10:00",
+      rows: [row({ distanceKm: "42" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.registration_opening).toBeUndefined();
+    expect(saved.registration_opening_time).toBeUndefined();
   });
 
   test("joins the format that was chosen, by its place in the list", () => {

@@ -117,6 +117,7 @@ func storedOf(view eventView) *storedEvent {
 	stored := &storedEvent{
 		ID: r.ID, StartDate: r.StartDate, EndDate: r.EndDate,
 		Name: r.Name, Location: r.Location, RegistrationURL: r.RegistrationURL, RegistrationDeadline: r.RegistrationDeadline, Notes: r.Notes,
+		RegistrationOpening: r.RegistrationOpening, RegistrationOpeningTime: r.RegistrationOpeningTime,
 	}
 	for _, f := range view.formats {
 		stored.Formats = append(stored.Formats, draftOfRecord(f.record))
@@ -140,6 +141,7 @@ func draftOf(view eventView) eventDraft {
 	draft := eventDraft{
 		ID: r.ID, Name: r.Name, Location: r.Location, StartDate: r.StartDate, EndDate: r.EndDate,
 		RegistrationURL: r.RegistrationURL, RegistrationDeadline: r.RegistrationDeadline, Notes: r.Notes,
+		RegistrationOpening: r.RegistrationOpening, RegistrationOpeningTime: r.RegistrationOpeningTime,
 	}
 	for _, f := range view.formats {
 		draft.Formats = append(draft.Formats, draftOfRecord(f.record))
@@ -202,6 +204,17 @@ func dateRefusal(w wording.Words, draft eventDraft, labels map[string]string, hi
 		if draft.StartDate != "" && f.Date != "" && f.Date < draft.StartDate {
 			return errors.New(formatSubject(i, titleOf(w, f, labels)) + ", " + fieldText("date", "format_date_out_of_range") + hint)
 		}
+	}
+	return nil
+}
+
+// openingRefusal is the refusal of the site for a draft that has a time of
+// opening and no day (validation_required on registration_opening): the form
+// does not send a time without a day (toEventDraft of formDraft.ts), and a tool
+// has no field to be left alone, so it says so before any write.
+func openingRefusal(draft eventDraft) error {
+	if draft.RegistrationOpeningTime != "" && draft.RegistrationOpening == "" {
+		return errors.New("La course, " + fieldText("registration_opening", "validation_required"))
 	}
 	return nil
 }
@@ -374,6 +387,9 @@ func (t *tools) changeEvent(ctx context.Context, tool string, view eventView, la
 	if err := measureRefusal(w, draft, labels); err != nil {
 		return eventWriteOut{}, err
 	}
+	if err := openingRefusal(draft); err != nil {
+		return eventWriteOut{}, err
+	}
 	if err := dateRefusal(w, draft, labels, moveHint); err != nil {
 		return eventWriteOut{}, err
 	}
@@ -455,16 +471,18 @@ func shortenedLine(start, end, newStart, newEnd string) string {
 // clearedPhrases say that a field would be cleared, by field: the optional
 // fields of a race, and the fields of a format.
 var clearedPhrases = map[string]string{
-	"registration_url":      "le lien d'inscription serait effacé",
-	"registration_deadline": "la date limite d'inscription serait effacée",
-	"name":                  "le nom serait effacé",
-	"distance_km":           "la distance serait effacée",
-	"elevation_gain_m":      "le D+ serait effacé",
-	"duration_min":          "la durée serait effacée",
-	"time_limit_min":        "le temps max serait effacé",
-	"price_eur":             "le prix serait effacé",
-	"route_url":             "le lien du parcours serait effacé",
-	"date":                  "la date de l'épreuve serait effacée",
+	"registration_url":          "le lien d'inscription serait effacé",
+	"registration_deadline":     "la date limite d'inscription serait effacée",
+	"registration_opening":      "l'ouverture des inscriptions serait effacée",
+	"registration_opening_time": "l'heure d'ouverture serait effacée",
+	"name":                      "le nom serait effacé",
+	"distance_km":               "la distance serait effacée",
+	"elevation_gain_m":          "le D+ serait effacé",
+	"duration_min":              "la durée serait effacée",
+	"time_limit_min":            "le temps max serait effacé",
+	"price_eur":                 "le prix serait effacé",
+	"route_url":                 "le lien du parcours serait effacé",
+	"date":                      "la date de l'épreuve serait effacée",
 }
 
 // days are the days of a race, as the messages write them: "2026-06-13", or
@@ -499,6 +517,8 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	for _, field := range []struct{ name, was, now, shown string }{
 		{"registration_url", event.RegistrationURL, draft.RegistrationURL, quote(event.RegistrationURL)},
 		{"registration_deadline", event.RegistrationDeadline, draft.RegistrationDeadline, event.RegistrationDeadline},
+		{"registration_opening", event.RegistrationOpening, draft.RegistrationOpening, event.RegistrationOpening},
+		{"registration_opening_time", event.RegistrationOpeningTime, draft.RegistrationOpeningTime, event.RegistrationOpeningTime},
 	} {
 		if strings.TrimSpace(field.was) != "" && field.now == "" {
 			r.Details = append(r.Details, upperFirst(clearedPhrases[field.name])+" (actuellement : "+field.shown+").")

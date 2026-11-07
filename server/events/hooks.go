@@ -131,6 +131,31 @@ func validateEvent(app core.App, event *core.Record) error {
 		}
 	}
 
+	// The opening of the registration: a real day, not after the deadline nor
+	// the first day of the event (the same day is fine), and a time that needs a
+	// day. Like the deadline, it is checked on every save, so an edit that
+	// leaves the opening alone still holds it against a deadline moved before it.
+	opening, openingTime := event.GetString("registration_opening"), event.GetString("registration_opening_time")
+	if opening != "" {
+		if _, ok := ParseDay(opening); !ok {
+			return apperr.Field("registration_opening", apperr.CodeDateInvalid)
+		}
+		if opening > start {
+			return apperr.Field("registration_opening", apperr.CodeRegistrationOpeningAfterStart)
+		}
+		if deadline := event.GetString("registration_deadline"); deadline != "" && opening > deadline {
+			return apperr.Field("registration_opening", apperr.CodeRegistrationOpeningAfterDeadline)
+		}
+	}
+	if openingTime != "" {
+		if !ValidTime(openingTime) {
+			return apperr.Field("registration_opening_time", apperr.CodeTimeInvalid)
+		}
+		if opening == "" {
+			return apperr.Field("registration_opening", "validation_required")
+		}
+	}
+
 	// A format stays inside its event: the range of an event cannot move away
 	// from the formats it holds. An edit that leaves the dates alone is not
 	// held against the formats.

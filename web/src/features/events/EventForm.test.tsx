@@ -257,6 +257,8 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
     end_date: "2026-06-14",
     registration_url: "https://trail.example.test/inscription",
     registration_deadline: "",
+    registration_opening: "",
+    registration_opening_time: "",
     notes: "Parking à l'arrivée.",
   });
   expect(one?.body).toMatchObject({

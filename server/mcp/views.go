@@ -47,17 +47,19 @@ type raceTypeRecord struct {
 
 // eventRecord is an event, with what eventExpand asks for.
 type eventRecord struct {
-	ID                   string `json:"id"`
-	Name                 string `json:"name"`
-	Location             string `json:"location"`
-	StartDate            string `json:"start_date"`
-	EndDate              string `json:"end_date"`
-	RegistrationURL      string `json:"registration_url"`
-	RegistrationDeadline string `json:"registration_deadline"`
-	Notes                string `json:"notes"`
-	CreatedBy            string `json:"created_by"`
-	Updated              string `json:"updated"`
-	Expand               struct {
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	Location                string `json:"location"`
+	StartDate               string `json:"start_date"`
+	EndDate                 string `json:"end_date"`
+	RegistrationURL         string `json:"registration_url"`
+	RegistrationDeadline    string `json:"registration_deadline"`
+	RegistrationOpening     string `json:"registration_opening"`
+	RegistrationOpeningTime string `json:"registration_opening_time"`
+	Notes                   string `json:"notes"`
+	CreatedBy               string `json:"created_by"`
+	Updated                 string `json:"updated"`
+	Expand                  struct {
 		Formats        []formatRecord        `json:"formats_via_event"`
 		Participations []participationRecord `json:"participations_via_event"`
 		// CreatedBy is asked by the tools that write a race (eventForWrite).
@@ -241,16 +243,18 @@ type commentOut struct {
 
 // eventSummary is a race as a list shows it (spec § 6.4, EVENT_SUMMARY).
 type eventSummary struct {
-	ID                   string          `json:"id"`
-	Name                 string          `json:"name"`
-	Location             string          `json:"location"`
-	StartDate            string          `json:"start_date"`
-	EndDate              string          `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
-	RegistrationDeadline string          `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
-	URL                  string          `json:"url" jsonschema:"l'adresse de la course sur le site"`
-	Formats              []formatSummary `json:"formats"`
-	Participants         int             `json:"participants" jsonschema:"les participations de la course qui ne sont pas « Non partant » (dns), supporteurs et intéressés sans épreuve compris : ce n'est pas le nombre de coureurs au départ"`
-	Mine                 []mineOut       `json:"mine" jsonschema:"les participations de la personne au nom de qui tu agis"`
+	ID                      string          `json:"id"`
+	Name                    string          `json:"name"`
+	Location                string          `json:"location"`
+	StartDate               string          `json:"start_date"`
+	EndDate                 string          `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
+	RegistrationDeadline    string          `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
+	RegistrationOpening     string          `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée"`
+	RegistrationOpeningTime string          `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture, à l'heure de Paris ; absente : le site compte 9 h"`
+	URL                     string          `json:"url" jsonschema:"l'adresse de la course sur le site"`
+	Formats                 []formatSummary `json:"formats"`
+	Participants            int             `json:"participants" jsonschema:"les participations de la course qui ne sont pas « Non partant » (dns), supporteurs et intéressés sans épreuve compris : ce n'est pas le nombre de coureurs au départ"`
+	Mine                    []mineOut       `json:"mine" jsonschema:"les participations de la personne au nom de qui tu agis"`
 }
 
 type formatSummary struct {
@@ -269,23 +273,25 @@ type mineOut struct {
 
 // eventDetail is the page of a race (spec § 6.4, get_event).
 type eventDetail struct {
-	ID                   string             `json:"id"`
-	Name                 string             `json:"name"`
-	Location             string             `json:"location"`
-	StartDate            string             `json:"start_date"`
-	EndDate              string             `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
-	RegistrationURL      string             `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course"`
-	RegistrationDeadline string             `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
-	Notes                string             `json:"notes,omitempty"`
-	CreatedBy            runnerRef          `json:"created_by,omitzero"`
-	URL                  string             `json:"url" jsonschema:"l'adresse de la course sur le site"`
-	Formats              []formatDetail     `json:"formats" jsonschema:"les épreuves, par jour puis par distance"`
-	Undecided            []participationOut `json:"undecided" jsonschema:"les intéressés qui n'ont pas encore choisi d'épreuve"`
-	Supporters           []participationOut `json:"supporters" jsonschema:"ceux qui viennent encourager"`
-	Rides                []offerOut         `json:"rides" jsonschema:"les voitures proposées"`
-	Lodgings             []offerOut         `json:"lodgings" jsonschema:"les logements proposés"`
-	Comments             []commentOut       `json:"comments" jsonschema:"les 50 derniers, du plus ancien au plus récent"`
-	CommentsTotal        int                `json:"comments_total" jsonschema:"le nombre de commentaires de la course : comments n'en donne que les 50 derniers"`
+	ID                      string             `json:"id"`
+	Name                    string             `json:"name"`
+	Location                string             `json:"location"`
+	StartDate               string             `json:"start_date"`
+	EndDate                 string             `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
+	RegistrationURL         string             `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course"`
+	RegistrationDeadline    string             `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
+	RegistrationOpening     string             `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée"`
+	RegistrationOpeningTime string             `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture, à l'heure de Paris ; absente : le site compte 9 h"`
+	Notes                   string             `json:"notes,omitempty"`
+	CreatedBy               runnerRef          `json:"created_by,omitzero"`
+	URL                     string             `json:"url" jsonschema:"l'adresse de la course sur le site"`
+	Formats                 []formatDetail     `json:"formats" jsonschema:"les épreuves, par jour puis par distance"`
+	Undecided               []participationOut `json:"undecided" jsonschema:"les intéressés qui n'ont pas encore choisi d'épreuve"`
+	Supporters              []participationOut `json:"supporters" jsonschema:"ceux qui viennent encourager"`
+	Rides                   []offerOut         `json:"rides" jsonschema:"les voitures proposées"`
+	Lodgings                []offerOut         `json:"lodgings" jsonschema:"les logements proposés"`
+	Comments                []commentOut       `json:"comments" jsonschema:"les 50 derniers, du plus ancien au plus récent"`
+	CommentsTotal           int                `json:"comments_total" jsonschema:"le nombre de commentaires de la course : comments n'en donne que les 50 derniers"`
 }
 
 type formatDetail struct {
@@ -570,9 +576,10 @@ func (v eventView) summary(cfg config.Config, w wording.Words, me string) eventS
 		ID: v.record.ID, Name: v.record.Name, Location: v.record.Location,
 		StartDate: v.record.StartDate, EndDate: v.record.EndDate,
 		RegistrationDeadline: v.record.RegistrationDeadline,
-		URL:                  eventURL(cfg, v.record.ID),
-		Formats:              []formatSummary{},
-		Mine:                 []mineOut{},
+		RegistrationOpening:  v.record.RegistrationOpening, RegistrationOpeningTime: v.record.RegistrationOpeningTime,
+		URL:     eventURL(cfg, v.record.ID),
+		Formats: []formatSummary{},
+		Mine:    []mineOut{},
 	}
 	for _, f := range v.formats {
 		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day})
@@ -594,6 +601,7 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 		ID: v.record.ID, Name: v.record.Name, Location: v.record.Location,
 		StartDate: v.record.StartDate, EndDate: v.record.EndDate,
 		RegistrationURL: v.record.RegistrationURL, RegistrationDeadline: v.record.RegistrationDeadline,
+		RegistrationOpening: v.record.RegistrationOpening, RegistrationOpeningTime: v.record.RegistrationOpeningTime,
 		Notes:         v.record.Notes,
 		CreatedBy:     v.createdBy,
 		URL:           eventURL(cfg, v.record.ID),

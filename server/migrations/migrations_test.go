@@ -2146,3 +2146,47 @@ func mustFind(t testing.TB, app core.App, collection, id string) *core.Record {
 	}
 	return record
 }
+
+// The migration 9l adds the opening of the registration to the events: a day
+// and an optional time. Its rollback removes both fields, and what they hold.
+func TestMigrations_RegistrationOpeningDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	migration := migrationFile(t, "9l_registration_opening.go")
+
+	field := func(name string) core.Field {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Fields.GetByName(name)
+	}
+	check := func(when string) {
+		t.Helper()
+		for _, name := range []string{"registration_opening", "registration_opening_time"} {
+			f, ok := field(name).(*core.TextField)
+			if !ok {
+				t.Fatalf("%s: events.%s must be a text field, got %T", when, name, field(name))
+			}
+			if f.Required || f.Hidden {
+				t.Errorf("%s: events.%s must be optional and visible", when, name)
+			}
+		}
+	}
+
+	check("as created")
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"registration_opening", "registration_opening_time"} {
+		if field(name) != nil {
+			t.Errorf("events.%s must be gone after the rollback", name)
+		}
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	check("after applying again")
+}
