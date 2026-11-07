@@ -340,3 +340,11 @@ func TestWording_ReminderBody(t *testing.T) {
 		})
 	}
 }
+
+func TestWords_DateToBeSet(t *testing.T) {
+	for lang, want := range map[string]string{"fr": "date à préciser", "en": "date to be set", "de": "date à préciser"} {
+		if got := Of(lang).DateToBeSet(); got != want {
+			t.Errorf("Of(%q).DateToBeSet() = %q, want %q", lang, got, want)
+		}
+	}
+}

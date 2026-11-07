@@ -1,6 +1,6 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { effectiveDate } from "../../lib/dates";
+import { lastRaceDay } from "../../lib/dates";
 import { pb } from "../../lib/pb";
 import type {
   EventRecord,
@@ -24,7 +24,10 @@ export type PendingView = ParticipationView & {
   /** Absent for a participation without a format. */
   format?: FormatRecord;
   raceType?: RaceTypeRecord;
-  /** The day of the format, or the start of the event without a format. */
+  /**
+   * The day of the format, or the start of the event without a format: the last day of the month
+   * for a race known by its month only (`lastRaceDay`), which is what says it is over.
+   */
   date: Temporal.PlainDate;
 };
 
@@ -55,7 +58,7 @@ function toPendingView(record: ExpandedPending): PendingView {
   const event = record.expand?.event;
   if (!event) throw new Error(`participation ${record.id}: its event is missing from the answer`);
   const view = toParticipationView(record);
-  if (!record.format) return { ...view, event, date: effectiveDate({}, event) };
+  if (!record.format) return { ...view, event, date: lastRaceDay({}, event) };
 
   const format = record.expand?.format;
   const raceType = format?.expand?.race_type;
@@ -64,7 +67,7 @@ function toPendingView(record: ExpandedPending): PendingView {
       `participation ${record.id}: its format or race type is missing from the answer`,
     );
   }
-  return { ...view, event, format, raceType, date: effectiveDate(format, event) };
+  return { ...view, event, format, raceType, date: lastRaceDay(format, event) };
 }
 
 /** The participations of the answer, the ones that come first on top. */

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"math"
 	"regexp"
+	"slices"
 	"time"
 
 	"ganigeorgiev.com/pocketbase/dbx"
@@ -51,6 +52,20 @@ func Register(app core.App) {
 		e.Record.Set("created_by", e.Record.Original().GetString("created_by"))
 		return e.Next()
 	})
+
+	// The end of an event known by its month is the last day of that month,
+	// whatever the request says (its formats have no day to give it one). It is
+	// set before the validation, which then checks the dates as they are.
+	setMonthEnd := func(e *core.RecordEvent) error {
+		if MonthOnly(e.Record) {
+			if last, ok := LastDayOfMonth(e.Record.GetString("start_date")); ok {
+				e.Record.Set("end_date", last)
+			}
+		}
+		return e.Next()
+	}
+	app.OnRecordCreate("events").BindFunc(setMonthEnd)
+	app.OnRecordUpdate("events").BindFunc(setMonthEnd)
 
 	// The system validation runs after these hooks. They call Next first, so
 	// that a missing or unknown value is reported by it, and the checks below
@@ -118,6 +133,29 @@ func validateEvent(app core.App, event *core.Record) error {
 		}
 	}
 
+	// An event known by its month starts on the 1st, and its formats have no
+	// date. Its end was set by the hook of the model: the last day of the month.
+	monthOnly := MonthOnly(event)
+	if monthOnly {
+		if !isFirstOfMonth(start) {
+			return apperr.Field("start_date", apperr.CodeMonthStartInvalid)
+		}
+		datedFormat, err := hasDatedFormat(app, event)
+		if err != nil {
+			return err
+		}
+		if datedFormat {
+			return apperr.Field("date_precision", apperr.CodeFormatDateMonth)
+		}
+	}
+	// The first day of the event, for what is not after it: the registration
+	// deadline and its opening. For an event known by its month, the day is not
+	// known, so they are held against the last day of the month.
+	firstDay := start
+	if monthOnly {
+		firstDay = end
+	}
+
 	// The last day to register is not after the first day of the event. It is
 	// checked on every save, before the formats: moving the start before the
 	// deadline is refused on the deadline, even when the formats are fine with
@@ -126,7 +164,7 @@ func validateEvent(app core.App, event *core.Record) error {
 		if _, ok := ParseDay(deadline); !ok {
 			return apperr.Field("registration_deadline", apperr.CodeDateInvalid)
 		}
-		if deadline > start {
+		if deadline > firstDay {
 			return apperr.Field("registration_deadline", apperr.CodeRegistrationDeadlineAfterStart)
 		}
 	}
@@ -140,7 +178,7 @@ func validateEvent(app core.App, event *core.Record) error {
 		if _, ok := ParseDay(opening); !ok {
 			return apperr.Field("registration_opening", apperr.CodeDateInvalid)
 		}
-		if opening > start {
+		if opening > firstDay {
 			return apperr.Field("registration_opening", apperr.CodeRegistrationOpeningAfterStart)
 		}
 		if deadline := event.GetString("registration_deadline"); deadline != "" && opening > deadline {
@@ -176,6 +214,18 @@ func validateEvent(app core.App, event *core.Record) error {
 	return nil
 }
 
+// hasDatedFormat reports whether a format of the event has a day of its own.
+func hasDatedFormat(app core.App, event *core.Record) (bool, error) {
+	if event.IsNew() {
+		return false, nil
+	}
+	formats, err := app.FindAllRecords("formats", dbx.HashExp{"event": event.Id})
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(formats, func(f *core.Record) bool { return f.GetString("date") != "" }), nil
+}
+
 // measures are the fields of a format that say what the race is: a distance,
 // a duration or a time limit.
 var measures = []string{"distance_km", "duration_min", "time_limit_min"}
@@ -188,6 +238,9 @@ func validateFormat(app core.App, format *core.Record) error {
 		event, err := app.FindRecordById("events", format.GetString("event"))
 		if err != nil {
 			return err
+		}
+		if MonthOnly(event) {
+			return apperr.Field("date", apperr.CodeFormatDateMonth)
 		}
 		if !InRange(day, event.GetString("start_date"), event.GetString("end_date")) {
 			return apperr.Field("date", apperr.CodeFormatDateOutOfRange)

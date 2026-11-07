@@ -206,6 +206,11 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			[]string{"L'heure d'ouverture serait effacée", "10:00"},
 		},
 		{
+			"update_event: a race that becomes a month loses the days of its formats", "update_event",
+			map[string]any{"event_id": fx.Event.Id, "date_precision": "month"},
+			[]string{"« Trail 42 km »", "son jour, le 2026-06-14, serait effacé", "la course n'ayant plus que son mois", "Alice (Inscrit)", "Bob (Intéressé, non confirmé)"},
+		},
+		{
 			"update_event: an old race shortened", "update_event",
 			map[string]any{"event_id": ultra.Id, "formats": []any{map[string]any{"format_id": fLast.Id, "date": "2026-03-02"}}},
 			[]string{"raccourcie", "2026-03-01 au 2026-03-03", "2026-03-01 au 2026-03-02"},

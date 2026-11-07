@@ -27,8 +27,11 @@ type formatDraft struct {
 type eventDraft struct {
 	ID, Name, Location, StartDate, EndDate, RegistrationURL, RegistrationDeadline, Notes string
 	RegistrationOpening, RegistrationOpeningTime                                         string
-	Formats                                                                              []formatDraft
-	Join                                                                                 *joinDraft // creation only
+	// DatePrecision is "month" for a race known by its month only (its start is the 1st, its
+	// end the last day, its formats have no date), "" for a race with a day.
+	DatePrecision string
+	Formats       []formatDraft
+	Join          *joinDraft // creation only
 }
 
 // joinDraft is « Je participe » of the form: the owner of the token takes part in
@@ -43,6 +46,7 @@ type storedEvent struct {
 	ID, StartDate, EndDate                                       string
 	Name, Location, RegistrationURL, RegistrationDeadline, Notes string
 	RegistrationOpening, RegistrationOpeningTime                 string
+	DatePrecision                                                string // "month" or ""
 	Formats                                                      []formatDraft
 }
 
@@ -78,6 +82,7 @@ func eventBody(draft eventDraft) map[string]any {
 		"registration_deadline":     draft.RegistrationDeadline,
 		"registration_opening":      draft.RegistrationOpening,
 		"registration_opening_time": draft.RegistrationOpeningTime,
+		"date_precision":            draft.precision(),
 		"notes":                     draft.Notes,
 	}
 }
@@ -111,6 +116,7 @@ func changedEventBody(draft eventDraft, stored *storedEvent) map[string]any {
 		{"registration_deadline", draft.RegistrationDeadline, stored.RegistrationDeadline},
 		{"registration_opening", draft.RegistrationOpening, stored.RegistrationOpening},
 		{"registration_opening_time", draft.RegistrationOpeningTime, stored.RegistrationOpeningTime},
+		{"date_precision", draft.precision(), stored.DatePrecision},
 		{"notes", draft.Notes, stored.Notes},
 	} {
 		if field.now != field.was {
@@ -123,10 +129,33 @@ func changedEventBody(draft eventDraft, stored *storedEvent) map[string]any {
 	return body
 }
 
+// precision is the date_precision that the form sends (eventBody of saveEvent.ts):
+// "month" for a race known by its month, "" for a day, which is how it clears the
+// field.
+func (d eventDraft) precision() string {
+	if d.DatePrecision == precisionMonth {
+		return precisionMonth
+	}
+	return ""
+}
+
+// monthOnly reports whether the draft is a race known by its month only.
+func (d eventDraft) monthOnly() bool { return d.precision() == precisionMonth }
+
+// endDate is the end that saving the draft gives the race (eventEndDate of
+// formDraft.ts).
+func (d eventDraft) endDate() string {
+	return eventEndDate(d.StartDate, datesOf(d), d.monthOnly())
+}
+
 // isInRangeOf is isInRangeOf of saveEvent.ts: whether a day is in the days that
-// the stored event has. An empty day is.
+// the stored event has. An empty day is. An event stored as a month offers no day
+// to a format: the server refuses one, whatever the month.
 func isInRangeOf(stored *storedEvent, day string) bool {
-	return day == "" || events.InRange(day, stored.StartDate, stored.EndDate)
+	if day == "" {
+		return true
+	}
+	return stored.DatePrecision != precisionMonth && events.InRange(day, stored.StartDate, stored.EndDate)
 }
 
 // planBatch is buildBatch: delete the removed formats, update the kept ones (date only when
@@ -174,6 +203,11 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 
 	var keptOps, lateOps []batchOp
 	for i, f := range draft.Formats {
+		// A race known by its month is a race without days for its formats: they have no
+		// date, whatever the draft holds (buildBatch of saveEvent.ts).
+		if draft.monthOnly() {
+			f.Date = ""
+		}
 		id := f.ID
 		if id == "" {
 			id = core.GenerateDefaultRandomId()
@@ -233,10 +267,14 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 // after the start, and none ("") when no format is, which makes the event a
 // one-day event. A format that has no day takes place on the first day, so it
 // never moves the end; neither does a text that is not a day. Without a start
-// day there is no period to speak of.
-func eventEndDate(start string, formatDates []string) string {
+// day there is no period to speak of. A race known by its month only (monthOnly)
+// ends on the last day of that month, whatever its formats say: they have no day.
+func eventEndDate(start string, formatDates []string, monthOnly bool) string {
 	if _, ok := events.ParseDay(start); !ok {
 		return ""
+	}
+	if monthOnly {
+		return lastDayOfMonth(start)
 	}
 	end := start
 	for _, day := range formatDates {

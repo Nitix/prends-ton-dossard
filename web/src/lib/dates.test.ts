@@ -9,7 +9,9 @@ import {
   eventRange,
   groupByMonth,
   instantOf,
+  isMonthOnly,
   isUpcoming,
+  lastRaceDay,
   monthGrid,
   msUntilTomorrow,
   overlaps,
@@ -478,5 +480,49 @@ describe("elapsed", () => {
 
   test("elapsed — une date dans le futur (horloge en retard) compte pour maintenant", () => {
     expect(elapsed(now.add({ minutes: 3 }), now)).toEqual({ value: 0, unit: "second" });
+  });
+});
+
+describe("isMonthOnly", () => {
+  test("only a month precision is a month", () => {
+    expect(isMonthOnly({ date_precision: "month" })).toBe(true);
+    expect(isMonthOnly({ date_precision: "day" })).toBe(false);
+    // An event that was there before has none: a day.
+    expect(isMonthOnly({})).toBe(false);
+    expect(isMonthOnly({ date_precision: "" })).toBe(false);
+  });
+});
+
+describe("lastRaceDay", () => {
+  const june = { start_date: "2027-06-01", end_date: "2027-06-30", date_precision: "month" };
+
+  test("a race known by its month is behind at the end of that month", () => {
+    expect(iso(lastRaceDay({}, june))).toBe("2027-06-30");
+    // Its formats have no day: whatever they say is not the day.
+    expect(iso(lastRaceDay({ date: "2027-06-10" }, june))).toBe("2027-06-30");
+  });
+
+  test("the months have their length, a leap year included", () => {
+    expect(iso(lastRaceDay({}, { start_date: "2028-02-01", date_precision: "month" }))).toBe(
+      "2028-02-29",
+    );
+    expect(iso(lastRaceDay({}, { start_date: "2027-02-01", date_precision: "month" }))).toBe(
+      "2027-02-28",
+    );
+    expect(iso(lastRaceDay({}, { start_date: "2027-12-01", date_precision: "month" }))).toBe(
+      "2027-12-31",
+    );
+  });
+
+  test("another race is on its day, which is the effective one", () => {
+    const twoDays = { start_date: "2026-06-13", end_date: "2026-06-14" };
+    expect(iso(lastRaceDay({ date: "2026-06-14" }, twoDays))).toBe("2026-06-14");
+    expect(iso(lastRaceDay({}, twoDays))).toBe("2026-06-13");
+    expect(iso(lastRaceDay({}, { ...twoDays, date_precision: "day" }))).toBe("2026-06-13");
+  });
+
+  test("the day that says a race could have started is still the 1st", () => {
+    expect(raceStarted({}, june, date("2027-06-01"))).toBe(true);
+    expect(raceStarted({}, june, date("2027-05-31"))).toBe(false);
   });
 });

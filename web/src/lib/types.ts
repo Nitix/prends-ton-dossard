@@ -74,6 +74,8 @@ export type EventRecord = BaseRecord & {
   registration_opening?: string;
   /** The time it opens, `HH:MM`, Paris time: empty for no time (the site then counts 9 h). Needs a day. */
   registration_opening_time?: string;
+  /** How much of the date is known: `day` (empty too) or `month`, a race that runs from the 1st to the last day of its month. */
+  date_precision?: "day" | "month";
   notes?: string;
   /** The runner of the user who created the event (a `runners` id). */
   created_by: string;

@@ -21,6 +21,8 @@ const (
 	CodeRegistrationDeadlineAfterStart   = "registration_deadline_after_start"
 	CodeRegistrationOpeningAfterStart    = "registration_opening_after_start"
 	CodeRegistrationOpeningAfterDeadline = "registration_opening_after_deadline"
+	CodeMonthStartInvalid                = "month_start_invalid"
+	CodeFormatDateMonth                  = "format_date_month"
 	CodeFormatDateOutOfRange             = "format_date_out_of_range"
 	CodeFormatOtherEvent                 = "format_other_event"
 	CodeFormatMeasureRequired            = "format_measure_required"

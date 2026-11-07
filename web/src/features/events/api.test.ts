@@ -262,6 +262,49 @@ describe("sortEvents", () => {
   });
 });
 
+const monthEvent = (id: string, name: string, start: string) => ({
+  ...event2,
+  id,
+  name,
+  start_date: start,
+  end_date: "2026-06-30",
+  date_precision: "month",
+  expand: {},
+});
+const datedEvent = (id: string, name: string, start: string) => ({
+  ...event2,
+  id,
+  name,
+  start_date: start,
+  end_date: "",
+  expand: {},
+});
+
+describe("sortEvents, une course au mois", () => {
+  test("sortEvents — une course au mois à la fin de son mois", () => {
+    const list = toEventViews([
+      datedEvent("late", "Course du 30", "2026-06-30"),
+      monthEvent("june", "Aaa trail de juin", "2026-06-01"),
+      datedEvent("early", "Course du 2", "2026-06-02"),
+      datedEvent("july", "Course de juillet", "2026-07-01"),
+    ]);
+
+    // After every race dated in June, even the one of the 30th, which has the same last day.
+    expect(ids(sortEvents(list, "asc"))).toEqual(["early", "late", "june", "july"]);
+    expect(ids(sortEvents(list, "desc"))).toEqual(["july", "june", "late", "early"]);
+  });
+
+  test("sortEvents — deux courses au mois du même mois vont par nom", () => {
+    const list = toEventViews([
+      monthEvent("b", "Beta", "2026-06-01"),
+      monthEvent("a", "Alpha", "2026-06-01"),
+      datedEvent("may", "Mai", "2026-05-31"),
+    ]);
+
+    expect(ids(sortEvents(list, "asc"))).toEqual(["may", "a", "b"]);
+  });
+});
+
 describe("applyFilters", () => {
   test("without criteria, everything stays", () => {
     expect(ids(applyFilters(views(), {}))).toEqual(["event", "event2"]);

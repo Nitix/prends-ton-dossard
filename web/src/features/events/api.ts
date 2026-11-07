@@ -7,7 +7,7 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import { effectiveDate, eventRange } from "../../lib/dates";
+import { effectiveDate, eventRange, isMonthOnly, lastRaceDay } from "../../lib/dates";
 import { pb } from "../../lib/pb";
 import type {
   EventRecord,
@@ -206,13 +206,19 @@ export function toEventViews(records: unknown[]): EventView[] {
 
 /**
  * The events that start first come first (`desc`: last), and on the same day
- * they go by name. The input is left alone.
+ * they go by name. An event known by its month only goes at the end of its
+ * month (`lastRaceDay`), after the events that start on that day. The input is
+ * left alone.
  */
 export function sortEvents(views: EventView[], direction: "asc" | "desc"): EventView[] {
   const sign = direction === "asc" ? 1 : -1;
+  const orderDay = (view: EventView) =>
+    isMonthOnly(view.event) ? lastRaceDay({}, view.event) : view.start;
   return views.toSorted(
     (a, b) =>
-      sign * Temporal.PlainDate.compare(a.start, b.start) ||
+      sign *
+        (Temporal.PlainDate.compare(orderDay(a), orderDay(b)) ||
+          Number(isMonthOnly(a.event)) - Number(isMonthOnly(b.event))) ||
       a.event.name.localeCompare(b.event.name) ||
       a.event.id.localeCompare(b.event.id),
   );

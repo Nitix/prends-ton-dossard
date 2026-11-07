@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { lastRaceDay } from "../../lib/dates";
 import { aliceRunner, bobRunner, eventRecord, f42, p2, trailType } from "../events/testFixture";
 import { pendingOf, type PendingView } from "./pending";
 
@@ -44,5 +45,29 @@ describe("pendingOf", () => {
     ]);
     // The list it was given is left as it is.
     expect(views).toHaveLength(7);
+  });
+});
+
+describe("pendingOf, une course au mois", () => {
+  test("pendingOf — une course au mois reste à confirmer jusqu'à la fin de son mois", () => {
+    const june = {
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month" as const,
+    };
+    // What toPendingView does: the day of a view is lastRaceDay.
+    const view = {
+      ...pendingOn("june", "2027-06-01", "registered"),
+      event: june,
+      date: lastRaceDay({}, june),
+    };
+
+    expect(view.date.toString()).toBe("2027-06-30");
+    const kept = (today: string) => pendingOf([view], date(today)).length;
+    // Over from 1 July: « Résultats à saisir » has it then, and it leaves this block.
+    expect(kept("2027-06-15")).toBe(1);
+    expect(kept("2027-06-30")).toBe(1);
+    expect(kept("2027-07-01")).toBe(0);
   });
 });

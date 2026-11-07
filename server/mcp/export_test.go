@@ -298,11 +298,13 @@ type (
 func PlanBatch(draft EventDraft, stored *StoredEvent, myRunnerID string) ([]BatchOp, string, []string) {
 	return planBatch(draft, stored, myRunnerID)
 }
-func EventEndDate(start string, formatDates []string) string { return eventEndDate(start, formatDates) }
-func IsLongEvent(start, end string) bool                     { return isLongEvent(start, end) }
-func Shortens(storedStart, storedEnd, end string) bool       { return shortens(storedStart, storedEnd, end) }
-func HasMeasure(f FormatDraft) bool                          { return hasMeasure(f) }
-func SignificantWords(name string) []string                  { return significantWords(name) }
+func EventEndDate(start string, formatDates []string, monthOnly bool) string {
+	return eventEndDate(start, formatDates, monthOnly)
+}
+func IsLongEvent(start, end string) bool               { return isLongEvent(start, end) }
+func Shortens(storedStart, storedEnd, end string) bool { return shortens(storedStart, storedEnd, end) }
+func HasMeasure(f FormatDraft) bool                    { return hasMeasure(f) }
+func SignificantWords(name string) []string            { return significantWords(name) }
 
 // Duplicates are the ids of the likely duplicates of a race, as create_event
 // looks for them, for the caller of ctx.

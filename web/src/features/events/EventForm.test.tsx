@@ -263,6 +263,7 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
     registration_deadline: "",
     registration_opening: "",
     registration_opening_time: "",
+    date_precision: "",
     notes: "Parking à l'arrivée.",
   });
   expect(one?.body).toMatchObject({

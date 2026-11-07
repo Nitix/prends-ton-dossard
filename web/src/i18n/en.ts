@@ -713,6 +713,8 @@ export const en = {
       "The registration deadline must be on or before the start day.",
     registration_opening_after_start: "Registration must open on or before the first day.",
     registration_opening_after_deadline: "Registration must open on or before the deadline.",
+    format_date_month: "A race known only by its month has no race dates.",
+    month_start_invalid: "For a race known only by its month, the date is the 1st.",
     format_date_out_of_range: "The race date must fall within the dates of the event.",
     format_other_event: "This race belongs to another event.",
     format_measure_required: "Enter at least a distance, a duration or a time limit.",

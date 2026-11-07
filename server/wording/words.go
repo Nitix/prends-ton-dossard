@@ -26,6 +26,8 @@ type Words struct {
 	deadline string
 	// opening is what the day that registrations open is called.
 	opening string
+	// dateToBeSet is what a race known by its month only says of its day.
+	dateToBeSet string
 	// reminder holds the pieces of the body of a reminder of an opening.
 	reminder reminderWords
 	// decimal is the separator of the decimals of a distance.
@@ -54,6 +56,7 @@ var texts = map[string]Words{
 		unconfirmed: "non confirmé",
 		deadline:    "Clôture des inscriptions",
 		opening:     "Ouverture des inscriptions",
+		dateToBeSet: "date à préciser",
 		reminder:    reminderWords{opens: "Les inscriptions ouvrent", today: "aujourd'hui", tomorrow: "demain", at: "à", in: "dans", min: "min"},
 		decimal:     ",",
 		minute:      "min",
@@ -78,6 +81,7 @@ var texts = map[string]Words{
 		unconfirmed: "not confirmed",
 		deadline:    "Registration closes",
 		opening:     "Registration opens",
+		dateToBeSet: "date to be set",
 		reminder:    reminderWords{opens: "Registration opens", today: "today", tomorrow: "tomorrow", at: "at", in: "in", min: "min"},
 		decimal:     ".",
 		minute:      "m",
@@ -284,4 +288,10 @@ func (w Words) ReminderBody(T time.Time, timeKnown bool, now time.Time) string {
 		return fmt.Sprintf("%s %s %s %s.", r.opens, day, r.at, hhmm)
 	}
 	return fmt.Sprintf("%s %s.", r.opens, day)
+}
+
+// DateToBeSet is what a race known by its month only says of its day: "date à
+// préciser", "date to be set".
+func (w Words) DateToBeSet() string {
+	return w.dateToBeSet
 }

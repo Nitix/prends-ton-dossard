@@ -23,14 +23,14 @@ var ports = []struct {
 	goPort string
 	sum    string
 }{
-	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "167e1f74ac78a9fda6aba2ec0a614d520c5ad2dd46d8c3060753e076368c8f6e"},
-	{"features/events/formDraft.ts", "eventEndDate and shortens of plan.go and race_writes.go", "65523bcc39280161dcd52b864330d8292c1531900aa8407d6e00eb8963b0f3ff"},
+	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "098f312254be0bab489bb0ecc2e728b6cd6cf3d9f782b8f503bdc0d78685bf62"},
+	{"features/events/formDraft.ts", "eventEndDate and shortens of plan.go and race_writes.go", "dbd85f8efb9723d3db5e3f289b35fe42d7ef40fd598bd4a2de0c043b22e83efb"},
 	{"features/events/duplicates.ts", "duplicates.go", "b34613d9a40541a03f85631164a31aade82ef46b591b760e72265e49a9c333bf"},
 	{"features/events/registration.ts", "registrationState (registrationStateOf) of home.go", "d24d2bbd184c284ca11425094cfa458d80624a283709a812988be6718e6ca4de"},
 	{"features/events/participants.ts", "hasStarters of home.go", "e7694134868064d0d35baf7a500ee506c3b8076d41b7ec100f4bd5f1fa3539d9"},
-	{"features/home/pending.ts", "pendingOf of home.go", "33518a8e9dc33cb685904bfaa59e2b55ce9337dbfcbfe3eb0fa77d539945cbb5"},
+	{"features/home/pending.ts", "pendingOf of home.go", "afc2cd876eb1fa7bc24bf1893903308dfa3a89073839603090f759d8951f9190"},
 	{"features/home/registrationTodo.ts", "registrationTodo, todosOf of home.go", "b35560dfa3e1fafd57aaa1d4a498c0a97426956fbae1aea9a5bddd9e3820d1c0"},
-	{"features/results/resultsToEnter.ts", "resultsToEnter of home.go", "c5a849992eb676e95492f5458dd72a554cdb16ed5c2f336e558009caafc4ec29"},
+	{"features/results/resultsToEnter.ts", "resultsToEnter of home.go", "a55d9a738803576e30cdf85e3500c5063ff484a2eaa19d5975528d4a306ba7b9"},
 	{"features/results/resultText.ts", "ResultParts of server/wording, hasResult of views.go", "ddb1ac5bfe9a8827d35fb7f8d31fb2805e094b9794e21740e7363c44dbae981a"},
 	{"features/stats/stats.ts", "stats.go", "5065bc790b58d26603a19d7f96c5ddfb329b3b5743e1573db34a95d0db20c1bc"},
 	{"features/route/gpx.ts", "parseGpx and statsOf of gpx.go", "488f3c213c7efbdca76360a6acb2da11d4308bfb216cf9ae0743feb176792a89"},

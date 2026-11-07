@@ -99,6 +99,7 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 		}
 		var days Entry
 		var ok bool
+		monthOnly := events.MonthOnly(event)
 		if format := p.ExpandedOne("format"); format != nil {
 			// The day of the race, which is the first of the event when the race
 			// has none.
@@ -112,12 +113,23 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 				format.GetInt("time_limit_min"),
 			)
 		} else {
-			days, ok = dayEntry(event.GetString("start_date"), event.GetString("end_date"))
+			// A race known by its month is the 1st alone, not the whole month.
+			end := event.GetString("end_date")
+			if monthOnly {
+				end = ""
+			}
+			days, ok = dayEntry(event.GetString("start_date"), end)
 		}
 		if !ok {
 			continue
 		}
 		entry.Start, entry.End = days.Start, days.End
+		if monthOnly {
+			// The day is not known: the 1st reminds of the race, and the file
+			// says so. The UID stays, so the calendar moves the race to its day
+			// once it is known.
+			entry.Summary += " (" + w.DateToBeSet() + ")"
+		}
 		entries = append(entries, entry)
 	}
 

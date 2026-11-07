@@ -30,7 +30,9 @@ import (
 // participationRow is a participation with what it is on: its event, and, unless it
 // is on the event alone ("format to choose", or supporter), its race with the type
 // that gives it its name. Runner is who it is for. Day is the day of the race
-// (effectiveDate of lib/dates.ts), or the start of the event with no race.
+// (effectiveDate of lib/dates.ts), or the start of the event with no race: the 1st
+// for an event known by its month only. lastDay is the day that says whether it is
+// behind and orders it.
 //
 // The fields are exported for the tests, which are in an external package.
 type participationRow struct {
@@ -91,6 +93,21 @@ func (t *tools) participationRows(ctx context.Context, filter, expand string, ru
 	return rows, nil
 }
 
+// lastDay ports lastRaceDay of lib/dates.ts: the day that says whether the race is
+// behind and orders it among the others. It is the Day of the row, except for an
+// event known by its month only, whose formats have no day: the last day of the
+// month.
+func (r participationRow) lastDay() string {
+	if r.Event.monthOnly() {
+		return lastRaceDay(r.Event, "")
+	}
+	return r.Day
+}
+
+// datePrecision is the precision of the day of the row to say in an answer: "month"
+// when the event is known by its month only, "" (left out) for a day.
+func (r participationRow) datePrecision() string { return datePrecisionOf(r.Event) }
+
 // formatTitle is what the race is called, as the site does: "" for a participation
 // on the event alone.
 func (r participationRow) formatTitle(w wording.Words) string {
@@ -122,12 +139,30 @@ func daysBetween(from, to string) (int, bool) {
 // The orders of the rows, as the site sorts them, then by name of the event (as a
 // person reads a list), then by id so that they never depend on the order of the
 // answer.
+//
+// The days that order the rows of the home page are the days that say whether a race
+// is behind (lastDay): a race known by its month only is at the end of its month.
+// The history of a runner is ordered by Day (latestFirst): the year of the month is
+// the year of its 1st.
 func soonestFirst(a, b participationRow) int {
-	return cmp.Or(cmp.Compare(a.Day, b.Day), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
+	return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 }
 
 func latestFirst(a, b participationRow) int {
 	return cmp.Or(cmp.Compare(b.Day, a.Day), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
+}
+
+// monthRank puts a race known by its month after the races of the month that have a
+// day, when they end on the same day.
+func monthRank(r participationRow) int {
+	if r.Event.monthOnly() {
+		return 1
+	}
+	return 0
+}
+
+func latestEndFirst(a, b participationRow) int {
+	return cmp.Or(cmp.Compare(b.lastDay(), a.lastDay()), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +175,7 @@ const resultsWindowDays = 60
 // isResultToEnter ports isResultToEnter of features/results/resultsToEnter.ts: a
 // participation is "registered" and its race is over (the day of a race is not: it
 // may still be on) for no more than resultsWindowDays days. day is the day of the
-// race. "Résultats à saisir" shows these, and "À confirmer" leaves them out
+// race (lastDay: a race known by its month only is over the day after its month). "Résultats à saisir" shows these, and "À confirmer" leaves them out
 // (pendingOf): both ask this, so they cannot disagree.
 func isResultToEnter(status, day, today string) bool {
 	if status != "registered" {
@@ -155,9 +190,9 @@ func isResultToEnter(status, day, today string) bool {
 // event, then the id of the participation. rows is left as it is.
 func toEnterOf(rows []participationRow, today string) []participationRow {
 	kept := slices.DeleteFunc(slices.Clone(rows), func(r participationRow) bool {
-		return !isResultToEnter(r.Participation.Status, r.Day, today)
+		return !isResultToEnter(r.Participation.Status, r.lastDay(), today)
 	})
-	slices.SortFunc(kept, latestFirst)
+	slices.SortFunc(kept, latestEndFirst)
 	return kept
 }
 
@@ -169,7 +204,7 @@ func toEnterOf(rows []participationRow, today string) []participationRow {
 // here. The order is the one of rows, which is left as it is.
 func pendingOf(rows []participationRow, today string) []participationRow {
 	return slices.DeleteFunc(slices.Clone(rows), func(r participationRow) bool {
-		return isResultToEnter(r.Participation.Status, r.Day, today)
+		return isResultToEnter(r.Participation.Status, r.lastDay(), today)
 	})
 }
 
@@ -268,19 +303,24 @@ func todosOf(rows []participationRow, today string) []registrationTodo {
 // On a race, it is the day of the race that counts: on an event of several days, a
 // race that has been run is behind, whatever the end of its event. A participation
 // on the event alone (interested with no race yet, or supporter) has no day of its
-// own: it is there until the last day of its event, and sorted on the first.
+// own: it is there until the last day of its event, and sorted on the first. A race
+// known by its month only is there until the end of its month, and sorted at the end
+// of it (lastDay), after the races of that month that have a day.
 func upcomingOf(rows []participationRow, today string) []participationRow {
 	kept := slices.DeleteFunc(slices.Clone(rows), func(r participationRow) bool {
 		if r.Participation.Status == statusDNS {
 			return true
 		}
-		day := r.Day
-		if r.Participation.Format == "" {
+		day := r.lastDay()
+		if r.Participation.Format == "" && !r.Event.monthOnly() {
 			day = cmp.Or(r.Event.EndDate, r.Event.StartDate)
 		}
 		return day < today
 	})
-	slices.SortFunc(kept, soonestFirst)
+	slices.SortFunc(kept, func(a, b participationRow) int {
+		return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), cmp.Compare(monthRank(a), monthRank(b)),
+			compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
+	})
 	return kept
 }
 
@@ -340,6 +380,8 @@ type toConfirmOut struct {
 	Event       eventRef `json:"event"`
 	FormatTitle string   `json:"format_title,omitempty" jsonschema:"l'épreuve, comme le site l'écrit ; absent pour une participation à la course seule (intéressé sans épreuve, supporteur)"`
 	Day         string   `json:"day" jsonschema:"le jour de l'épreuve, ou le début de la course pour une participation à la course seule"`
+	// DatePrecision is "month" when only the month of the race is known.
+	DatePrecision string `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 }
 
 // registrationToDoOut is a registration to make.
@@ -361,6 +403,7 @@ type resultToEnterOut struct {
 	Event           eventRef `json:"event"`
 	FormatTitle     string   `json:"format_title,omitempty" jsonschema:"l'épreuve, comme le site l'écrit"`
 	Day             string   `json:"day" jsonschema:"le jour de l'épreuve"`
+	DatePrecision   string   `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 }
 
 // upcomingOut is a race that a runner is down for.
@@ -371,6 +414,7 @@ type upcomingOut struct {
 	Day             string   `json:"day" jsonschema:"le jour de l'épreuve, ou le début de la course pour une participation à la course seule"`
 	Status          string   `json:"status" jsonschema:"interested, registered, finished, dnf ou supporter"`
 	StatusLabel     string   `json:"status_label" jsonschema:"le libellé du statut, comme le site"`
+	DatePrecision   string   `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 	Confirmed       bool     `json:"confirmed" jsonschema:"faux : la participation a été ajoutée par un autre et son coureur ne l'a pas encore confirmée (le site écrit « Non confirmé ») ; ne la présente pas comme un fait acquis"`
 }
 
@@ -479,6 +523,7 @@ func (t *tools) home(ctx context.Context, _ *mcpsdk.CallToolRequest, _ struct{})
 		out.ToConfirm = append(out.ToConfirm, toConfirmOut{
 			participationOut: row.Participation.out(w),
 			Event:            row.eventRef(t.cfg), FormatTitle: row.formatTitle(w), Day: row.Day,
+			DatePrecision: row.datePrecision(),
 		})
 	}
 	for _, todo := range todosOf(rows, day) {
@@ -495,6 +540,7 @@ func (t *tools) home(ctx context.Context, _ *mcpsdk.CallToolRequest, _ struct{})
 	for _, row := range toEnterOf(rows, day) {
 		out.ResultsToEnter = append(out.ResultsToEnter, resultToEnterOut{
 			ParticipationID: row.Participation.ID, Event: row.eventRef(t.cfg), FormatTitle: row.formatTitle(w), Day: row.Day,
+			DatePrecision: row.datePrecision(),
 		})
 	}
 	for _, row := range upcomingOf(rows, day) {
@@ -551,7 +597,7 @@ func (t *tools) latestOnHome(ctx context.Context) ([]commentRecord, error) {
 // upcomingOut is the row as a race that the runner is down for.
 func (r participationRow) upcomingOut(cfg config.Config, w wording.Words) upcomingOut {
 	return upcomingOut{
-		ParticipationID: r.Participation.ID, Event: r.eventRef(cfg), FormatTitle: r.formatTitle(w), Day: r.Day,
+		ParticipationID: r.Participation.ID, Event: r.eventRef(cfg), FormatTitle: r.formatTitle(w), Day: r.Day, DatePrecision: r.datePrecision(),
 		Status: r.Participation.Status, StatusLabel: w.Status(r.Participation.Status), Confirmed: r.Participation.Confirmed,
 	}
 }

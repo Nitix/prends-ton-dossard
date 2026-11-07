@@ -119,6 +119,7 @@ func storedOf(view eventView) *storedEvent {
 		ID: r.ID, StartDate: r.StartDate, EndDate: r.EndDate,
 		Name: r.Name, Location: r.Location, RegistrationURL: r.RegistrationURL, RegistrationDeadline: r.RegistrationDeadline, Notes: r.Notes,
 		RegistrationOpening: r.RegistrationOpening, RegistrationOpeningTime: r.RegistrationOpeningTime,
+		DatePrecision: datePrecisionOf(r),
 	}
 	for _, f := range view.formats {
 		stored.Formats = append(stored.Formats, draftOfRecord(f.record))
@@ -143,6 +144,7 @@ func draftOf(view eventView) eventDraft {
 		ID: r.ID, Name: r.Name, Location: r.Location, StartDate: r.StartDate, EndDate: r.EndDate,
 		RegistrationURL: r.RegistrationURL, RegistrationDeadline: r.RegistrationDeadline, Notes: r.Notes,
 		RegistrationOpening: r.RegistrationOpening, RegistrationOpeningTime: r.RegistrationOpeningTime,
+		DatePrecision: datePrecisionOf(r),
 	}
 	for _, f := range view.formats {
 		draft.Formats = append(draft.Formats, draftOfRecord(f.record))
@@ -209,12 +211,37 @@ func dateRefusal(w wording.Words, draft eventDraft, labels map[string]string, hi
 	return nil
 }
 
+// monthRefusal is the refusal of the site for a race known by its month only
+// (validateEvent and validateFormat of the events package): a start that is not the
+// 1st of its month (month_start_invalid on start_date), then a format that has a
+// day (format_date_month on date). The form does not send them (toEventDraft of
+// formDraft.ts: the 1st of the month chosen, and no date on the formats), and a
+// tool is given a day or a date, so it says so before any write.
+func monthRefusal(w wording.Words, draft eventDraft, labels map[string]string) error {
+	if !draft.monthOnly() {
+		return nil
+	}
+	if draft.StartDate != "" && !strings.HasSuffix(draft.StartDate, "-01") {
+		return errors.New("La course, " + fieldText("start_date", "month_start_invalid"))
+	}
+	for i, f := range draft.Formats {
+		if f.Date != "" {
+			return errors.New(formatSubject(i, titleOf(w, f, labels)) + ", " + fieldText("date", "format_date_month") + monthHint)
+		}
+	}
+	return nil
+}
+
+// monthHint says what to do with the day of a format of a race known by its month.
+const monthHint = " Donne la date de la course (date_precision: day) pour dater ses épreuves."
+
 // openingRefusal is the refusal of the site for the opening of the registration
 // of a draft, in the site's own words and in its own order (validateEvent of the
 // events package): an opening after the first day or after the deadline
 // (registration_opening_after_start, registration_opening_after_deadline), a
 // time that is not HH:MM (time_invalid), and a time without a day
-// (validation_required on registration_opening). The form does not send a time
+// (validation_required on registration_opening). The first day of a race known by
+// its month is the last day of that month. The form does not send a time
 // without a day (toEventDraft of formDraft.ts), and a tool has no field to be
 // left alone, so it says so before any write. It says all of them before a
 // confirmation too: a person is not asked to agree to what the site then
@@ -225,11 +252,15 @@ func openingRefusal(draft eventDraft) error {
 	refuse := func(field, code string) error {
 		return errors.New("La course, " + fieldText(field, code))
 	}
+	firstDay := draft.StartDate
+	if draft.monthOnly() {
+		firstDay = lastDayOfMonth(draft.StartDate)
+	}
 	if opening := draft.RegistrationOpening; opening != "" {
 		if _, ok := events.ParseDay(opening); !ok {
 			return refuse("registration_opening", "date_invalid")
 		}
-		if draft.StartDate != "" && opening > draft.StartDate {
+		if firstDay != "" && opening > firstDay {
 			return refuse("registration_opening", "registration_opening_after_start")
 		}
 		if deadline := draft.RegistrationDeadline; deadline != "" && opening > deadline {
@@ -410,9 +441,12 @@ func (t *tools) changeEvent(ctx context.Context, tool string, view eventView, la
 	stored := storedOf(view)
 	draft := draftOf(view)
 	change(&draft)
-	draft.EndDate = eventEndDate(draft.StartDate, datesOf(draft))
+	draft.EndDate = draft.endDate()
 
 	if err := measureRefusal(w, draft, labels); err != nil {
+		return eventWriteOut{}, err
+	}
+	if err := monthRefusal(w, draft, labels); err != nil {
 		return eventWriteOut{}, err
 	}
 	if err := openingRefusal(draft); err != nil {
@@ -535,11 +569,16 @@ func period(start, end string) string {
 // people entered (spec § 6.13, update_event and update_format): a filled field
 // cleared, notes replaced, the race shortened (shortens), the day of a format
 // that has participants changed (its own date, or the start for a format that
-// has none). nil when nothing.
+// has none), the days of the formats that a race becoming a month loses (spec
+// § 12.3). Going the other way, from a month to a day, loses nothing: the days of the
+// race are not the ones people entered, and nothing asks. nil when nothing.
 func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	var r risk
 	event := view.record
 	eventShown := false
+	// A race that becomes a month loses the days of its formats; one that stops being a
+	// month had none to lose.
+	toMonth, fromMonth := draft.monthOnly() && !event.monthOnly(), event.monthOnly() && !draft.monthOnly()
 	// The link is a text that a member wrote, quoted; the deadline is a day that
 	// the site checked.
 	for _, field := range []struct{ name, was, now, shown string }{
@@ -561,7 +600,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		r.Details = append(r.Details, "Les notes seraient "+verb+" (actuellement : "+quote(event.Notes)+").")
 		eventShown = true
 	}
-	if shortens(event.StartDate, event.EndDate, draft.EndDate) {
+	if !fromMonth && shortens(event.StartDate, event.EndDate, draft.EndDate) {
 		r.Details = append(r.Details, shortenedLine(event.StartDate, event.EndDate, draft.StartDate, draft.EndDate))
 		eventShown = true
 	}
@@ -576,7 +615,15 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		var lines []string
 
 		dayWas, dayNow := cmp.Or(was.Date, event.StartDate), cmp.Or(now.Date, draft.StartDate)
-		dayMoves := dayWas != dayNow && len(f.participations) > 0
+		dayMoves := dayWas != dayNow && len(f.participations) > 0 && !toMonth && !fromMonth
+		lostToMonth := toMonth && was.Date != ""
+		if lostToMonth {
+			line := "Épreuve " + quote(title) + " : son jour, le " + was.Date + ", serait effacé, la course n'ayant plus que son mois"
+			if len(f.participations) > 0 {
+				line += ", pour ses participants : " + participantLabels(w, f.participations)
+			}
+			lines = append(lines, line+".")
+		}
 		if dayMoves {
 			lines = append(lines, "Le jour de l'épreuve "+quote(title)+" passerait du "+dayWas+" au "+dayNow+
 				", pour ses participants : "+participantLabels(w, f.participations)+".")
@@ -594,7 +641,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			{"price_eur", was.PriceEur != 0, now.PriceEur != 0, number(was.PriceEur) + " €"},
 			{"route_url", was.RouteURL != "", now.RouteURL != "", quote(was.RouteURL)},
 			// The day that moves says it already.
-			{"date", was.Date != "" && !dayMoves, now.Date != "", was.Date},
+			{"date", was.Date != "" && !dayMoves && !lostToMonth, now.Date != "", was.Date},
 		} {
 			if field.was && !field.now {
 				lines = append(lines, "Épreuve "+quote(title)+" : "+clearedPhrases[field.name]+" (actuellement : "+field.value+").")
@@ -604,7 +651,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			r.Details = append(r.Details, lines...)
 			r.Records = append(r.Records, stamp{Collection: "formats", ID: f.record.ID, Updated: f.record.Updated})
 		}
-		if dayMoves {
+		if dayMoves || lostToMonth {
 			r.Records = append(r.Records, stampsOf(f.participations)...)
 		}
 	}

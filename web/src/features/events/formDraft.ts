@@ -1,4 +1,4 @@
-import { daysBetween, parseDate, raceStarted } from "../../lib/dates";
+import { daysBetween, isMonthOnly, parseDate, raceStarted } from "../../lib/dates";
 import { newId } from "../../lib/ids";
 import type { EventRecord, Measure, Status } from "../../lib/types";
 import type { EventView } from "./api";
@@ -37,6 +37,10 @@ export type FormDraft = {
   name: string;
   location: string;
   startDate: string;
+  /** The day is not known: only the month is, and the formats have no date. */
+  monthOnly: boolean;
+  /** The month of a race that is known by its month only, `YYYY-MM`, or empty: a month of the list of the form. */
+  startMonth: string;
   registrationUrl: string;
   /** A `YYYY-MM-DD` day, or empty. */
   registrationDeadline: string;
@@ -82,6 +86,8 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
       name: "",
       location: "",
       startDate: "",
+      monthOnly: false,
+      startMonth: "",
       registrationUrl: "",
       registrationDeadline: "",
       registrationOpening: "",
@@ -116,6 +122,9 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     name: event.name,
     location: event.location,
     startDate: event.start_date,
+    monthOnly: isMonthOnly(event),
+    // The month of the day, so that checking the box offers the month it is in.
+    startMonth: event.start_date.slice(0, 7),
     registrationUrl: event.registration_url ?? "",
     registrationDeadline: event.registration_deadline ?? "",
     registrationOpening: event.registration_opening ?? "",
@@ -149,13 +158,31 @@ export function isDay(text: string): boolean {
  * text that is not a day. Without a start day there is no period to speak of.
  * Both are `YYYY-MM-DD` texts, which sort as the days do.
  */
-export function eventEndDate(start: string, formatDates: readonly string[]): string {
+export function eventEndDate(
+  start: string,
+  formatDates: readonly string[],
+  monthOnly = false,
+): string {
   if (!isDay(start)) return "";
+  // A race known by its month runs to the last day of that month, whatever its formats say (they
+  // have no day).
+  if (monthOnly) return lastDayOfMonth(start);
   let end = start;
   for (const day of formatDates) {
     if (day > end && isDay(day)) end = day;
   }
   return end === start ? "" : end;
+}
+
+/** The last day of the month of a day (`YYYY-MM-DD`, a real one). */
+function lastDayOfMonth(day: string): string {
+  const date = parseDate(day);
+  return date.with({ day: date.daysInMonth }).toString();
+}
+
+/** The 1st of a month (`YYYY-MM`): what a race known by its month starts on. Empty when the text is not a month. */
+export function monthStart(month: string): string {
+  return /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : "";
 }
 
 /**
@@ -256,7 +283,10 @@ export function joinStarted(draft: FormDraft, today: Temporal.PlainDate): boolea
   const row = joinRowOf(draft);
   if (!row) return false;
   try {
-    return raceStarted({ date: row.date }, { start_date: draft.startDate }, today);
+    // A race known by its month starts on the 1st, and its formats have no day.
+    return draft.monthOnly
+      ? raceStarted({}, { start_date: monthStart(draft.startMonth) }, today)
+      : raceStarted({ date: row.date }, { start_date: draft.startDate }, today);
   } catch (error) {
     // The day is empty, or half typed: Temporal refuses it with a RangeError.
     if (error instanceof RangeError) return false;
@@ -277,15 +307,19 @@ export function toEventDraft(
   label?: (row: FormatRow, index: number) => string,
 ): EventDraft {
   const joinRow = joinRowOf(draft);
+  // A race known by its month: the 1st of the month, to the last day of it, and no date on the formats.
+  const startDate = draft.monthOnly ? monthStart(draft.startMonth) : draft.startDate;
   return {
     id: existing?.event.id,
     name: draft.name.trim(),
     location: draft.location.trim(),
-    start_date: draft.startDate,
+    start_date: startDate,
     end_date: eventEndDate(
-      draft.startDate,
+      startDate,
       draft.rows.map((row) => row.date),
+      draft.monthOnly,
     ),
+    date_precision: draft.monthOnly ? "month" : undefined,
     registration_url: draft.registrationUrl.trim() || undefined,
     registration_deadline: draft.registrationDeadline || undefined,
     registration_opening: draft.registrationOpening || undefined,
@@ -308,7 +342,7 @@ export function toEventDraft(
       route_url: row.routeUrl.trim() || undefined,
       gpx: row.gpx,
       label: label?.(row, index),
-      date: row.date || undefined,
+      date: draft.monthOnly ? undefined : row.date || undefined,
     })),
     join:
       join && joinRow

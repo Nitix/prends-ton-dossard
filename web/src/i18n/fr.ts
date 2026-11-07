@@ -899,6 +899,8 @@ export const fr = {
       "L'ouverture des inscriptions doit être au plus tard le jour du début.",
     registration_opening_after_deadline:
       "L'ouverture des inscriptions doit être au plus tard la date limite.",
+    format_date_month: "Une course dont seul le mois est connu n'a pas de date d'épreuve.",
+    month_start_invalid: "Pour une course dont seul le mois est connu, la date est le 1er du mois.",
     format_date_out_of_range:
       "La date de l'épreuve doit être comprise dans les dates de l'événement.",
     format_other_event: "Cette épreuve appartient à un autre événement.",

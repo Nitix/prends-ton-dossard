@@ -1,6 +1,7 @@
 import { ClientResponseError } from "pocketbase";
 
 import { errorCode, fieldErrors } from "../../i18n/errors";
+import { isMonthOnly } from "../../lib/dates";
 import { newId } from "../../lib/ids";
 import { pb } from "../../lib/pb";
 import type { Status } from "../../lib/types";
@@ -50,6 +51,12 @@ export type EventDraft = {
   registration_opening?: string;
   /** The time of that opening, `HH:MM`, Paris time. Needs `registration_opening`. */
   registration_opening_time?: string;
+  /**
+   * `month` for a race whose month is known and not its day: it runs from the 1st (`start_date`) to
+   * the last day of the month (`end_date`, which the server sets), and its formats have no `date`.
+   * `day`, or nothing, is a race with a day.
+   */
+  date_precision?: "day" | "month";
   notes?: string;
   formats: {
     id?: string;
@@ -88,6 +95,8 @@ function eventBody(draft: EventDraft): Record<string, unknown> {
     registration_deadline: draft.registration_deadline ?? "",
     registration_opening: draft.registration_opening ?? "",
     registration_opening_time: draft.registration_opening_time ?? "",
+    // Empty is a day: it is what every event that was there before holds.
+    date_precision: draft.date_precision === "month" ? "month" : "",
     notes: draft.notes ?? "",
   };
 }
@@ -106,9 +115,14 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
   };
 }
 
-/** Whether a day (a `YYYY-MM-DD` text, which sorts like the day) is in the dates the event has now. An empty day is. */
+/**
+ * Whether a day (a `YYYY-MM-DD` text, which sorts like the day) is in the dates the event has now. An
+ * empty day is. An event that is stored as a month offers no day to a format: the server refuses
+ * one, whatever the month.
+ */
 function isInRangeOf(event: EventView["event"], day: string | undefined): boolean {
   if (!day) return true;
+  if (isMonthOnly(event)) return false;
   return day >= event.start_date && (!event.end_date || day <= event.end_date);
 }
 
@@ -157,7 +171,12 @@ export function buildBatch(
   const formatIds: string[] = [];
   const keptOps: BatchOp[] = [];
   const lateOps: BatchOp[] = [];
-  for (const format of draft.formats) {
+  // A race known by its month is a race without days for its formats: they have no date, whatever the
+  // draft holds (the form drops them, but a draft that kept them would be refused).
+  const formats = isMonthOnly(draft)
+    ? draft.formats.map((format) => ({ ...format, date: undefined }))
+    : draft.formats;
+  for (const format of formats) {
     const id = format.id ?? newId();
     formatIds.push(id);
     if (existing && existingIds.has(id)) {

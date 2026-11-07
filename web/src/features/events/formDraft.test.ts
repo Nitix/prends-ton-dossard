@@ -102,6 +102,18 @@ describe("eventEndDate", () => {
     expect(eventEndDate("", ["2026-06-15"])).toBe("");
     expect(eventEndDate("2026-06-1", ["2026-06-15"])).toBe("");
   });
+
+  test("eventEndDate — une course au mois finit le dernier jour du mois", () => {
+    expect(eventEndDate("2027-06-01", [], true)).toBe("2027-06-30");
+    expect(eventEndDate("2027-12-01", [], true)).toBe("2027-12-31");
+    expect(eventEndDate("2028-02-01", [], true)).toBe("2028-02-29");
+    expect(eventEndDate("2027-02-01", [], true)).toBe("2027-02-28");
+    // The days of its formats do not give it its end.
+    expect(eventEndDate("2027-06-01", ["2027-06-12", "2027-07-02"], true)).toBe("2027-06-30");
+    // Without a start there is no month.
+    expect(eventEndDate("", [], true)).toBe("");
+    expect(eventEndDate("2027-06", [], true)).toBe("");
+  });
 });
 
 describe("isLongEvent", () => {
@@ -186,6 +198,32 @@ describe("initialDraft", () => {
     expect(draft.rows).toHaveLength(1);
     expect(draft.rows[0]?.id).toBeUndefined();
     expect(draft.joinRow).toBe(draft.rows[0]?.key);
+  });
+
+  test("initialDraft — une course au mois : le mois est repris, la case est cochée", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        start_date: "2027-06-01",
+        end_date: "2027-06-30",
+        date_precision: "month",
+        expand: { formats_via_event: [{ ...f15 }] },
+      }),
+    );
+
+    expect(draft).toMatchObject({
+      monthOnly: true,
+      startMonth: "2027-06",
+      startDate: "2027-06-01",
+    });
+  });
+
+  test("initialDraft — une course datée : la case n'est pas cochée, son mois est proposé", () => {
+    expect(initialDraft(toEventView(eventRecord))).toMatchObject({
+      monthOnly: false,
+      startMonth: "2026-06",
+    });
+    expect(initialDraft(undefined)).toMatchObject({ monthOnly: false, startMonth: "" });
   });
 
   test("an event being edited: its values, its formats by their id, and no taking part", () => {
@@ -384,6 +422,49 @@ describe("toEventDraft", () => {
     expect(saved.registration_opening_time).toBe("10:00");
   });
 
+  test("toEventDraft — une course au mois", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      name: "Trail de juin",
+      monthOnly: true,
+      startMonth: "2027-06",
+      // What was typed before the box was checked is kept in the draft, and not sent.
+      startDate: "2027-05-20",
+      rows: [row({ distanceKm: "42", date: "2027-06-12" }), row({ key: "k2", distanceKm: "10" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved).toMatchObject({
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+    });
+    expect(saved.formats.map(({ date }) => date)).toEqual([undefined, undefined]);
+  });
+
+  test("toEventDraft — décocher rend la date et les dates des épreuves", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      monthOnly: false,
+      startMonth: "2027-06",
+      startDate: "2027-06-12",
+      rows: [row({ distanceKm: "42", date: "2027-06-13" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved).toMatchObject({ start_date: "2027-06-12", end_date: "2027-06-13" });
+    expect(saved.date_precision).toBeUndefined();
+    expect(saved.formats[0]?.date).toBe("2027-06-13");
+  });
+
+  test("toEventDraft — un mois qui n'est pas choisi n'a pas de début", () => {
+    const draft = { ...initialDraft(undefined), monthOnly: true, startMonth: "" };
+
+    expect(toEventDraft(draft, undefined, false)).toMatchObject({ start_date: "", end_date: "" });
+  });
+
   test("toEventDraft — une heure sans jour n'est pas envoyée", () => {
     const draft = {
       ...initialDraft(undefined),
@@ -474,6 +555,20 @@ describe("joinStarted", () => {
     expect(joinStarted(draft, day("2026-06-14"))).toBe(true);
     // The other format has no day of its own.
     expect(joinStarted({ ...draft, joinRow: "b" }, day("2026-06-13"))).toBe(true);
+  });
+
+  test("une course au mois commence le 1er du mois, quelles que soient ses épreuves", () => {
+    const draft = typed({
+      monthOnly: true,
+      startMonth: "2027-06",
+      startDate: "",
+      rows: [row({ key: "a", date: "2027-06-20" })],
+      joinRow: "a",
+    });
+
+    expect(joinStarted(draft, day("2027-05-31"))).toBe(false);
+    expect(joinStarted(draft, day("2027-06-01"))).toBe(true);
+    expect(joinStarted({ ...draft, startMonth: "" }, day("2027-06-01"))).toBe(false);
   });
 
   test("is false while the day is not typed (or not a day): nobody finishes a race with no day", () => {

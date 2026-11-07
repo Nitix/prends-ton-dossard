@@ -1,4 +1,4 @@
-import { daysBetween, effectiveDate } from "../../lib/dates";
+import { daysBetween, lastRaceDay } from "../../lib/dates";
 import type {
   EventRecord,
   FormatRecord,
@@ -18,7 +18,9 @@ export const RESULTS_EXPAND = "event,format.race_type";
 /**
  * A race the runner is registered for, whose result they may have to enter:
  * the participation, and what it is on, with the race type that gives the
- * format its name. `date` is the day of the race (`effectiveDate`).
+ * format its name. `date` is the day that says whether the race is over
+ * (`lastRaceDay`): its day, or the last day of its month for a race known by
+ * its month only.
  */
 export type ToEnter = {
   participation: ParticipationRecord;
@@ -52,14 +54,15 @@ export function toEnterRow(record: RegisteredRecord): ToEnter {
       `participation ${record.id}: its event, its format or the race type of its format is missing from the answer`,
     );
   }
-  return { participation: record, event, format, raceType, date: effectiveDate(format, event) };
+  return { participation: record, event, format, raceType, date: lastRaceDay(format, event) };
 }
 
 /**
  * Whether the result of a participation is to enter: it is « Registered » and
  * its race is over (the day of a race is not: it may still be on) for no more
  * than `RESULTS_WINDOW_DAYS` days. `date` is the day of the race
- * (`effectiveDate`). « Résultats à saisir » shows these, and « À confirmer »
+ * (`lastRaceDay`): a race known by its month only is over the day after its
+ * month. « Résultats à saisir » shows these, and « À confirmer »
  * leaves them out (see `pendingOf`): both ask this, so they cannot disagree.
  */
 export function isResultToEnter(
