@@ -12,8 +12,10 @@ import (
 const vapidHeader = `{"typ":"JWT","alg":"ES256"}`
 
 // vapidLife is the life of a token: the longest that the services all take
-// (RFC 8292 caps it at a day; Apple's refuse more).
-const vapidLife = time.Hour
+// (RFC 8292 caps it at a day; Apple's refuse more than an hour). It is 50 minutes,
+// not an hour: a clock of this server a few seconds ahead of the service's would
+// make an hour of life more than an hour away there.
+const vapidLife = 50 * time.Minute
 
 // vapidAuthorization is the Authorization header of RFC 8292 § 3:
 // "vapid t=<JWT>, k=<public key>". The audience is the origin of the push

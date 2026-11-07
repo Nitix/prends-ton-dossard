@@ -50,7 +50,7 @@ func TestVAPID_Token(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(claims) != 3 || claims["aud"] != "https://fcm.googleapis.com" || claims["sub"] != "mailto:admin@example.fr" ||
-		claims["exp"] != float64(now.Add(time.Hour).Unix()) {
+		claims["exp"] != float64(now.Add(50*time.Minute).Unix()) {
 		t.Errorf("claims %v", claims)
 	}
 
