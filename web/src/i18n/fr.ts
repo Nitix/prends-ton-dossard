@@ -561,6 +561,11 @@ export const fr = {
     map: "Carte du parcours",
     zoomIn: "Zoom avant",
     zoomOut: "Zoom arrière",
+    // The hints of the map: the wheel alone scrolls the page (the key is Ctrl, or ⌘ on Apple devices), and on a touch screen one finger does too.
+    wheelHint: (key: string) => `${key} + molette pour zoomer`,
+    fingersHint: "Deux doigts pour déplacer la carte",
+    // What describes the map to a screen reader (visually hidden).
+    mapHelp: (key: string) => `Boutons + et −, ${key} + molette ou deux doigts pour zoomer.`,
     // The accessible name of the profile, which the page completes with the numbers.
     profileLabel: "Profil de dénivelé",
     // The legend of the colours of the profile, which are the steepness of the slope.

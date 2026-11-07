@@ -12,9 +12,10 @@ import {
   type PointTuple,
   type TooltipOptions,
 } from "leaflet";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
+import { coarsePointer, gateWheel, zoomModifier } from "./gestures";
 import type { TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
 import { SLOPE_COLORS, SLOPE_FILLS, type SlopeZone } from "./slope";
@@ -57,6 +58,11 @@ const PADDING_BOTTOM_RIGHT: PointTuple = [16, 52];
 
 /** The user asks the system for less motion. */
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+/** How long the hint stays on the map, in milliseconds. */
+const HINT_MS = 1500;
+/** How far a finger has to go, in pixels, to be moving and not tapping (less than the slop of a browser). */
+const FINGER_MOVE_PX = 4;
 
 // The colours of the track and of its two ends are properties of the theme
 // (`--map-*` in styles.css), which a skin sets. The start and the finish also
@@ -129,7 +135,8 @@ function place(layers: Layers | null, index: TrackIndex, { km, zone }: Wanted) {
 
 /**
  * A track on a topographic map that can be moved and zoomed (with the buttons,
- * the keys, or two fingers: the wheel scrolls the page): the line, and two dots
+ * the keys, Ctrl or ⌘ and the wheel, or two fingers: the wheel alone scrolls the
+ * page, and on a touch screen so does one finger; a hint says so, see gestures.ts): the line, and two dots
  * for the start and the finish. Pass the whole track, with at least one point;
  * Leaflet reduces the line to what the zoom shows. `tileUrl` is where the tiles
  * come from, which only a test changes. Without tiles (offline, or blocked) the
@@ -167,6 +174,19 @@ export default function TrackMap({
 }) {
   const { t } = useI18n();
   const element = useRef<HTMLElement>(null);
+  const gate = useRef<HTMLDivElement>(null);
+  const help = useId();
+  // The hint over the map, which goes away by itself.
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef(0);
+  const showHint = useCallback((text: string) => {
+    setHint(text);
+    clearTimeout(hintTimer.current);
+    hintTimer.current = window.setTimeout(() => setHint(null), HINT_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
+  const key = zoomModifier();
+  const { wheelHint, fingersHint } = t.route;
   // Each map has its gradient: two tracks on a page have two maps.
   const gradient = useId();
   const { zoomIn, zoomOut, start, finish } = t.route;
@@ -192,7 +212,10 @@ export default function TrackMap({
     // the tiles, not the zoom of the markers (otherwise Leaflet decides for each browser).
     const calm = window.matchMedia(REDUCED_MOTION).matches;
     const map = createMap(container, {
-      scrollWheelZoom: false,
+      // The wheel zooms with Ctrl or ⌘ only (see gateWheel); on a touch screen a
+      // finger scrolls the page, and two fingers move and zoom the map.
+      scrollWheelZoom: true,
+      dragging: !coarsePointer(),
       maxZoom: MAX_ZOOM,
       zoomControl: false,
       ...(calm ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {}),
@@ -352,6 +375,43 @@ export default function TrackMap({
     };
   }, [points, index, tileUrl, zoomIn, zoomOut, start, finish, gradient]);
 
+  // The wheel alone scrolls the page, and says why.
+  useEffect(() => {
+    const gateElement = gate.current;
+    if (gateElement === null) return undefined;
+    return gateWheel(gateElement, () => showHint(wheelHint(key)));
+  }, [showHint, wheelHint, key]);
+
+  // On a touch screen, a finger that moves over the map scrolls the page: it says
+  // that two fingers move the map. (Two fingers are the map's, and say nothing.)
+  useEffect(() => {
+    const container = element.current;
+    if (container === null || !coarsePointer()) return undefined;
+    const down = new Map<number, { x: number; y: number }>();
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType === "touch")
+        down.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    };
+    const onMove = (event: PointerEvent) => {
+      const from = down.get(event.pointerId);
+      if (from === undefined || down.size !== 1) return;
+      if (Math.hypot(event.clientX - from.x, event.clientY - from.y) >= FINGER_MOVE_PX) {
+        showHint(fingersHint);
+      }
+    };
+    const onEnd = (event: PointerEvent) => void down.delete(event.pointerId);
+    container.addEventListener("pointerdown", onDown);
+    container.addEventListener("pointermove", onMove);
+    container.addEventListener("pointerup", onEnd);
+    container.addEventListener("pointercancel", onEnd);
+    return () => {
+      container.removeEventListener("pointerdown", onDown);
+      container.removeEventListener("pointermove", onMove);
+      container.removeEventListener("pointerup", onEnd);
+      container.removeEventListener("pointercancel", onEnd);
+    };
+  }, [showHint, fingersHint]);
+
   // The mark follows the cursor of the profile. This effect comes after the one
   // above, so a new track has its map before its mark.
   useEffect(() => {
@@ -374,7 +434,26 @@ export default function TrackMap({
           </linearGradient>
         </defs>
       </svg>
-      <section ref={element} aria-label={t.route.map} className={`track-map isolate ${MAP_BOX}`} />
+      <div ref={gate} className="relative isolate">
+        <section
+          ref={element}
+          aria-label={t.route.map}
+          aria-describedby={help}
+          className={`track-map isolate ${MAP_BOX}`}
+        />
+        <p id={help} className="sr-only">
+          {t.route.mapHelp(key)}
+        </p>
+        {/* The hint: over the map, for the eye only, and it takes no pointer. */}
+        {hint === null ? null : (
+          <div
+            aria-hidden="true"
+            className="track-hint pointer-events-none absolute inset-0 flex items-center justify-center rounded-[1.25rem] bg-black/55 p-4 text-center text-base font-semibold text-white"
+          >
+            {hint}
+          </div>
+        )}
+      </div>
     </>
   );
 }

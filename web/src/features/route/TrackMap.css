@@ -97,3 +97,16 @@
 .track-map .track-marker {
   stroke: var(--color-card);
 }
+
+/* The hint over the map (see TrackMap): it comes in softly, and at once when less
+   motion is asked for. */
+@media (prefers-reduced-motion: no-preference) {
+  .track-hint {
+    animation: track-hint-in 150ms ease-out;
+  }
+}
+@keyframes track-hint-in {
+  from {
+    opacity: 0;
+  }
+}

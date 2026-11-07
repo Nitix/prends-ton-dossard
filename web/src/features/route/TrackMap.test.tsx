@@ -7,6 +7,7 @@ import { page } from "vitest/browser";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { BLANK_TILE } from "../../test/tiles";
+import { gateWheel } from "./gestures";
 import { toTrack } from "./gpx";
 import TrackMap, { TILE_ATTRIBUTION, TILE_URL } from "./TrackMap";
 
@@ -198,7 +199,7 @@ test("TrackMap — a race that ends where it starts shows both marks", async () 
   expect(a && b && (a.bottom <= b.top + 1 || b.bottom <= a.top + 1)).toBe(true);
 });
 
-test("TrackMap — zoom buttons are 44 px, wheel zoom is off", async () => {
+test("TrackMap — zoom buttons are 44 px, the plain wheel is left to the page", async () => {
   const screen = await renderMap();
 
   // The buttons have names, in the language of the page, and are tap targets.
@@ -480,4 +481,161 @@ test("TrackMap — a map removed in the middle of a zoom leaves nothing that fai
   }
 
   expect(failures).toEqual([]);
+});
+
+/** The Leaflet map of the one that was just made (Leaflet gives no way to it from its element). */
+function leafletOf(fitBounds: { mock: { contexts: unknown[] } }): LeafletMap {
+  const map = fitBounds.mock.contexts.at(-1);
+  if (!(map instanceof LeafletMap)) throw new Error("no map was made");
+  return map;
+}
+
+/** A wheel over the middle of the map. */
+function wheelOver(screen: Screen, init: WheelEventInit): WheelEvent {
+  const event = new WheelEvent("wheel", {
+    bubbles: true,
+    cancelable: true,
+    deltaY: -400,
+    ...init,
+  });
+  part(screen, ".leaflet-pane.leaflet-map-pane").dispatchEvent(event);
+  return event;
+}
+
+const hintText = (screen: Screen) => screen.container.querySelector(".track-hint")?.textContent;
+
+test("TrackMap — la molette seule fait défiler la page et montre l'aide", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  const zoom = map.getZoom();
+
+  const event = wheelOver(screen, {});
+
+  expect(event.defaultPrevented).toBe(false);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.wheelHint("Ctrl"));
+  // The hint is for the eye only, and takes no pointer.
+  const hint = part(screen, ".track-hint");
+  expect(hint.getAttribute("aria-hidden")).toBe("true");
+  expect(getComputedStyle(hint).pointerEvents).toBe("none");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  expect(map.getZoom()).toBe(zoom);
+  // ... and it goes away by itself.
+  await expect.poll(() => hintText(screen), { timeout: 4000 }).toBeUndefined();
+});
+
+test("TrackMap — Ctrl + molette zoome", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  const zoom = map.getZoom();
+
+  const event = wheelOver(screen, { ctrlKey: true });
+
+  expect(event.defaultPrevented).toBe(true);
+  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBeGreaterThan(zoom);
+  expect(hintText(screen)).toBeUndefined();
+});
+
+test("TrackMap — ⌘ sur Mac", async () => {
+  vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  const zoom = map.getZoom();
+
+  wheelOver(screen, {});
+  await expect.poll(() => hintText(screen)).toBe(fr.route.wheelHint("⌘"));
+
+  expect(wheelOver(screen, { metaKey: true }).defaultPrevented).toBe(true);
+  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBeGreaterThan(zoom);
+});
+
+/** The device says that its main pointer is coarse (a finger). */
+function touchScreen() {
+  const matchMedia = window.matchMedia.bind(window);
+  vi.spyOn(window, "matchMedia").mockImplementation((query) =>
+    matchMedia(query.includes("pointer: coarse") ? "all" : query),
+  );
+}
+
+test("TrackMap — un appareil tactile n'a pas le glisser à un doigt", async () => {
+  touchScreen();
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  expect(map.dragging.enabled()).toBe(false);
+  expect(map.touchZoom.enabled()).toBe(true);
+
+  const region = part(screen, ".leaflet-container");
+  const touch = (type: string, id: number, x: number, y: number) =>
+    region.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "touch",
+        pointerId: id,
+        clientX: x,
+        clientY: y,
+        buttons: 1,
+      }),
+    );
+  // Two fingers moving are the map's: no hint.
+  touch("pointerdown", 1, 100, 100);
+  touch("pointerdown", 2, 140, 100);
+  touch("pointermove", 1, 100, 140);
+  expect(hintText(screen)).toBeUndefined();
+  touch("pointerup", 1, 100, 140);
+  touch("pointerup", 2, 140, 100);
+
+  // One finger that moves scrolls the page, and says so.
+  touch("pointerdown", 3, 100, 100);
+  touch("pointermove", 3, 100, 130);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+});
+
+test("TrackMap — avec une souris, la carte se déplace au glisser", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  await renderMap();
+  expect(leafletOf(fit).dragging.enabled()).toBe(true);
+});
+
+test("TrackMap — la carte est décrite", async () => {
+  const screen = await renderMap();
+  const region = screen.getByRole("region", { name: fr.route.map });
+  await expect.element(region).toHaveAccessibleDescription(fr.route.mapHelp("Ctrl"));
+  expect(fr.route.mapHelp("Ctrl")).toBe(
+    "Boutons + et −, Ctrl + molette ou deux doigts pour zoomer.",
+  );
+});
+
+// gateWheel needs a DOM: the tests of the other gestures are in gestures.test.ts.
+test("gateWheel — stops a plain wheel, lets Ctrl or ⌘ through, and cleans up", () => {
+  const gate = document.createElement("div");
+  const inner = document.createElement("div");
+  gate.append(inner);
+  const reached = vi.fn<() => void>();
+  inner.addEventListener("wheel", reached);
+  const onPlain = vi.fn<() => void>();
+  const stop = gateWheel(gate, onPlain);
+
+  const wheel = (init: WheelEventInit) => {
+    const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+    inner.dispatchEvent(event);
+    return event;
+  };
+
+  const plain = wheel({ deltaY: 100 });
+  expect(reached).not.toHaveBeenCalled();
+  expect(onPlain).toHaveBeenCalledOnce();
+  expect(plain.defaultPrevented).toBe(false);
+
+  wheel({ deltaY: 100, ctrlKey: true });
+  wheel({ deltaY: 100, metaKey: true });
+  expect(reached).toHaveBeenCalledTimes(2);
+  expect(onPlain).toHaveBeenCalledOnce();
+
+  stop();
+  wheel({ deltaY: 100 });
+  expect(reached).toHaveBeenCalledTimes(3);
+  expect(onPlain).toHaveBeenCalledOnce();
 });
