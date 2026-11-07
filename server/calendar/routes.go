@@ -270,8 +270,14 @@ func feedRoute(cfg config.Config) func(*core.RequestEvent) error {
 		if err != nil {
 			return e.InternalServerError("", err)
 		}
+		// On the demo the account is shared, so the reminders that it could set
+		// through the collection API are not read: its feed has no alarm.
+		chosen := reminders.Of(user)
+		if cfg.Demo() {
+			chosen = nil
+		}
 		if runner != nil {
-			if entries, err = entriesOf(e.App, runner, cfg.AppURL, w, reminders.Of(user)); err != nil {
+			if entries, err = entriesOf(e.App, runner, cfg.AppURL, w, chosen); err != nil {
 				return e.InternalServerError("", err)
 			}
 		}

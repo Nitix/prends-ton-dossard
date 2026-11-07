@@ -279,3 +279,24 @@ func TestCalendarFeed_Openings(t *testing.T) {
 		}
 	})
 }
+
+// On the demo, whose account everybody shares, the personal feed has no alarm
+// whatever the account chose: the reminders routes are not there, but the
+// collection API still lets the account set `reminders`.
+func TestCalendarFeed_NoAlarmOnTheDemo(t *testing.T) {
+	app := testutil.NewAppWith(t, map[string]string{"DEMO_LOGIN_EMAIL": "alice@example.test"})
+	fx := testutil.Seed(t, app)
+	o := setUpOpenings(t, app, fx, "day", "hour")
+	_, feed := request(t, app, http.MethodGet, subscribe(t, app, fx.Alice, "fr"), nil, "", http.StatusOK)
+
+	uid := openingUID(o.timed, fx.AliceRunner)
+	if !strings.Contains(feed, "UID:"+uid) {
+		t.Fatalf("the opening is not in the feed:\n%q", feed)
+	}
+	if triggers, _ := alarmsOf(t, feed, uid); len(triggers) != 0 {
+		t.Errorf("alarms on the demo: %v, want none", triggers)
+	}
+	if strings.Contains(feed, "BEGIN:VALARM") {
+		t.Errorf("an alarm in the feed of the demo:\n%q", feed)
+	}
+}
