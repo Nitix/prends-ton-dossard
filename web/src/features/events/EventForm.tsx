@@ -9,7 +9,7 @@ import { Field, INPUT } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
-import { parseDate } from "../../lib/dates";
+import { isMonthOnly, parseDate } from "../../lib/dates";
 import type { RaceTypeRecord } from "../../lib/types";
 import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
@@ -307,13 +307,25 @@ function EventFields({
 
   /** The box: checked, the month of the day typed (else the one chosen before, else this month); the draft keeps both. */
   function setMonthOnly(monthOnly: boolean) {
-    setDraft((current) => ({
-      ...current,
-      monthOnly,
-      startMonth: isDay(current.startDate)
-        ? current.startDate.slice(0, 7)
-        : current.startMonth || today.toPlainYearMonth().toString(),
-    }));
+    setDraft((current) => {
+      // The stored 1st of a month race is not a day the person chose: unchecking leaves the field
+      // empty (it is required), so that Save cannot date the race on the 1st. A typed day stays.
+      const storedFirst =
+        initial !== undefined &&
+        isMonthOnly(initial.event) &&
+        current.startDate === initial.event.start_date;
+      return {
+        ...current,
+        monthOnly,
+        startDate: !monthOnly && storedFirst ? "" : current.startDate,
+        // A day half typed (`0020-06-13`) is no month to offer.
+        startMonth: !monthOnly
+          ? current.startMonth
+          : isDay(current.startDate) && isSettled(current.startDate)
+            ? current.startDate.slice(0, 7)
+            : current.startMonth || today.toPlainYearMonth().toString(),
+      };
+    });
   }
 
   function changeRow(key: string, patch: Partial<FormatRow>) {
@@ -539,7 +551,7 @@ function EventFields({
             end={endDate}
             former={former}
             month={draft.monthOnly ? draft.startMonth : undefined}
-            dates={[firstDay, ...draft.rows.map((row) => row.date)]}
+            dates={draft.monthOnly ? [firstDay] : [firstDay, ...draft.rows.map((row) => row.date)]}
           />
         </div>
         <DuplicateHint name={draft.name} startDate={firstDay} excludeId={initial?.event.id} />

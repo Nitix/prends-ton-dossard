@@ -9,6 +9,11 @@ import type { EventView } from "./api";
  * known by its month only, « juin 2027 · date à préciser ». `style` is `short`
  * (no year, the default) or `long` (with the year; a month always has its year).
  */
+/** « juin 2027 · date à préciser »: the month of `start`. */
+function monthText(start: Temporal.PlainDate, f: Formatters, t: Messages): string {
+  return t.event.monthWhen(f.monthTitle(start.toPlainYearMonth()));
+}
+
 export function eventWhen(
   view: { event: { date_precision?: string }; start: EventView["start"]; end: EventView["end"] },
   f: Formatters,
@@ -16,7 +21,7 @@ export function eventWhen(
   style: "short" | "long" = "short",
 ): string {
   const { event, start, end } = view;
-  if (isMonthOnly(event)) return t.event.monthWhen(f.monthTitle(start.toPlainYearMonth()));
+  if (isMonthOnly(event)) return monthText(start, f, t);
   const day = (d: Temporal.PlainDate) => (style === "long" ? f.dateLong(d) : f.date(d));
   return start.equals(end) ? day(start) : t.event.dateRange(day(start), day(end));
 }
@@ -32,10 +37,6 @@ export function dayOrMonth(
   t: Messages,
   style: "short" | "long" = "short",
 ): string {
-  if (isMonthOnly(event)) {
-    return t.event.monthWhen(
-      f.monthTitle(Temporal.PlainDate.from(event.start_date).toPlainYearMonth()),
-    );
-  }
+  if (isMonthOnly(event)) return monthText(Temporal.PlainDate.from(event.start_date), f, t);
   return style === "long" ? f.dateLong(day) : f.date(day);
 }

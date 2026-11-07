@@ -134,7 +134,7 @@ function MonthOnlyBlock({ views }: { views: EventView[] }) {
             <Link
               to="/evenements/$id"
               params={{ id: view.event.id }}
-              className="flex min-h-11 items-center underline-offset-4 hover:text-iris-700 hover:underline"
+              className="flex min-h-11 items-center underline underline-offset-4 hover:text-iris-700"
             >
               {view.event.name}
             </Link>

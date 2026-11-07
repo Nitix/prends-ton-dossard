@@ -127,3 +127,47 @@ test("EventForm — l'heure d'ouverture désactivée dit pourquoi : il faut un j
     .element(screen.getByText(fr.form.registrationOpeningTimeNeedsDay))
     .not.toBeInTheDocument();
 });
+
+test("EventForm — décocher une course au mois laisse le jour vide : le 1er enregistré n'est pas un jour choisi", async () => {
+  mocks.getOne.mockResolvedValue({
+    ...eventRecord,
+    start_date: "2027-06-01",
+    end_date: "2027-06-30",
+    date_precision: "month",
+  });
+  const { screen } = await renderEdit();
+  await monthSelect(screen).selectOptions("2027-08");
+
+  await unknownDay(screen).click();
+
+  await expect.element(startDate(screen)).toHaveValue("");
+  await expect.element(startDate(screen)).toBeRequired();
+  // The month chosen meanwhile is kept for the next time the box is checked.
+  await unknownDay(screen).click();
+  await expect.element(monthSelect(screen)).toHaveValue("2027-08");
+});
+
+test("EventForm — décocher garde un jour que la personne a tapé", async () => {
+  const { screen } = await renderForm();
+  await startDate(screen).fill("2026-09-12");
+
+  await unknownDay(screen).click();
+  await expect.element(monthSelect(screen)).toHaveValue("2026-09");
+  await unknownDay(screen).click();
+
+  await expect.element(startDate(screen)).toHaveValue("2026-09-12");
+});
+
+test("EventForm — une année à moitié tapée n'est jamais prise pour un mois", async () => {
+  const { screen } = await renderForm();
+  // Chromium gives a complete day for each key of a year: 0020-06-13.
+  await startDate(screen).fill("0020-06-13");
+
+  await unknownDay(screen).click();
+
+  const options = [...monthSelect(screen).element().querySelectorAll("option")].map(
+    (option) => option.value,
+  );
+  expect(options).not.toContain("0020-06");
+  await expect.element(monthSelect(screen)).toHaveValue("2026-06");
+});

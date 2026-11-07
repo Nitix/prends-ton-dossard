@@ -65,7 +65,22 @@ const dupEvent = {
   end_date: "",
   expand: { formats_via_event: [dupFormat] },
 };
-const events = [eventRecord, event2Record, dupEvent];
+/** A race known by its month only, with two formats that have no day. */
+const monthEvent = {
+  ...eventRecord,
+  id: "event-month",
+  name: "Trail de juin",
+  start_date: "2027-06-01",
+  end_date: "2027-06-30",
+  date_precision: "month" as const,
+  expand: {
+    formats_via_event: [
+      { ...f42, id: "fMonth42", event: "event-month", date: "", expand: { race_type: trailType } },
+      { ...dupFormat, id: "fMonth15", event: "event-month", distance_km: 15 },
+    ],
+  },
+};
+const events = [eventRecord, event2Record, dupEvent, monthEvent];
 
 /** The counters of a merge of two events: formats, comments and offers moved, and one date that went. */
 const EVENTS_PREVIEW = {
@@ -606,6 +621,16 @@ test("DuplicatesPage — les épreuves se reconnaissent à leur mesure et à leu
       }),
     )
     .toBeInTheDocument();
+});
+
+test("DuplicatesPage — les épreuves d'une course au mois n'ont pas de jour", async () => {
+  const { screen } = await renderPage();
+  await openFormatsOf(screen, monthEvent);
+
+  const first = formatSelect(screen, t.firstFormat);
+  const options = first.getByRole("option").elements();
+  expect(options.length).toBeGreaterThan(0);
+  for (const option of options) expect(option.textContent).not.toMatch(/juin/);
 });
 
 test("DuplicatesPage — changer d'épreuve invalide l'aperçu", async () => {

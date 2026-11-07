@@ -5,6 +5,7 @@ import { Dialog } from "../../components/Dialog";
 import { Field, INPUT } from "../../components/Field";
 import { errorCode, fieldErrors, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
+import { isMonthOnly } from "../../lib/dates";
 import type { OfferKind } from "../../lib/types";
 import type { EventView } from "../events/api";
 import { useSaveOffer, type OfferInput, type OfferView } from "./api";
@@ -33,7 +34,7 @@ type Draft = {
 
 /**
  * A new offer starts empty, on the first day of the event: it is the day most
- * cars leave and most beds are for. An offer that is changed starts as it is,
+ * cars leave and most beds are for (none for a race known by its month only). An offer that is changed starts as it is,
  * with no day if it has none.
  */
 function initialDraft(view: EventView, offer: OfferView | undefined): Draft {
@@ -41,7 +42,8 @@ function initialDraft(view: EventView, offer: OfferView | undefined): Draft {
     return {
       place: "",
       seats: "",
-      date: view.event.start_date,
+      // The 1st of a month race is a guess, not a day: the field stays empty.
+      date: isMonthOnly(view.event) ? "" : view.event.start_date,
       time: "",
       endDate: "",
       url: "",

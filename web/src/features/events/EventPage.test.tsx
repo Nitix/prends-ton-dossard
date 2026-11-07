@@ -26,6 +26,7 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  f15,
   f42,
   ninaRunner,
   p1,
@@ -33,7 +34,9 @@ import {
   p3,
   pNinaSupporter,
   pNinaUndecided,
+  roadType,
   samRunner,
+  trailType,
   withParticipations,
 } from "./testFixture";
 
@@ -256,6 +259,29 @@ function textOfRow(element: Element): string {
 }
 
 // --- The information ---
+
+test("EventPage — une course au mois dit « juin 2027 · date à préciser », sans date sur ses épreuves", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, date: "", expand: { race_type: trailType } },
+          { ...f15, date: "", expand: { race_type: roadType } },
+        ],
+      },
+    },
+  });
+
+  await loaded(screen);
+  await expect.element(screen.getByText("juin 2027 · date à préciser")).toBeVisible();
+  expect(screen.container.querySelector(".format-date")).toBeNull();
+  expect(screen.container.querySelector(".countdown-ring")).toBeNull();
+});
 
 test("EventPage — montre le nom, les dates, le lieu et les notes de l'événement", async () => {
   const { screen } = await renderPage({
