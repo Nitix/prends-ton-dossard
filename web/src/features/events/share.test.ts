@@ -33,6 +33,18 @@ beforeAll(async () => {
 /** The lines of the text, whitespace gathered. */
 const lines = (text: string) => text.split("\n").map(plain);
 
+/** The days line (the second) of the text of a race that has these days. */
+const days = (start: string, end: string, extra: object = {}) =>
+  lines(
+    shareText(
+      toEventView({ ...event2Record, start_date: start, end_date: end, ...extra }),
+      APP,
+      today,
+      FR,
+      fr,
+    ),
+  )[1];
+
 describe("shareText", () => {
   test("un jour : le nom, le jour et le lieu, l'épreuve, l'adresse", () => {
     const view = toEventView(event2Record);
@@ -50,7 +62,7 @@ describe("shareText", () => {
 
     expect(lines(shareText(view, APP, today, FR, fr))).toEqual([
       "Trail des Crêtes",
-      "du sam. 13 juin 2026 au dim. 14 juin 2026 · Annecy",
+      "Du sam. 13 au dim. 14 juin 2026 · Annecy",
       "Épreuves : Trail 15 km · 700 m D+ ; Trail 42 km · 2 400 m D+ · max 10h",
       `${APP}/evenements/event`,
     ]);
@@ -84,6 +96,31 @@ describe("shareText", () => {
       "Inscriptions jusqu'au dim. 31 mai",
       `${APP}/evenements/event2`,
     ]);
+  });
+
+  test("les jours : un mois, deux mois, deux années, un seul jour, un mois seul", () => {
+    expect(days("2026-06-13", "2026-06-14")).toBe("Du sam. 13 au dim. 14 juin 2026 · Lyon");
+    expect(days("2026-05-30", "2026-06-01")).toBe("Du sam. 30 mai au lun. 1 juin 2026 · Lyon");
+    expect(days("2026-12-31", "2027-01-01")).toBe(
+      "Du jeu. 31 déc. 2026 au ven. 1 janv. 2027 · Lyon",
+    );
+    expect(days("2026-06-13", "2026-06-13")).toBe("sam. 13 juin 2026 · Lyon");
+    expect(days("2027-06-01", "2027-06-30", { date_precision: "month" })).toBe(
+      "juin 2027 (date à préciser) · Lyon",
+    );
+  });
+
+  test("une ouverture aujourd'hui dit son jour et son heure, jamais « aujourd'hui »", () => {
+    const view = toEventView({
+      ...event2Record,
+      registration_opening: "2026-01-05",
+      registration_opening_time: "10:00",
+    });
+
+    const text = plain(shareText(view, APP, today, FR, fr));
+
+    expect(text).toContain("Ouverture des inscriptions le lun. 5 janv. à 10:00");
+    expect(text).not.toContain("aujourd");
   });
 
   test("date limite : une ligne, et aucune quand les inscriptions sont closes ou sans date", () => {
@@ -156,7 +193,7 @@ describe("shareText", () => {
 
     expect(lines(shareText(view, APP, today, GB, en))).toEqual([
       "Trail des Crêtes",
-      "Sat, 13 Jun 2026 to Sun, 14 Jun 2026 · Annecy",
+      "Sat 13 to Sun, 14 Jun 2026 · Annecy",
       "Races: Trail 15 km · 700 m gain ; Trail 42 km · 2,400 m gain · max 10h",
       "Registration opens on Mon 12 Jan at 10:00",
       "Registration until Sun 31 May",

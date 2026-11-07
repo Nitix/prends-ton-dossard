@@ -2,13 +2,31 @@ import type { Messages } from "../../i18n/fr";
 import { isMonthOnly } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventView } from "./api";
-import { eventWhen } from "./eventWhen";
 import { formatMeasures } from "./formatName";
 import { openingText, registrationState } from "./registration";
 
 /** What separates the measures of a format, and the formats of a race. */
 const MEASURES = " · ";
 const FORMATS = " ; ";
+
+/**
+ * The days of a race that is not known by its month, with the year said once
+ * when it can be: « sam. 13 juin 2026 », « Du sam. 13 au dim. 14 juin 2026 »,
+ * « Du sam. 30 mai au lun. 1 juin 2026 », and with both years when they differ.
+ */
+function daysLine(view: EventView, f: Formatters, t: Messages): string {
+  const { start, end } = view;
+  if (start.equals(end)) return f.dateLong(start);
+  const sameYear = start.year === end.year;
+  const sameMonth = sameYear && start.month === end.month;
+  const from = sameMonth
+    ? `${f.weekday(start, "short")} ${start.day}`
+    : sameYear
+      ? f.date(start)
+      : f.dateLong(start);
+  const range = t.event.dateRange(from, f.dateLong(end));
+  return range.charAt(0).toLocaleUpperCase() + range.slice(1);
+}
 
 /**
  * The text of a race to send to a friend, in the language of the page, one line
@@ -28,7 +46,7 @@ export function shareText(
   const { event, formats, start } = view;
   const when = isMonthOnly(event)
     ? t.share.monthWhen(f.monthTitle(start.toPlainYearMonth()))
-    : eventWhen(view, f, t, "long");
+    : daysLine(view, f, t);
   const place = event.location?.trim();
   const lines = [event.name, place ? `${when} · ${place}` : when];
 
@@ -42,7 +60,8 @@ export function shareText(
   const state = registrationState(event, today);
   if (state) {
     if (state.kind === "soon" || state.kind === "today") {
-      lines.push(openingText(state, f, t, "hero"));
+      // The text is read later: the day of the opening, never « aujourd'hui ».
+      lines.push(openingText({ ...state, kind: "soon", daysLeft: 0 }, f, t, "hero"));
       if (state.deadline) lines.push(t.event.registrationUntil(f.date(state.deadline)));
     } else if (state.kind === "open") {
       lines.push(t.event.registrationUntil(f.date(state.deadline)));

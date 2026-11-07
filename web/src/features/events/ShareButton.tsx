@@ -20,19 +20,30 @@ export function ShareButton({ view, className }: { view: EventView; className?: 
   const today = useToday();
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
+  // Set on the spot: a second tap while the share sheet is open must not start another.
+  const sharing = useRef(false);
   const text = shareText(view, location.origin, today, f, t);
 
   async function share() {
+    if (sharing.current) return;
     const data = { title: view.event.name, text };
     if (typeof navigator.share === "function") {
       // A browser that has a share sheet may still not be able to share this.
       if (typeof navigator.canShare !== "function" || navigator.canShare(data)) {
+        sharing.current = true;
         try {
           await navigator.share(data);
           return;
         } catch (err) {
-          // Closing the share sheet without choosing anything is not a failure.
-          if (err instanceof DOMException && err.name === "AbortError") return;
+          // Closing the share sheet without choosing anything is not a failure, nor is a sheet already open.
+          if (
+            err instanceof DOMException &&
+            (err.name === "AbortError" || err.name === "InvalidStateError")
+          ) {
+            return;
+          }
+        } finally {
+          sharing.current = false;
         }
       }
     }

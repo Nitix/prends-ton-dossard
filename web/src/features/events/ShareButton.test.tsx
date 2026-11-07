@@ -193,3 +193,41 @@ test("ShareButton — le focus revient au bouton à la fermeture", async () => {
     expect(document.activeElement).toBe(button(screen).element());
   });
 });
+
+test("ShareButton — un second appui pendant que la feuille est ouverte est ignoré", async () => {
+  const gate = Promise.withResolvers<void>();
+  const share = withShare(
+    vi.fn<(data: ShareData) => Promise<void>>().mockReturnValue(gate.promise),
+  );
+  const screen = await renderButton();
+
+  await button(screen).click();
+  await button(screen).click();
+
+  await vi.waitFor(() => {
+    expect(share).toHaveBeenCalledOnce();
+  });
+  gate.resolve();
+  // Once it is over, the button shares again.
+  await vi.waitFor(async () => {
+    await button(screen).click();
+    expect(share).toHaveBeenCalledTimes(2);
+  });
+});
+
+test("ShareButton — InvalidStateError (une feuille déjà ouverte) n'ouvre pas la fenêtre", async () => {
+  const share = withShare(
+    vi
+      .fn<(data: ShareData) => Promise<void>>()
+      .mockRejectedValue(new DOMException("", "InvalidStateError")),
+  );
+  const screen = await renderButton();
+
+  await button(screen).click();
+
+  await vi.waitFor(() => {
+    expect(share).toHaveBeenCalledOnce();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
+});
