@@ -13,6 +13,18 @@ import type { KmRange } from "./range";
 import type { SlopeZone } from "./slope";
 import { TrackFigures } from "./TrackFigures";
 
+/** A number for each track that is read, so that a new one is a new `Track`: its portion does not outlive it. */
+let identified = 0;
+const identities = new WeakMap<TrackPoint[], number>();
+function identityOf(points: TrackPoint[]): number {
+  let id = identities.get(points);
+  if (id === undefined) {
+    id = ++identified;
+    identities.set(points, id);
+  }
+  return id;
+}
+
 // The map brings Leaflet along: it is loaded when a track is shown, not with the page.
 const TrackMap = lazy(() => import("./TrackMap"));
 
@@ -159,7 +171,7 @@ export function RouteSection({ format }: { format: FormatRecord }) {
       {file !== undefined && track.isError && (
         <output className="text-sm text-neutral-700">{t.route.unreadable}</output>
       )}
-      {track.data && <Track points={track.data} />}
+      {track.data && <Track key={identityOf(track.data)} points={track.data} />}
       <div className="route-links flex flex-wrap gap-2">
         {file !== undefined && (
           <a href={file} download className={`${SECONDARY} inline-flex items-center gap-2`}>

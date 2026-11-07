@@ -551,7 +551,9 @@ test("ElevationProfile — glisser choisit une portion", async () => {
   // The band is drawn while the pointer is down, in the colour of the theme.
   await expect.poll(() => screen.container.querySelector(".profile-selection")).not.toBeNull();
   const band = screen.container.querySelector<SVGRectElement>(".profile-selection");
-  expect(band?.style.fill).toBe("var(--profile-selection)");
+  // The fill is the theme's (a class, so that forced colours can take it over).
+  expect(band && getComputedStyle(band).fill).not.toBe("rgb(0, 0, 0)");
+  expect(band?.getAttribute("style")).toBeNull();
   expect(onRange).not.toHaveBeenCalled();
 
   pointer(slider, "pointerup", at(0.5));
@@ -561,8 +563,10 @@ test("ElevationProfile — glisser choisit une portion", async () => {
   expect(Math.abs((chosen?.to ?? 0) - lastKm * 0.5)).toBeLessThan(1.2);
   // The band goes, the profile is limited to the portion and says it.
   await expect.poll(() => screen.container.querySelector(".profile-selection")).toBeNull();
+  await expect
+    .poll(() => seen(screen.container.querySelector("output")?.textContent))
+    .toMatch(/^Du km \d+,\d au km \d+,\d$/);
   const words = seen(screen.container.querySelector("output")?.textContent);
-  expect(words).toMatch(/^Du km \d+,\d au km \d+,\d$/);
   await expect
     .element(screen.getByRole("img", { name: new RegExp(`^Profil, ${words}$`) }))
     .toBeVisible();
@@ -674,7 +678,48 @@ test("ElevationProfile — les boutons Zoomer, Dézoomer et Vue entière", async
   await whole.click();
   expect(lastRange(onRange)).toBeNull();
   await expect.element(whole).toHaveAttribute("aria-disabled", "true");
-  expect(screen.container.querySelector("output")?.textContent).toBe("");
+  // The reset is said (the live region is throttled: a moment after the last change).
+  await expect
+    .poll(() => screen.container.querySelector("output")?.textContent, { timeout: 2000 })
+    .toBe(fr.route.profileWhole);
+});
+
+test("ElevationProfile — la portion n'est pas dite à chaque pas d'un geste", async () => {
+  const { screen, cursor } = await renderZoom(mountain());
+  const output = screen.container.querySelector("output");
+  const said: string[] = [];
+  const watch = new MutationObserver(() => said.push(output?.textContent ?? ""));
+  if (output) watch.observe(output, { childList: true, characterData: true, subtree: true });
+  // Five zooms in a row, as fast as a pinch moves.
+  cursor.element().focus();
+  for (let i = 0; i < 5; i++) {
+    cursor
+      .element()
+      .dispatchEvent(new KeyboardEvent("keydown", { key: i % 2 ? "+" : "-", bubbles: true }));
+    cursor.element().dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true }));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(said.length).toBeLessThanOrEqual(2);
+  // The last portion is said in the end.
+  await expect.poll(() => output?.textContent, { timeout: 2000 }).toMatch(/^Du km /);
+  watch.disconnect();
+});
+
+test("ElevationProfile — la bande, en couleurs forcées, n'a que son contour, dans la couleur du texte", async () => {
+  await emulateMedia({ forcedColors: "active" });
+  try {
+    const { screen, cursor, at } = await renderZoom(mountain());
+    pointer(cursor.element(), "pointerdown", at(0.25));
+    pointer(cursor.element(), "pointermove", at(0.5));
+    await expect.poll(() => screen.container.querySelector(".profile-selection")).not.toBeNull();
+    const band = screen.container.querySelector(".profile-selection");
+    if (!band) throw new Error("no band");
+    const style = getComputedStyle(band);
+    expect(style.stroke).toBe(systemColour("CanvasText"));
+    expect(style.fill).toBe("rgba(0, 0, 0, 0)");
+  } finally {
+    await resetMedia();
+  }
 });
 
 test("ElevationProfile — les touches + et −", async () => {

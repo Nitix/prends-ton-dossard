@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
@@ -120,6 +121,28 @@ function labelRight(
   return centre + wide / 2;
 }
 
+/** How often the live region of the portion speaks during a gesture, at most, in milliseconds. */
+const SAY_MS = 500;
+
+/**
+ * A value that changes at most once in `ms`: the first change is at once, the
+ * ones that follow within the delay give way to the latest, at its end.
+ */
+function useThrottled<T>(value: T, ms: number): T {
+  const [shown, setShown] = useState(value);
+  const last = useRef(0);
+  useEffect(() => {
+    if (shown === value) return undefined;
+    const wait = Math.max(0, last.current + ms - Date.now());
+    const timer = setTimeout(() => {
+      last.current = Date.now();
+      setShown(value);
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [value, shown, ms]);
+  return shown;
+}
+
 /** The width of an element, followed as it changes. */
 function useWidth<E extends HTMLElement>(): [RefObject<E | null>, number] {
   const ref = useRef<E>(null);
@@ -232,12 +255,17 @@ function Profile({
   useLayoutEffect(() => {
     latest.current = range;
   });
+  // Whether the portion was put back to the whole track, which the <output> then says.
+  const [wasReset, setWasReset] = useState(false);
   const setRange = (next: KmRange | null) => {
     latest.current = next;
+    setWasReset(next === null);
     setOwnRange(next);
     onRange?.(next);
   };
-  const view: KmRange = range ?? { from: 0, to: lastKm };
+  const viewFrom = range?.from ?? 0;
+  const viewTo = range?.to ?? lastKm;
+  const view: KmRange = { from: viewFrom, to: viewTo };
   const span = view.to - view.from;
   const zoomed = range !== null;
 
@@ -250,40 +278,57 @@ function Profile({
   const plotWidth = Math.max(120, width - MARGIN.left - MARGIN.right);
   const altitudes = shown.map((p) => p.ele);
   const scale = altitudeScale(Math.min(...altitudes), Math.max(...altitudes));
-  const kilometers = distanceTicks(view.from, view.to);
+  const kilometers = useMemo(() => distanceTicks(viewFrom, viewTo), [viewFrom, viewTo]);
 
   const x = (km: number) => MARGIN.left + ((km - view.from) / span) * plotWidth;
   const y = (ele: number) =>
     MARGIN.top + (1 - (ele - scale.from) / (scale.to - scale.from)) * PLOT_HEIGHT;
   const bottom = MARGIN.top + PLOT_HEIGHT;
 
-  const line = shown
-    .map((p, i) => `${i === 0 ? "M" : "L"}${coordinates(x(p.km), y(p.ele))}`)
-    .join(" ");
-  const first = shown[0];
-  const area = `${line} L${coordinates(x(shown.at(-1)?.km ?? view.to), bottom)} L${coordinates(x(first?.km ?? view.from), bottom)} Z`;
-  const runs = slopeRuns(all, view, lastKm);
+  // The drawing is worked out again when the points, the portion or the width change, not at
+  // every move of a pointer (which only moves the cursor or the band).
+  const { line, area } = useMemo(() => {
+    const drawing = shown
+      .map((p, i) => `${i === 0 ? "M" : "L"}${coordinates(x(p.km), y(p.ele))}`)
+      .join(" ");
+    return {
+      line: drawing,
+      area: `${drawing} L${coordinates(x(shown.at(-1)?.km ?? viewTo), bottom)} L${coordinates(x(shown[0]?.km ?? viewFrom), bottom)} Z`,
+    };
+    // x and y are functions of exactly the values listed.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, viewFrom, viewTo, plotWidth, scale.from, scale.to]);
+  const runs = useMemo(
+    () => slopeRuns(all, { from: viewFrom, to: viewTo }, lastKm),
+    [all, viewFrom, viewTo, lastKm],
+  );
 
   // The labels of the kilometers stay in the drawing (the first starts at its
   // tick when it is at the left edge, one that would pass the right edge ends at
   // it), and one that would touch the label before it is left out: its tick stays.
-  const kmLabels: { km: number; anchor: "start" | "middle" | "end"; shown: boolean }[] = [];
-  for (const [i, km] of kilometers.entries()) {
-    const wide = f.km(km).length * LABEL_FONT_SIZE * 0.6;
-    const centre = x(km);
-    const anchor =
-      i === 0 && centre - wide / 2 < MARGIN.left
-        ? "start"
-        : centre + wide / 2 > width - 2
-          ? "end"
-          : "middle";
-    const left = anchor === "start" ? centre : anchor === "end" ? centre - wide : centre - wide / 2;
-    const previous = kmLabels.findLast((mark) => mark.shown);
-    const previousRight = previous
-      ? labelRight(previous, x, f.km(previous.km).length * LABEL_FONT_SIZE * 0.6)
-      : -Infinity;
-    kmLabels.push({ km, anchor, shown: left > previousRight + 6 });
-  }
+  const kmLabels = useMemo(() => {
+    const labels: { km: number; anchor: "start" | "middle" | "end"; shown: boolean }[] = [];
+    for (const [i, km] of kilometers.entries()) {
+      const wide = f.km(km).length * LABEL_FONT_SIZE * 0.6;
+      const centre = x(km);
+      const anchor =
+        i === 0 && centre - wide / 2 < MARGIN.left
+          ? "start"
+          : centre + wide / 2 > width - 2
+            ? "end"
+            : "middle";
+      const left =
+        anchor === "start" ? centre : anchor === "end" ? centre - wide : centre - wide / 2;
+      const previous = labels.findLast((mark) => mark.shown);
+      const previousRight = previous
+        ? labelRight(previous, x, f.km(previous.km).length * LABEL_FONT_SIZE * 0.6)
+        : -Infinity;
+      labels.push({ km, anchor, shown: left > previousRight + 6 });
+    }
+    return labels;
+    // x is a function of exactly the values listed.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [kilometers, viewFrom, viewTo, plotWidth, width, f]);
 
   // The highest point, named on the drawing.
   const summit = shown.reduce(
@@ -316,6 +361,9 @@ function Profile({
   const rangeText = range
     ? t.route.profileRange(oneDecimal.format(range.from), oneDecimal.format(range.to))
     : "";
+  // What the live region says: the portion, or that the whole profile is back. A pinch changes
+  // it at every move of the fingers: it is said a few times a second at most.
+  const spoken = useThrottled(range ? rangeText : wasReset ? t.route.profileWhole : "", SAY_MS);
 
   // The cursor: the distance, the altitude there, and the slope around it, read
   // as the bands are; its dot takes the colour of the band under it. It stays in the portion.
@@ -346,8 +394,17 @@ function Profile({
   // The cursor's range goes a little beyond both ends of the portion, as its box beyond the plot.
   const bleed = (CURSOR_BLEED / plotWidth) * span;
   /** The kilometer under a pointer, by its place on the cursor's range. */
-  const kmUnder = (clientX: number, rect: DOMRect) =>
-    clamp(view.from - bleed + ((clientX - rect.left) / rect.width) * (span + 2 * bleed));
+  const kmUnder = (clientX: number, rect: DOMRect, shownRange: KmRange = view) => {
+    const length = shownRange.to - shownRange.from;
+    const margin = (CURSOR_BLEED / plotWidth) * length;
+    return Math.min(
+      shownRange.to,
+      Math.max(
+        shownRange.from,
+        shownRange.from - margin + ((clientX - rect.left) / rect.width) * (length + 2 * margin),
+      ),
+    );
+  };
   // A pointer that moves over the profile (without a button pressed, too) puts the cursor under it.
   const follow = (event: PointerEvent<HTMLInputElement>) => {
     setCursor(kmUnder(event.clientX, event.currentTarget.getBoundingClientRect()));
@@ -397,7 +454,11 @@ function Profile({
         if (now > 0 && spread.current > 0) {
           // Fingers that spread make the portion shorter: the ratio of the old gap to the new.
           const middle = ((a?.x ?? 0) + (b?.x ?? 0)) / 2;
-          zoomBy(spread.current / now, kmUnder(middle, rect));
+          // Read in the latest portion, the one that the zoom starts from (a render may be behind).
+          zoomBy(
+            spread.current / now,
+            kmUnder(middle, rect, latest.current ?? { from: 0, to: lastKm }),
+          );
         }
         if (now > 0) spread.current = now;
         return;
@@ -551,12 +612,11 @@ function Profile({
               ink, which forced colours turn into the text's. */}
           {band && (
             <rect
-              className="profile-selection stroke-relief forced-colors:fill-transparent forced-colors:stroke-[CanvasText]"
+              className="profile-selection stroke-relief"
               x={x(Math.min(band.from, band.to))}
               y={MARGIN.top}
               width={Math.abs(x(band.to) - x(band.from))}
               height={PLOT_HEIGHT}
-              style={{ fill: "var(--profile-selection)" }}
               strokeWidth={1.5}
               strokeOpacity={0.7}
               pointerEvents="none"
@@ -681,7 +741,7 @@ function Profile({
           {t.route.zoomProfileAll}
         </button>
         {/* The portion in words, said politely when it changes. */}
-        <output className="profile-range text-sm text-neutral-700 tabular-nums">{rangeText}</output>
+        <output className="profile-range text-sm text-neutral-700 tabular-nums">{spoken}</output>
       </div>
       <p id={helpId} className="profile-help text-sm text-neutral-600">
         {fine ? t.route.profileHelpFine : t.route.profileHelpCoarse}

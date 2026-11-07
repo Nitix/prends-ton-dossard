@@ -561,6 +561,9 @@ test("TrackMap — ⌘ sur Mac", async () => {
   await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBeGreaterThan(zoom);
 });
 
+/** How long a test waits to be sure that no hint comes: well over what a render takes. */
+const NO_HINT_MS = 500;
+
 /** The device says that its main pointer is coarse (a finger). */
 function touchScreen() {
   const matchMedia = window.matchMedia.bind(window);
@@ -630,16 +633,22 @@ test("TrackMap — sur un téléphone, un doigt que le navigateur reprend (point
   touch("pointercancel", 1, 100, 101);
   await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
 
-  // Two fingers that are cancelled are no scroll: nothing to say.
+  // Two fingers that are cancelled (a pinch the browser took) are no one-finger scroll: nothing to say.
   await expect.poll(() => hintText(screen), { timeout: 4000 }).toBeUndefined();
   touch("pointerdown", 2, 100, 100);
   touch("pointerdown", 3, 140, 100);
   touch("pointercancel", 2, 100, 100);
   touch("pointercancel", 3, 140, 100);
+  // The hint renders a moment after the event: wait for it as long as the positive checks do.
+  await new Promise((resolve) => setTimeout(resolve, NO_HINT_MS));
   expect(hintText(screen)).toBeUndefined();
+  // ... and a lone finger after that still says it.
+  touch("pointerdown", 4, 100, 100);
+  touch("pointercancel", 4, 100, 100);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
 });
 
-test("TrackMap — un doigt qui commence sur un bouton de zoom fait défiler la page, et l'aide le dit aussi", async () => {
+test("TrackMap — un doigt qui commence sur un bouton de zoom ne montre pas l'aide", async () => {
   touchScreen();
   const screen = await renderMap();
   const button = part(screen, ".leaflet-control-zoom-in");
@@ -657,6 +666,31 @@ test("TrackMap — un doigt qui commence sur un bouton de zoom fait défiler la 
     );
   touch("pointerdown", 20, 20);
   touch("pointermove", 20, 50);
+  touch("pointercancel", 20, 50);
+  await new Promise((resolve) => setTimeout(resolve, NO_HINT_MS));
+  expect(hintText(screen)).toBeUndefined();
+  // The same finger on the body of the map does say it.
+  const region = part(screen, ".leaflet-container");
+  region.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      pointerType: "touch",
+      pointerId: 8,
+      clientX: 200,
+      clientY: 100,
+      buttons: 1,
+    }),
+  );
+  region.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      pointerType: "touch",
+      pointerId: 8,
+      clientX: 200,
+      clientY: 140,
+      buttons: 1,
+    }),
+  );
   await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
 });
 

@@ -64,6 +64,8 @@ const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 /** How long the hint stays on the map, in milliseconds. */
 const HINT_MS = 1500;
+/** Changes of the portion that follow each other within this (milliseconds) are a gesture: the map is framed with no animation. */
+const RAPID_MS = 250;
 /** How far a finger has to go, in pixels, to be moving and not tapping (less than the slop of a browser). */
 const FINGER_MOVE_PX = 4;
 
@@ -482,22 +484,31 @@ export default function TrackMap({
     const container = element.current;
     if (container === null || !coarsePointer()) return undefined;
     const down = new Map<number, { x: number; y: number }>();
+    // Whether a second finger was down during this gesture (until all are up): a pinch
+    // that the browser cancels is not a finger that scrolls.
+    let multi = false;
     const onDown = (event: PointerEvent) => {
-      if (event.pointerType === "touch")
-        down.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (event.pointerType !== "touch") return;
+      // A finger on a button or another control of the map is not trying to move the map.
+      if (event.target instanceof Element && event.target.closest(".leaflet-control")) return;
+      down.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (down.size >= 2) multi = true;
     };
     const onMove = (event: PointerEvent) => {
       const from = down.get(event.pointerId);
-      if (from === undefined || down.size !== 1) return;
+      if (from === undefined || down.size !== 1 || multi) return;
       if (Math.hypot(event.clientX - from.x, event.clientY - from.y) >= FINGER_MOVE_PX) {
         showHint(fingersHint);
       }
     };
-    const onEnd = (event: PointerEvent) => void down.delete(event.pointerId);
+    const onEnd = (event: PointerEvent) => {
+      down.delete(event.pointerId);
+      if (down.size === 0) multi = false;
+    };
     // The browser that takes a finger for a scroll cancels its pointer, sometimes before it
     // has moved by `FINGER_MOVE_PX` (iOS): a lone finger that is cancelled says why too.
     const onCancel = (event: PointerEvent) => {
-      if (down.has(event.pointerId) && down.size === 1) showHint(fingersHint);
+      if (down.has(event.pointerId) && down.size === 1 && !multi) showHint(fingersHint);
       onEnd(event);
     };
     container.addEventListener("pointerdown", onDown);
@@ -513,14 +524,24 @@ export default function TrackMap({
   }, [showHint, fingersHint]);
 
   // The map follows the portion of the profile. This effect too comes after the map's.
+  // A pinch changes the portion at every move of the fingers: the map is drawn once an image
+  // at most, and without the animation of the frame while the changes come one on the
+  // other (a button or a key makes one change, and is animated).
+  const lastChange = useRef(0);
   useEffect(() => {
     shownRange.current = range;
-    const current = layers.current;
-    const same =
-      current?.range?.from === range?.from &&
-      current?.range?.to === range?.to &&
-      (current?.range === null) === (range === null);
-    if (!same) showRange(current, points, range, true);
+    const at = performance.now();
+    const rapid = at - lastChange.current < RAPID_MS;
+    lastChange.current = at;
+    const frame = requestAnimationFrame(() => {
+      const current = layers.current;
+      const same =
+        current?.range?.from === range?.from &&
+        current?.range?.to === range?.to &&
+        (current?.range === null) === (range === null);
+      if (!same) showRange(current, points, range, !rapid);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [points, range]);
 
   // The mark follows the cursor of the profile. This effect comes after the one

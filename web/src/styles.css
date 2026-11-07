@@ -706,6 +706,19 @@
 
 /* The cursor of the elevation profile: a range with no track and no thumb to
    see, since the profile draws it (see ElevationProfile). The focus ring stays. */
+/* The band of a drag that chooses a portion of the profile (see ElevationProfile):
+   the fill of the theme, and in forced colours the edge only, in the text's colour. */
+.profile-selection {
+  fill: var(--profile-selection);
+}
+@media (forced-colors: active) {
+  .profile-selection {
+    fill: transparent;
+    stroke: CanvasText;
+    stroke-opacity: 1;
+  }
+}
+
 .profile-cursor::-webkit-slider-runnable-track {
   height: 100%;
   background: transparent;
