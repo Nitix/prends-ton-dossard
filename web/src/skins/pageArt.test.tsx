@@ -247,7 +247,11 @@ for (const [path, width, empty, least] of [
     await chooseSkin("carnet");
     await page.viewport(width, 900);
     const screen = await openApp(path);
-    await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
+    // The page is a lazy chunk of the route, which a loaded run (many files at once) can
+    // take longer than the 1 s of `expect.element` to fetch: wait for it, as long as it takes.
+    await expect
+      .element(screen.getByRole("heading", { level: 1 }), { timeout: 10_000 })
+      .toBeVisible();
     await fontsReady();
     const art = sheet().firstElementChild;
     if (!art) throw new Error("no art");

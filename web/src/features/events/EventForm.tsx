@@ -122,13 +122,19 @@ function refusal(err: unknown, rows: FormatRow[]): Errors {
   return { ...NO_ERRORS, form: code ?? "generic" };
 }
 
+/** The page that creates an event. The page that edits one sets its title itself (see `EditEventPage`). */
+export function NewEventPage() {
+  const { t } = useI18n();
+  usePageTitle(t.titles.newEvent);
+  return <EventForm />;
+}
+
 /**
  * The form that creates an event, or edits `existing`, with its formats. The
- * app shell around it owns the page's `<main>`.
+ * app shell around it owns the page's `<main>`; the page sets the title.
  */
 export function EventForm({ existing }: { existing?: EventView }) {
   const { t } = useI18n();
-  usePageTitle(existing ? t.titles.edit(existing.event.name) : t.titles.newEvent);
   const raceTypes = useRaceTypes();
 
   if (raceTypes.data) return <EventFields existing={existing} raceTypes={raceTypes.data} />;
@@ -156,7 +162,7 @@ export function EventForm({ existing }: { existing?: EventView }) {
 export function EditEventPage({ id }: { id: string }) {
   const { t } = useI18n();
   const query = useEvent(id);
-  // The form sets the title once the event is there (the same one, as this does).
+  // The one hook that sets this page's title, while the event loads and after.
   usePageTitle(
     query.data
       ? t.titles.edit(query.data.event.name)

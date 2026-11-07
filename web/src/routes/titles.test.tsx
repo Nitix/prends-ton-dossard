@@ -14,8 +14,12 @@ import "../styles.css";
 
 const world = vi.hoisted(() => ({
   record: null as { id: string; collectionName: string; role: string; email: string } | null,
-  /** What the request for the event `getOne` waits for, then gives (or refuses with). */
-  event: null as Promise<unknown> | null,
+  /**
+   * What the request for the event `getOne` waits for, then gives. A refusal is a
+   * function, so that its promise is made when the request is, not before: a
+   * rejection with no handler yet is an `unhandledrejection`.
+   */
+  event: null as Promise<unknown> | (() => Promise<unknown>) | null,
 }));
 
 // The real tree of routes runs here: every list is empty, except the runners
@@ -45,10 +49,18 @@ vi.mock("../lib/pb", () => ({
         Promise.resolve(name === "runners" ? [{ id: "r1", name: "Alice", user: "u1" }] : []),
       getList: () => Promise.resolve({ items: [] }),
       getFirstListItem: () => Promise.resolve({ id: "r1", name: "Alice", user: "u1" }),
-      getOne: () => world.event ?? Promise.reject(new Error("no event")),
+      getOne: () => {
+        const event = world.event;
+        return typeof event === "function"
+          ? event()
+          : (event ?? Promise.reject(new Error("no event")));
+      },
     }),
   },
 }));
+
+/** How long a title may take: a loaded run can be slow to load a route (the default poll is 1 s). */
+const SLOW = { timeout: 5000 };
 
 beforeAll(async () => {
   await ensureTemporal();
@@ -113,12 +125,12 @@ const ROWS: [path: string, fr: string, en: string][] = [
 for (const [path, fr, en] of ROWS) {
   test(`titres — ${path} s'appelle « ${fr} » en français`, async () => {
     await openApp(path, "fr");
-    await expect.poll(() => document.title).toBe(`${fr} · Prends ton dossard`);
+    await expect.poll(() => document.title, SLOW).toBe(`${fr} · Prends ton dossard`);
   });
 
   test(`titres — ${path} s'appelle « ${en} » en anglais`, async () => {
     await openApp(path, "en");
-    await expect.poll(() => document.title).toBe(`${en} · Prends ton dossard`);
+    await expect.poll(() => document.title, SLOW).toBe(`${en} · Prends ton dossard`);
   });
 }
 
@@ -126,78 +138,82 @@ test("titres — la course : « Course », puis son nom quand il arrive", async 
   let arrive!: (record: unknown) => void;
   world.event = new Promise((resolve) => (arrive = resolve));
   await openApp("/evenements/e1", "fr");
-  await expect.poll(() => document.title).toBe("Course · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Course · Prends ton dossard");
 
   arrive(eventRecord("Trail des Crêtes"));
-  await expect.poll(() => document.title).toBe("Trail des Crêtes · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Trail des Crêtes · Prends ton dossard");
 });
 
 test("titres — la course, en anglais : « Race », puis son nom", async () => {
   let arrive!: (record: unknown) => void;
   world.event = new Promise((resolve) => (arrive = resolve));
   await openApp("/evenements/e1", "en");
-  await expect.poll(() => document.title).toBe("Race · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Race · Prends ton dossard");
 
   arrive(eventRecord("Trail des Crêtes"));
-  await expect.poll(() => document.title).toBe("Trail des Crêtes · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Trail des Crêtes · Prends ton dossard");
 });
 
 test("titres — un nom de course est du texte, rien n'y est interprété", async () => {
   world.event = Promise.resolve(eventRecord("<b>Trail</b> &amp; co"));
   await openApp("/evenements/e1", "fr");
-  await expect.poll(() => document.title).toBe("<b>Trail</b> &amp; co · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("<b>Trail</b> &amp; co · Prends ton dossard");
 });
 
 test("titres — une course qui n'existe pas (404) : « Course introuvable »", async () => {
-  world.event = Promise.reject(new ClientResponseError({ status: 404, response: {} }));
+  world.event = () => Promise.reject(new ClientResponseError({ status: 404, response: {} }));
   await openApp("/evenements/nope", "fr");
-  await expect.poll(() => document.title).toBe("Course introuvable · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Course introuvable · Prends ton dossard");
 });
 
 test("titres — une course introuvable, en anglais", async () => {
-  world.event = Promise.reject(new ClientResponseError({ status: 404, response: {} }));
+  world.event = () => Promise.reject(new ClientResponseError({ status: 404, response: {} }));
   await openApp("/evenements/nope", "en");
-  await expect.poll(() => document.title).toBe("Race not found · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Race not found · Prends ton dossard");
 });
 
 test("titres — modifier une course : « Modifier », puis « Modifier · <nom> »", async () => {
   let arrive!: (record: unknown) => void;
   world.event = new Promise((resolve) => (arrive = resolve));
   await openApp("/evenements/e1/modifier", "fr");
-  await expect.poll(() => document.title).toBe("Modifier · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Modifier · Prends ton dossard");
 
   arrive(eventRecord("Trail des Crêtes"));
-  await expect.poll(() => document.title).toBe("Modifier · Trail des Crêtes · Prends ton dossard");
+  await expect
+    .poll(() => document.title, SLOW)
+    .toBe("Modifier · Trail des Crêtes · Prends ton dossard");
 });
 
 test("titres — modifier une course, en anglais", async () => {
   world.event = Promise.resolve(eventRecord("Trail des Crêtes"));
   await openApp("/evenements/e1/modifier", "en");
-  await expect.poll(() => document.title).toBe("Edit · Trail des Crêtes · Prends ton dossard");
+  await expect
+    .poll(() => document.title, SLOW)
+    .toBe("Edit · Trail des Crêtes · Prends ton dossard");
 });
 
 test("titres — modifier une course qui n'existe pas : « Course introuvable »", async () => {
-  world.event = Promise.reject(new ClientResponseError({ status: 404, response: {} }));
+  world.event = () => Promise.reject(new ClientResponseError({ status: 404, response: {} }));
   await openApp("/evenements/nope/modifier", "fr");
-  await expect.poll(() => document.title).toBe("Course introuvable · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Course introuvable · Prends ton dossard");
 });
 
 test("titres — un coureur : son nom", async () => {
   await openApp("/coureurs/r1", "fr");
-  await expect.poll(() => document.title).toBe("Alice · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Alice · Prends ton dossard");
 });
 
 test("titres — un coureur, en anglais : son nom aussi", async () => {
   await openApp("/coureurs/r1", "en");
-  await expect.poll(() => document.title).toBe("Alice · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Alice · Prends ton dossard");
 });
 
 test("titres — un coureur inconnu : « Coureur »", async () => {
   await openApp("/coureurs/inconnu", "fr");
-  await expect.poll(() => document.title).toBe("Coureur · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Coureur · Prends ton dossard");
 });
 
 test("titres — un coureur inconnu, en anglais : « Runner »", async () => {
   await openApp("/coureurs/inconnu", "en");
-  await expect.poll(() => document.title).toBe("Runner · Prends ton dossard");
+  await expect.poll(() => document.title, SLOW).toBe("Runner · Prends ton dossard");
 });

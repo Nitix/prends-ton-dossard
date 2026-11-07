@@ -3,17 +3,17 @@ import { isMonthOnly } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventView } from "./api";
 
+/** « juin 2027 · date à préciser »: the month of `start`. */
+function monthText(start: Temporal.PlainDate, f: Formatters, t: Messages): string {
+  return t.event.monthWhen(f.monthTitle(start.toPlainYearMonth()));
+}
+
 /**
  * What a race says of its days, wherever it says them: the day (« sam. 13 juin »),
  * the first and last day (« du sam. 13 juin au dim. 14 juin »), or, for a race
  * known by its month only, « juin 2027 · date à préciser ». `style` is `short`
  * (no year, the default) or `long` (with the year; a month always has its year).
  */
-/** « juin 2027 · date à préciser »: the month of `start`. */
-function monthText(start: Temporal.PlainDate, f: Formatters, t: Messages): string {
-  return t.event.monthWhen(f.monthTitle(start.toPlainYearMonth()));
-}
-
 export function eventWhen(
   view: { event: { date_precision?: string }; start: EventView["start"]; end: EventView["end"] },
   f: Formatters,

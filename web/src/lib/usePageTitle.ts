@@ -19,9 +19,14 @@ export function usePageTitle(title: string | null): void {
 
   useEffect(() => {
     document.title = title === null ? appName : `${title} · ${appName}`;
-    // A page that goes away leaves the name of the app until the next one sets its own.
-    return () => {
-      document.title = appName;
-    };
   }, [title, appName]);
+
+  // A page that goes away leaves the name of the app until the next one sets its
+  // own. Apart from the effect above, so that a change of title writes once.
+  useEffect(
+    () => () => {
+      document.title = appName;
+    },
+    [appName],
+  );
 }
