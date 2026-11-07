@@ -58,9 +58,9 @@ const FOUND_TRACK: Weather = {
 
 async function renderSection(
   answer: Weather | Error | "pending",
-  options: { today?: string; languages?: string[] } = {},
+  options: { today?: string; languages?: string[]; record?: typeof eventRecord } = {},
 ) {
-  const { today = "2026-06-08", languages = ["fr"] } = options;
+  const { today = "2026-06-08", languages = ["fr"], record = eventRecord } = options;
   if (answer === "pending") mocks.send.mockReturnValue(new Promise(() => {}));
   else if (answer instanceof Error) mocks.send.mockRejectedValue(answer);
   else mocks.send.mockResolvedValue(answer);
@@ -69,7 +69,7 @@ async function renderSection(
     <QueryClientProvider client={queryClient}>
       <I18nProvider languages={languages}>
         <TodayProvider value={Temporal.PlainDate.from(today)}>
-          <WeatherSection view={toEventView(eventRecord)} />
+          <WeatherSection view={toEventView(record)} />
         </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>,
@@ -220,24 +220,52 @@ describe("WeatherSection", () => {
     await expect.element(screen.getByText("Chargement de la météo…")).toBeVisible();
   });
 
-  test("WeatherSection — rien à dire avant J-7 ni pour une course au mois", async () => {
-    for (const answer of [
-      { status: "not_yet", from: "2026-06-06" },
-      { status: "over" },
-      { status: "no_day" },
-    ] as const) {
-      const screen = await renderSection(answer);
-      await expect.poll(() => mocks.send.mock.calls.length).toBeGreaterThan(0);
-      await expect.element(title()).not.toBeInTheDocument();
-      await screen.unmount();
-      mocks.send.mockReset();
-    }
+  test("WeatherSection — avant J-7, une ligne dit à partir de quand, sans requête", async () => {
+    // The race is on 13 June: the window opens on 6 June.
+    const screen = await renderSection(FOUND_PLACE, { today: "2026-06-05" });
+    await expect.element(title()).toBeVisible();
+    await expect.element(screen.getByText(fr.weather.notYet("sam. 6 juin"))).toBeVisible();
+    expect(fr.weather.notYet("sam. 6 juin")).toBe(
+      "La météo sera là à partir du sam. 6 juin, une semaine avant la course.",
+    );
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 
-  test("WeatherSection — hors de la fenêtre, ni section ni requête", async () => {
-    const screen = await renderSection(FOUND_PLACE, { today: "2026-06-05" });
+  test("WeatherSection — avant J-7, en anglais", async () => {
+    const screen = await renderSection(FOUND_PLACE, { today: "2026-06-05", languages: ["en"] });
+    await expect
+      .element(
+        screen.getByText("The forecast will be here from Sat, Jun 6, a week before the race."),
+      )
+      .toBeVisible();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  test("WeatherSection — une course au mois : une ligne, sans requête", async () => {
+    const record = { ...eventRecord, date_precision: "month" };
+    const screen = await renderSection({ status: "no_day" }, { record });
+    await expect.element(title()).toBeVisible();
+    await expect
+      .element(screen.getByText("La météo viendra quand le jour de la course sera connu."))
+      .toBeVisible();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  test("WeatherSection — après la course, rien du tout, sans requête", async () => {
+    const screen = await renderSection({ status: "over" }, { today: "2026-06-15" });
     await expect.element(title()).not.toBeInTheDocument();
     expect(screen.container.textContent).toBe("");
     expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  test("WeatherSection — si le serveur dit « over », rien; s'il dit « not_yet », sa date", async () => {
+    // The clocks of the page and of the server can differ by a moment.
+    const over = await renderSection({ status: "over" });
+    await expect.poll(() => mocks.send.mock.calls.length).toBeGreaterThan(0);
+    await expect.element(title()).not.toBeInTheDocument();
+    await over.unmount();
+    mocks.send.mockReset();
+    const early = await renderSection({ status: "not_yet", from: "2026-06-09" });
+    await expect.element(early.getByText(fr.weather.notYet("mar. 9 juin"))).toBeVisible();
   });
 });

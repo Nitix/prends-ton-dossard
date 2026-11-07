@@ -148,6 +148,8 @@ export const en = {
     atPlace: (name: string, detail: string) => (detail ? `In ${name} (${detail})` : `In ${name}`),
     atTrack: (format: string) => `At the start of the track of “${format}”`,
     noPlace: (query: string) => `No weather: the place “${query}” was not found.`,
+    notYet: (from: string) => `The forecast will be here from ${from}, a week before the race.`,
+    noDay: "The forecast will come once the day of the race is known.",
     forecastAt: (time: string, stale: boolean) =>
       stale ? `Forecast of ${time}, out of date` : `Forecast of ${time}`,
     sourceBefore: "Data: ",

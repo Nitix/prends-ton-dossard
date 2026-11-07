@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"courses/server/testutil"
 	"courses/server/weather"
@@ -178,4 +179,36 @@ func TestWeather_ValidatesTheDays(t *testing.T) {
 			t.Errorf("an empty list: status %d", status)
 		}
 	})
+}
+
+// windowOpenings are races (their first day) and the day the window of their
+// weather opens, across both changes of the clocks of Paris (29 March and
+// 25 October 2026). The same table is in web/src/features/weather/window.test.ts:
+// the page says the date of the opening without asking, and it must be the
+// server's `from`.
+var windowOpenings = [][2]string{
+	{"2026-06-13", "2026-06-06"},
+	{"2026-03-29", "2026-03-22"}, // the clocks go forward on the day of the race
+	{"2026-04-03", "2026-03-27"}, // the window opens across it
+	{"2026-10-25", "2026-10-18"}, // the clocks go back on the day of the race
+	{"2026-10-28", "2026-10-21"}, // the window opens across it
+	{"2026-11-22", "2026-11-15"},
+	{"2027-01-03", "2026-12-27"}, // across the new year
+}
+
+func TestWeather_FromIsSevenDaysBefore(t *testing.T) {
+	for _, row := range windowOpenings {
+		t.Run(row[0], func(t *testing.T) {
+			first, err := time.Parse(time.DateOnly, row[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The day before the opening, in Paris.
+			w := newWorld(t, first.AddDate(0, 0, -1).Format(time.DateOnly))
+			a := w.answer(t, w.event(t, "Annecy", row[0], "").Id)
+			if a.Status != "not_yet" || a.From != row[1] {
+				t.Fatalf("answer %+v, want not_yet from %s", a, row[1])
+			}
+		})
+	}
 }

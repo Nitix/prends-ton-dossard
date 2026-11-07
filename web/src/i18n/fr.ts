@@ -171,6 +171,9 @@ export const fr = {
     atPlace: (name: string, detail: string) => (detail ? `À ${name} (${detail})` : `À ${name}`),
     atTrack: (format: string) => `Au départ de la trace de « ${format} »`,
     noPlace: (query: string) => `Pas de météo : le lieu « ${query} » n'a pas été trouvé.`,
+    // Before the window of the weather, and for a race with no day: said, not left blank. The date is already formatted.
+    notYet: (from: string) => `La météo sera là à partir du ${from}, une semaine avant la course.`,
+    noDay: "La météo viendra quand le jour de la course sera connu.",
     // The time is already formatted; a forecast that is not the last one the server could get says so.
     forecastAt: (time: string, stale: boolean) =>
       stale ? `Prévision de ${time}, pas à jour` : `Prévision de ${time}`,

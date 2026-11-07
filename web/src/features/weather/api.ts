@@ -29,9 +29,10 @@ export type WeatherPlace = {
 };
 
 /**
- * What the server answers. Only `ok` and `no_place` have something to show; before
- * the window (`not_yet`), after it (`over`) and for a race known by its month
- * (`no_day`) there is nothing.
+ * What the server answers. `ok` and `no_place` have a forecast or its reason; `not_yet`
+ * (with the first day of the window) and `no_day` (a race known by its month) say when it
+ * will be there; after the window (`over`) there is nothing. The page works out the first
+ * three cases itself and asks only inside the window.
  */
 export type Weather =
   | { status: "ok"; place: WeatherPlace; days: WeatherDay[]; fetchedAt: string; stale?: boolean }

@@ -22,7 +22,7 @@ import { useToday } from "../../lib/useToday";
 import type { EventView } from "../events/api";
 import { useWeather, type WeatherDay, type WeatherPlace } from "./api";
 import { weatherKind, weatherLabel, type WeatherKind } from "./labels";
-import { weatherWindow } from "./window";
+import { weatherPhase } from "./window";
 
 const OPEN_METEO = "https://open-meteo.com/";
 
@@ -61,9 +61,10 @@ function placeLine(place: WeatherPlace, t: Messages): string {
 /**
  * « Météo prévue » on the page of an event (spec § 10.6): one line per race day,
  * the place the forecast is for, when it was made, and where the data comes from.
- * Nothing at all outside the window of the weather (from seven days before the
- * race to its last day, not for a race known by its month), and then no request;
- * nothing either when the server has no day to say.
+ * Outside the window of the weather (from seven days before the race to its last
+ * day) there is no request: before it, and for a race known by its month, the
+ * section says when the forecast will be there instead of staying silent (the
+ * user took the silence for a failure); after it, nothing.
  *
  * The server's list starts at today, not at the first day of the race: each
  * line says its own date.
@@ -73,16 +74,27 @@ export function WeatherSection({ view }: { view: EventView }) {
   const today = useToday();
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
-  const inWindow = weatherWindow(view, today);
-  const query = useWeather(view.event.id, inWindow);
+  const span = weatherPhase(view, today);
+  const phase = span.phase;
+  const query = useWeather(view.event.id, phase === "now");
 
-  if (!inWindow) return null;
-  const weather = query.data;
-  // Nothing to say when the server has no day: before it, after it, or no day to speak of.
-  if (weather && weather.status !== "ok" && weather.status !== "no_place") return null;
+  if (phase === "over") return null;
+  const weather = phase === "now" ? query.data : undefined;
+  // The server's clock can differ from this one by a moment: it says the same as the page would.
+  if (weather?.status === "over") return null;
 
   let body: ReactNode;
-  if (weather?.status === "ok") {
+  if (phase === "no_day" || weather?.status === "no_day") {
+    body = <p className="weather-no-day text-sm text-neutral-700">{t.weather.noDay}</p>;
+  } else if (phase === "not_yet" || weather?.status === "not_yet") {
+    const from =
+      span.phase === "not_yet"
+        ? span.from
+        : parseDate(weather?.status === "not_yet" ? weather.from : "");
+    body = (
+      <p className="weather-not-yet text-sm text-neutral-700">{t.weather.notYet(f.date(from))}</p>
+    );
+  } else if (weather?.status === "ok") {
     const icon = (code: number) => {
       const Icon = ICONS[weatherKind(code)];
       return <Icon className="size-5 shrink-0 text-iris-600" />;
