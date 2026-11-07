@@ -236,7 +236,7 @@ type registrationTodo struct {
 func registrationStateOf(event eventRecord, today string) (todo registrationTodo, ok bool) {
 	deadline := event.RegistrationDeadline
 	if opening := event.RegistrationOpening; opening != "" {
-		if daysLeft, ok := daysBetween(today, opening); ok && daysLeft >= 0 {
+		if daysLeft, parsed := daysBetween(today, opening); parsed && daysLeft >= 0 {
 			state := stateSoon
 			if daysLeft == 0 {
 				state = stateToday
@@ -250,7 +250,7 @@ func registrationStateOf(event eventRecord, today string) (todo registrationTodo
 	if deadline == "" {
 		return registrationTodo{}, false
 	}
-	if daysLeft, ok := daysBetween(today, deadline); ok && daysLeft >= 0 {
+	if daysLeft, parsed := daysBetween(today, deadline); parsed && daysLeft >= 0 {
 		return registrationTodo{State: stateOpen, Day: deadline, Deadline: deadline, DaysLeft: daysLeft}, true
 	}
 	return registrationTodo{}, false
