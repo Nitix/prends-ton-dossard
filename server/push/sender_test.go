@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/ecdh"
 	"crypto/rand"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -60,7 +63,7 @@ func TestSender_Outcomes(t *testing.T) {
 		code := status
 		mu.Unlock()
 		if code >= 300 && code < 400 {
-			w.Header().Set("Location", "https://fcm.googleapis.com/elsewhere")
+			w.Header().Set("Location", "https://"+r.Host+"/elsewhere")
 		}
 		w.WriteHeader(code)
 		io.WriteString(w, "detail of the push service")
@@ -198,6 +201,8 @@ func TestSender_RefusesBeforeAnyRequest(t *testing.T) {
 
 	// The real sender, with the allow-list: the address of a test server is on 127.0.0.1.
 	real := push.NewSender(keys, "mailto:a@example.fr")
+	counting := &countingRT{}
+	push.UseTransport(real, counting) // a refusal that failed to happen would reach no real host
 	out, err := real.Send(context.Background(), rcpt.sub, []byte("x"), goodOpts)
 	if out != push.Rejected || err == nil {
 		t.Errorf("an address off the list: %v, %v", out, err)
@@ -211,6 +216,9 @@ func TestSender_RefusesBeforeAnyRequest(t *testing.T) {
 		if out, err := real.Send(context.Background(), sub, []byte("x"), goodOpts); out != push.Rejected || err == nil {
 			t.Errorf("%q: %v, %v", e, out, err)
 		}
+	}
+	if counting.n.Load() != 0 {
+		t.Errorf("%d requests left the real sender, want none", counting.n.Load())
 	}
 
 	s := push.NewTestSender(keys, "mailto:a@example.fr", srv.Client(), nil)
@@ -245,5 +253,110 @@ func TestSender_RefusesBeforeAnyRequest(t *testing.T) {
 	}
 	if n := requests.Load(); n != 1 {
 		t.Errorf("%d requests, want only the last, good one", n)
+	}
+}
+
+// countingRT counts the requests it is given and fails them all: it stands in
+// for the network where a test must not be able to reach a real push host.
+type countingRT struct{ n atomic.Int32 }
+
+func (c *countingRT) RoundTrip(*http.Request) (*http.Response, error) {
+	c.n.Add(1)
+	return nil, errors.New("no network in tests")
+}
+
+// The client of the production sender, as NewSender makes it: each of its
+// protections is asserted, since a sender built another way would lose it
+// without any other test noticing.
+func TestSender_ProductionClient(t *testing.T) {
+	c := push.ClientOf(push.NewSender(testKeys(t), "mailto:a@example.fr"))
+	if c.Timeout != 10*time.Second || push.SendTimeout != 10*time.Second {
+		t.Errorf("timeout %v, want 10s", c.Timeout)
+	}
+	if c.CheckRedirect == nil {
+		t.Fatal("no redirect policy")
+	}
+	if err := c.CheckRedirect(&http.Request{}, nil); !errors.Is(err, http.ErrUseLastResponse) {
+		t.Errorf("a redirect is followed: %v", err)
+	}
+	if c.Jar != nil {
+		t.Error("the client keeps cookies")
+	}
+	tr, ok := c.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport %T", c.Transport)
+	}
+	if tr.Proxy != nil {
+		t.Error("the transport uses a proxy")
+	}
+	if tr.DialContext == nil {
+		t.Error("the transport has no guarded dialer")
+	}
+}
+
+// The real transport refuses to connect to a private address, whatever the
+// allow-list was made to say: a listener there sees no connection at all.
+func TestSender_RealTransportRefusesPrivateAddresses(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "https://"))
+
+	s := push.NewSender(testKeys(t), "mailto:a@example.fr")
+	push.OpenAllowList(s)
+	for _, host := range []string{"127.0.0.1", "localhost", "[::1]"} {
+		rcpt := newRecipient(t, "https://"+host+":"+port+"/wpush/secret-path")
+		out, err := s.Send(context.Background(), rcpt.sub, []byte("x"), goodOpts)
+		if out != push.Failed || err == nil {
+			t.Errorf("%s: %v, %v", host, out, err)
+			continue
+		}
+		if !strings.Contains(err.Error(), "not a public one") {
+			t.Errorf("%s: the refusal is not the dial guard's: %v", host, err)
+		}
+		for _, leak := range []string{"127.0.0.1", "secret-path", port} {
+			if strings.Contains(err.Error(), leak) {
+				t.Errorf("%s: the error holds %q", host, leak)
+			}
+		}
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("the listener got %d hits", n)
+	}
+}
+
+func TestSender_PublicAddr(t *testing.T) {
+	public := []string{
+		"8.8.8.8", "1.1.1.1", "142.250.74.14", "17.253.144.10", "100.63.255.255", "100.128.0.0",
+		"172.15.255.255", "172.32.0.0", "198.17.255.255", "198.20.0.0", "223.255.255.255",
+		"2a00:1450:4007:80d::200e", "2606:4700:4700::1111", "2620:149:a44::1",
+		"::ffff:8.8.8.8",   // mapped: judged by the IPv4 inside
+		"64:ff9b::808:808", // NAT64 of 8.8.8.8
+		"::808:808",        // IPv4-compatible of 8.8.8.8
+	}
+	private := []string{
+		"0.0.0.0", "0.1.2.3", "10.0.0.1", "10.255.255.255", "100.64.0.0", "100.100.100.200", "100.127.255.255",
+		"127.0.0.1", "127.255.255.254", "169.254.169.254", "169.254.0.1", "172.16.0.1", "172.31.255.255",
+		"192.0.0.1", "192.0.2.1", "192.168.0.1", "192.168.255.255", "198.18.0.1", "198.19.255.255",
+		"198.51.100.1", "203.0.113.1", "224.0.0.1", "239.255.255.255", "240.0.0.1", "255.255.255.255",
+		"::", "::1", "fe80::1", "fec0::1", "fc00::1", "fd12:3456::1", "ff02::1",
+		"2001:db8::1", "2001::1", "2002:7f00:1::", "2002:808:808::",
+		"::ffff:127.0.0.1", "::ffff:10.0.0.1", "::ffff:169.254.169.254", "::ffff:100.64.0.1",
+		"::7f00:1", "::a00:1", "::1:2",
+		"64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b::a9fe:a9fe",
+		"64:ff9b:1::1", // local-use NAT64: outside 2000::/3
+	}
+	for _, s := range public {
+		if !push.PublicAddr(netip.MustParseAddr(s)) {
+			t.Errorf("%s refused", s)
+		}
+	}
+	for _, s := range private {
+		if push.PublicAddr(netip.MustParseAddr(s)) {
+			t.Errorf("%s allowed", s)
+		}
+	}
+	if push.PublicAddr(netip.Addr{}) {
+		t.Error("the zero address is allowed")
 	}
 }

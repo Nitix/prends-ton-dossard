@@ -85,9 +85,63 @@ func publicOnlyTransport() *http.Transport {
 	return t
 }
 
+// deniedV4 are the IPv4 ranges that are not the public internet: this network,
+// private, shared (carrier-grade NAT, Tailscale), loopback, link-local (cloud
+// metadata), protocol assignments, the documentation ranges, benchmarking,
+// multicast and the reserved class E with the broadcast address.
+var deniedV4 = mustPrefixes(
+	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+	"172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15",
+	"198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+)
+
+// deniedV6 are the parts of the global-unicast space 2000::/3 that are not the
+// public internet: documentation, Teredo and 6to4 (which embed an IPv4 address
+// that nobody checks). Everything outside 2000::/3 (loopback, unspecified,
+// unique-local, link-local, site-local fec0::/10, multicast…) is refused
+// already, by not being in it.
+var deniedV6 = mustPrefixes("2001::/32", "2001:db8::/32", "2002::/16")
+
+var (
+	globalV6 = netip.MustParsePrefix("2000::/3")
+	nat64    = netip.MustParsePrefix("64:ff9b::/96")
+	v4Compat = netip.MustParsePrefix("::/96")
+)
+
+func mustPrefixes(s ...string) []netip.Prefix {
+	out := make([]netip.Prefix, len(s))
+	for i, p := range s {
+		out[i] = netip.MustParsePrefix(p)
+	}
+	return out
+}
+
+func inAny(a netip.Addr, prefixes []netip.Prefix) bool {
+	for _, p := range prefixes {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// publicAddr says whether a is on the public internet. An IPv4-mapped address
+// (::ffff:a.b.c.d), an IPv4-compatible one (::a.b.c.d) and a NAT64 one
+// (64:ff9b::a.b.c.d, which is how an IPv6-only host reaches IPv4) are judged
+// by the IPv4 address they hold.
 func publicAddr(a netip.Addr) bool {
-	a = a.Unmap()
-	return a.IsValid() && a.IsGlobalUnicast() && !a.IsPrivate() && !a.IsLoopback() && !a.IsLinkLocalUnicast()
+	a = a.WithZone("").Unmap()
+	switch {
+	case !a.IsValid():
+		return false
+	case a.Is4():
+		return !inAny(a, deniedV4)
+	case nat64.Contains(a) || v4Compat.Contains(a):
+		b := a.As16()
+		return publicAddr(netip.AddrFrom4([4]byte(b[12:])))
+	default:
+		return globalV6.Contains(a) && !inAny(a, deniedV6)
+	}
 }
 
 // topicOK: at most 32 characters of the base64url alphabet (RFC 8030 § 5.4).

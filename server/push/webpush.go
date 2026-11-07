@@ -7,8 +7,12 @@ import (
 	"crypto/hkdf"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
+	"strings"
 )
 
 // Subscription is what a browser gave: its endpoint and its two keys.
@@ -103,3 +107,24 @@ func encrypt(sub Subscription, plaintext []byte, ephemeral *ecdh.PrivateKey, sal
 	body = append(body, asPublic...)
 	return gcm.Seal(body, nonce, record, nil), nil
 }
+
+// What a Subscription says of itself: its host and nothing else. The endpoint
+// is the capability to write to a device, and the keys are what reads the
+// messages: a value passed to a log or an error must not carry them.
+
+func (s Subscription) String() string {
+	host := "invalid"
+	if u, err := url.Parse(s.Endpoint); err == nil && u.Hostname() != "" && ldhHost(strings.ToLower(u.Hostname())) {
+		host = strings.ToLower(u.Hostname())
+	}
+	return "push.Subscription{host " + host + "}"
+}
+
+func (s Subscription) GoString() string { return s.String() }
+
+// Format answers every verb (%v, %+v, %#v, %s, %x, %d…) with String.
+func (s Subscription) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte(s.String())) }
+
+func (s Subscription) MarshalJSON() ([]byte, error) { return json.Marshal(s.String()) }
+func (s Subscription) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+func (s Subscription) LogValue() slog.Value         { return slog.StringValue(s.String()) }

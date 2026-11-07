@@ -16,6 +16,8 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -42,6 +44,16 @@ type keyFile struct {
 // or holds no valid pair, it returns an error and leaves the file alone: it is
 // never replaced.
 func LoadOrCreateKeys(path string) (*Keys, error) {
+	createMu.Lock()
+	defer createMu.Unlock()
+	return loadOrCreate(path)
+}
+
+// createMu keeps two callers of this process from making a pair at once. Two
+// processes are kept apart by publishExclusive, which never replaces a file.
+var createMu sync.Mutex
+
+func loadOrCreate(path string) (*Keys, error) {
 	raw, err := os.ReadFile(path)
 	switch {
 	case err == nil:
@@ -58,6 +70,10 @@ func unwrapPathError(err error) error {
 	var pe *fs.PathError
 	if errors.As(err, &pe) {
 		return pe.Err
+	}
+	var le *os.LinkError
+	if errors.As(err, &le) {
+		return le.Err
 	}
 	return err
 }
@@ -108,16 +124,27 @@ func createKeys(path string) (*Keys, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := writeAtomically(path, append(content, '\n')); err != nil {
+	switch err := publishExclusive(path, append(content, '\n')); {
+	case errors.Is(err, fs.ErrExist):
+		// Another process made its pair first: its file is the one, read it back.
+		raw, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil, fmt.Errorf("push: the VAPID key file cannot be read: %w", unwrapPathError(rerr))
+		}
+		return parseKeys(raw)
+	case err != nil:
 		return nil, fmt.Errorf("push: the VAPID key file cannot be written: %w", unwrapPathError(err))
 	}
 	return k, nil
 }
 
-// writeAtomically writes content to a temp file of the directory (mode 0600
-// from the start: CreateTemp makes it so) and renames it to path, so that a
-// crash leaves either no file or a whole one, never half of the keys.
-func writeAtomically(path string, content []byte) (err error) {
+// publishExclusive writes content to a temp file of the directory (mode 0600 from
+// the start: CreateTemp makes it so) and links it to path, so that a crash
+// leaves either no file or a whole one, never half of the keys, and so that a
+// file already at path is never replaced: Link fails with fs.ErrExist instead
+// (a rename would replace it). The directory is then synced, so that the entry
+// survives a crash; that is best effort, and not possible on Windows.
+func publishExclusive(path string, content []byte) (err error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -145,7 +172,22 @@ func writeAtomically(path string, content []byte) (err error) {
 	if err = tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err = os.Link(tmp.Name(), path); err != nil {
+		return err
+	}
+	_ = os.Remove(tmp.Name())
+	syncDir(dir)
+	return nil
+}
+
+func syncDir(dir string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 }
 
 // PublicKey is the applicationServerKey of the browsers: the uncompressed

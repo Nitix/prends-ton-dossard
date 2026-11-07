@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -88,9 +89,13 @@ func TestKeys_CreatedOnceAndKept(t *testing.T) {
 	if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
 		t.Error("a second load rewrote the file")
 	}
+
+	t.Run("an unusable file is never replaced", unusableFilesAreNeverReplaced)
 }
 
-func TestKeys_UnusableFileIsNeverReplaced(t *testing.T) {
+// unusableFilesAreNeverReplaced is the second half of TestKeys_CreatedOnceAndKept:
+// a file that is there and cannot be used is an error, and stays as it is.
+func unusableFilesAreNeverReplaced(t *testing.T) {
 	newFile := func() keyFile {
 		p := filepath.Join(t.TempDir(), "k.json")
 		if _, err := push.LoadOrCreateKeys(p); err != nil {
@@ -212,5 +217,97 @@ func TestKeys_NeverLeave(t *testing.T) {
 	}
 	if got := fmt.Sprintf("%#v", k); !strings.HasPrefix(got, "push.Keys{public ") {
 		t.Errorf("%%#v = %q", got)
+	}
+}
+
+// Two callers at once, in one process (the lock) and in two (the unlocked
+// function stands in for a second process: only the exclusive publication keeps
+// them apart): every one of them ends with the pair that is on disk.
+func TestKeys_ConcurrentFirstCreation(t *testing.T) {
+	for name, load := range map[string]func(string) (*push.Keys, error){
+		"one process":   push.LoadOrCreateKeys,
+		"two processes": push.LoadOrCreateKeysUnlocked,
+	} {
+		t.Run(name, func(t *testing.T) {
+			for round := 0; round < 30; round++ {
+				path := filepath.Join(t.TempDir(), "push_vapid.json")
+				const callers = 8
+				got := make([]string, callers)
+				var wg sync.WaitGroup
+				start := make(chan struct{})
+				for i := range got {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						<-start
+						k, err := load(path)
+						if err != nil {
+							t.Error(err)
+							return
+						}
+						got[i] = k.PublicKey()
+					}()
+				}
+				close(start)
+				wg.Wait()
+				onDisk := readKeyFile(t, path).PublicKey
+				for i, pub := range got {
+					if pub != onDisk {
+						t.Fatalf("round %d: caller %d holds a pair that is not the one on disk", round, i)
+					}
+				}
+				entries, _ := os.ReadDir(filepath.Dir(path))
+				if len(entries) != 1 {
+					t.Fatalf("round %d: %d entries, want only the file", round, len(entries))
+				}
+			}
+		})
+	}
+}
+
+func TestSubscription_NeverLeaves(t *testing.T) {
+	rcpt := newRecipient(t, "https://fcm.googleapis.com/fcm/send/endpoint-token-APA91bSECRET")
+	sub := rcpt.sub
+	secrets := []string{
+		"endpoint-token", "APA91bSECRET", "/fcm/send",
+		push.B64(sub.P256dh), push.B64(sub.Auth),
+		fmt.Sprintf("%x", sub.P256dh), fmt.Sprintf("%x", sub.Auth),
+		fmt.Sprintf("%X", sub.P256dh), fmt.Sprintf("%X", sub.Auth),
+		base64.StdEncoding.EncodeToString(sub.P256dh), base64.StdEncoding.EncodeToString(sub.Auth),
+		fmt.Sprintf("%v", sub.Auth), fmt.Sprintf("%v", sub.P256dh),
+	}
+	jb, _ := json.Marshal(sub)
+	jp, _ := json.Marshal(&sub)
+	jm, _ := json.Marshal(map[string]any{"sub": sub, "list": []push.Subscription{sub}})
+	var logs bytes.Buffer
+	slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})).Debug("send", "sub", sub, "p", &sub)
+	slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})).Debug("send", "sub", sub)
+	outputs := map[string]string{
+		"Sprint": fmt.Sprint(sub), "Sprint pointer": fmt.Sprint(&sub),
+		"%v": fmt.Sprintf("%v", sub), "%+v": fmt.Sprintf("%+v", sub), "%#v": fmt.Sprintf("%#v", sub),
+		"%+v pointer": fmt.Sprintf("%+v", &sub), "%s": fmt.Sprintf("%s", sub), "%x": fmt.Sprintf("%x", sub),
+		"%d": fmt.Sprintf("%d", sub), "%q": fmt.Sprintf("%q", sub),
+		"collections": fmt.Sprintf("%v %+v", []push.Subscription{sub}, map[string]push.Subscription{"a": sub}),
+		"json":        string(jb), "json pointer": string(jp), "json nested": string(jm), "slog": logs.String(),
+		"error wrap": fmt.Errorf("x: %v", sub).Error(),
+	}
+	for name, out := range outputs {
+		if out == "" {
+			t.Errorf("%s is empty", name)
+		}
+		for _, s := range secrets {
+			if strings.Contains(out, s) {
+				t.Errorf("%s holds a secret of the subscription", name)
+			}
+		}
+		if !strings.Contains(out, "fcm.googleapis.com") {
+			t.Errorf("%s does not name the host", name)
+		}
+	}
+	if got := fmt.Sprint(sub); got != "push.Subscription{host fcm.googleapis.com}" {
+		t.Errorf("Sprint = %q", got)
+	}
+	if got := fmt.Sprint(push.Subscription{Endpoint: "https://evil.test\n/x"}); strings.Contains(got, "evil") {
+		t.Errorf("an invalid endpoint is printed: %q", got)
 	}
 }

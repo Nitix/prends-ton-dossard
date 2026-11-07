@@ -51,15 +51,41 @@ func parseEndpoint(raw string) (*url.URL, bool) {
 }
 
 func hostAllowed(host string) bool {
+	if !ldhHost(host) {
+		return false
+	}
 	if exactHosts[host] {
 		return true
 	}
 	for _, suffix := range suffixHosts {
-		if label, ok := strings.CutSuffix(host, suffix); ok && label != "" && !strings.Contains(label, "..") {
+		if label, ok := strings.CutSuffix(host, suffix); ok && label != "" {
 			return true
 		}
 	}
 	return false
+}
+
+// ldhHost says whether host is made of ASCII letter-digit-hyphen labels of 1 to
+// 63 characters, none starting or ending with a hyphen, none empty (so no
+// "a..b", no leading or trailing dot). The check then runs on the very bytes
+// that net/http dials, with no IDNA mapping (a full stop of another script
+// would turn into a dot there) and no underscore or other odd character.
+func ldhHost(host string) bool {
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // ValidKeys checks a subscription's keys: p256dh a point on P-256 (65 bytes),

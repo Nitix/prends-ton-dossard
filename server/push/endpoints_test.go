@@ -3,6 +3,7 @@ package push_test
 import (
 	"crypto/ecdh"
 	"crypto/rand"
+	"strings"
 	"testing"
 
 	"courses/server/push"
@@ -86,6 +87,16 @@ var refusedEndpoints = []string{
 	"https://fcm.googleapis.com./x", // another spelling of the same host: the list is exact
 	"https://fcm.googleapis.com\n.evil.test/x",
 	"https://fcm.googleapis.com\r\nHost: evil.test/x",
+	"https://a..push.apple.com/x",
+	"https://..push.apple.com/x",
+	"https://a.push.apple.com../x",
+	"https://-.notify.windows.com/x",
+	"https://a-.notify.windows.com/x",
+	"https://a_b.notify.windows.com/x",
+	"https://evil。com.push.apple.com/x",
+	"https://evil%E3%80%82com.push.apple.com/x",
+	"https://%ff.push.apple.com/x",
+	"https://" + strings.Repeat("a", 64) + ".push.apple.com/x",
 	" https://fcm.googleapis.com/x",
 	"https://fcm.googleapis.com/x ",
 	"https://fcm.googleapis.com\x00/x",
