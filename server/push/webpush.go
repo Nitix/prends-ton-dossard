@@ -114,7 +114,7 @@ func encrypt(sub Subscription, plaintext []byte, ephemeral *ecdh.PrivateKey, sal
 
 func (s Subscription) String() string {
 	host := "invalid"
-	if u, err := url.Parse(s.Endpoint); err == nil && u.Hostname() != "" && ldhHost(strings.ToLower(u.Hostname())) {
+	if u, err := url.Parse(s.Endpoint); err == nil && u.Hostname() != "" && asciiOnly(u.Hostname()) && ldhHost(strings.ToLower(u.Hostname())) {
 		host = strings.ToLower(u.Hostname())
 	}
 	return "push.Subscription{host " + host + "}"

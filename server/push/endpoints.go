@@ -38,6 +38,9 @@ func parseEndpoint(raw string) (*url.URL, bool) {
 	if err != nil || u.Scheme != "https" || u.Opaque != "" || u.User != nil {
 		return nil, false
 	}
+	if !asciiOnly(u.Host) {
+		return nil, false // decoded by url.Parse: "%C4%B0" is seen here as the letter
+	}
 	host := strings.ToLower(u.Hostname())
 	// u.Host must be the bare name, or the name with the port 443: "host:" and
 	// every other port are refused. A literal IP is never in the list.
@@ -96,4 +99,17 @@ func ValidKeys(p256dh, auth []byte) bool {
 	}
 	_, err := ecdh.P256().NewPublicKey(p256dh)
 	return err == nil
+}
+
+// asciiOnly says whether s has no byte of 0x80 or more. It is asked of a host
+// before any lower-casing: strings.ToLower maps U+0130 and the Kelvin sign to
+// ASCII letters, so that "fcm.googleapİs.com" would read as the name of the
+// list, where net/http dials it through IDNA as another name altogether.
+func asciiOnly(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }

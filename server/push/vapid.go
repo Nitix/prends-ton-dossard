@@ -28,6 +28,9 @@ func vapidAuthorization(keys *Keys, endpoint, contact string, now time.Time) (st
 	}
 	// The origin of the service: the scheme and the host, in lowercase, without
 	// the default port. No path: it names the endpoint.
+	if !asciiOnly(u.Hostname()) {
+		return "", errors.New("push: the endpoint host is not ASCII")
+	}
 	host := strings.ToLower(u.Hostname())
 	if p := u.Port(); p != "" && p != "443" {
 		host += ":" + p

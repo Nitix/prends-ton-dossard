@@ -63,6 +63,23 @@ func TestValidKeys(t *testing.T) {
 
 // refusedEndpoints are the addresses that are not one of the push services.
 var refusedEndpoints = []string{
+	// A letter that lower-cases to ASCII (U+0130 and the Kelvin sign U+212A) or
+	// that a full-width form maps to: net/http dials these through IDNA, as
+	// another name than the one the list holds.
+	"https://fcm.googleapİs.com/x",
+	"https://fcm.googleap%C4%B0s.com/x",
+	"https://updates.push.services.moz%C4%B0lla.com/x",
+	"https://updates.push.services.mozİlla.com/x",
+	"https://wns2-par02p.notify.w%C4%B0ndows.com/x",
+	"https://fcm.googleapis.Kom/x",
+	"https://fcm.googleapis.%E2%84%AAom/x",
+	"https://wns2-par02p.notify.windows.Kom/x",
+	"https://api.push.apple.Kom/x",
+	"https://İpi.push.apple.com/x",
+	"https://api.push.apple.com．evil.test/x",
+	"https://fcm.googleapis.cｏm/x",
+	"https://fcm.googleapis.%EF%BD%8Fom/x",
+	"https://ｆcm.googleapis.com/x",
 	"http://fcm.googleapis.com/fcm/send/x",
 	"https://fcm.googleapis.com:8443/fcm/send/x",
 	"https://fcm.googleapis.com:/fcm/send/x",
