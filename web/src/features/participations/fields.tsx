@@ -2,6 +2,7 @@ import { useId, type ReactNode } from "react";
 
 import { INPUT } from "../../components/Field";
 import { useI18n } from "../../i18n/I18nProvider";
+import { isMonthOnly } from "../../lib/dates";
 import type { Status } from "../../lib/types";
 import type { EventView, FormatView } from "../events/api";
 import { formatDisplayName } from "../events/formatName";
@@ -81,7 +82,7 @@ export function FormatField({
   onChange: (value: string) => void;
 }) {
   const { t, f } = useI18n();
-  const severalDays = !view.start.equals(view.end);
+  const severalDays = !isMonthOnly(view.event) && !view.start.equals(view.end);
 
   return (
     <SelectField label={t.participation.format} value={value} onChange={onChange} required>

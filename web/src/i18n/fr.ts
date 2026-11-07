@@ -278,6 +278,11 @@ export const fr = {
     addedBy: (name: string) => `Ajouté par ${name}`,
     // An event of several days: both days are already formatted.
     dateRange: (from: string, to: string) => `du ${from} au ${to}`,
+    // A race known by its month only: the month already formatted ("juin 2027"). `monthWhen` is the line that says its days; `monthLabel` is what a screen reader says of its chip.
+    monthWhen: (month: string) => `${month} · date à préciser`,
+    monthLabel: (month: string) => `${month}, date à préciser`,
+    // After the title of a race known by its month in a calendar file.
+    dateToBeSet: "date à préciser",
     // The page of an event (see features/events/EventPage.tsx).
     register: "S'inscrire sur le site officiel",
     nobody: "Personne pour l'instant.",
@@ -575,6 +580,13 @@ export const fr = {
     registrationOpening: "Ouverture des inscriptions",
     registrationOpeningTime: "Heure d'ouverture",
     registrationOpeningTimeHint: "Facultative, à l'heure de Paris.",
+    // Read with the time field while it is disabled: a time needs a day.
+    registrationOpeningTimeNeedsDay: "Choisis d'abord le jour de l'ouverture.",
+    // Under the start date: the box that says the day is not known, and the month to give instead.
+    dayUnknown: "Le jour n'est pas encore connu",
+    month: "Mois",
+    periodMonth: (month: string) => `${month}, date à préciser`,
+    formatDatesLater: "Les épreuves auront leur date quand le jour sera connu.",
     notes: "Notes",
     formatsTitle: "Épreuves",
     // The title of the group of fields of a format, from 1.
@@ -646,6 +658,8 @@ export const fr = {
     // Under the grid, on a phone: nothing chosen yet, or nothing on the day chosen.
     selectDay: "Touche un jour pour voir ses événements.",
     dayEmpty: "Aucun événement ce jour-là.",
+    // The block above the grid: the races of the month whose day is not known.
+    monthToBeSet: "Ce mois-ci, date à préciser",
   },
   list: {
     empty: "Aucun événement à afficher.",

@@ -168,3 +168,20 @@ describe("eventsByDay", () => {
     expect(names(byDay.get("2026-06-22"))).toEqual(["10 km de Lyon"]);
   });
 });
+
+describe("eventsByDay — une course au mois", () => {
+  test("eventsByDay — une course au mois n'est sur aucun jour", () => {
+    const monthRace = {
+      ...eventOn("m", "Trail de juin", "2026-06-01", "2026-06-30"),
+      date_precision: "month",
+    };
+    const views = toEventViews([monthRace, eventOn("d", "Dated", "2026-06-10")]);
+
+    const byDay = eventsByDay(views, june());
+
+    for (const list of byDay.values()) {
+      expect(names(list)).not.toContain("Trail de juin");
+    }
+    expect(names(byDay.get("2026-06-10"))).toEqual(["Dated"]);
+  });
+});

@@ -28,6 +28,7 @@ export function FormatFieldset({
   number,
   row,
   startDate,
+  monthOnly = false,
   raceTypes,
   errors,
   onChange,
@@ -39,6 +40,8 @@ export function FormatFieldset({
   row: FormatRow;
   /** The first day of the event, as it is typed: a text that is not a day gives no minimum. */
   startDate: string;
+  /** The day of the event is not known: the date of the format gives way to a sentence (the draft keeps what was typed). */
+  monthOnly?: boolean;
   raceTypes: RaceTypeRecord[];
   errors: Readonly<Record<string, string>>;
   onChange: (patch: Partial<FormatRow>) => void;
@@ -442,20 +445,24 @@ export function FormatFieldset({
         )}
       </Field>
 
-      <Field label={t.form.formatDate} hint={t.form.formatDateHint} error={message("date")}>
-        {(control) => (
-          <input
-            {...control}
-            type="date"
-            min={isDay(startDate) ? startDate : undefined}
-            value={row.date}
-            onChange={(event) => {
-              onChange({ date: event.target.value });
-            }}
-            className={INPUT}
-          />
-        )}
-      </Field>
+      {monthOnly ? (
+        <p className="format-date-later text-sm text-neutral-700">{t.form.formatDatesLater}</p>
+      ) : (
+        <Field label={t.form.formatDate} hint={t.form.formatDateHint} error={message("date")}>
+          {(control) => (
+            <input
+              {...control}
+              type="date"
+              min={isDay(startDate) ? startDate : undefined}
+              value={row.date}
+              onChange={(event) => {
+                onChange({ date: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+      )}
 
       {removal && (
         <div className="flex flex-col gap-1">

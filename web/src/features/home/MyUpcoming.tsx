@@ -9,6 +9,7 @@ import { daysBetween, isMonthOnly, lastRaceDay } from "../../lib/dates";
 import type { ParticipationRecord } from "../../lib/types";
 import { useToday } from "../../lib/useToday";
 import type { EventView, FormatView, ParticipationView } from "../events/api";
+import { dayOrMonth } from "../events/eventWhen";
 import { formatDisplayName } from "../events/formatName";
 import { starters } from "../events/participants";
 
@@ -190,6 +191,8 @@ export function UpcomingRow({
   if (formatView) what = formatDisplayName(formatView.format, formatView.raceType.label, f, t);
   else if (participation.status !== "supporter") what = t.event.formatToChoose;
 
+  // A race known by its month has no day to count to: its month, and no ring.
+  const monthOnly = isMonthOnly(event);
   const daysLeft = Math.max(0, daysBetween(today, date));
 
   return (
@@ -201,7 +204,7 @@ export function UpcomingRow({
       }`}
     >
       {/* The ring shows the days left; the words under the date say them. */}
-      {dateStyle === "countdown" && <CountdownRing days={daysLeft} />}
+      {dateStyle === "countdown" && !monthOnly && <CountdownRing days={daysLeft} />}
       <div className="flex min-w-0 flex-col">
         <h3 className="card-title">
           <Link
@@ -218,10 +221,10 @@ export function UpcomingRow({
         </p>
         <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
           <p className="text-neutral-600">
-            {dateStyle === "long" ? f.dateLong(date) : f.date(date)}
+            {dayOrMonth(event, date, f, t, dateStyle === "long" ? "long" : "short")}
           </p>
           {/* The words are the countdown: nothing here is told by a colour. */}
-          {dateStyle === "countdown" && (
+          {dateStyle === "countdown" && !monthOnly && (
             <p className="days-left font-semibold text-iris-700">{f.inDays(daysLeft)}</p>
           )}
         </div>

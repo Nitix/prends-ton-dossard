@@ -3,8 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { DateChip } from "../../components/Dawn";
 import { PinIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
+import { isMonthOnly } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
 import type { EventView } from "./api";
+import { eventWhen } from "./eventWhen";
 import { FormatLine } from "./FormatLine";
 import { ParticipantChips } from "./ParticipantChips";
 import { starters } from "./participants";
@@ -22,7 +24,9 @@ import { registrationLabel, registrationState } from "./registration";
 export function EventCard({ view }: { view: EventView }) {
   const { t, f } = useI18n();
   const { event, formats, start, end } = view;
-  const severalDays = !start.equals(end);
+  const monthOnly = isMonthOnly(event);
+  // A race known by its month has no day to say of a format.
+  const severalDays = !monthOnly && !start.equals(end);
   const interested = starters(view.interested);
   const registration = registrationState(event, useToday());
 
@@ -32,7 +36,12 @@ export function EventCard({ view }: { view: EventView }) {
         <DateChip
           start={start}
           end={end}
-          label={severalDays ? t.event.dateRange(f.date(start), f.date(end)) : f.date(start)}
+          monthOnly={monthOnly}
+          label={
+            monthOnly
+              ? t.event.monthLabel(f.monthTitle(start.toPlainYearMonth()))
+              : eventWhen(view, f, t)
+          }
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="event-card-title font-display text-[1.0625rem] leading-snug font-bold display-title">

@@ -10,6 +10,7 @@ import { pb } from "../../lib/pb";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { invalidateEvents } from "../events/api";
+import { dayOrMonth } from "../events/eventWhen";
 import { formatDisplayName } from "../events/formatName";
 import { useUpdateParticipation } from "../participations/api";
 import { participationError } from "../participations/errors";
@@ -188,7 +189,7 @@ function ResultRow({
           </Link>
         </h3>
         <p className="text-sm">{formatDisplayName(format, raceType.label, f, t)}</p>
-        <p className="text-sm text-neutral-600">{f.date(date)}</p>
+        <p className="text-sm text-neutral-600">{dayOrMonth(event, date, f, t)}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button

@@ -6,6 +6,7 @@ import { Field, INPUT } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
+import { isMonthOnly } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useEvent, type FormatView } from "../events/api";
@@ -234,7 +235,7 @@ function FormatsOf({ eventId, onPlan }: { eventId: string; onPlan: (plan: Plan) 
   const { start, end } = event.data;
   const choices: Choice[] = event.data.formats.map((view) => ({
     id: view.format.id,
-    label: formatLine(view, !start.equals(end), f, t),
+    label: formatLine(view, !isMonthOnly(event.data.event) && !start.equals(end), f, t),
   }));
   if (choices.length < 2) return <p>{t.admin.needTwoFormats}</p>;
 

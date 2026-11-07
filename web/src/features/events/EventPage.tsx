@@ -16,7 +16,7 @@ import {
 import { SECTION, UNCONFIRMED_ROW } from "../../components/section";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
-import { raceStarted } from "../../lib/dates";
+import { isMonthOnly, raceStarted } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventRecord, ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
@@ -208,7 +208,8 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const departed: Depart = (participation, source, row) => {
     setDeparture({ participation, source, row });
   };
-  const severalDays = !start.equals(end);
+  // A race known by its month has no day to say of a format.
+  const severalDays = !isMonthOnly(event) && !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
   // A runner who is only interested is told to register before it is too late.
@@ -242,7 +243,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       type="button"
       data-action="calendar"
       onClick={() => {
-        downloadEventIcs(view, t.event.calendarFileName, lang, reminders);
+        downloadEventIcs(view, t.event.calendarFileName, lang, t, reminders);
       }}
       className={ACTION}
     >

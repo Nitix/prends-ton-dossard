@@ -1,7 +1,6 @@
 import type { Lang } from "../../i18n/detect";
-import { en } from "../../i18n/en";
-import { fr } from "../../i18n/fr";
-import { PARIS } from "../../lib/dates";
+import type { Messages } from "../../i18n/fr";
+import { isMonthOnly, PARIS } from "../../lib/dates";
 import type { Reminder } from "../../lib/types";
 import type { EventView } from "../events/api";
 
@@ -132,7 +131,12 @@ function stampValue(instant: Temporal.Instant): string {
  * the address of its page on the site at `appURL`, as of the moment `now`,
  * which is its `DTSTAMP`. An empty place is left out. `lang` is the language
  * of the site, which the `PRODID` says (`FR` or `EN`), as the feed of the
- * server does, and the one of the title of the opening.
+ * server does. `t` is the texts of the site, from the caller: the title of the
+ * opening and « date à préciser » come from them.
+ *
+ * A race known by its month only is one whole day, the 1st of the month, with
+ * « (date à préciser) » after its name: the calendar has a reminder at the start
+ * of the month, and the same UID when the day is known (spec 5.4).
  *
  * An event with an opening of its registration has a second `VEVENT` for it:
  * with a time, thirty minutes in UTC (the time is Paris time, so the instant
@@ -143,9 +147,13 @@ export function eventIcs(
   appURL: string,
   now: Temporal.Instant,
   lang: Lang,
+  t: Messages,
   reminders: readonly Reminder[] = [],
 ): string {
-  const { event, start, end } = view;
+  const { event, start } = view;
+  const monthOnly = isMonthOnly(event);
+  // The end of an event of whole days is exclusive: one day for a month, the 1st.
+  const end = monthOnly ? start : view.end;
   const address = `${appURL}/evenements/${event.id}`;
   const lines: string[] = [];
   const line = (name: string, value: string) => {
@@ -165,7 +173,7 @@ export function eventIcs(
   line("DTSTART;VALUE=DATE", dateValue(start));
   // The end of an event of whole days is exclusive.
   line("DTEND;VALUE=DATE", dateValue(end.add({ days: 1 })));
-  line("SUMMARY", textValue(event.name));
+  line("SUMMARY", textValue(monthOnly ? `${event.name} (${t.event.dateToBeSet})` : event.name));
   optional("DESCRIPTION", textValue(address));
   optional("LOCATION", textValue(event.location));
   optional("URL", uriValue(address));
@@ -184,7 +192,7 @@ export function eventIcs(
       line("DTSTART", stampValue(starts));
       line("DTEND", stampValue(starts.add({ minutes: OPENING_MINUTES })));
     }
-    const title = (lang === "fr" ? fr : en).event.openingCalendarTitle(event.name);
+    const title = t.event.openingCalendarTitle(event.name);
     line("SUMMARY", textValue(title));
     optional("DESCRIPTION", textValue(address));
     optional("URL", uriValue(address));
@@ -223,15 +231,16 @@ export function icsFileName(eventName: string, fallback: string): string {
  * Saves the calendar file of the event: the browser is handed a file made on
  * the spot, through a link that is clicked and let go. `fallbackName` names the
  * file when the name of the event gives nothing (see `icsFileName`), and `lang`
- * is the language of the site (see `eventIcs`).
+ * is the language of the site and `t` its texts (see `eventIcs`).
  */
 export function downloadEventIcs(
   view: EventView,
   fallbackName: string,
   lang: Lang,
+  t: Messages,
   reminders: readonly Reminder[] = [],
 ): void {
-  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang, reminders);
+  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang, t, reminders);
   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;

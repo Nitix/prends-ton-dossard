@@ -2,10 +2,11 @@ import { CountdownRing } from "../../components/Dawn";
 import { CalendarIcon, ClockIcon, PinIcon } from "../../components/icons";
 import { HeroArt } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
-import { daysBetween } from "../../lib/dates";
+import { daysBetween, isMonthOnly } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
 import type { EventView } from "./api";
+import { eventWhen } from "./eventWhen";
 import { RegisterLink } from "./RegisterLink";
 import { deadlineText, registrationState } from "./registration";
 
@@ -32,11 +33,11 @@ export function EventHero({
 }) {
   const { t, f } = useI18n();
   const today = useToday();
-  const { event, start, end } = view;
-  const severalDays = !start.equals(end);
+  const { event, start } = view;
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
-  const daysToGo = daysBetween(today, start);
+  // No ring for a race known by its month: there is no day to count to.
+  const daysToGo = isMonthOnly(event) ? 0 : daysBetween(today, start);
 
   return (
     <header className="event-hero on-dawn relative overflow-hidden rounded-[1.75rem] bg-dawn-hero text-white shadow-glow">
@@ -54,9 +55,7 @@ export function EventHero({
         <div className="event-hero-facts flex flex-col gap-1.5 text-[0.9375rem] font-medium">
           <p className="flex items-center gap-2">
             <CalendarIcon className="size-[1.125rem] shrink-0 opacity-90" />
-            {severalDays
-              ? t.event.dateRange(f.dateLong(start), f.dateLong(end))
-              : f.dateLong(start)}
+            {eventWhen(view, f, t, "long")}
           </p>
           <p className="flex items-center gap-2">
             <PinIcon className="size-[1.125rem] shrink-0 opacity-90" />

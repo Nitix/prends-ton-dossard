@@ -867,3 +867,51 @@ test("AgendaPage — la grille a des en-têtes de colonne et le mois pour nom", 
   await expect.element(screen.getByRole("columnheader").first()).toBeVisible();
   expect(screen.getByRole("row").elements()).toHaveLength(1 + 5);
 });
+
+// ---- Les courses dont on ne connaît que le mois
+
+const monthRace = {
+  ...event2Record,
+  id: "event-june",
+  name: "Trail de juin",
+  start_date: "2026-06-01",
+  end_date: "2026-06-30",
+  date_precision: "month",
+};
+
+test("AgendaPage — le bloc « Ce mois-ci, date à préciser » liste les courses au mois, avec un lien vers leur fiche", async () => {
+  mocks.events.mockResolvedValue([eventRecord, monthRace]);
+
+  const { screen } = await renderAgenda("/agenda?mois=2026-06");
+
+  const block = screen.getByRole("region", { name: fr.agenda.monthToBeSet });
+  await expect.element(block).toBeVisible();
+  const link = block.getByRole("link", { name: "Trail de juin" });
+  expect(link.element().getAttribute("href")).toBe("/evenements/event-june");
+  // Not on a day of the grid, and not under the title of a day.
+  const cells = screen.getByRole("button").elements();
+  for (const cell of cells) expect(cell.textContent).not.toContain("Trail de juin");
+});
+
+test("AgendaPage — pas de bloc sans course au mois", async () => {
+  const { screen } = await renderAgenda("/agenda?mois=2026-06");
+
+  await expect.element(screen.getByRole("heading", { level: 2, name: "juin 2026" })).toBeVisible();
+  await expect.poll(() => screen.getByRole("button").elements().length).toBeGreaterThan(0);
+  await expect
+    .element(screen.getByRole("region", { name: fr.agenda.monthToBeSet }))
+    .not.toBeInTheDocument();
+});
+
+test("AgendaPage — le bloc est celui du mois affiché : une course de juin n'est pas dans celui de juillet", async () => {
+  mocks.events.mockResolvedValue([monthRace]);
+
+  const { screen } = await renderAgenda("/agenda?mois=2026-07");
+
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: "juillet 2026" }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("region", { name: fr.agenda.monthToBeSet }))
+    .not.toBeInTheDocument();
+});

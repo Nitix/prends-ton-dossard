@@ -26,7 +26,7 @@ var ports = []struct {
 	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "098f312254be0bab489bb0ecc2e728b6cd6cf3d9f782b8f503bdc0d78685bf62"},
 	{"features/events/formDraft.ts", "eventEndDate and shortens of plan.go and race_writes.go", "dbd85f8efb9723d3db5e3f289b35fe42d7ef40fd598bd4a2de0c043b22e83efb"},
 	{"lib/dates.ts", "lastRaceDay of views.go, participationRow.lastDay of home.go", "674bc31333e6cac072e999937f5bcde51a0593c7abbf65db609999654143027e"},
-	{"features/home/MyUpcoming.tsx", "upcomingOf of home.go", "d02bffbdc5d0a4e5a7c31fb5fe78475db09967d4783dc2d536633713bb5a6722"},
+	{"features/home/MyUpcoming.tsx", "upcomingOf of home.go", "a141677cfd243d478a63a3d51a0c4269bcf760f73017d600532e1a0aba40620f"},
 	{"features/events/duplicates.ts", "duplicates.go", "b34613d9a40541a03f85631164a31aade82ef46b591b760e72265e49a9c333bf"},
 	{"features/events/registration.ts", "registrationState (registrationStateOf) of home.go", "d24d2bbd184c284ca11425094cfa458d80624a283709a812988be6718e6ca4de"},
 	{"features/events/participants.ts", "hasStarters of home.go", "e7694134868064d0d35baf7a500ee506c3b8076d41b7ec100f4bd5f1fa3539d9"},

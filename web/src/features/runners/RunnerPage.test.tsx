@@ -549,3 +549,25 @@ test("RunnerPage — « Réessayer » n'est pas désactivé et un double appui n
   // The first request, and one more.
   expect(mocks.runners).toHaveBeenCalledTimes(2);
 });
+
+test("RunnerPage — l'historique d'une course au mois dit « mai 2026 · date à préciser »", async () => {
+  const month = {
+    ...result("rm", crossEvent, crossFormat, "2026-05-01", { status: "dnf" }),
+    expand: {
+      runner: aliceRunner,
+      event: {
+        ...crossEvent,
+        start_date: "2026-05-01",
+        end_date: "2026-05-31",
+        date_precision: "month",
+      },
+      format: { ...crossFormat, date: "" },
+    },
+  };
+  mocks.results.mockResolvedValue([month]);
+
+  const { screen } = await renderRunner();
+
+  const history = section(screen, fr.runner.history);
+  await expect.element(history.getByText("mai 2026 · date à préciser")).toBeVisible();
+});
