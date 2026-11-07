@@ -235,17 +235,18 @@ func monthRefusal(w wording.Words, draft eventDraft, labels map[string]string) e
 // monthHint says what to do with the day of a format of a race known by its month.
 const monthHint = " Donne la date de la course (date_precision: day) pour dater ses épreuves."
 
-// openingRefusal is the refusal of the site for the opening of the registration
-// of a draft, in the site's own words and in its own order (validateEvent of the
-// events package): an opening after the first day or after the deadline
-// (registration_opening_after_start, registration_opening_after_deadline), a
-// time that is not HH:MM (time_invalid), and a time without a day
-// (validation_required on registration_opening). The first day of a race known by
-// its month is the last day of that month. The form does not send a time
-// without a day (toEventDraft of formDraft.ts), and a tool has no field to be
-// left alone, so it says so before any write. It says all of them before a
-// confirmation too: a person is not asked to agree to what the site then
-// refuses.
+// openingRefusal is the refusal of the site for the registration deadline and the
+// opening of the registration of a draft, in the site's own words and in its own
+// order (validateEvent of the events package): a deadline after the first day
+// (registration_deadline_after_start), which the site checks before the opening, so
+// that a draft that is wrong in both is told the same as by the site; then an opening
+// after the first day or after the deadline (registration_opening_after_start,
+// registration_opening_after_deadline), a time that is not HH:MM (time_invalid), and
+// a time without a day (validation_required on registration_opening). The first
+// day of a race known by its month is the last day of that month. The form does not
+// send a time without a day (toEventDraft of formDraft.ts), and a tool has no field
+// to be left alone, so it says so before any write. It says all of them before a
+// confirmation too: a person is not asked to agree to what the site then refuses.
 //
 // The days are compared as text, as the site does (they were checked to be days).
 func openingRefusal(draft eventDraft) error {
@@ -255,6 +256,14 @@ func openingRefusal(draft eventDraft) error {
 	firstDay := draft.StartDate
 	if draft.monthOnly() {
 		firstDay = lastDayOfMonth(draft.StartDate)
+	}
+	if deadline := draft.RegistrationDeadline; deadline != "" {
+		if _, ok := events.ParseDay(deadline); !ok {
+			return refuse("registration_deadline", "date_invalid")
+		}
+		if firstDay != "" && deadline > firstDay {
+			return refuse("registration_deadline", "registration_deadline_after_start")
+		}
 	}
 	if opening := draft.RegistrationOpening; opening != "" {
 		if _, ok := events.ParseDay(opening); !ok {

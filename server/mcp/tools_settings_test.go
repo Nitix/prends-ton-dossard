@@ -814,7 +814,11 @@ func TestTools_McpTokens(t *testing.T) {
 	secrets := func(w world) []string {
 		var words []string
 		for _, token := range []string{w.alice, w.desktop, w.bob} {
-			secret := token[strings.LastIndexByte(token, '_')+1:]
+			// ptd_<id>_<secret>: the secret is what follows the second "_". It is base64url, so it
+			// may hold "_" itself: cutting at the last one would make a word of a few
+			// characters, such as "s", that any answer holds ("tokens"), and the test fail
+			// on the luck of the secret.
+			secret := strings.SplitN(token, "_", 3)[2]
 			words = append(words, token, secret, invitations.Hash(secret), "token_hash", "ptd_")
 		}
 		return words

@@ -767,7 +767,9 @@ func TestMCP_TokenIsNotLogged(t *testing.T) {
 
 	secrets := map[string]string{"the session of the inner request": session}
 	for name, value := range map[string]string{"token": token, "malformed token": malformed, "token with a wrong secret": wrongSecret} {
-		secret := value[strings.LastIndexByte(value, '_')+1:]
+		// ptd_<id>_<secret>: what follows the second "_". The secret is base64url and may hold "_":
+		// cutting at the last one would give a word of a few characters that any log holds.
+		secret := strings.SplitN(value, "_", 3)[2]
 		secrets["the "+name] = value
 		secrets["the secret of the "+name] = secret
 		secrets["the hash of the secret of the "+name] = invitations.Hash(secret)

@@ -556,6 +556,36 @@ func TestTools_OpeningRefusedBeforeAnyConfirmation(t *testing.T) {
 		}, afterDeadline)
 	})
 
+	// The site checks the deadline against the first day before it looks at the opening: a
+	// draft that is wrong in both is told the deadline, as the site tells it.
+	const deadlineAfterStart = "La course, date limite d'inscription : la date limite d'inscription doit être au plus tard le jour du début. (registration_deadline_after_start)"
+
+	t.Run("update_event: a deadline after the start, with an opening after it too, says the deadline", func(t *testing.T) {
+		announced(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_deadline": "2026-06-23", "registration_opening": "2026-06-24",
+		}, deadlineAfterStart)
+		announced(t, app, alice, "update_event", map[string]any{
+			"event_id": fx.Event2.Id, "registration_deadline": "2026-06-23",
+		}, deadlineAfterStart)
+	})
+
+	t.Run("create_event: the same", func(t *testing.T) {
+		announced(t, app, alice, "create_event", map[string]any{
+			"name": "Corrida de Noël", "location": "Lyon", "start_date": "2026-12-20",
+			"formats":               []any{map[string]any{"race_type": "Trail", "distance_km": 42}},
+			"registration_deadline": "2026-12-21", "registration_opening": "2026-12-22",
+		}, deadlineAfterStart)
+	})
+
+	t.Run("a deadline on the first day is fine, and after the month for a race known by its month is not", func(t *testing.T) {
+		isDone(t, callTool(t, app, alice, "update_event", map[string]any{"event_id": fx.Event2.Id, "registration_deadline": "2026-06-22"}))
+		announced(t, app, alice, "create_event", map[string]any{
+			"name": "Trail de juin", "location": "Annecy", "start_date": "2027-06", "date_precision": "month",
+			"formats":               []any{map[string]any{"race_type": "Trail", "distance_km": 42}},
+			"registration_deadline": "2027-07-01",
+		}, deadlineAfterStart)
+	})
+
 	t.Run("update_event: a time that is not one", func(t *testing.T) {
 		announced(t, app, alice, "update_event", map[string]any{
 			"event_id": fx.Event2.Id, "registration_opening_time": "24:00",

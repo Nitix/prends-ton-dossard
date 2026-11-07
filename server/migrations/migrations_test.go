@@ -2254,10 +2254,19 @@ func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
 				when, reminders.Required, reminders.Hidden, reminders.MaxSelect, reminders.Values)
 		}
 	}
-	refusesOtherAccounts := func() bool {
+	// The two rules, written out: the one of 9j before this migration, and the
+	// same with one more condition inside the admin's parentheses. Compared by
+	// equality, so that a change to any other clause on the way is seen.
+	const ruleOf9j = `(id = @request.auth.id && @request.body.role:isset = false && @request.body.disabled:isset = false && @request.body.email:isset = false)` +
+		` || (@request.auth.role = "admin" && @request.body.email:isset = false && @request.body.password:isset = false && @request.body.skin:isset = false)`
+	ruleOf9m := ruleOf9j[:len(ruleOf9j)-1] + ` && @request.body.reminders:isset = false)`
+	updateRule := func() string {
 		t.Helper()
 		rule := users().UpdateRule
-		return rule != nil && strings.Contains(*rule, "@request.body.reminders:isset = false")
+		if rule == nil {
+			return "<nil>"
+		}
+		return *rule
 	}
 	setReminders := func(value any) error {
 		t.Helper()
@@ -2267,8 +2276,8 @@ func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
 	}
 
 	checkField("as created")
-	if !refusesOtherAccounts() {
-		t.Error("as created: the rule that updates an account must refuse an admin the reminders of another account")
+	if got := updateRule(); got != ruleOf9m {
+		t.Errorf("as created: the update rule of the accounts is\n%s\nwant\n%s", got, ruleOf9m)
 	}
 	if got := fx.Alice.GetStringSlice("reminders"); len(got) != 0 {
 		t.Errorf("an account made without reminders has %v, want none", got)
@@ -2293,8 +2302,8 @@ func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
 	if users().Fields.GetByName("reminders") != nil {
 		t.Error("users.reminders must be gone after the rollback")
 	}
-	if rule := users().UpdateRule; rule == nil || refusesOtherAccounts() || !strings.Contains(*rule, "@request.body.skin:isset = false") {
-		t.Errorf("after the rollback, the update rule is %v, want the one of 9j", rule)
+	if got := updateRule(); got != ruleOf9j {
+		t.Errorf("after the rollback, the update rule is\n%s\nwant the one of 9j\n%s", got, ruleOf9j)
 	}
 	if alice := mustFind(t, app, "users", fx.Alice.Id); alice.GetString("email") != "alice@example.test" {
 		t.Errorf("after the rollback, Alice changed beyond her reminders: %v", alice.FieldsData())
@@ -2304,8 +2313,8 @@ func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkField("after applying again")
-	if !refusesOtherAccounts() {
-		t.Error("after applying again: the update rule must refuse an admin the reminders of another account")
+	if got := updateRule(); got != ruleOf9m {
+		t.Errorf("after applying again, the update rule is\n%s\nwant\n%s", got, ruleOf9m)
 	}
 	if got := mustFind(t, app, "users", fx.Alice.Id).GetStringSlice("reminders"); len(got) != 0 {
 		t.Errorf("after applying again, Alice has reminders %v, want none", got)
