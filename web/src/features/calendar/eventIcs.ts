@@ -2,6 +2,7 @@ import type { Lang } from "../../i18n/detect";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { PARIS } from "../../lib/dates";
+import type { Reminder } from "../../lib/types";
 import type { EventView } from "../events/api";
 
 // The calendar file of one event, made in the browser for a calendar app to
@@ -23,6 +24,15 @@ const REVOKE_AFTER_MS = 1000;
 
 /** How long the opening of the registration lasts in a calendar, when it has a time. */
 const OPENING_MINUTES = 30;
+
+/**
+ * When an alarm of the opening goes off, from the start of the opening
+ * (RFC 5545, 3.8.6.3). With a time: a day and an hour before it. Without one the
+ * opening is a whole day, which starts at 0 h of the calendar: the day before at
+ * 9 h and the day itself at 8 h, the moments of the notifications.
+ */
+const TIMED_TRIGGERS: Readonly<Record<Reminder, string>> = { day: "-P1D", hour: "-PT1H" };
+const WHOLE_DAY_TRIGGERS: Readonly<Record<Reminder, string>> = { day: "-PT15H", hour: "PT8H" };
 
 /** The UID of the opening of the registration of an event: its own, beside the event's. */
 const openingUid = (eventId: string) => `opening-${eventId}@prends-ton-dossard`;
@@ -133,6 +143,7 @@ export function eventIcs(
   appURL: string,
   now: Temporal.Instant,
   lang: Lang,
+  reminders: readonly Reminder[] = [],
 ): string {
   const { event, start, end } = view;
   const address = `${appURL}/evenements/${event.id}`;
@@ -177,6 +188,17 @@ export function eventIcs(
     line("SUMMARY", textValue(title));
     optional("DESCRIPTION", textValue(address));
     optional("URL", uriValue(address));
+    // One alarm for each reminder the person chose, "day" before "hour", as the
+    // feed of the server writes them (server/calendar/entries.go).
+    const triggers = time === "" ? WHOLE_DAY_TRIGGERS : TIMED_TRIGGERS;
+    for (const kind of ["day", "hour"] as const) {
+      if (!reminders.includes(kind)) continue;
+      line("BEGIN", "VALARM");
+      line("ACTION", "DISPLAY");
+      line("TRIGGER", uriValue(triggers[kind]));
+      line("DESCRIPTION", textValue(title));
+      line("END", "VALARM");
+    }
     line("END", "VEVENT");
   }
   line("END", "VCALENDAR");
@@ -203,8 +225,13 @@ export function icsFileName(eventName: string, fallback: string): string {
  * file when the name of the event gives nothing (see `icsFileName`), and `lang`
  * is the language of the site (see `eventIcs`).
  */
-export function downloadEventIcs(view: EventView, fallbackName: string, lang: Lang): void {
-  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang);
+export function downloadEventIcs(
+  view: EventView,
+  fallbackName: string,
+  lang: Lang,
+  reminders: readonly Reminder[] = [],
+): void {
+  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang, reminders);
   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;

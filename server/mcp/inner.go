@@ -394,6 +394,9 @@ var memberRoutes = []string{
 	// mcp_tokens: the list, and a revocation.
 	"GET /api/app/mcp-tokens",
 	"DELETE /api/app/mcp-tokens/{id}",
+	// reminders: the choice of the person, read and replaced.
+	"GET /api/app/me/reminders",
+	"PUT /api/app/me/reminders",
 }
 
 // adminRoutes are the routes that only the admin tools send requests to.

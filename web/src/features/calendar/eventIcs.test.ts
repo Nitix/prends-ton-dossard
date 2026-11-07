@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import type { Reminder } from "../../lib/types";
 import { toEventView } from "../events/api";
 import { event2Record, eventRecord } from "../events/testFixture";
 import { eventIcs, icsFileName } from "./eventIcs";
@@ -223,6 +224,27 @@ function events(ics: string): Record<string, string>[] {
     .map((part) => properties(part.split("END:VEVENT")[0] ?? ""));
 }
 
+/** The alarms of the event that has the UID: [TRIGGER, DESCRIPTION] of each, in order. */
+function alarms(ics: string, uid: string): string[][] {
+  const found: string[][] = [];
+  let inEvent = false;
+  let alarm: string[] | null = null;
+  for (const line of unfold(ics)) {
+    if (line.startsWith("UID:")) inEvent = line === `UID:${uid}`;
+    else if (line === "BEGIN:VALARM") alarm = [];
+    else if (line === "END:VALARM") {
+      if (inEvent && alarm !== null) found.push(alarm);
+      alarm = null;
+    } else if (alarm !== null) {
+      // ACTION, TRIGGER and DESCRIPTION, in that order, and nothing else.
+      if (line !== "ACTION:DISPLAY") alarm.push(line);
+    }
+  }
+  for (const one of found) expect(one).toHaveLength(2);
+  return found;
+}
+const OPENING = "opening-event@prends-ton-dossard";
+
 describe("eventIcs — l'ouverture des inscriptions", () => {
   test("eventIcs — l'ouverture est un second événement, en UTC", () => {
     // In winter, Paris is one hour ahead of UTC: 10:00 is 09:00Z.
@@ -270,6 +292,45 @@ describe("eventIcs — l'ouverture des inscriptions", () => {
     expect(opening?.["DTSTART;VALUE=DATE"]).toBe("20260512");
     expect(opening?.["DTEND;VALUE=DATE"]).toBe("20260513");
     expect(opening).not.toHaveProperty("DTSTART");
+  });
+
+  test("eventIcs — les alarmes de la personne", () => {
+    const timed = viewOf({
+      registration_opening: "2026-01-12",
+      registration_opening_time: "10:00",
+    });
+    const wholeDay = viewOf({ registration_opening: "2026-01-12" });
+    const title = "DESCRIPTION:Ouverture des inscriptions : Trail des Crêtes";
+    const alarmsOf = (view: ReturnType<typeof viewOf>, lang: "fr" | "en", reminders?: Reminder[]) =>
+      alarms(eventIcs(view, APP_URL, now(), lang, reminders), OPENING);
+
+    // With a time: a day before and an hour before it, day first.
+    expect(alarmsOf(timed, "fr", ["hour", "day"])).toEqual([
+      ["TRIGGER:-P1D", title],
+      ["TRIGGER:-PT1H", title],
+    ]);
+    lines(eventIcs(timed, APP_URL, now(), "fr", ["hour", "day"]));
+    expect(alarmsOf(timed, "fr", ["day"])).toEqual([["TRIGGER:-P1D", title]]);
+    expect(alarmsOf(timed, "fr", ["hour"])).toEqual([["TRIGGER:-PT1H", title]]);
+
+    // Without a time, from the start of the day: the day before at 9 h, the day itself at 8 h.
+    expect(alarmsOf(wholeDay, "fr", ["day", "hour"])).toEqual([
+      ["TRIGGER:-PT15H", title],
+      ["TRIGGER:PT8H", title],
+    ]);
+
+    // In English, an alarm says what the title says.
+    expect(alarmsOf(timed, "en", ["day"])).toEqual([
+      ["TRIGGER:-P1D", "DESCRIPTION:Registration opens: Trail des Crêtes"],
+    ]);
+
+    // None chosen, or not given: no alarm; the race itself never has one.
+    expect(eventIcs(timed, APP_URL, now(), "fr", [])).not.toContain("VALARM");
+    expect(eventIcs(timed, APP_URL, now(), "fr")).not.toContain("VALARM");
+    expect(eventIcs(viewOf(), APP_URL, now(), "fr", ["day", "hour"])).not.toContain("VALARM");
+    expect(
+      alarms(eventIcs(timed, APP_URL, now(), "fr", ["day"]), "event-event@prends-ton-dossard"),
+    ).toEqual([]);
   });
 
   test("eventIcs — sans ouverture, un seul événement", () => {

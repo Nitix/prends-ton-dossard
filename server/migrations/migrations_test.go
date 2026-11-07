@@ -2190,3 +2190,91 @@ func TestMigrations_RegistrationOpeningDownThenUp(t *testing.T) {
 	}
 	check("after applying again")
 }
+
+// The migration 9m adds the reminders to the accounts: a choice of at most two
+// of "day" and "hour", empty by default, and one more condition on the update
+// rule, which keeps an admin from setting those of another account.
+func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9m_user_reminders.go")
+
+	users := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("users")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	checkField := func(when string) {
+		t.Helper()
+		reminders, ok := users().Fields.GetByName("reminders").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: users.reminders must be a select field, got %T", when, users().Fields.GetByName("reminders"))
+		}
+		if reminders.Required || reminders.Hidden || reminders.MaxSelect != 2 || !slices.Equal(reminders.Values, []string{"day", "hour"}) {
+			t.Errorf("%s: users.reminders = required %v, hidden %v, max %d, values %v; want optional, visible, 2, [day hour]",
+				when, reminders.Required, reminders.Hidden, reminders.MaxSelect, reminders.Values)
+		}
+	}
+	refusesOtherAccounts := func() bool {
+		t.Helper()
+		rule := users().UpdateRule
+		return rule != nil && strings.Contains(*rule, "@request.body.reminders:isset = false")
+	}
+	setReminders := func(value any) error {
+		t.Helper()
+		alice := mustFind(t, app, "users", fx.Alice.Id)
+		alice.Set("reminders", value)
+		return app.Save(alice)
+	}
+
+	checkField("as created")
+	if !refusesOtherAccounts() {
+		t.Error("as created: the rule that updates an account must refuse an admin the reminders of another account")
+	}
+	if got := fx.Alice.GetStringSlice("reminders"); len(got) != 0 {
+		t.Errorf("an account made without reminders has %v, want none", got)
+	}
+	for _, ok := range [][]string{{}, {"day"}, {"hour"}, {"day", "hour"}} {
+		if err := setReminders(ok); err != nil {
+			t.Errorf("the reminders %v are refused: %v", ok, err)
+		}
+	}
+	for _, bad := range [][]string{{"week"}, {"day", "week"}} {
+		if err := setReminders(bad); err == nil {
+			t.Errorf("the reminders %v were accepted", bad)
+		}
+	}
+
+	if err := setReminders([]string{"day", "hour"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with reminders set: %v", err)
+	}
+	if users().Fields.GetByName("reminders") != nil {
+		t.Error("users.reminders must be gone after the rollback")
+	}
+	if rule := users().UpdateRule; rule == nil || refusesOtherAccounts() || !strings.Contains(*rule, "@request.body.skin:isset = false") {
+		t.Errorf("after the rollback, the update rule is %v, want the one of 9j", rule)
+	}
+	if alice := mustFind(t, app, "users", fx.Alice.Id); alice.GetString("email") != "alice@example.test" {
+		t.Errorf("after the rollback, Alice changed beyond her reminders: %v", alice.FieldsData())
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	if !refusesOtherAccounts() {
+		t.Error("after applying again: the update rule must refuse an admin the reminders of another account")
+	}
+	if got := mustFind(t, app, "users", fx.Alice.Id).GetStringSlice("reminders"); len(got) != 0 {
+		t.Errorf("after applying again, Alice has reminders %v, want none", got)
+	}
+	if err := setReminders([]string{"hour"}); err != nil {
+		t.Errorf("reminders are refused after applying again: %v", err)
+	}
+}

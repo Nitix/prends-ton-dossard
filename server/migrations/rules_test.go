@@ -1082,3 +1082,67 @@ func TestRules_UserSkin(t *testing.T) {
 	}
 	testutil.RunRows(t, rows)
 }
+
+// The reminders are the choice of the person whose account it is: an admin
+// sets their own, and not those of another account.
+func TestUsers_AdminCannotSetTheRemindersOfAnother(t *testing.T) {
+	bob := func(fx testutil.Fixture) *core.Record { return fx.Bob }
+	admin := func(fx testutil.Fixture) *core.Record { return fx.Admin }
+	remindersAre := func(account func(testutil.Fixture) *core.Record, want ...string) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+		return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			t.Helper()
+			got := mustFind(t, app, "users", account(fx).Id).GetStringSlice("reminders")
+			if !slices.Equal(got, want) {
+				t.Errorf("the reminders of the account are %v, want %v", got, want)
+			}
+		}
+	}
+
+	testutil.RunRows(t, []testutil.Row{
+		{
+			Name:     "bob sets his own",
+			As:       "bob",
+			Method:   http.MethodPatch,
+			URL:      recordOf("users", bob),
+			Body:     body(`{"reminders":["day","hour"]}`),
+			Status:   http.StatusOK,
+			Contains: []string{`"reminders":["day","hour"]`},
+			After:    remindersAre(bob, "day", "hour"),
+		},
+		{
+			Name:   "an admin cannot set those of bob",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"reminders":["day"]}`),
+			Status: http.StatusNotFound,
+			After:  remindersAre(bob),
+		},
+		{
+			Name:   "an admin cannot slip them in with the role of bob",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"role":"admin","reminders":["day"]}`),
+			Status: http.StatusNotFound,
+			After:  remindersAre(bob),
+		},
+		{
+			Name:   "an admin sets their own",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", admin),
+			Body:   body(`{"reminders":["hour"]}`),
+			Status: http.StatusOK,
+			After:  remindersAre(admin, "hour"),
+		},
+		{
+			Name:   "an admin still changes the disabled flag of bob",
+			As:     "admin",
+			Method: http.MethodPatch,
+			URL:    recordOf("users", bob),
+			Body:   body(`{"disabled":true}`),
+			Status: http.StatusOK,
+		},
+	})
+}

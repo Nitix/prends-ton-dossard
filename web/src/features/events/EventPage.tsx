@@ -36,6 +36,7 @@ import {
   canEditParticipation,
   type Me,
 } from "../participations/permissions";
+import { useReminders } from "../reminders/api";
 import { resultParts } from "../results/resultText";
 import { RouteSection } from "../route/RouteSection";
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
@@ -193,6 +194,8 @@ function useFocusAfterDeparture(view: EventView) {
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const { t, f, lang } = useI18n();
   const today = useToday();
+  // The alarms of the calendar file are the person's reminders; none when they cannot be read, or on the demo.
+  const reminders = useReminders().data ?? [];
   // The title describes « Ajouter quelqu'un » of the page, which the offers have a button of the same name to put someone in a car.
   const titleId = useId();
   const { event, formats, start, end } = view;
@@ -239,7 +242,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       type="button"
       data-action="calendar"
       onClick={() => {
-        downloadEventIcs(view, t.event.calendarFileName, lang);
+        downloadEventIcs(view, t.event.calendarFileName, lang, reminders);
       }}
       className={ACTION}
     >

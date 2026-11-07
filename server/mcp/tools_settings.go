@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 // This file has the tools of the profile and the settings (spec § 6.10):
-// rename_runner, passkeys, calendar_link and mcp_tokens. Each does what the
+// rename_runner, passkeys, calendar_link, mcp_tokens and reminders. Each does what the
 // settings page of the site does, through the requests it sends: the rules of
 // the collections and the routes of the site decide, and a tool only announces the
 // refusal that it knows the site will give.
@@ -799,4 +800,95 @@ func (t *tools) mcpTokens(ctx context.Context, _ *mcpsdk.CallToolRequest, in mcp
 		writeStatus: writeStatus{Done: true, Summary: summary},
 		Revoked:     &revokedToken{ID: token.ID, Name: token.Name, Current: current},
 	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// reminders
+
+// The reminders are one choice of the person for two channels (spec § 4.1): the
+// alarms of the calendar feed, which a tool reads and writes through the routes of
+// the site, and the notifications, which want a device that only the browser of
+// that device activates, so no tool does it.
+
+// remindersNote is what the answer of the tool says of the two channels.
+const remindersNote = "Les alarmes vont dans l'agenda abonné (le lien d'agenda de la personne, outil calendar_link). " +
+	"Les notifications demandent en plus d'activer un appareil dans les Réglages du site : l'assistant ne peut pas le faire."
+
+// remindersOf is how a choice is said: the words of the settings of the site.
+func remindersOf(chosen []string) string {
+	switch {
+	case slices.Contains(chosen, "day") && slices.Contains(chosen, "hour"):
+		return "1 jour et 1 heure avant"
+	case slices.Contains(chosen, "day"):
+		return "1 jour avant"
+	case slices.Contains(chosen, "hour"):
+		return "1 heure avant"
+	}
+	return "jamais"
+}
+
+type remindersIn struct {
+	Action string   `json:"action" jsonschema:"show pour voir le choix, set pour le remplacer"`
+	When   []string `json:"when,omitempty" jsonschema:"set : les rappels voulus, parmi day (1 jour avant) et hour (1 heure avant), dans l'ordre et en nombre qu'on veut ; une liste vide ne veut aucun rappel"`
+}
+
+type remindersOut struct {
+	Done      bool     `json:"done" jsonschema:"toujours vrai : ce que le site refuse est une erreur"`
+	Summary   string   `json:"summary" jsonschema:"le choix, et ce qu'il fait, en quelques phrases"`
+	Reminders []string `json:"reminders" jsonschema:"le choix de la personne, day avant hour : vide quand elle ne veut aucun rappel"`
+}
+
+func addReminders(s *mcpsdk.Server, t *tools) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name:  "reminders",
+		Title: "Rappels",
+		Description: "Les rappels de la personne (Réglages → « Rappels ») : être prévenue 1 jour avant (day), 1 heure avant (hour), les deux, ou jamais, quand les inscriptions d'une course où elle est intéressée ou inscrite ouvrent. " +
+			"Un seul choix pour les deux canaux : l'alarme dans l'agenda abonné et la notification. " +
+			"show donne le choix ; set le remplace par la liste when (day, hour, les deux, ou une liste vide pour aucun rappel). " +
+			"Aucune confirmation : c'est un choix de la personne, remplacé par un autre. " +
+			"Les notifications demandent d'activer un appareil dans les Réglages du site, ce que tu ne peux pas faire : dis-le à la personne.",
+		InputSchema: inputSchema[remindersIn](map[string][]string{"action": {"show", "set"}, "when": {"day", "hour"}}),
+		Annotations: writeAnnotations(false, true),
+	}, t.reminders)
+}
+
+func (t *tools) reminders(ctx context.Context, _ *mcpsdk.CallToolRequest, in remindersIn) (*mcpsdk.CallToolResult, remindersOut, error) {
+	fail := func(err error) (*mcpsdk.CallToolResult, remindersOut, error) {
+		return nil, remindersOut{}, describe(t.app, err, nil)
+	}
+	refuse := func(err error) (*mcpsdk.CallToolResult, remindersOut, error) {
+		return nil, remindersOut{}, err
+	}
+	var stored struct {
+		Reminders []string `json:"reminders"`
+	}
+	switch in.Action {
+	case "show":
+		if err := t.inner.get(ctx, "/api/app/me/reminders", &stored); err != nil {
+			return fail(err)
+		}
+	case "set":
+		// A missing list is not an empty one: the person who wants none says so.
+		if in.When == nil {
+			return refuse(errors.New("when est la liste des rappels voulus (day, hour), vide pour aucun : set ne l'invente pas."))
+		}
+		if err := t.inner.send(ctx, http.MethodPut, "/api/app/me/reminders", map[string]any{"reminders": in.When}, &stored); err != nil {
+			return fail(err)
+		}
+	default:
+		return refuse(errors.New("action est show ou set."))
+	}
+
+	chosen := stored.Reminders
+	if chosen == nil {
+		chosen = []string{}
+	}
+	summary := "Rappels : " + remindersOf(chosen) + "."
+	if in.Action == "set" {
+		summary = "Les rappels sont changés : " + remindersOf(chosen) + "."
+	}
+	if len(chosen) > 0 {
+		summary += " " + remindersNote
+	}
+	return nil, remindersOut{Done: true, Summary: summary, Reminders: chosen}, nil
 }

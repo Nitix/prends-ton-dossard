@@ -484,15 +484,20 @@ func parseFeed(t *testing.T, feed string) []vevent {
 
 	var events []vevent
 	var current vevent
+	inAlarm := false // the lines of an alarm are not the event's: it has its own DESCRIPTION
 	for _, line := range unfold(feed) {
 		switch line {
+		case "BEGIN:VALARM":
+			inAlarm = true
+		case "END:VALARM":
+			inAlarm = false
 		case "BEGIN:VEVENT":
 			current = vevent{}
 		case "END:VEVENT":
 			events = append(events, current)
 			current = nil
 		default:
-			if current == nil {
+			if current == nil || inAlarm {
 				continue
 			}
 			name, value, _ := strings.Cut(line, ":")

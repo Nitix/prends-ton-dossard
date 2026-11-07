@@ -114,6 +114,21 @@ export const en = {
     renewHint: "The old link will stop working.",
     remove: "Delete the link",
   },
+  reminders: {
+    title: "Reminders",
+    intro: "Before registrations open for the races you are interested in or registered to.",
+    legend: "Warn me",
+    day: "1 day before",
+    hour: "1 hour before",
+    both: "1 day and 1 hour before",
+    none: "Never",
+    saved: "Reminders saved.",
+    noTime:
+      "When the opening time is not known, “1 day before” comes the day before at 9 am and “1 hour before” the same day at 8 am.",
+    whereTitle: "Where they arrive",
+    where:
+      "As a notification on the devices turned on below, and as an alarm in your subscribed calendar (the “Calendar” section). Google Calendar and Outlook often ignore the alarms of a subscribed calendar: notifications are more reliable.",
+  },
   mcp: {
     title: "AI assistant (MCP)",
     intro:

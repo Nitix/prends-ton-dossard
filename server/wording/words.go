@@ -22,6 +22,8 @@ type Words struct {
 	unconfirmed string
 	// deadline is what the day that registrations close is called.
 	deadline string
+	// opening is what the day that registrations open is called.
+	opening string
 	// decimal is the separator of the decimals of a distance.
 	decimal string
 	// minute is the unit of the minutes of a duration, in the narrow style of
@@ -47,6 +49,7 @@ var texts = map[string]Words{
 		},
 		unconfirmed: "non confirmé",
 		deadline:    "Clôture des inscriptions",
+		opening:     "Ouverture des inscriptions",
 		decimal:     ",",
 		minute:      "min",
 		rankOf:      "sur",
@@ -69,6 +72,7 @@ var texts = map[string]Words{
 		},
 		unconfirmed: "not confirmed",
 		deadline:    "Registration closes",
+		opening:     "Registration opens",
 		decimal:     ".",
 		minute:      "m",
 		rankOf:      "out of",
@@ -230,4 +234,9 @@ func (w Words) ResultParts(finishTimeS, rank, rankOf int, note string) []string 
 		parts = append(parts, note)
 	}
 	return parts
+}
+
+// Opening is what the day that registrations open is called.
+func (w Words) Opening() string {
+	return w.opening
 }

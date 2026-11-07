@@ -15,6 +15,7 @@ import (
 	"courses/server/config"
 	"courses/server/events"
 	"courses/server/invitations"
+	"courses/server/reminders"
 	"courses/server/wording"
 )
 
@@ -191,7 +192,7 @@ func feedRoute(cfg config.Config) func(*core.RequestEvent) error {
 		lang := link.GetString("lang")
 		var entries []Entry
 		if runner != nil {
-			if entries, err = entriesOf(e.App, runner, cfg.AppURL, wording.Of(lang)); err != nil {
+			if entries, err = entriesOf(e.App, runner, cfg.AppURL, wording.Of(lang), reminders.Of(user)); err != nil {
 				return e.InternalServerError("", err)
 			}
 		}

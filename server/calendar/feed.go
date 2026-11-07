@@ -1,6 +1,6 @@
 // Package calendar holds the calendar link of an account and the iCalendar feed
 // that a calendar app reads at that address: the races of the runner of the
-// account and the days that registrations close.
+// account, the days that registrations close, and when they open.
 //
 // The link carries a random token in its path, since a calendar app can only
 // ask for an address. The token is stored, hidden, so that the site can show the
@@ -15,7 +15,18 @@ import (
 	"unicode/utf8"
 )
 
-// Entry is one event of a feed, of one or several whole days.
+// Alarm is a reminder that a calendar app shows before an event, or after its
+// start.
+type Alarm struct {
+	// Trigger is the duration from the start of the event, as it is written in
+	// the file (RFC 5545, 3.3.6, 3.8.6.3): "-P1D" is a day before, "-PT1H" an
+	// hour before, "PT8H" eight hours after.
+	Trigger string
+	// Description is what the alarm says.
+	Description string
+}
+
+// Entry is one event of a feed: one or several whole days, or a timed one.
 type Entry struct {
 	// UID names the event for good: a calendar app that reads the feed again
 	// updates the event with that UID, and adds one for each UID it has not
@@ -28,11 +39,26 @@ type Entry struct {
 	// Start is the first day, and End the day after the last one: the end of an
 	// event of whole days is exclusive in iCalendar. Both are YYYY-MM-DD.
 	Start, End string
+	// At is the start of an event that has a time, in UTC, which lasts timedLength:
+	// then Start and End are not used. It is the zero time for an event of whole
+	// days.
+	At time.Time
+	// Alarms are the reminders of the event, in the order they are written.
+	Alarms []Alarm
 }
 
 // maxLineOctets is the longest line of an iCalendar file, the line break not
 // counted (RFC 5545, 3.1).
 const maxLineOctets = 75
+
+// timedLength is how long an event that has a time lasts: the file says when it
+// starts, and a calendar app needs an end to draw it.
+const timedLength = 30 * time.Minute
+
+// refresh is how often the calendar apps that read it (Apple Calendrier) are
+// asked to read the feed again (RFC 7986, 5.7, and the older X-PUBLISHED-TTL):
+// an opening added the day before must be there in time.
+const refresh = "PT1H"
 
 // stampLayout is a date and time in UTC in iCalendar (RFC 5545, 3.3.5).
 const stampLayout = "20060102T150405Z"
@@ -101,18 +127,32 @@ func Feed(entries []Entry, lang string, now time.Time) string {
 	line("PRODID", "-//Prends ton dossard//"+strings.ToUpper(lang))
 	line("X-WR-CALNAME", "Prends ton dossard")
 	line("CALSCALE", "GREGORIAN")
+	line("REFRESH-INTERVAL;VALUE=DURATION", refresh)
+	line("X-PUBLISHED-TTL", refresh)
 
 	stamp := now.UTC().Format(stampLayout)
 	for _, entry := range entries {
 		line("BEGIN", "VEVENT")
 		line("UID", textValue(entry.UID))
 		line("DTSTAMP", stamp)
-		line("DTSTART;VALUE=DATE", date(entry.Start))
-		line("DTEND;VALUE=DATE", date(entry.End))
+		if entry.At.IsZero() {
+			line("DTSTART;VALUE=DATE", date(entry.Start))
+			line("DTEND;VALUE=DATE", date(entry.End))
+		} else {
+			line("DTSTART", entry.At.UTC().Format(stampLayout))
+			line("DTEND", entry.At.Add(timedLength).UTC().Format(stampLayout))
+		}
 		line("SUMMARY", textValue(entry.Summary))
 		optional("DESCRIPTION", textValue(entry.Description))
 		optional("LOCATION", textValue(entry.Location))
 		optional("URL", uriValue(entry.URL))
+		for _, alarm := range entry.Alarms {
+			line("BEGIN", "VALARM")
+			line("ACTION", "DISPLAY")
+			line("TRIGGER", uriValue(alarm.Trigger))
+			line("DESCRIPTION", textValue(alarm.Description))
+			line("END", "VALARM")
+		}
 		line("END", "VEVENT")
 	}
 	line("END", "VCALENDAR")

@@ -15,6 +15,7 @@ import { logout, useSession } from "../auth/session";
 import { CalendarSection } from "../calendar/CalendarSection";
 import { McpSection } from "../mcp/McpSection";
 import { InstallSection } from "../pwa/InstallSection";
+import { RemindersSection } from "../reminders/RemindersSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { failureOf, text, type Failure } from "./forms";
 import { PasskeyList } from "./PasskeyList";
@@ -88,12 +89,13 @@ function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRec
 }
 
 /**
- * What a member has after the look of the app: the link of their calendar, the
+ * What a member has after the look of the app: their reminders, the link of their calendar, the
  * tokens of their AI assistants (absent on the demo), and how to install the app.
  */
 function AppSections() {
   return (
     <>
+      <RemindersSection />
       <CalendarSection />
       <McpSection />
       <InstallSection />

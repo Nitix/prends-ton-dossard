@@ -86,6 +86,12 @@ func TestWords_Status(t *testing.T) {
 	if got := Of("en").Deadline(); got != "Registration closes" {
 		t.Errorf("the English deadline is %q", got)
 	}
+	if got := Of("en").Opening(); got != "Registration opens" {
+		t.Errorf("the English opening is %q", got)
+	}
+	if got := Of("fr").Opening(); got != "Ouverture des inscriptions" {
+		t.Errorf("the French opening is %q", got)
+	}
 	if got := Of("fr").Deadline(); got != "Clôture des inscriptions" {
 		t.Errorf("the French deadline is %q", got)
 	}

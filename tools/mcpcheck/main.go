@@ -79,8 +79,8 @@ const (
 	duplicateName = "Doublon MCP"
 	testName      = "Test MCP"
 
-	memberTools = 32
-	adminTools  = 43
+	memberTools = 33
+	adminTools  = 44
 	adminPrefix = "admin_"
 
 	// defaultPace is the time left before each call: the site's own limits (20

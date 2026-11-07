@@ -10,6 +10,7 @@ import (
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 
 	"courses/server/events"
+	"courses/server/reminders"
 	"courses/server/wording"
 )
 
@@ -21,6 +22,9 @@ const (
 	statusDNS = "dns"
 	// statusInterested is the one that a deadline matters for.
 	statusInterested = "interested"
+	// statusRegistered, like statusInterested, matters for an opening: before
+	// registrations open, "registered" says an intention or a pre-registration.
+	statusRegistered = "registered"
 )
 
 // entriesOf returns the events of the feed of a runner, by first day, then UID,
@@ -30,13 +34,22 @@ const (
 //     not start. A participation in a race is the day of the race (the one of
 //     the race, otherwise the first day of the event), and a participation in an
 //     event only (interested, supporter) is the days of the event.
+//
 //   - one for each event that the runner is interested in, and that has a
 //     registration deadline: the day it closes, whether it is over or not, once
 //     for the event however many races the runner is interested in.
 //
+//   - one for each event that has a registration opening, and that the runner is
+//     interested in or registered to, whatever the race: the opening, once for
+//     the event, with the alarms that chosen asks for. A supporter does not
+//     register, so they have none.
+//
+// chosen is the choice of the account (reminders.Of): the kinds of alarm that
+// an opening has. An empty choice gives openings with no alarm.
+//
 // A day that is not a real one (the hooks of the events do not let one in) is
 // left out rather than written: a calendar app refuses the whole file for it.
-func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words) ([]Entry, error) {
+func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words, chosen []string) ([]Entry, error) {
 	participations, err := app.FindAllRecords("participations", dbx.HashExp{"runner": runner.Id})
 	if err != nil {
 		return nil, err
@@ -47,6 +60,7 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 
 	var entries []Entry
 	closing := map[string]bool{} // the events whose deadline is in the entries
+	opening := map[string]bool{} // the events whose opening is in the entries
 	for _, p := range participations {
 		status := p.GetString("status")
 		event := p.ExpandedOne("event")
@@ -66,6 +80,13 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 					Start:       deadline.Start,
 					End:         deadline.End,
 				})
+			}
+		}
+
+		if (status == statusInterested || status == statusRegistered) && !opening[event.Id] {
+			opening[event.Id] = true
+			if entry, ok := openingEntry(event, runner, eventURL, w, chosen); ok {
+				entries = append(entries, entry)
 			}
 		}
 
@@ -104,6 +125,51 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 		return cmp.Or(cmp.Compare(a.Start, b.Start), cmp.Compare(a.UID, b.UID))
 	})
 	return entries, nil
+}
+
+// openingEntry is the entry of the registration opening of the event for the
+// runner, with an alarm for each reminder. It reports false for an event that has
+// no opening, or whose day is not a real one.
+//
+// With a time, the entry is the instant of the opening (Paris time turned into
+// UTC, see events.OpeningInstant), and the alarms are relative to it: a day
+// before and an hour before. Without one, it is the whole day, and the alarms
+// say the moments that the notifications use for such an opening, from the
+// start of that day: the day before at 9 h (15 hours before the start) and the
+// day itself at 8 h.
+func openingEntry(event, runner *core.Record, eventURL string, w wording.Words, chosen []string) (Entry, bool) {
+	day, ok := dayEntry(event.GetString("registration_opening"), "")
+	if !ok {
+		return Entry{}, false
+	}
+	entry := Entry{
+		UID:     "opening-" + event.Id + "-" + runner.Id + uidSuffix,
+		Summary: w.Opening() + wording.Separator + event.GetString("name"),
+		URL:     eventURL,
+		Start:   day.Start,
+		End:     day.End,
+	}
+	entry.Description = eventURL
+	if link := event.GetString("registration_url"); link != "" {
+		entry.Description = link + "\n" + eventURL
+	}
+
+	dayBefore, hourBefore := "-PT15H", "PT8H"
+	if hhmm := event.GetString("registration_opening_time"); events.ValidTime(hhmm) {
+		if at, ok := events.OpeningInstant(event.GetString("registration_opening"), hhmm); ok {
+			entry.At = at
+			dayBefore, hourBefore = "-P1D", "-PT1H"
+		}
+	}
+	for _, kind := range chosen {
+		switch kind {
+		case reminders.KindDay:
+			entry.Alarms = append(entry.Alarms, Alarm{Trigger: dayBefore, Description: entry.Summary})
+		case reminders.KindHour:
+			entry.Alarms = append(entry.Alarms, Alarm{Trigger: hourBefore, Description: entry.Summary})
+		}
+	}
+	return entry, true
 }
 
 // raceTypeLabel is the label of the type of a format that was expanded.

@@ -30,7 +30,12 @@ export type UserRecord = BaseRecord & {
   disabled: boolean;
   /** The id of the skin (the theme) the person chose, for every device: empty until they choose (see features/auth/accountSkin). */
   skin?: string;
+  /** When the person wants to be warned before a registration opens (the alarms of the calendar, the notifications): empty, none. */
+  reminders?: Reminder[];
 };
+
+/** A reminder: one day before the registrations open, or one hour before. */
+export type Reminder = "day" | "hour";
 
 export type RunnerRecord = BaseRecord & {
   name: string;

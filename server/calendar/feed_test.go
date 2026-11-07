@@ -43,6 +43,8 @@ func TestFeed_Structure(t *testing.T) {
 			"PRODID:-//Prends ton dossard//FR\r\n" +
 			"X-WR-CALNAME:Prends ton dossard\r\n" +
 			"CALSCALE:GREGORIAN\r\n" +
+			"REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n" +
+			"X-PUBLISHED-TTL:PT1H\r\n" +
 			"END:VCALENDAR\r\n"
 		if got != want {
 			t.Errorf("Feed(nil) =\n%q\nwant\n%q", got, want)
@@ -64,6 +66,8 @@ func TestFeed_Structure(t *testing.T) {
 			"PRODID:-//Prends ton dossard//EN\r\n" +
 			"X-WR-CALNAME:Prends ton dossard\r\n" +
 			"CALSCALE:GREGORIAN\r\n" +
+			"REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n" +
+			"X-PUBLISHED-TTL:PT1H\r\n" +
 			"BEGIN:VEVENT\r\n" +
 			"UID:participation-abc@prends-ton-dossard\r\n" +
 			"DTSTAMP:20261101T093015Z\r\n" +
@@ -290,4 +294,123 @@ func TestFeed_AllDay(t *testing.T) {
 	if strings.Join(ends, "|") != strings.Join(wantEnds, "|") {
 		t.Errorf("DTEND lines = %q, want %q", ends, wantEnds)
 	}
+}
+
+func TestFeed_TimedEntriesAndAlarms(t *testing.T) {
+	opening := calendar.Entry{
+		UID:         "opening-e1-r1@prends-ton-dossard",
+		Summary:     "Ouverture des inscriptions · Trail des Crêtes",
+		Description: "https://ex.test/inscription\nhttps://ex.test/e1",
+		URL:         "https://ex.test/e1",
+		At:          time.Date(2027, time.January, 12, 9, 0, 0, 0, time.UTC),
+		Alarms: []calendar.Alarm{
+			{Trigger: "-P1D", Description: "Ouverture des inscriptions · Trail des Crêtes"},
+			{Trigger: "-PT1H", Description: "Ouverture des inscriptions · Trail des Crêtes"},
+		},
+	}
+
+	t.Run("a timed entry is in UTC, lasts 30 minutes and has its alarms after its properties", func(t *testing.T) {
+		got := calendar.Feed([]calendar.Entry{opening}, "fr", now)
+		want := "BEGIN:VCALENDAR\r\n" +
+			"VERSION:2.0\r\n" +
+			"PRODID:-//Prends ton dossard//FR\r\n" +
+			"X-WR-CALNAME:Prends ton dossard\r\n" +
+			"CALSCALE:GREGORIAN\r\n" +
+			"REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n" +
+			"X-PUBLISHED-TTL:PT1H\r\n" +
+			"BEGIN:VEVENT\r\n" +
+			"UID:opening-e1-r1@prends-ton-dossard\r\n" +
+			"DTSTAMP:20261101T093015Z\r\n" +
+			"DTSTART:20270112T090000Z\r\n" +
+			"DTEND:20270112T093000Z\r\n" +
+			"SUMMARY:Ouverture des inscriptions · Trail des Crêtes\r\n" +
+			"DESCRIPTION:https://ex.test/inscription\\nhttps://ex.test/e1\r\n" +
+			"URL:https://ex.test/e1\r\n" +
+			"BEGIN:VALARM\r\n" +
+			"ACTION:DISPLAY\r\n" +
+			"TRIGGER:-P1D\r\n" +
+			"DESCRIPTION:Ouverture des inscriptions · Trail des Crêtes\r\n" +
+			"END:VALARM\r\n" +
+			"BEGIN:VALARM\r\n" +
+			"ACTION:DISPLAY\r\n" +
+			"TRIGGER:-PT1H\r\n" +
+			"DESCRIPTION:Ouverture des inscriptions · Trail des Crêtes\r\n" +
+			"END:VALARM\r\n" +
+			"END:VEVENT\r\n" +
+			"END:VCALENDAR\r\n"
+		if got != want {
+			t.Errorf("Feed() =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("the end crosses midnight", func(t *testing.T) {
+		late := opening
+		late.At = time.Date(2027, time.January, 12, 23, 45, 0, 0, time.UTC)
+		got := calendar.Feed([]calendar.Entry{late}, "fr", now)
+		if !strings.Contains(got, "\r\nDTSTART:20270112T234500Z\r\nDTEND:20270113T001500Z\r\n") {
+			t.Errorf("the times are wrong:\n%q", got)
+		}
+	})
+
+	t.Run("an entry of a whole day with an alarm keeps its dates", func(t *testing.T) {
+		day := calendar.Entry{
+			UID: "opening-e1-r1@prends-ton-dossard", Summary: "Ouverture", Start: "2027-01-12", End: "2027-01-13",
+			Alarms: []calendar.Alarm{{Trigger: "-PT15H", Description: "Ouverture"}, {Trigger: "PT8H", Description: "Ouverture"}},
+		}
+		got := calendar.Feed([]calendar.Entry{day}, "fr", now)
+		for _, want := range []string{
+			"\r\nDTSTART;VALUE=DATE:20270112\r\nDTEND;VALUE=DATE:20270113\r\n",
+			"\r\nTRIGGER:-PT15H\r\n", "\r\nTRIGGER:PT8H\r\n",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("the feed lacks %q:\n%q", want, got)
+			}
+		}
+	})
+
+	t.Run("an alarm says its words escaped and folded, and cannot start a line of its own", func(t *testing.T) {
+		long := opening
+		long.Alarms = []calendar.Alarm{{
+			Trigger:     "-PT1H\r\nATTENDEE:evil",
+			Description: `Ouverture, des; inscriptions \ ` + strings.Repeat("é", 60) + "\nfin",
+		}}
+		feed := calendar.Feed([]calendar.Entry{long}, "fr", now)
+		for _, line := range lines(t, feed) {
+			if len(line) > 75 || strings.HasPrefix(line, "ATTENDEE") {
+				t.Errorf("the line %q is too long, or is a property of its own", line)
+			}
+			if !utf8.ValidString(line) {
+				t.Errorf("the line %q cuts a character", line)
+			}
+		}
+		var trigger, description string
+		inAlarm := false
+		for _, line := range unfold(feed) {
+			switch {
+			case line == "BEGIN:VALARM":
+				inAlarm = true
+			case line == "END:VALARM":
+				inAlarm = false
+			case inAlarm && strings.HasPrefix(line, "TRIGGER:"):
+				trigger = line
+			case inAlarm && strings.HasPrefix(line, "DESCRIPTION:"):
+				description = line
+			}
+		}
+		if trigger != "TRIGGER:-PT1HATTENDEE:evil" {
+			t.Errorf("trigger = %q", trigger)
+		}
+		if want := `DESCRIPTION:Ouverture\, des\; inscriptions \\ ` + strings.Repeat("é", 60) + `\nfin`; description != want {
+			t.Errorf("description = %q, want %q", description, want)
+		}
+	})
+
+	t.Run("a feed has both refresh hints", func(t *testing.T) {
+		got := calendar.Feed(nil, "en", now)
+		for _, want := range []string{"\r\nREFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n", "\r\nX-PUBLISHED-TTL:PT1H\r\n"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("the feed lacks %q", want)
+			}
+		}
+	})
 }

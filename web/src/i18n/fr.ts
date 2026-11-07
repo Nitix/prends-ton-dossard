@@ -131,6 +131,22 @@ export const fr = {
     renewHint: "L'ancien lien cessera de marcher.",
     remove: "Supprimer le lien",
   },
+  // The "Rappels" section of the settings page (see features/reminders): when to be warned before the registrations of a race open.
+  reminders: {
+    title: "Rappels",
+    intro: "Avant l'ouverture des inscriptions des courses où tu es intéressé ou inscrit.",
+    legend: "Me prévenir",
+    day: "1 jour avant",
+    hour: "1 heure avant",
+    both: "1 jour et 1 heure avant",
+    none: "Jamais",
+    saved: "Rappels enregistrés.",
+    noTime:
+      "Sans heure d'ouverture connue, « 1 jour avant » arrive la veille à 9 h et « 1 heure avant » le jour même à 8 h.",
+    whereTitle: "Où ils arrivent",
+    where:
+      "En notification sur les appareils activés ci-dessous, et en alarme dans ton agenda abonné (section « Agenda »). Google Agenda et Outlook ignorent souvent les alarmes d'un agenda abonné : les notifications sont plus sûres.",
+  },
   // The "AI assistant" section of the settings page (see features/mcp): the personal tokens with which an assistant acts on the site as the member.
   mcp: {
     title: "Assistant IA (MCP)",

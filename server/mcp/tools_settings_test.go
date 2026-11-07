@@ -1015,6 +1015,7 @@ func TestTools_SettingsDescriptions(t *testing.T) {
 		{"passkeys", []string{"jamais", "données d'identification", "toujours", "dernière", "WebAuthn", "runner"}, []string{"list", "rename", "delete"}, []any{"action"}},
 		{"calendar_link", []string{"secret", "quiconque", "renew", "delete", "toujours", "ancien lien"}, []string{"show", "create", "renew", "delete"}, []any{"action"}},
 		{"mcp_tokens", []string{"jamais", "secret", "ne crée", "toujours", "dernier appel"}, []string{"list", "revoke"}, []any{"action"}},
+		{"reminders", []string{"Réglages", "1 jour avant", "1 heure avant", "Aucune confirmation", "appareil", "liste vide"}, []string{"show", "set"}, []any{"action"}},
 	} {
 		t.Run(row.tool, func(t *testing.T) {
 			tool, ok := tools[row.tool]
@@ -1060,4 +1061,93 @@ func linkFor(t testing.TB, app core.App, user *core.Record) string {
 	}
 	create(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token": token, "token_hash": hash, "lang": "fr"})
 	return siteURL + "/api/app/calendar/" + token + ".ics"
+}
+
+func TestTools_Reminders(t *testing.T) {
+	chosen := func(t *testing.T, app *tests.TestApp, user *core.Record) []string {
+		t.Helper()
+		return storedRecord(t, app, "users", user.Id).GetStringSlice("reminders")
+	}
+
+	t.Run("show: none by default, and nothing written", func(t *testing.T) {
+		app, _, alice := caseApp(t)
+		writesNothing(t, app, func() {
+			result := isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "show"}))
+			assertJSON(t, result.Structured["reminders"], []any{})
+			if summary := summaryOfResult(result); !strings.Contains(summary, "jamais") {
+				t.Errorf("the summary is %q, want « jamais »", summary)
+			}
+		})
+	})
+
+	t.Run("set: the choice is replaced, day before hour, and the summary says the two channels", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		counted := mcp.CountInnerRequests(t)
+		result := isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"hour", "day", "hour"}}))
+		assertJSON(t, result.Structured["reminders"], []any{"day", "hour"})
+		if got := chosen(t, app, fx.Alice); !slices.Equal(got, []string{"day", "hour"}) {
+			t.Errorf("stored %v, want [day hour]", got)
+		}
+		if got := counted.Of(http.MethodPut); got != 1 {
+			t.Errorf("%d PUT, want one", got)
+		}
+		summary := summaryOfResult(result)
+		for _, want := range []string{"1 jour et 1 heure avant", "Réglages", "agenda"} {
+			if !strings.Contains(summary, want) {
+				t.Errorf("the summary %q does not say %q", summary, want)
+			}
+		}
+
+		shown := isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "show"}))
+		assertJSON(t, shown.Structured["reminders"], []any{"day", "hour"})
+	})
+
+	t.Run("set: one kind, then another", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"day"}}))
+		isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"hour"}}))
+		if got := chosen(t, app, fx.Alice); !slices.Equal(got, []string{"hour"}) {
+			t.Errorf("stored %v, want [hour]", got)
+		}
+	})
+
+	t.Run("an empty list wants no reminder, with no confirmation", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"day", "hour"}}))
+		result := isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{}}))
+		assertJSON(t, result.Structured["reminders"], []any{})
+		if got := chosen(t, app, fx.Alice); len(got) != 0 {
+			t.Errorf("stored %v, want none", got)
+		}
+	})
+
+	t.Run("a missing list is not an empty one", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"day"}}))
+		refused(t, app, alice, "reminders", map[string]any{"action": "set"}, "when est la liste des rappels")
+		if got := chosen(t, app, fx.Alice); !slices.Equal(got, []string{"day"}) {
+			t.Errorf("stored %v, want [day]", got)
+		}
+	})
+
+	t.Run("a value that is not a kind: the schema, and nothing written", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		if result := callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"week"}}); !result.IsError {
+			t.Errorf("a week is answered %.200s", redact(result.Text))
+		}
+		if result := callTool(t, app, alice, "reminders", map[string]any{"action": "forget"}); !result.IsError {
+			t.Errorf("an action that is not one is answered %.200s", redact(result.Text))
+		}
+		if got := chosen(t, app, fx.Alice); len(got) != 0 {
+			t.Errorf("stored %v, want none", got)
+		}
+	})
+
+	t.Run("each person has their own choice", func(t *testing.T) {
+		app, fx, alice := caseApp(t)
+		bob := newToken(t, app, fx.Bob)
+		isDone(t, callTool(t, app, alice, "reminders", map[string]any{"action": "set", "when": []string{"day"}}))
+		shown := isDone(t, callTool(t, app, bob, "reminders", map[string]any{"action": "show"}))
+		assertJSON(t, shown.Structured["reminders"], []any{})
+	})
 }
