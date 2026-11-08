@@ -15,7 +15,7 @@ func init() {
 const startTimePattern = `^([01]\d|2[0-3]):[0-5]\d$`
 
 // upFormatStartTime adds formats.start_time: the time at which a format starts,
-// an HH:MM text in Paris time like the opening of the registration (9l), empty
+// an HH:MM text, the time at the place of the race (Paris time for a race in France, like the opening of the registration, 9l), empty
 // when it is not known. It is optional: every format that exists has none.
 //
 // The pattern is the only check of the form of the value. That a race known by

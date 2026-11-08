@@ -49,7 +49,7 @@ export type EventDraft = {
   registration_deadline?: string;
   /** The day registration opens, a `YYYY-MM-DD` text, never after `registration_deadline` or `start_date`. */
   registration_opening?: string;
-  /** The time of that opening, `HH:MM`, Paris time. Needs `registration_opening`. */
+  /** The time of that opening, `HH:MM`, the time at the place of the race (Paris time for a race in France). Needs `registration_opening`. */
   registration_opening_time?: string;
   /**
    * `month` for a race whose month is known and not its day: it runs from the 1st (`start_date`) to
@@ -75,7 +75,7 @@ export type EventDraft = {
     /** What the message that says a track was not sent calls the format. It defaults to its name. */
     label?: string;
     date?: string;
-    /** `HH:MM`, Paris time. A race known by its month has none. */
+    /** `HH:MM`, the time at the place of the race (Paris time for a race in France). A race known by its month has none. */
     start_time?: string;
   }[];
   /** The member takes part in the format at `formatIndex` of `formats`. Only when the event is created. */
@@ -183,12 +183,27 @@ export function buildBatch(
     const id = format.id ?? newId();
     formatIds.push(id);
     if (existing && existingIds.has(id)) {
-      // A day that the event does not have yet waits for the event.
+      // A day that the event does not have yet waits for the event, and so does a start time while
+      // the stored event is a month: the server refuses it there, and the event that gains its day
+      // comes first.
       const waits = !isInRangeOf(existing.event, format.date);
-      const kept = waits ? { ...format, date: undefined } : format;
+      const waitsTime = isMonthOnly(existing.event) && !!format.start_time;
+      const kept = {
+        ...format,
+        ...(waits ? { date: undefined } : {}),
+        ...(waitsTime ? { start_time: undefined } : {}),
+      };
       keptOps.push({ action: "update", collection: "formats", id, body: formatBody(kept) });
-      if (waits) {
-        lateOps.push({ action: "update", collection: "formats", id, body: { date: format.date } });
+      if (waits || waitsTime) {
+        lateOps.push({
+          action: "update",
+          collection: "formats",
+          id,
+          body: {
+            ...(waits ? { date: format.date } : {}),
+            ...(waitsTime ? { start_time: format.start_time } : {}),
+          },
+        });
       }
     } else {
       lateOps.push({

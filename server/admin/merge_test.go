@@ -76,12 +76,12 @@ func result(want admin.MergeResult) string {
 // tags of MergeResult, so a renamed tag would go through them unnoticed.
 func TestMergeResult_JSONKeys(t *testing.T) {
 	got, err := json.Marshal(admin.MergeResult{
-		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, MovedComments: 5, MovedOffers: 6,
+		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, ClearedFormatTimes: 7, MovedComments: 5, MovedOffers: 6,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"movedComments":5,"movedOffers":6}`
+	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"clearedFormatTimes":7,"movedComments":5,"movedOffers":6}`
 	if string(got) != want {
 		t.Errorf("MergeResult as JSON = %s, want %s", got, want)
 	}
@@ -614,7 +614,7 @@ func TestMergeEvents(t *testing.T) {
 			URL:      path(mergeEvents),
 			Body:     merge(id(event2), id(event), false),
 			Status:   http.StatusOK,
-			Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1})},
+			Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1, ClearedFormatTimes: 1})},
 			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("start_time"); got != "" {
 					t.Errorf("the start time of F42 is %q, want it empty", got)

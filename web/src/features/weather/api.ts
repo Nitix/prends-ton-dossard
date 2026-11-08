@@ -28,7 +28,7 @@ export type WeatherStart = {
   format: string;
   /** `YYYY-MM-DD`: the day of the start, which is one of the days of the list. */
   date: string;
-  /** `HH:MM`, Paris time. */
+  /** `HH:MM`, the time at the place of the race (Paris time for a race in France). */
   time: string;
   code: number;
   /** In °C. */

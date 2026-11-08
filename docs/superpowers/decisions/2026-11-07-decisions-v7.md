@@ -113,7 +113,7 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 ### 21. Une heure de départ par épreuve, et sa ligne de météo
 
 - **Demandé par l'utilisateur, le 2026-11-08, pour la v7** : « avec température min et max de la journée comme là, tout pareil, mais avec une ligne spéciale heure de départ si indiquée ».
-- **Décision :** chaque épreuve a une **heure de départ facultative** (`formats.start_time`, HH:MM, heure de Paris comme les ouvertures, migration `9r`). La section « Météo prévue » garde ses lignes de jour (minimum et maximum de la journée) et ajoute, sous le jour d'un départ, une ligne « Départ de « 42 km » à 7 h 30 : … » avec le temps de l'heure pleine qui contient l'heure (7 h 30 lit 7 h).
+- **Décision :** chaque épreuve a une **heure de départ facultative** (`formats.start_time`, HH:MM, l'heure du lieu de la course (celle de Paris pour une course en France), migration `9r`). La section « Météo prévue » garde ses lignes de jour (minimum et maximum de la journée) et ajoute, sous le jour d'un départ, une ligne « Départ de « 42 km » à 7 h 30 : … » avec le temps de l'heure pleine qui contient l'heure (7 h 30 lit 7 h).
 - **Une course au mois n'a pas d'heure de départ** (refus `format_time_month`), comme ses épreuves n'ont pas de date : passer une course au mois efface les heures avec les dates (lot du formulaire, plan du MCP, fusion).
 - **Pas d'appel de plus :** les heures sont demandées dans la requête de la prévision, seulement quand une épreuve a une heure un jour demandé ; la clé du cache porte les heures de départ.
 - **Le reste ne bouge pas :** l'heure ne déplace pas le jour de la course et ne change aucun rappel ; les flux d'agenda et le .ics restent des journées entières.

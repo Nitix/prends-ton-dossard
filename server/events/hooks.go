@@ -140,7 +140,7 @@ func validateEvent(app core.App, event *core.Record) error {
 		if !isFirstOfMonth(start) {
 			return apperr.Field("start_date", apperr.CodeMonthStartInvalid)
 		}
-		datedFormat, timedFormat, err := hasDatedFormat(app, event)
+		datedFormat, timedFormat, err := hasDatedOrTimedFormat(app, event)
 		if err != nil {
 			return err
 		}
@@ -217,9 +217,9 @@ func validateEvent(app core.App, event *core.Record) error {
 	return nil
 }
 
-// hasDatedFormat reports whether a format of the event has a day of its own, and
+// hasDatedOrTimedFormat reports whether a format of the event has a day of its own, and
 // whether one has a start time.
-func hasDatedFormat(app core.App, event *core.Record) (dated, timed bool, err error) {
+func hasDatedOrTimedFormat(app core.App, event *core.Record) (dated, timed bool, err error) {
 	if event.IsNew() {
 		return false, false, nil
 	}

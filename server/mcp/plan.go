@@ -225,18 +225,30 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 			lateOps = append(lateOps, batchOp{Method: http.MethodPost, URL: recordsOf + "formats/records", Body: body, Target: targetFormat, Format: i})
 			continue
 		}
-		// A day that the event does not have yet waits for the event.
+		// A day that the event does not have yet waits for the event, and so does a start time
+		// while the stored event is a month (buildBatch of saveEvent.ts).
 		update := recordsOf + "formats/records/" + id
 		waits := !isInRangeOf(stored, f.Date)
+		waitsTime := stored.DatePrecision == "month" && f.StartTime != ""
 		sent := f
 		if waits {
 			sent.Date = ""
 		}
+		if waitsTime {
+			sent.StartTime = ""
+		}
 		if sent != was {
 			keptOps = append(keptOps, batchOp{Method: http.MethodPatch, URL: update, Body: formatBody(sent), Target: targetFormat, Format: i})
 		}
-		if waits {
-			lateOps = append(lateOps, batchOp{Method: http.MethodPatch, URL: update, Body: map[string]any{"date": f.Date}, Target: targetFormat, Format: i})
+		if waits || waitsTime {
+			late := map[string]any{}
+			if waits {
+				late["date"] = f.Date
+			}
+			if waitsTime {
+				late["start_time"] = f.StartTime
+			}
+			lateOps = append(lateOps, batchOp{Method: http.MethodPatch, URL: update, Body: late, Target: targetFormat, Format: i})
 		}
 	}
 

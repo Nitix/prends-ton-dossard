@@ -212,3 +212,37 @@ func TestPlan_StartTime_ARaceOfAMonthSendsNone(t *testing.T) {
 		}
 	}
 }
+
+// A race that goes from a month to a day, with times (saveEvent.test.ts « de la course au mois
+// à la course d'un jour, avec des heures »): the time waits for the event, with the date.
+func TestPlan_StartTime_MonthToDayWaitsForTheEvent(t *testing.T) {
+	draft := editDraft(func(d *mcp.EventDraft) {
+		d.StartDate, d.EndDate, d.DatePrecision = "2027-06-12", "2027-06-13", "day"
+		d.Formats[0].Date, d.Formats[0].StartTime = "2027-06-13", "07:30"
+		d.Formats[1].StartTime = "09:00"
+	})
+
+	ops, _, _ := mcp.PlanBatch(draft, monthExisting(), me)
+
+	eventAt := -1
+	for i, op := range ops {
+		if collectionOf(op) == "events" {
+			eventAt = i
+		}
+	}
+	if eventAt < 0 {
+		t.Fatal("no request for the event")
+	}
+	for _, op := range ops[:eventAt] {
+		wantBody(t, op, map[string]any{"start_time": "", "date": ""})
+	}
+	late := map[string]map[string]any{}
+	for _, op := range ops[eventAt+1:] {
+		late[idOf(op)] = op.Body
+	}
+	wantExactBody(t, mcp.BatchOp{Body: late["f42"]}, map[string]any{"date": "2027-06-13", "start_time": "07:30"})
+	wantExactBody(t, mcp.BatchOp{Body: late["f15"]}, map[string]any{"start_time": "09:00"})
+	if _, err := runOnServer(ops, monthExisting()); err != nil {
+		t.Error(err)
+	}
+}

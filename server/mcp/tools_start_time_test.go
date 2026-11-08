@@ -143,3 +143,37 @@ func TestTools_StartTime_NotForARaceOfAMonth(t *testing.T) {
 		"Épreuve 2 (« Trail 42 km »), heure de départ : une épreuve d'une course au mois n'a pas d'heure de départ. (format_time_month)"+
 			" Donne la date de la course (date_precision: day) pour donner l'heure de départ de ses épreuves.")
 }
+
+func TestTools_StartTime_MonthToDayInOneCall(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	set := func(id string, values map[string]any) {
+		r := storedRecord(t, app, "formats", id)
+		for k, v := range values {
+			r.Set(k, v)
+		}
+		if err := app.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set(fx.F42.Id, map[string]any{"date": ""})
+	event := storedRecord(t, app, "events", fx.Event.Id)
+	event.Set("date_precision", "month")
+	event.Set("start_date", "2026-06-01")
+	if err := app.Save(event); err != nil {
+		t.Fatal(err)
+	}
+
+	isDone(t, callTool(t, app, alice, "update_event", map[string]any{
+		"event_id": fx.Event.Id, "date_precision": "day", "start_date": "2026-06-12",
+		"formats": []any{map[string]any{"format_id": fx.F42.Id, "date": "2026-06-13", "start_time": "07:30"}},
+	}))
+
+	got := storedRecord(t, app, "formats", fx.F42.Id)
+	if got.GetString("date") != "2026-06-13" || got.GetString("start_time") != "07:30" {
+		t.Errorf("the 42 km is on %q at %q, want 2026-06-13 at 07:30", got.GetString("date"), got.GetString("start_time"))
+	}
+}

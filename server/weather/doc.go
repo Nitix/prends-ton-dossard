@@ -27,7 +27,7 @@
 //
 // # The starts
 //
-// A format may have a start time (HH:MM, Paris time). When one has it on a day
+// A format may have a start time (HH:MM, the time at the place of the race: Paris time for a race in France). When one has it on a day
 // that is asked, the same forecast request also asks for the hours (`hourly`;
 // `timezone=auto` makes them the hours of the place), so there is no extra call
 // and no extra budget, and the answer has a `starts` entry for it: the weather

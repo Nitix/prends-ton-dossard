@@ -23,7 +23,7 @@ var ports = []struct {
 	goPort string
 	sum    string
 }{
-	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "75fb91b1a2ec339ffbd45afcc07d5ec83daaa20f15b31c440f4428214325c969"},
+	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "23c83c1518a3f4e8c37392bb57b6292b0664644bd2fc148bb6a7b0ce4a76a076"},
 	{"features/events/formDraft.ts", "eventEndDate and shortens of plan.go and race_writes.go", "778c3294797d2c1087d3348cfc51cf9d9f46f29e53f71b23b212b507347ad792"},
 	{"lib/dates.ts", "lastRaceDay of views.go, participationRow.lastDay of home.go", "674bc31333e6cac072e999937f5bcde51a0593c7abbf65db609999654143027e"},
 	{"features/home/MyUpcoming.tsx", "upcomingOf of home.go", "a141677cfd243d478a63a3d51a0c4269bcf760f73017d600532e1a0aba40620f"},
@@ -37,7 +37,7 @@ var ports = []struct {
 	{"features/stats/stats.ts", "stats.go", "5065bc790b58d26603a19d7f96c5ddfb329b3b5743e1573db34a95d0db20c1bc"},
 	{"features/route/gpx.ts", "parseGpx and statsOf of gpx.go", "488f3c213c7efbdca76360a6acb2da11d4308bfb216cf9ae0743feb176792a89"},
 	{"features/admin/memberState.ts", "memberState of admin_members.go", "2cbc2de092245dcd95e616adedc212ca6aaef639f23665eb1eab4a9155137e04"},
-	{"features/admin/mergePreview.ts", "describeMerge of admin_merge.go", "ac223910c6e9c3c6dc56ca333ffe6c34f13113d5bdb7f8dff832d7f26538adc9"},
+	{"features/admin/mergePreview.ts", "describeMerge of admin_merge.go", "3716dca43798de3c56457dce18baf9cbf89fdc9e05be1797f0d402c4ae1e3961"},
 	{"features/comments/excerpt.ts", "excerpt of home.go", "904f45e3d9a966a68f28276dc3771b8db216171d79b0f317398b9da9fc1a4748"},
 }
 

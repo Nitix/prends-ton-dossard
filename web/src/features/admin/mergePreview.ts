@@ -25,6 +25,8 @@ export type MergeResult = {
   droppedParticipations: number;
   /** The formats that lost their own date, which fell outside the dates of the kept event. */
   clearedFormatDates: number;
+  /** The formats that lost their start time, which a race known by its month does not have. */
+  clearedFormatTimes: number;
   /** The comments of the merged event that went to the kept event: a merge of formats moves none. */
   movedComments: number;
   /** The offers (cars and lodgings) of the merged event that went to the kept event, with their places: a merge of formats moves none. */
@@ -37,6 +39,7 @@ const COUNTERS = [
   "movedParticipations",
   "droppedParticipations",
   "clearedFormatDates",
+  "clearedFormatTimes",
   "movedComments",
   "movedOffers",
 ] as const satisfies readonly (keyof MergeResult)[];

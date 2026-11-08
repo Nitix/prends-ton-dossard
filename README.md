@@ -213,7 +213,7 @@ La fiche d'une course montre la **« Météo prévue »** de ses jours, **de J-7
 - **Le cache** est en mémoire (un redémarrage le vide : un appel de plus par course) : une prévision une heure, un lieu 30 jours, une seule requête à la fois par clé. Si Open-Meteo ne répond pas (8 secondes), la dernière prévision de moins de 6 heures est montrée, marquée comme ancienne ; un échec est retenu une minute avant un nouvel essai.
 - **L'attribution** est sur la fiche (« Données : Open-Meteo.com », avec un lien) et dans la réponse de l'outil MCP `get_weather`.
 - La route (`GET /api/app/events/{id}/weather`) existe aussi sur la démo, où le budget borne les appels.
-- **L'heure de départ** (facultative, heure de Paris, jamais sur une course au mois) d'une épreuve ajoute, sous son jour, une ligne « Départ de « 42 km » à 7 h 30 : … » avec le temps de l'heure pleine du départ ; elle est demandée dans la même requête que les jours, sans appel de plus.
+- **L'heure de départ** (facultative, heure du lieu de la course, celle de Paris pour une course en France, jamais sur une course au mois) d'une épreuve ajoute, sous son jour, une ligne « Départ de « 42 km » à 7 h 30 : … » avec le temps de l'heure pleine du départ ; elle est demandée dans la même requête que les jours, sans appel de plus.
 
 ## Flux d'agenda du groupe
 

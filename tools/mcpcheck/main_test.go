@@ -817,7 +817,7 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 		}
 		f.counts[f.names[str("merge_id")]]--
 		return done("Les courses sont fusionnées.", obj{
-			"result": obj{"movedFormats": 1, "movedParticipations": 0, "droppedParticipations": 0, "clearedFormatDates": 0, "movedComments": 0, "movedOffers": 0},
+			"result": obj{"movedFormats": 1, "movedParticipations": 0, "droppedParticipations": 0, "clearedFormatDates": 0, "clearedFormatTimes": 0, "movedComments": 0, "movedOffers": 0},
 			"kept":   obj{"id": str("keep_id"), "name": f.names[str("keep_id")]},
 		})
 	case "admin_delete_runner":

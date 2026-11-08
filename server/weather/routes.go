@@ -48,12 +48,12 @@ type Place struct {
 	Format string `json:"format,omitempty"`
 }
 
-// / Start is the weather at the start of a format that has a start time, read at
+// Start is the weather at the start of a format that has a start time, read at
 // the hour of that time (a start at 07:30 reads the 07:00 hour).
 type Start struct {
 	Format     string  `json:"format"` // what the format is called, as the site names it
 	Date       string  `json:"date"`
-	Time       string  `json:"time"` // HH:MM, Paris time, as the format has it
+	Time       string  `json:"time"` // HH:MM, the time at the place (Paris time for a race in France), as the format has it
 	Code       int     `json:"code"`
 	Temp       float64 `json:"temp"`
 	RainChance int     `json:"rainChance"`

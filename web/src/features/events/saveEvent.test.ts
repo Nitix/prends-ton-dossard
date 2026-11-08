@@ -421,6 +421,9 @@ function runOnServer(ops: BatchOp[], view: EventView): Stored {
       if (day !== undefined && day !== "" && !isWithin(day, stored.start, stored.end)) {
         throw new Error(`request ${index}: the date ${day} of ${op.id} is out of the event`);
       }
+      if (textOf(op.body?.start_time) !== "" && stored.month) {
+        throw new Error(`request ${index}: ${op.id} has a start time, and the event is a month`);
+      }
       stored.formats.set(op.id, day ?? "");
     }
   });
@@ -1127,5 +1130,34 @@ describe("buildBatch — l'heure de départ", () => {
       expect(formats.length).toBeGreaterThan(0);
       for (const op of formats) expect(op.body).toMatchObject({ start_time: "" });
     }
+  });
+});
+
+describe("buildBatch — de la course au mois à la course d'un jour, avec des heures", () => {
+  test("l'heure attend l'événement avec la date, et le serveur ne refuse rien", () => {
+    const draft = editDraft({
+      start_date: "2027-06-12",
+      end_date: "2027-06-13",
+      date_precision: "day",
+    });
+    draft.formats = [
+      { ...draft.formats[0]!, date: "2027-06-13", start_time: "07:30" },
+      { ...draft.formats[1]!, start_time: "09:00" },
+    ];
+
+    const { ops } = buildBatch(draft, monthExisting(), ME);
+
+    // Before the event, no time and no date; after it, the date and the time together.
+    const eventAt = ops.findIndex((op) => op.collection === "events");
+    for (const op of ops.slice(0, eventAt))
+      expect(op.body).toMatchObject({ start_time: "", date: "" });
+    expect(ops.slice(eventAt + 1).find((op) => op.id === "f42")?.body).toEqual({
+      date: "2027-06-13",
+      start_time: "07:30",
+    });
+    expect(ops.slice(eventAt + 1).find((op) => op.id === "f15")?.body).toEqual({
+      start_time: "09:00",
+    });
+    expect(() => runOnServer(ops, monthExisting())).not.toThrow();
   });
 });

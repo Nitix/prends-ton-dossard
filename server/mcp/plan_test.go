@@ -540,6 +540,9 @@ func runOnServer(ops []mcp.BatchOp, view *mcp.StoredEvent) (stored, error) {
 			if day != "" && !within(day, s.start, s.end) {
 				return s, fmt.Errorf("request %d: the date %s of %s is out of the event", index, day, id)
 			}
+			if at, _ := op.Body["start_time"].(string); at != "" && s.month {
+				return s, fmt.Errorf("request %d: %s has a start time, and the event is a month", index, id)
+			}
 			s.formats[id] = day
 		}
 	}

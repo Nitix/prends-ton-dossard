@@ -1000,6 +1000,10 @@ export const fr = {
         one: "date d'épreuve effacée (hors des dates de l'événement)",
         other: "dates d'épreuve effacées (hors des dates de l'événement)",
       },
+      clearedFormatTimes: {
+        one: "heure de départ effacée (la course gardée n'a que son mois)",
+        other: "heures de départ effacées (la course gardée n'a que son mois)",
+      },
       movedComments: { one: "commentaire déplacé", other: "commentaires déplacés" },
       movedOffers: { one: "offre déplacée", other: "offres déplacées" },
     },

@@ -88,6 +88,7 @@ const EVENTS_PREVIEW = {
   movedParticipations: 3,
   droppedParticipations: 0,
   clearedFormatDates: 1,
+  clearedFormatTimes: 0,
   movedComments: 2,
   movedOffers: 1,
 };
@@ -97,6 +98,7 @@ const FORMATS_PREVIEW = {
   movedParticipations: 2,
   droppedParticipations: 1,
   clearedFormatDates: 0,
+  clearedFormatTimes: 0,
   movedComments: 0,
   movedOffers: 0,
 };
@@ -455,6 +457,7 @@ test("DuplicatesPage — un aperçu sans rien à déplacer le dit", async () => 
     movedParticipations: 0,
     droppedParticipations: 0,
     clearedFormatDates: 0,
+    clearedFormatTimes: 0,
     movedComments: 0,
     movedOffers: 0,
   });

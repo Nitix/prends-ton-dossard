@@ -52,7 +52,7 @@ type formatIn struct {
 	PriceEur       float64 `json:"price_eur,omitempty" jsonschema:"le prix en euros, au centime"`
 	RouteURL       string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	Date           string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve quand ce n'est pas le premier jour de la course, jamais avant ; la fin de la course en découle"`
-	StartTime      string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve, facultative ; elle donne la météo de l'heure du départ. Pas pour une course dont seul le mois est connu"`
+	StartTime      string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, facultative ; elle donne la météo de l'heure du départ. Pas pour une course dont seul le mois est connu"`
 }
 
 // formatPatchIn is a change of a format (update_event.formats, update_format): a
@@ -68,7 +68,7 @@ type formatPatchIn struct {
 	PriceEur       *float64 `json:"price_eur,omitempty" jsonschema:"le prix en euros, au centime ; 0 l'efface"`
 	RouteURL       *string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours ; vide l'efface"`
 	Date           *string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve ; vide : le premier jour de la course. La fin de la course en découle"`
-	StartTime      *string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve ; vide l'efface. Pas pour une course dont seul le mois est connu"`
+	StartTime      *string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve ; vide l'efface. Pas pour une course dont seul le mois est connu"`
 }
 
 // The numbers of a format, which are never below 0 (the minimum of the form,

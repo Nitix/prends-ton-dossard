@@ -800,6 +800,10 @@ export const en = {
         one: "race date cleared (outside the event's dates)",
         other: "race dates cleared (outside the event's dates)",
       },
+      clearedFormatTimes: {
+        one: "start time cleared (the kept race has only its month)",
+        other: "start times cleared (the kept race has only its month)",
+      },
       movedComments: { one: "comment moved", other: "comments moved" },
       movedOffers: { one: "offer moved", other: "offers moved" },
     },

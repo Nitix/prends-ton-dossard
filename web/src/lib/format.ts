@@ -33,7 +33,7 @@ export type Formatters = {
   /** The time of an instant, in Paris: "14:05". */
   time(instant: Temporal.Instant): string;
   /**
-   * The start time of a format, `HH:MM` as the site keeps it (Paris time: it is a time of the day, there
+   * The start time of a format, `HH:MM` as the site keeps it (a time of the day, at the place of the race: Paris time for a race in France; there
    * is no zone to convert): "7 h 30" in French, "7:30" in en-GB, "7:30 AM" in en-US. A text that is
    * not a time is given back as it is.
    */

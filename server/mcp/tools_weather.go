@@ -32,7 +32,7 @@ type weatherDayOut struct {
 type weatherStartOut struct {
 	Format     string  `json:"format" jsonschema:"l'épreuve, citée"`
 	Date       string  `json:"date" jsonschema:"le jour du départ, AAAA-MM-JJ"`
-	Time       string  `json:"time" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve ; le temps est celui de l'heure pleine qui la contient (7 h 30 donne celui de 7 h)"`
+	Time       string  `json:"time" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve ; le temps est celui de l'heure pleine qui la contient (7 h 30 donne celui de 7 h)"`
 	Code       int     `json:"code"`
 	Label      string  `json:"label" jsonschema:"le temps en mots, d'après le code"`
 	Temp       float64 `json:"temp" jsonschema:"en °C"`

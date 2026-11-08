@@ -57,14 +57,14 @@ function dayLine(day: WeatherDay, f: Formatters, t: Messages): string {
  * nuageux, 4 °C, pluie 20 % (0 mm), rafales 30 km/h ». The weather in words follows a colon, so it
  * is in lower case; the numbers are those of a day line.
  */
-function startLine(start: WeatherStart, f: Formatters, t: Messages): string {
+function startLine(start: WeatherStart, f: Formatters, t: Messages, locale: string): string {
   const mm =
     start.rainMm > 0 && start.rainMm < 0.5 ? t.weather.lessThanOneMm : f.integer(start.rainMm);
   const label = weatherLabel(start.code, t);
   return t.weather.start(
     start.format,
     f.startTime(start.time),
-    label.charAt(0).toLocaleLowerCase() + label.slice(1),
+    label.charAt(0).toLocaleLowerCase(locale) + label.slice(1),
     f.integer(start.temp),
     f.integer(start.rainChance),
     mm,
@@ -90,7 +90,7 @@ function placeLine(place: WeatherPlace, t: Messages): string {
  * line says its own date.
  */
 export function WeatherSection({ view }: { view: EventView }) {
-  const { t, f } = useI18n();
+  const { t, f, formatLocale } = useI18n();
   const today = useToday();
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -132,13 +132,13 @@ export function WeatherSection({ view }: { view: EventView }) {
                 </div>
                 {starts.length > 0 && (
                   <ul className="weather-starts flex flex-col gap-2 pl-7.5">
-                    {starts.map((start) => (
+                    {starts.map((start, index) => (
                       <li
-                        key={`${start.format}|${start.time}`}
+                        key={`${index}|${start.format}|${start.time}`}
                         className="weather-start flex items-start gap-2.5"
                       >
                         <span className="mt-0.5">{icon(start.code)}</span>
-                        <span>{startLine(start, f, t)}</span>
+                        <span>{startLine(start, f, t, formatLocale)}</span>
                       </li>
                     ))}
                   </ul>
