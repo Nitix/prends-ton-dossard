@@ -307,7 +307,10 @@ test("EventPage — un événement d'un jour n'a qu'une date, et sans notes il n
 
   await loaded(screen, "10 km de Lyon");
   await expect.element(screen.getByText("lun. 22 juin 2026")).toBeVisible();
-  expect(screen.container.textContent).not.toContain("du ");
+  // (Not the weather's line, which says « à partir du » before the window.)
+  const copy = screen.container.cloneNode(true);
+  if (copy instanceof HTMLElement) copy.querySelector('[data-section="weather"]')?.remove();
+  expect(copy.textContent).not.toContain("du ");
 });
 
 test("EventPage — en anglais, les dates et les textes suivent la langue", async () => {
@@ -557,7 +560,9 @@ test("EventPage — chaque épreuve a son titre (type, mesures), dans l'ordre de
     .elements()
     .map((element) => plain(element.textContent));
   // The carpooling, the lodging and the comments come after the formats.
+  // The weather comes first, after the actions (before the window it says when it will be there).
   expect(titles).toEqual([
+    fr.weather.title,
     "Trail 15 km · 700 m D+",
     "Trail 42 km · 2 400 m D+ · max 10h",
     fr.offers.title.ride,
@@ -2760,15 +2765,18 @@ test("EventPage — un intéressé voit « Les inscriptions ouvrent le … »", 
 const weatherRequests = () =>
   mocks.send.mock.calls.map(([path]) => path).filter((path) => path.endsWith("/weather"));
 
-// The weather (see features/weather): from seven days before the race to its last day, never beyond.
-test("EventPage — pas de météo hors de la fenêtre", async () => {
+// The weather (see features/weather): asked for from seven days before the race to its last day, never beyond.
+test("EventPage — hors de la fenêtre, pas de requête : une ligne avant, rien après", async () => {
   // The event is on 13 and 14 June: on the 5th it is 8 days away, on the 15th it is over.
-  for (const today of ["2026-06-05", "2026-06-15"]) {
-    const { screen } = await renderPage({ today });
-    await loaded(screen);
-    expect(screen.getByRole("heading", { name: fr.weather.title }).elements()).toHaveLength(0);
-    await screen.unmount();
-  }
+  const early = await renderPage({ today: "2026-06-05" });
+  await loaded(early.screen);
+  await expect.element(early.screen.getByText(fr.weather.notYet("sam. 6 juin"))).toBeVisible();
+  await early.screen.unmount();
+
+  const late = await renderPage({ today: "2026-06-15" });
+  await loaded(late.screen);
+  expect(late.screen.getByRole("heading", { name: fr.weather.title }).elements()).toHaveLength(0);
+  await late.screen.unmount();
   expect(weatherRequests()).toEqual([]);
 });
 
