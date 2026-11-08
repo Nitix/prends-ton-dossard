@@ -75,6 +75,8 @@ export type EventDraft = {
     /** What the message that says a track was not sent calls the format. It defaults to its name. */
     label?: string;
     date?: string;
+    /** `HH:MM`, Paris time. A race known by its month has none. */
+    start_time?: string;
   }[];
   /** The member takes part in the format at `formatIndex` of `formats`. Only when the event is created. */
   join?: { formatIndex: number; status: Status };
@@ -112,6 +114,7 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
     price_eur: format.price_eur ?? 0,
     route_url: format.route_url ?? "",
     date: format.date ?? "",
+    start_time: format.start_time ?? "",
   };
 }
 
@@ -171,10 +174,10 @@ export function buildBatch(
   const formatIds: string[] = [];
   const keptOps: BatchOp[] = [];
   const lateOps: BatchOp[] = [];
-  // A race known by its month is a race without days for its formats: they have no date, whatever the
+  // A race known by its month is a race without days for its formats: they have no date nor start time, whatever the
   // draft holds (the form drops them, but a draft that kept them would be refused).
   const formats = isMonthOnly(draft)
-    ? draft.formats.map((format) => ({ ...format, date: undefined }))
+    ? draft.formats.map((format) => ({ ...format, date: undefined, start_time: undefined }))
     : draft.formats;
   for (const format of formats) {
     const id = format.id ?? newId();

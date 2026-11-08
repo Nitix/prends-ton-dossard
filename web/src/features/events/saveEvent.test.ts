@@ -210,6 +210,7 @@ describe("buildBatch, creation", () => {
       price_eur: 0,
       route_url: "",
       date: "",
+      start_time: "",
     });
   });
 
@@ -1100,5 +1101,31 @@ describe("buildBatch — la précision de la date", () => {
     ]);
     expect(ops[3]).toMatchObject({ id: "f42", body: { date: "2027-06-10" } });
     expect(() => runOnServer(ops, monthExisting())).not.toThrow();
+  });
+});
+
+describe("buildBatch — l'heure de départ", () => {
+  test("elle part avec l'épreuve, et vide quand il n'y en a pas (ce qui l'efface)", () => {
+    const draft = editDraft();
+    const [first] = draft.formats;
+    if (first) first.start_time = "07:30";
+
+    const { ops } = buildBatch(draft, existing(), ME);
+
+    expect(ops.find((op) => op.id === "f42")?.body).toMatchObject({ start_time: "07:30" });
+    expect(ops.find((op) => op.id === "f15")?.body).toMatchObject({ start_time: "" });
+  });
+
+  test("une course au mois n'envoie aucune heure de départ, ce que garde le brouillon n'y fait rien", () => {
+    const draft = monthDraft();
+    draft.formats = draft.formats.map((format) => ({ ...format, start_time: "07:30" }));
+
+    for (const view of [undefined, existing()]) {
+      const { ops } = buildBatch(draft, view, ME);
+
+      const formats = ops.filter(({ collection }) => collection === "formats");
+      expect(formats.length).toBeGreaterThan(0);
+      for (const op of formats) expect(op.body).toMatchObject({ start_time: "" });
+    }
   });
 });

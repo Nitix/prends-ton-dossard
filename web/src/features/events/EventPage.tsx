@@ -521,6 +521,8 @@ function FormatSection({
   const onTheStart = starters(participations);
   // Nobody has finished a race that has not started: the menus of the rows know it.
   const started = raceStarted(format, event, today);
+  // A race known by its month has no start time to say, whatever the data holds.
+  const startTime = isMonthOnly(event) ? "" : (format.start_time ?? "");
 
   return (
     <section
@@ -531,7 +533,16 @@ function FormatSection({
         {/* Its words: the name in ink, the measures in grey, one line. */}
         <FormatTitle parts={parts} />
       </BlockTitle>
-      {showDate && <p className="format-date eyebrow -mt-1">{f.date(date)}</p>}
+      {(showDate || startTime) && (
+        <p className="format-date eyebrow -mt-1">
+          {[
+            showDate ? f.date(date) : null,
+            startTime ? t.event.startAt(f.startTime(startTime)) : null,
+          ]
+            .filter((part) => part !== null)
+            .join(" · ")}
+        </p>
+      )}
       {onTheStart.length === 0 ? (
         <p className="format-empty text-sm text-neutral-600">{t.event.nobody}</p>
       ) : (

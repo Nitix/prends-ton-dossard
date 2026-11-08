@@ -156,3 +156,59 @@ func TestEventEndDate_Month(t *testing.T) {
 		t.Errorf("without the month, the end is %q, want 2027-06-12", got)
 	}
 }
+
+// The start time of a format (formatBody and buildBatch): the ports of the cases of
+// saveEvent.test.ts « l'heure de départ ».
+func TestPlan_StartTime_GoesWithTheFormatAndEmptyClearsIt(t *testing.T) {
+	draft := editDraft(func(d *mcp.EventDraft) { d.Formats[0].StartTime = "07:30" })
+
+	ops, _, _ := mcp.PlanBatch(draft, existing(), me)
+
+	for _, op := range ops {
+		switch idOf(op) {
+		case "f42":
+			wantBody(t, op, map[string]any{"start_time": "07:30"})
+		}
+	}
+	created, _, _ := mcp.PlanBatch(newDraft(nil), nil, me)
+	for _, op := range created {
+		if collectionOf(op) == "formats" {
+			wantBody(t, op, map[string]any{"start_time": ""})
+		}
+	}
+
+	// A start time that is taken off is sent as empty, which clears it.
+	stored := existing()
+	stored.Formats[0].StartTime = "07:30"
+	cleared, _, _ := mcp.PlanBatch(editDraft(nil), stored, me)
+	found := false
+	for _, op := range cleared {
+		if idOf(op) == "f42" {
+			wantBody(t, op, map[string]any{"start_time": ""})
+			found = true
+		}
+	}
+	if !found {
+		t.Error("no request clears the start time of F42")
+	}
+}
+
+func TestPlan_StartTime_ARaceOfAMonthSendsNone(t *testing.T) {
+	draft := monthDraft(func(d *mcp.EventDraft) {
+		d.Formats[0].StartTime, d.Formats[1].StartTime = "07:30", "09:00"
+	})
+
+	for _, stored := range []*mcp.StoredEvent{nil, existing()} {
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		formats := 0
+		for _, op := range ops {
+			if collectionOf(op) == "formats" {
+				wantBody(t, op, map[string]any{"start_time": ""})
+				formats++
+			}
+		}
+		if formats == 0 {
+			t.Error("the plan has no request for a format")
+		}
+	}
+}

@@ -7,6 +7,7 @@ import {
   fillEvent,
   format,
   formatDate,
+  formatStartTime,
   location,
   name,
   raceType,
@@ -192,4 +193,33 @@ test("EventForm — pour une course au mois, une ouverture refusée après le d�
   await expect
     .element(screen.getByText(fr.errors.registration_opening_after_start))
     .not.toBeInTheDocument();
+});
+
+test("EventForm — l'heure de départ laisse la place, comme la date, pour une course au mois, et le brouillon la garde", async () => {
+  const { screen } = await renderForm();
+  await formatStartTime(format(screen, 1)).fill("07:30");
+
+  await unknownDay(screen).click();
+
+  await expect.element(screen.getByLabelText(fr.form.formatStartTime)).not.toBeInTheDocument();
+
+  await unknownDay(screen).click();
+
+  await expect.element(formatStartTime(format(screen, 1))).toHaveValue("07:30");
+});
+
+test("EventForm — une course au mois s'enregistre sans heure de départ", async () => {
+  const { screen, router } = await renderForm();
+  await name(screen).fill("Trail du Lac");
+  await location(screen).fill("Annecy");
+  await formatStartTime(format(screen, 1)).fill("07:30");
+  await raceType(format(screen, 1)).selectOptions(trailType.id);
+  await distance(format(screen, 1)).fill("42");
+  await unknownDay(screen).click();
+  await monthSelect(screen).selectOptions("2027-06");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "formats")?.body?.start_time).toBe("");
 });

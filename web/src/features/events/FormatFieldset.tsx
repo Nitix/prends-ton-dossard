@@ -464,6 +464,27 @@ export function FormatFieldset({
         </Field>
       )}
 
+      {!monthOnly && (
+        <Field
+          label={t.form.formatStartTime}
+          hint={t.form.formatStartTimeHint}
+          error={message("start_time")}
+        >
+          {(control) => (
+            <input
+              {...control}
+              type="time"
+              step={60}
+              value={row.startTime}
+              onChange={(event) => {
+                onChange({ startTime: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+      )}
+
       {removal && (
         <div className="flex flex-col gap-1">
           <button

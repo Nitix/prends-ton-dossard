@@ -99,6 +99,8 @@ export type FormatRecord = BaseRecord & {
   route_url?: string;
   /** The day of the format when it differs from the start of its event. */
   date?: string;
+  /** The start time, `HH:MM` Paris time: empty or absent when it is not known. */
+  start_time?: string;
 };
 
 export type ParticipationRecord = BaseRecord & {

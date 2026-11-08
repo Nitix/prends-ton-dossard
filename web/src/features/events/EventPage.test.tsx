@@ -28,6 +28,7 @@ import {
   eventRecord,
   f15,
   f42,
+  fLyon,
   ninaRunner,
   p1,
   p2,
@@ -2814,4 +2815,64 @@ test("EventPage — la météo, après les actions", async () => {
   expect(section?.compareDocumentPosition(firstFormat ?? document) ?? 0).toBe(
     Node.DOCUMENT_POSITION_FOLLOWING,
   );
+});
+
+test("EventPage — une épreuve qui a une heure de départ la dit près de son jour", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, start_time: "07:30", expand: { race_type: trailType } },
+          { ...f15, expand: { race_type: roadType } },
+        ],
+      },
+    },
+  });
+
+  await loaded(screen);
+  const days = [...screen.container.querySelectorAll(".format-date")].map((element) =>
+    (element.textContent ?? "").replaceAll(/\s+/g, " "),
+  );
+  expect(days).toHaveLength(2);
+  expect(days.filter((text) => text.includes("départ à 7 h 30"))).toHaveLength(1);
+  expect(days.find((text) => text.includes("départ"))).toMatch(/dim\. 14 juin · départ à 7 h 30/);
+});
+
+test("EventPage — le jour d'une course d'un jour n'est pas répété, mais l'heure de départ est dite", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...event2Record,
+      expand: {
+        ...event2Record.expand,
+        formats_via_event: [{ ...fLyon, start_time: "09:00", expand: { race_type: roadType } }],
+      },
+    },
+  });
+
+  await loaded(screen, "10 km de Lyon");
+  const line = screen.container.querySelector(".format-date");
+  expect((line?.textContent ?? "").replaceAll(/\s+/g, " ")).toBe("départ à 9 h 00");
+});
+
+test("EventPage — une course au mois ne dit aucune heure de départ", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, date: "", start_time: "07:30", expand: { race_type: trailType } },
+          { ...f15, date: "", expand: { race_type: roadType } },
+        ],
+      },
+    },
+  });
+
+  await loaded(screen);
+  expect(screen.container.textContent).not.toContain("départ à");
 });

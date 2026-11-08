@@ -31,6 +31,8 @@ export type FormatRow = {
   /** What is done with the track when the form is saved: the file chosen, or taking it off. */
   gpx: GpxChange;
   date: string;
+  /** An `HH:MM` time, Paris time, or empty. Only saved for a race with a day: the draft keeps it. */
+  startTime: string;
 };
 
 export type FormDraft = {
@@ -70,6 +72,7 @@ export function emptyRow(raceType = ""): FormatRow {
     hasTrack: false,
     gpx: { kind: "keep" },
     date: "",
+    startTime: "",
   };
 }
 
@@ -114,6 +117,7 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     hasTrack: !!format.gpx,
     gpx: { kind: "keep" },
     date: format.date ?? "",
+    startTime: format.start_time ?? "",
   }));
   // An event has at least one format: one that has none (which only a write
   // outside the app can make) starts with a row to fill in.
@@ -343,6 +347,7 @@ export function toEventDraft(
       gpx: row.gpx,
       label: label?.(row, index),
       date: draft.monthOnly ? undefined : row.date || undefined,
+      start_time: draft.monthOnly ? undefined : row.startTime || undefined,
     })),
     join:
       join && joinRow

@@ -294,3 +294,20 @@ describe("integer", () => {
     expect(createFormatters("en-GB").integer(1234.4)).toBe("1,234");
   });
 });
+
+describe("startTime", () => {
+  test.each([
+    { locale: "fr-FR", at: "07:30", expected: "7 h 30" },
+    { locale: "fr-FR", at: "19:05", expected: "19 h 05" },
+    { locale: "fr-FR", at: "00:00", expected: "0 h 00" },
+    { locale: "en-GB", at: "07:30", expected: "7:30" },
+    { locale: "en-US", at: "07:30", expected: "7:30 AM" },
+    { locale: "en-US", at: "19:05", expected: "7:05 PM" },
+  ])("startTime, $locale $at: $expected", ({ locale, at, expected }) => {
+    expect(plain(createFormatters(locale).startTime(at))).toBe(expected);
+  });
+
+  test("startTime — a text that is not a time is given back as it is", () => {
+    expect(createFormatters("fr-FR").startTime("tôt")).toBe("tôt");
+  });
+});

@@ -226,7 +226,7 @@ func TestPlan_Creation_NotFilledInIsEmptyOrZero(t *testing.T) {
 	wantExactBody(t, ops[2], map[string]any{
 		"id": idOf(ops[2]), "event": idOf(ops[0]), "name": "", "race_type": trailType,
 		"distance_km": 15, "duration_min": 0, "time_limit_min": 0, "elevation_gain_m": 700,
-		"price_eur": 0, "route_url": "", "date": "",
+		"price_eur": 0, "route_url": "", "date": "", "start_time": "",
 	})
 }
 

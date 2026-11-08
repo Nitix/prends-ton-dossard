@@ -17,6 +17,7 @@ import {
   fillEvent,
   format,
   formatDate,
+  formatStartTime,
   gpxField,
   gpxFile,
   hoursOf,
@@ -1883,4 +1884,52 @@ test("EventForm — un fichier illisible, ou trop lourd, laisse le retrait en at
     expect(router.state.location.pathname).toBe("/evenements/event");
   });
   expect(mocks.updateFormat).toHaveBeenCalledExactlyOnceWith("f15", { gpx: null });
+});
+
+test("EventForm — l'heure de départ facultative : son indication, et elle part avec l'épreuve", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  const time = formatStartTime(row);
+
+  await expect.element(time).toHaveAttribute("type", "time");
+  await expect.element(time).toHaveAttribute("step", "60");
+  const hint = row.getByText(fr.form.formatStartTimeHint);
+  await expect.element(hint).toBeVisible();
+  expect(time.element().getAttribute("aria-describedby")).toContain(hint.element().id);
+  await time.fill("07:30");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "formats")?.body?.start_time).toBe(
+    "07:30",
+  );
+});
+
+test("EventForm — sans heure de départ, l'épreuve part avec une heure vide", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "formats")?.body?.start_time).toBe("");
+});
+
+test("EventForm — l'erreur du serveur sur l'heure de départ s'affiche sous le champ", async () => {
+  mocks.send.mockRejectedValue(refused(1, 400, { start_time: field("format_time_month") }));
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await formatStartTime(format(screen, 1)).fill("07:30");
+
+  await save(screen).click();
+
+  const message = screen.getByText(fr.errors.format_time_month);
+  await expect.element(message).toBeVisible();
+  const time = formatStartTime(format(screen, 1));
+  expect(message.element().id).not.toBe("");
+  expect(time.element().getAttribute("aria-describedby")).toContain(message.element().id);
+  expect(time.element().getAttribute("aria-invalid")).toBe("true");
+  await expect.element(time).toHaveValue("07:30");
 });

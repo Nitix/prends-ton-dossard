@@ -29,6 +29,7 @@ const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   hasTrack: false,
   gpx: { kind: "keep" },
   date: "",
+  startTime: "",
   ...extra,
 });
 
@@ -574,5 +575,45 @@ describe("joinStarted", () => {
   test("is false while the day is not typed (or not a day): nobody finishes a race with no day", () => {
     expect(joinStarted(typed({ startDate: "" }), day("2026-06-13"))).toBe(false);
     expect(joinStarted(typed({ startDate: "2026-06-3" }), day("2026-06-13"))).toBe(false);
+  });
+});
+
+describe("l'heure de départ", () => {
+  test("initialDraft — l'heure de l'épreuve enregistrée est dans le champ, vide sans heure", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        expand: { formats_via_event: [{ ...f42, start_time: "07:30" }, f15] },
+      }),
+    );
+
+    expect(draft.rows.map((r) => r.startTime)).toEqual(["", "07:30"]);
+    expect(initialDraft(undefined).rows[0]?.startTime).toBe("");
+  });
+
+  test("toEventDraft — l'heure part avec l'épreuve, vide n'est pas envoyée", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      startDate: "2027-06-12",
+      rows: [row({ distanceKm: "42", startTime: "07:30" }), row({ distanceKm: "15" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.formats.map(({ start_time }) => start_time)).toEqual(["07:30", undefined]);
+  });
+
+  test("toEventDraft — une course au mois n'a pas d'heure, et le brouillon garde ce qui est saisi", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      monthOnly: true,
+      startMonth: "2027-06",
+      rows: [row({ distanceKm: "42", startTime: "07:30" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.formats[0]?.start_time).toBeUndefined();
+    expect(draft.rows[0]?.startTime).toBe("07:30");
   });
 });

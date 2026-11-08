@@ -12,6 +12,7 @@ import {
   event2Record,
   eventRecord,
   f15,
+  f42,
   p1,
   p2,
   pNinaSupporter,
@@ -219,5 +220,44 @@ describe("whatsappURL", () => {
     expect(url).toBe(
       "https://wa.me/?text=Trail%20des%20Cr%C3%AAtes%0Ahttps%3A%2F%2Fx.test%2Fa%3Fb%3D1%26c%3D2",
     );
+  });
+});
+
+describe("shareText — l'heure de départ", () => {
+  test("elle suit l'épreuve qui en a une, et seulement celle-là", () => {
+    const view = toEventView({
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: eventRecord.expand.formats_via_event.map((format) =>
+          format.id === "f42" ? { ...format, start_time: "07:30" } : format,
+        ),
+      },
+    });
+
+    expect(lines(shareText(view, APP, today, FR, fr))[2]).toBe(
+      "Épreuves : Trail 15 km · 700 m D+ ; Trail 42 km · 2 400 m D+ · max 10h · départ à 7 h 30",
+    );
+    expect(lines(shareText(view, APP, today, GB, en))[2]).toBe(
+      "Races: Trail 15 km · 700 m gain ; Trail 42 km · 2,400 m gain · max 10h · start at 7:30",
+    );
+  });
+
+  test("une course au mois n'a pas d'heure, même si une est restée dans les données", () => {
+    const view = toEventView({
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, date: "", start_time: "07:30" },
+          { ...f15, date: "" },
+        ],
+      },
+    });
+
+    expect(shareText(view, APP, today, FR, fr)).not.toContain("départ");
   });
 });

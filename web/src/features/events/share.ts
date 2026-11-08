@@ -47,9 +47,13 @@ export function shareText(
   const lines = [event.name, place ? `${when} · ${place}` : when];
 
   if (formats.length > 0) {
-    const list = formats.map(({ format, raceType }) =>
-      formatMeasures(format, raceType.label, f, t).join(MEASURES),
-    );
+    const list = formats.map(({ format, raceType }) => {
+      const parts = formatMeasures(format, raceType.label, f, t);
+      // The time of the start, for a race that has days: a race known by its month has none.
+      if (format.start_time && !isMonthOnly(event))
+        parts.push(t.event.startAt(f.startTime(format.start_time)));
+      return parts.join(MEASURES);
+    });
     lines.push(t.share.formats(list.join(FORMATS)));
   }
 

@@ -78,6 +78,7 @@ const FORMAT_FIELDS: readonly string[] = [
   "gpx",
   "route_url",
   "date",
+  "start_time",
 ];
 
 const MONTHS_BACK = 12;

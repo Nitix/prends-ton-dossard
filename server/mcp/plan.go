@@ -18,7 +18,9 @@ import (
 // saveEvent.ts): what is not given is "" or 0, as PocketBase stores it. A format
 // that has an ID exists already.
 type formatDraft struct {
-	ID, Name, RaceType, RouteURL, Date        string
+	ID, Name, RaceType, RouteURL, Date string
+	// StartTime is HH:MM, Paris time, or "" when it is not known. A race known by its month has none.
+	StartTime                                 string
 	DistanceKm, PriceEur                      float64
 	DurationMin, TimeLimitMin, ElevationGainM int
 }
@@ -100,6 +102,7 @@ func formatBody(f formatDraft) map[string]any {
 		"price_eur":        f.PriceEur,
 		"route_url":        f.RouteURL,
 		"date":             f.Date,
+		"start_time":       f.StartTime,
 	}
 }
 
@@ -204,9 +207,9 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 	var keptOps, lateOps []batchOp
 	for i, f := range draft.Formats {
 		// A race known by its month is a race without days for its formats: they have no
-		// date, whatever the draft holds (buildBatch of saveEvent.ts).
+		// date nor start time, whatever the draft holds (buildBatch of saveEvent.ts).
 		if draft.monthOnly() {
-			f.Date = ""
+			f.Date, f.StartTime = "", ""
 		}
 		id := f.ID
 		if id == "" {
