@@ -2,7 +2,14 @@ import { describe, expect, test } from "vitest";
 
 import type { ParticipationRecord } from "../../lib/types";
 import { eventRecord, f42, p1, trailType } from "../events/testFixture";
-import { RESULTS_WINDOW_DAYS, isResultToEnter, toEnterOf, type ToEnter } from "./resultsToEnter";
+import {
+  RESULTS_WINDOW_DAYS,
+  isResultToEnter,
+  toEnterOf,
+  toEnterRow,
+  type RegisteredRecord,
+  type ToEnter,
+} from "./resultsToEnter";
 
 const date = (s: string) => Temporal.PlainDate.from(s);
 const TODAY = "2026-04-30";
@@ -17,6 +24,7 @@ function rowOf(id: string, day: string, eventName = "Trail des Crêtes"): ToEnte
     format: f42,
     raceType: trailType,
     date: date(day),
+    lastDay: date(day),
   };
 }
 
@@ -65,6 +73,45 @@ describe("toEnterOf", () => {
       "a",
       "b-1",
     ]);
+  });
+});
+
+const record = (event: object): RegisteredRecord => ({
+  ...registered,
+  expand: {
+    event: { ...eventRecord, ...event },
+    format: { ...f42, expand: { race_type: trailType } },
+  },
+});
+
+describe("toEnterRow", () => {
+  test("toEnterRow — le jour d'une épreuve est le sien", () => {
+    expect(toEnterRow(record({})).date.toString()).toBe("2026-06-14");
+  });
+
+  test("resultsToEnter — une course au mois à partir de la fin du mois", () => {
+    const june = {
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+    };
+    const row = toEnterRow({
+      ...record(june),
+      expand: {
+        ...record(june).expand,
+        format: { ...f42, date: "", expand: { race_type: trailType } },
+      },
+    });
+
+    // The race is over the day after the last day of its month, not the day after its 1st.
+    expect(row.lastDay.toString()).toBe("2027-06-30");
+    expect(row.date.toString()).toBe("2027-06-01");
+    expect(toEnterOf([row], date("2027-06-15"))).toEqual([]);
+    expect(toEnterOf([row], date("2027-06-30"))).toEqual([]);
+    expect(toEnterOf([row], date("2027-07-01"))).toEqual([row]);
+    // The window of 60 days counts from the end of the month: 29 August is the 60th day.
+    expect(toEnterOf([row], date("2027-08-29"))).toEqual([row]);
+    expect(toEnterOf([row], date("2027-08-30"))).toEqual([]);
   });
 });
 

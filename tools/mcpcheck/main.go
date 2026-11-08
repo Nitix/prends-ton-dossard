@@ -78,9 +78,13 @@ const (
 	raceName      = "Course de test MCP"
 	duplicateName = "Doublon MCP"
 	testName      = "Test MCP"
+	// monthRaceName is the race known by its month that the write steps make, and
+	// seedRaceName the race of the seed whose weather the read steps ask for.
+	monthRaceName = "Course au mois MCP"
+	seedRaceName  = "Trail des Crêtes"
 
-	memberTools = 32
-	adminTools  = 43
+	memberTools = 34
+	adminTools  = 45
 	adminPrefix = "admin_"
 
 	// defaultPace is the time left before each call: the site's own limits (20
@@ -924,6 +928,82 @@ func (c *checker) readSteps() {
 		}
 		return fmt.Sprintf("année %d, %s", c.today.Year(), plural(len(r.data.list("runners")), "coureur", "coureurs")), nil
 	})
+
+	// --- The v7: the reminders and the weather. Both are reads: the weather of
+	// the race of the seed is Open-Meteo's, asked once by the site.
+	c.step("reminders", func() (string, error) {
+		r, err := c.callDone("reminders", map[string]any{"action": "show"})
+		if err != nil {
+			return "", err
+		}
+		if !r.data.isList("reminders") || !r.data.isList("devices") {
+			return "", errors.New("la réponse n'a pas la liste des rappels et celle des appareils")
+		}
+		return remindersWords(r.data.texts("reminders")) + ", " +
+			plural(len(r.data.list("devices")), "appareil activé", "appareils activés"), nil
+	})
+
+	c.step("get_weather", func() (string, error) {
+		// The race of the seed, else the first race to come: its status may be
+		// any of the five, which are answers and not errors.
+		which, id := "« "+seedRaceName+" »", ""
+		found, err := c.callOK("search_events", map[string]any{"query": seedRaceName})
+		if err != nil {
+			return "", err
+		}
+		for _, event := range found.data.list("events") {
+			if event.text("name") != "" && strings.Contains(event.text("name"), seedRaceName) {
+				id = event.text("id")
+				break
+			}
+		}
+		if id == "" {
+			which = "la première course à venir"
+			all, err := c.callOK("search_events", nil)
+			if err != nil {
+				return "", err
+			}
+			if events := all.data.list("events"); len(events) > 0 {
+				id = events[0].text("id")
+			}
+		}
+		if id == "" {
+			return "aucune course à venir, rien à essayer", nil
+		}
+
+		r, err := c.callOK("get_weather", map[string]any{"event_id": id})
+		if err != nil {
+			return "", err
+		}
+		status := r.data.text("status")
+		if !slices.Contains([]string{"ok", "not_yet", "over", "no_day", "no_place"}, status) {
+			return "", fmt.Errorf("la météo a un état inconnu : %q", status)
+		}
+		if r.data.text("attribution") == "" || r.data.text("summary") == "" {
+			return "", errors.New("la météo ne cite pas sa source, ou n'a pas de résumé")
+		}
+		if status != "ok" {
+			return which + " : " + status, nil
+		}
+		days := r.data.list("days")
+		if len(days) == 0 {
+			return "", errors.New("la météo est donnée sans aucun jour")
+		}
+		for _, d := range days {
+			if d.text("date") == "" || d.text("label") == "" || !d.has("tMin") || !d.has("tMax") {
+				return "", errors.New("un jour de la météo n'a pas sa date, son temps ou ses températures")
+			}
+		}
+		where := "au lieu de la course"
+		if r.data.text("place", "source") == "track" {
+			where = "au départ d'une trace"
+		}
+		note := ""
+		if r.data.flag("stale") {
+			note = " (prévision ancienne)"
+		}
+		return fmt.Sprintf("%s : ok, %s, %s%s", which, plural(len(days), "jour", "jours"), where, note), nil
+	})
 }
 
 // revokedStep revokes the token as the settings page does, and checks that the
@@ -1475,6 +1555,109 @@ func (c *checker) memberSteps() {
 		}
 		return "confirmé", nil
 	})
+
+	// --- The v7: the reminders, and a race known by its month with an opening.
+	// The choice of reminders is the person's own: it is put back as it was.
+	var reminders []string
+	c.step("reminders", func() (string, error) {
+		before, err := c.callDone("reminders", map[string]any{"action": "show"})
+		if err != nil {
+			return "", err
+		}
+		reminders = before.data.texts("reminders")
+		changed, err := c.callDone("reminders", map[string]any{"action": "set", "when": []any{"hour"}})
+		if err != nil {
+			return "", err
+		}
+		if got := changed.data.texts("reminders"); len(got) != 1 || got[0] != "hour" {
+			return "", fmt.Errorf("le choix est « %s » au lieu de « 1 heure avant »", remindersWords(got))
+		}
+		back := make([]any, 0, len(reminders))
+		for _, r := range reminders {
+			back = append(back, r)
+		}
+		restored, err := c.callDone("reminders", map[string]any{"action": "set", "when": back})
+		if err != nil {
+			return "", err
+		}
+		if got := restored.data.texts("reminders"); !slices.Equal(got, reminders) {
+			return "", fmt.Errorf("le choix d'avant (%s) n'est pas remis : %s", remindersWords(reminders), remindersWords(got))
+		}
+		return "changés (1 heure avant), puis remis comme avant", nil
+	})
+
+	month := time.Date(c.today.Year(), c.today.Month()+3, 1, 0, 0, 0, 0, time.UTC)
+	var monthID, monthToken string
+	c.step("create_event", func() (string, error) {
+		args := map[string]any{
+			"name": monthRaceName, "location": "Annecy", "date_precision": "month",
+			"start_date":           month.Format("2006-01"),
+			"registration_opening": c.day(2), "registration_opening_time": "10:00",
+			"formats": []map[string]any{{"race_type": c.raceType, "distance_km": 10}},
+		}
+		r, err := c.call("create_event", args)
+		if err != nil {
+			return "", err
+		}
+		if r.ok() == nil && !r.data.flag("done") && r.data.has("confirmation") {
+			// A race of an earlier run is still there: the site asks, and the person says yes.
+			token, err := c.asked(r)
+			if err != nil {
+				return "", err
+			}
+			if r, err = c.callDone("create_event", with(args, token)); err != nil {
+				return "", err
+			}
+		}
+		if err := r.done(); err != nil {
+			return "", err
+		}
+		monthID = r.data.text("id")
+		last := month.AddDate(0, 1, -1)
+		switch {
+		case len(monthID) != 15:
+			return "", errors.New("la course n'a pas d'identifiant")
+		case r.data.text("date_precision") != "month":
+			return "", errors.New("la course n'est pas notée « au mois »")
+		case r.data.text("start_date") != month.Format(time.DateOnly) || r.data.text("end_date") != last.Format(time.DateOnly):
+			return "", fmt.Errorf("la course va du %s au %s, pas du %s au %s", r.data.text("start_date"), r.data.text("end_date"), month.Format(time.DateOnly), last.Format(time.DateOnly))
+		case r.data.text("registration_opening") != c.day(2) || r.data.text("registration_opening_time") != "10:00":
+			return "", fmt.Errorf("l'ouverture est le %s à %s, pas le %s à 10:00", r.data.text("registration_opening"), r.data.text("registration_opening_time"), c.day(2))
+		}
+		for _, format := range r.data.list("formats") {
+			if format.text("date") != "" {
+				return "", errors.New("une épreuve d'une course au mois a une date")
+			}
+		}
+		return "course au mois, ouverture à 10:00", nil
+	})
+	c.step("update_event", func() (string, error) {
+		// An opening that is emptied is asked first: it would be lost.
+		r, _, err := c.confirmed("update_event", map[string]any{"event_id": monthID, "registration_opening": ""})
+		if err != nil {
+			return "", err
+		}
+		if r.data.has("registration_opening") || r.data.has("registration_opening_time") {
+			return "", errors.New("l'ouverture est encore là après avoir été effacée")
+		}
+		return "ouverture effacée après confirmation", nil
+	})
+	c.step("delete_event", func() (string, error) {
+		first, err := c.call("delete_event", map[string]any{"event_id": monthID})
+		if err != nil {
+			return "", err
+		}
+		if monthToken, err = c.asked(first); err != nil {
+			return "", err
+		}
+		if _, err := c.callDone("delete_event", map[string]any{"event_id": monthID, "confirmation": monthToken}); err != nil {
+			return "", err
+		}
+		if gone, err := c.call("get_event", map[string]any{"event_id": monthID}); err != nil || gone.ok() == nil {
+			return "", errors.New("la course supprimée se lit encore")
+		}
+		return "course au mois, confirmé", nil
+	})
 }
 
 // sameServer says that an address is a path of this very server: on this machine, on
@@ -1782,4 +1965,23 @@ func (c *checker) adminSteps() {
 		}
 		return "confirmé", nil
 	})
+}
+
+// remindersWords says a choice of reminders (the values day and hour) in words.
+func remindersWords(choice []string) string {
+	if len(choice) == 0 {
+		return "aucun rappel"
+	}
+	words := make([]string, 0, len(choice))
+	for _, c := range choice {
+		switch c {
+		case "day":
+			words = append(words, "1 jour avant")
+		case "hour":
+			words = append(words, "1 heure avant")
+		default:
+			words = append(words, "un rappel inconnu")
+		}
+	}
+	return strings.Join(words, ", ")
 }

@@ -211,7 +211,7 @@ func (t *tools) deleteFormat(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	}
 	draft := draftOf(view)
 	change(&draft)
-	if end := eventEndDate(draft.StartDate, datesOf(draft)); shortens(event.StartDate, event.EndDate, end) {
+	if end := draft.endDate(); shortens(event.StartDate, event.EndDate, end) {
 		line := shortenedLine(event.StartDate, event.EndDate, event.StartDate, end)
 		r.Message += " " + line
 		r.Details = append(r.Details, line)

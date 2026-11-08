@@ -9,20 +9,40 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { describeError } from "../profile/forms";
 import { Section } from "../profile/Section";
-import { useCalendarStatus, useCreateCalendar, useDeleteCalendar } from "./api";
+import { useCalendarStatus, useCreateCalendar, useDeleteCalendar, type CalendarScope } from "./api";
 
 /** What the window that asks first is about: a new link, or no link at all. */
 type Asking = "renew" | "remove";
 
 /**
- * "Calendar" on the settings page: the link that a calendar app subscribes to.
- * Without a link, a button makes one, and the link is shown at once, in a field
- * to copy it from. With a link, the page says so and offers to show it again
- * (the server keeps it, and the status carries its address), a new one (the old
- * one stops working) or to delete it, the last two after a confirmation, and
- * always: also when the link has just been made. A link made before the server
- * kept the address cannot be shown: the page says so, and the member makes a
- * new one.
+ * "Calendar" on the settings page: the links that a calendar app subscribes to,
+ * in two blocks that are the same component: "Mes courses" (the races of the
+ * member) and "Les courses du groupe" (every race where somebody goes, with who;
+ * absent where the server has no such link, which is the demo).
+ *
+ * The title of the section takes the focus when a link goes and its button with
+ * it: it is the `heading` of each block.
+ */
+export function CalendarSection() {
+  const { t } = useI18n();
+  const heading = useRef<HTMLHeadingElement>(null);
+  return (
+    <Section title={t.calendar.title} headingRef={heading}>
+      <CalendarLinkBlock scope="mine" heading={heading} />
+      <CalendarLinkBlock scope="group" heading={heading} />
+    </Section>
+  );
+}
+
+/**
+ * One calendar link of the settings page: the link that a calendar app subscribes
+ * to, of the kind `scope`. Without a link, a button makes one, and the link is
+ * shown at once, in a field to copy it from. With a link, the page says so and
+ * offers to show it again (the server keeps it, and the status carries its
+ * address), a new one (the old one stops working) or to delete it, the last two
+ * after a confirmation, and always: also when the link has just been made. A link
+ * made before the server kept the address cannot be shown: the page says so, and
+ * the member makes a new one. The other kind of link is never touched.
  *
  * The focus never falls to the page. A link that is shown takes it, selected,
  * as the next thing to do is to copy it (the button that was tapped to show it
@@ -33,16 +53,24 @@ type Asking = "renew" | "remove";
  * the page must not scroll to the title then; cancelling a confirmation gives it
  * back to the button that opened it.
  */
-export function CalendarSection() {
+function CalendarLinkBlock({
+  scope,
+  heading,
+}: {
+  scope: CalendarScope;
+  heading: RefObject<HTMLHeadingElement | null>;
+}) {
   const { t, lang } = useI18n();
-  const status = useCalendarStatus();
-  const create = useCreateCalendar();
-  const remove = useDeleteCalendar();
+  const status = useCalendarStatus(scope);
+  const create = useCreateCalendar(scope);
+  const remove = useDeleteCalendar(scope);
+  const titleId = useId();
+  const group = scope === "group";
+  const title = group ? t.calendar.group : t.calendar.mine;
   // Whether the member has the link on screen: they asked for it, or made it.
   // The address is the one of the status, which a new link replaces.
   const [shown, setShown] = useState(false);
   const [asking, setAsking] = useState<Asking | null>(null);
-  const heading = useRef<HTMLHeadingElement>(null);
   const field = useRef<HTMLInputElement>(null);
   // The button that opened the window that asks first.
   const opener = useRef<HTMLElement | null>(null);
@@ -102,12 +130,20 @@ export function CalendarSection() {
     setAsking(null);
   };
 
+  // The server has no link of this kind to give (the group's, on the demo): the
+  // block is not there at all.
+  if (status.data === null) return null;
+
   return (
-    <Section title={t.calendar.title} headingRef={heading}>
+    <fieldset aria-labelledby={titleId} className="flex min-w-0 flex-col gap-3">
+      <h3 id={titleId} className="eyebrow">
+        {title}
+      </h3>
+      {group && <p className="text-sm text-neutral-600">{t.calendar.groupHelp}</p>}
       {status.data?.exists === true && (
         <>
-          <p>{t.calendar.exists}</p>
-          {shown && url !== "" && <LinkField url={url} inputRef={field} />}
+          <p>{group ? t.calendar.groupExists : t.calendar.exists}</p>
+          {shown && url !== "" && <LinkField url={url} label={title} inputRef={field} />}
           {url === "" && <p>{t.calendar.legacy}</p>}
           <div className="flex flex-wrap gap-2">
             {!shown && url !== "" && (
@@ -136,7 +172,9 @@ export function CalendarSection() {
           </div>
         </>
       )}
-      {status.data?.exists === false && <CreateLink make={makeLink} />}
+      {status.data?.exists === false && (
+        <CreateLink make={makeLink} label={group ? t.calendar.groupCreate : t.calendar.create} />
+      )}
       {unreadable && <LoadFailure onRetry={status.refetch} heading={heading} />}
       {status.data === undefined && !unreadable && <output>{t.common.loading}</output>}
 
@@ -151,7 +189,7 @@ export function CalendarSection() {
       <Dialog open={asking === "remove"} onClose={cancel} title={t.calendar.remove}>
         <ConfirmForm label={t.calendar.remove} danger action={deleteLink} onCancel={cancel} />
       </Dialog>
-    </Section>
+    </fieldset>
   );
 }
 
@@ -195,8 +233,7 @@ function ErrorMessage({ message }: { message: string | null }) {
 }
 
 /** The button that makes the first link. It says it is busy without losing the focus: it is never disabled. */
-function CreateLink({ make }: { make: () => Promise<void> }) {
-  const { t } = useI18n();
+function CreateLink({ make, label }: { make: () => Promise<void>; label: string }) {
   const { run, busy, message } = useAction(make);
 
   return (
@@ -207,7 +244,7 @@ function CreateLink({ make }: { make: () => Promise<void> }) {
         aria-disabled={busy || undefined}
         className={`${PRIMARY} self-start ${busy ? "opacity-60" : ""}`}
       >
-        {t.calendar.create}
+        {label}
       </button>
       <ErrorMessage message={message} />
     </>
@@ -265,9 +302,12 @@ function ConfirmForm({
  */
 function LinkField({
   url,
+  label,
   inputRef,
 }: {
   url: string;
+  /** What the field is called: the block it is in. */
+  label: string;
   inputRef: RefObject<HTMLInputElement | null>;
 }) {
   const { t } = useI18n();
@@ -292,7 +332,7 @@ function LinkField({
           ref={inputRef}
           readOnly
           value={url}
-          aria-label={t.calendar.title}
+          aria-label={label}
           aria-describedby={helpId}
           className={`${READ_ONLY_INPUT} min-w-0 flex-1`}
         />

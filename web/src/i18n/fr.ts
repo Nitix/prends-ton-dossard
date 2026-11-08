@@ -30,6 +30,30 @@ export const fr = {
     // The accessible name of the tab bar.
     main: "Navigation principale",
   },
+  // The title of each page, in the tab and for screen readers (see lib/usePageTitle): « <title> · Prends ton dossard ».
+  titles: {
+    home: "Accueil",
+    listUpcoming: "Courses à venir",
+    listPast: "Courses passées",
+    calendar: (month: string) => `Agenda · ${month}`,
+    stats: (year: number) => `Statistiques ${year}`,
+    newEvent: "Nouvelle course",
+    // The page of a race while it loads (and if it fails), and when there is no such race.
+    race: "Course",
+    raceNotFound: "Course introuvable",
+    // The form of a race while it loads, and once it is there (the name is the race's).
+    editLoading: "Modifier",
+    edit: (name: string) => `Modifier · ${name}`,
+    runner: "Coureur",
+    profile: "Profil",
+    settings: "Réglages",
+    members: "Membres · Admin",
+    raceTypes: "Types de course · Admin",
+    duplicates: "Doublons · Admin",
+    signIn: "Connexion",
+    invitation: "Invitation",
+    notFound: "Page introuvable",
+  },
   auth: {
     signIn: "Se connecter",
     signingIn: "Connexion…",
@@ -130,6 +154,133 @@ export const fr = {
     renew: "Nouveau lien",
     renewHint: "L'ancien lien cessera de marcher.",
     remove: "Supprimer le lien",
+    // The two links of the section: the races of the member, and the races of the group (with who goes).
+    mine: "Mes courses",
+    group: "Les courses du groupe",
+    groupCreate: "Créer le lien des courses du groupe",
+    groupHelp:
+      "Toutes les courses où au moins un membre va, avec qui y va. Ce lien est secret : il donne les noms des membres.",
+    groupExists: "Le lien des courses du groupe est actif.",
+  },
+  // The weather of the page of an event (see features/weather): from seven days before the race to its last day.
+  weather: {
+    title: "Météo prévue",
+    loading: "Chargement de la météo…",
+    failed: "La météo n'a pas pu être chargée.",
+    // The place the forecast is for, said so that a mistake of the geocoding shows (`detail` may be empty).
+    atPlace: (name: string, detail: string) => (detail ? `À ${name} (${detail})` : `À ${name}`),
+    atTrack: (format: string) => `Au départ de la trace de « ${format} »`,
+    noPlace: (query: string) => `Pas de météo : le lieu « ${query} » n'a pas été trouvé.`,
+    // Before the window of the weather, and for a race with no day: said, not left blank. The date is already formatted.
+    notYet: (from: string) => `La météo sera là à partir du ${from}, une semaine avant la course.`,
+    noDay: "La météo viendra quand le jour de la course sera connu.",
+    // The time is already formatted; a forecast that is not the last one the server could get says so.
+    forecastAt: (time: string, stale: boolean) =>
+      stale ? `Prévision de ${time}, pas à jour` : `Prévision de ${time}`,
+    // « Données : Open-Meteo.com (CC BY 4.0) · lieu : GeoNames »: the name is a link.
+    sourceBefore: "Données : ",
+    sourceName: "Open-Meteo.com",
+    sourceAfter: " (CC BY 4.0)",
+    geonames: " · lieu : GeoNames",
+    // One day, all already formatted: its date, the weather in words, the temperatures, the rain, the gusts.
+    day: (
+      date: string,
+      label: string,
+      tMin: string,
+      tMax: string,
+      chance: string,
+      mm: string,
+      gust: string,
+    ) =>
+      `${date} · ${label} · ${tMin} à ${tMax} °C · pluie ${chance} %, ${mm} mm · rafales ${gust} km/h`,
+    // The special line of a start, all already formatted: the name of the format, its time, the weather in words (in lower case, it follows a colon), the temperature, the rain, the gusts.
+    start: (
+      format: string,
+      time: string,
+      label: string,
+      temp: string,
+      chance: string,
+      mm: string,
+      gust: string,
+    ) =>
+      `Départ de « ${format} » à ${time} : ${label}, ${temp} °C, pluie ${chance} % (${mm} mm), rafales ${gust} km/h`,
+    // Under a millimetre: a few drops are not none.
+    lessThanOneMm: "< 1",
+    // The WMO codes in words (see labels.ts).
+    kinds: {
+      clear: "Ciel dégagé",
+      partly: "Peu nuageux",
+      overcast: "Couvert",
+      fog: "Brouillard",
+      drizzle: "Bruine",
+      rain: "Pluie",
+      heavyRain: "Forte pluie",
+      freezingRain: "Pluie verglaçante",
+      snow: "Neige",
+      showers: "Averses",
+      heavyShowers: "Fortes averses",
+      snowShowers: "Averses de neige",
+      storm: "Orage",
+      hail: "Orage et grêle",
+      unknown: "Temps inconnu",
+    },
+  },
+  // The "Rappels" section of the settings page (see features/reminders): when to be warned before the registrations of a race open.
+  reminders: {
+    title: "Rappels",
+    intro: "Avant l'ouverture des inscriptions des courses où tu es intéressé ou inscrit.",
+    legend: "Me prévenir",
+    day: "1 jour avant",
+    hour: "1 heure avant",
+    both: "1 jour et 1 heure avant",
+    none: "Jamais",
+    saved: "Rappels enregistrés.",
+    noTime:
+      "Sans heure d'ouverture connue, « 1 jour avant » arrive la veille à 9 h et « 1 heure avant » le jour même à 8 h.",
+    whereTitle: "Où ils arrivent",
+    where:
+      "En notification sur les appareils activés ci-dessous, et en alarme dans ton agenda abonné (section « Agenda »). Google Agenda et Outlook ignorent souvent les alarmes d'un agenda abonné : les notifications sont plus sûres.",
+  },
+  // Notifications on this device, inside the "Rappels" section (see features/push).
+  push: {
+    title: "Notifications sur cet appareil",
+    enable: "Activer sur cet appareil",
+    enabled: "Notifications activées sur cet appareil.",
+    disable: "Désactiver sur cet appareil",
+    disabled: "Notifications désactivées sur cet appareil.",
+    test: "Envoyer un essai",
+    testSent: (sent: number) =>
+      sent === 1 ? "Essai envoyé à 1 appareil." : `Essai envoyé à ${sent} appareils.`,
+    testNone: "Aucun appareil n'a reçu l'essai.",
+    testFailed: (failed: number) =>
+      failed === 1 ? "1 appareil n'a pas répondu." : `${failed} appareils n'ont pas répondu.`,
+    tooManyTests: "Trop d'essais à la suite : attends quelques secondes, puis réessaie.",
+    dismissed: "Tu n'as pas répondu à la demande du navigateur : réessaie quand tu veux.",
+    notReady:
+      "Le navigateur n'est pas encore prêt pour les notifications : réessaie dans un instant.",
+    chooseFirst: "Choisis d'abord quand être prévenu.",
+    needsInstall:
+      "Sur iPhone et iPad, les notifications ne marchent que dans l'appli installée (iOS 16.4 ou plus) : touche Partager, puis « Sur l'écran d'accueil », ouvre l'appli et reviens ici.",
+    denied:
+      "Les notifications sont bloquées pour ce site sur cet appareil : autorise-les dans les réglages du navigateur (ou de l'iPhone), puis reviens ici.",
+    unsupported: "Ce navigateur ne peut pas recevoir de notifications.",
+    unavailable: "Les notifications ne sont pas disponibles pour l'instant.",
+    devicesTitle: "Mes appareils",
+    noDevices: "Aucun appareil n'est activé pour l'instant.",
+    thisDevice: "cet appareil",
+    since: (date: string) => `depuis le ${date}`,
+    lastReminder: (date: string) => `dernier rappel le ${date}`,
+    neverReminded: "aucun rappel reçu",
+    remove: "Retirer",
+    // The name of the device is in the accessible name only, after the visible text.
+    removeLabel: (label: string) => `Retirer ${label}`,
+    // What a device is called in the list (see features/push/deviceLabel.ts).
+    device: {
+      iphone: "iPhone",
+      ipad: "iPad",
+      unknown: "Appareil",
+      browserOn: (browser: string, system: string) => `${browser} sur ${system}`,
+    },
   },
   // The "AI assistant" section of the settings page (see features/mcp): the personal tokens with which an assistant acts on the site as the member.
   mcp: {
@@ -221,6 +372,11 @@ export const fr = {
     addedBy: (name: string) => `Ajouté par ${name}`,
     // An event of several days: both days are already formatted.
     dateRange: (from: string, to: string) => `du ${from} au ${to}`,
+    // A race known by its month only: the month already formatted ("juin 2027"). `monthWhen` is the line that says its days; `monthLabel` is what a screen reader says of its chip.
+    monthWhen: (month: string) => `${month} · date à préciser`,
+    monthLabel: (month: string) => `${month}, date à préciser`,
+    // After the title of a race known by its month in a calendar file.
+    dateToBeSet: "date à préciser",
     // The page of an event (see features/events/EventPage.tsx).
     register: "S'inscrire sur le site officiel",
     nobody: "Personne pour l'instant.",
@@ -261,11 +417,40 @@ export const fr = {
       n === 0 ? "dernier jour" : n === 1 ? "plus qu'un jour" : `plus que ${n} jours`,
     // The box that reminds a runner who is only interested to register, and its text: the date is already formatted.
     reminderTitle: "Rappel",
+    startAt: (time: string) => `départ à ${time}`,
     reminder: (date: string) => `Pense à t'inscrire avant le ${date}.`,
+    // The opening of the registration, before it: a start (said in the page's line, the chip of a card, the box of a runner who is
+    // interested, and the home page), then the day (« le lun. 12 janv. » or « aujourd'hui »), then the time when there is one («  à 10:00 »).
+    openingHero: "Ouverture des inscriptions",
+    openingCard: "Ouverture",
+    openingAside: "Les inscriptions ouvrent",
+    openingTodo: "ouvre",
+    openingToday: "aujourd'hui",
+    openingOnDate: (date: string) => `le ${date}`,
+    openingAt: (time: string) => `à ${time}`,
+    // After the opening, in the page's line, when the event has a deadline: the date is already formatted.
+    openingDeadline: (date: string) => `jusqu'au ${date}`,
+    // The title of the opening in a calendar file: the name of the event is its own.
+    openingCalendarTitle: (name: string) => `Ouverture des inscriptions : ${name}`,
     // The button that downloads a calendar file of the event, and the name of that file when the event's own name
     // has nothing left once the characters a file name cannot have are taken out (the extension is added).
     addToCalendar: "Ajouter à mon agenda",
     calendarFileName: "evenement",
+  },
+  // Sharing a race (see features/events/share.ts and ShareButton.tsx).
+  share: {
+    button: "Partager",
+    title: "Partager la course",
+    // After the month of a race known by its month only, in the text that is sent.
+    monthWhen: (month: string) => `${month} (date à préciser)`,
+    formats: (list: string) => `Épreuves : ${list}`,
+    textLabel: "Texte à partager",
+    copy: "Copier le texte",
+    copied: "Texte copié.",
+    copyFailed: "Le navigateur n'a pas pu copier : le texte est sélectionné, copie-le à la main.",
+    whatsapp: "Envoyer sur WhatsApp",
+    newTab: "(nouvel onglet)",
+    signIn: "Le lien ne s'ouvre qu'après connexion : seuls les membres du groupe voient la course.",
   },
   // What a member does with the participations of an event (see features/participations).
   participation: {
@@ -462,6 +647,11 @@ export const fr = {
     map: "Carte du parcours",
     zoomIn: "Zoom avant",
     zoomOut: "Zoom arrière",
+    // The hints of the map: the wheel alone scrolls the page (the key is Ctrl, or ⌘ on Apple devices), and on a touch screen one finger does too.
+    wheelHint: (key: string) => `${key} + molette pour zoomer`,
+    fingersHint: "Deux doigts pour déplacer la carte",
+    // What describes the map to a screen reader (visually hidden).
+    mapHelp: (key: string) => `Boutons + et −, ${key} + molette ou deux doigts pour zoomer.`,
     // The accessible name of the profile, which the page completes with the numbers.
     profileLabel: "Profil de dénivelé",
     // The legend of the colours of the profile, which are the steepness of the slope.
@@ -470,6 +660,17 @@ export const fr = {
     profileCursor: "Position sur le profil",
     profileReading: (km: string, altitude: string, slope: string) =>
       `${km}, altitude ${altitude}, pente ${slope}`,
+    // Zooming on a portion of the profile: the three buttons (text, then accessible name), the portion in words (the kilometers already formatted: "Du km 12,4 au km 18,0"), and the help under the profile.
+    zoomProfileIn: "Zoomer",
+    zoomProfileInLabel: "Zoomer sur le profil",
+    zoomProfileOut: "Dézoomer",
+    zoomProfileOutLabel: "Dézoomer le profil",
+    zoomProfileAll: "Vue entière",
+    zoomProfileAllLabel: "Vue entière du profil",
+    profileWhole: "Profil entier",
+    profileRange: (from: string, to: string) => `Du km ${from} au km ${to}`,
+    profileHelpFine: "Glisse sur le profil pour zoomer sur une portion.",
+    profileHelpCoarse: "Écarte deux doigts sur le profil pour zoomer.",
     // What the two marks of the map stand for.
     start: "Départ",
     finish: "Arrivée",
@@ -502,6 +703,20 @@ export const fr = {
     registrationUrl: "Lien pour s'inscrire",
     registrationUrlHint: "Facultatif : l'adresse de la page d'inscription.",
     registrationDeadline: "Date limite d'inscription",
+    registrationOpening: "Ouverture des inscriptions",
+    registrationOpeningTime: "Heure d'ouverture",
+    registrationOpeningTimeHint: "Facultative, à l'heure de Paris.",
+    // Read with the time field while it is disabled: a time needs a day.
+    registrationOpeningTimeNeedsDay: "Choisis d'abord le jour de l'ouverture.",
+    // Under the start date: the box that says the day is not known, and the month to give instead.
+    dayUnknown: "Le jour n'est pas encore connu",
+    month: "Mois",
+    periodMonth: (month: string) => `${month}, date à préciser`,
+    deadlineAfterMonthEnd:
+      "La date limite d'inscription ne peut pas être après la fin du mois de la course.",
+    openingAfterMonthEnd:
+      "L'ouverture des inscriptions ne peut pas être après la fin du mois de la course.",
+    formatDatesLater: "Les épreuves auront leur date quand le jour sera connu.",
     notes: "Notes",
     formatsTitle: "Épreuves",
     // The title of the group of fields of a format, from 1.
@@ -533,6 +748,8 @@ export const fr = {
     elevation: "Dénivelé positif (m)",
     formatDate: "Date de l'épreuve",
     formatDateHint: "Seulement si ce n'est pas le premier jour.",
+    formatStartTime: "Heure de départ",
+    formatStartTimeHint: "Facultative. Elle donne la météo de l'heure du départ.",
     addFormat: "Ajouter une épreuve",
     // Next to « Retirer » on a format that already has runners: the server deletes their participations with it.
     formatHasParticipants: (n: number) =>
@@ -573,6 +790,8 @@ export const fr = {
     // Under the grid, on a phone: nothing chosen yet, or nothing on the day chosen.
     selectDay: "Touche un jour pour voir ses événements.",
     dayEmpty: "Aucun événement ce jour-là.",
+    // The block above the grid: the races of the month whose day is not known.
+    monthToBeSet: "Ce mois-ci, date à préciser",
   },
   list: {
     empty: "Aucun événement à afficher.",
@@ -781,6 +1000,10 @@ export const fr = {
         one: "date d'épreuve effacée (hors des dates de l'événement)",
         other: "dates d'épreuve effacées (hors des dates de l'événement)",
       },
+      clearedFormatTimes: {
+        one: "heure de départ effacée (la course gardée n'a que son mois)",
+        other: "heures de départ effacées (la course gardée n'a que son mois)",
+      },
       movedComments: { one: "commentaire déplacé", other: "commentaires déplacés" },
       movedOffers: { one: "offre déplacée", other: "offres déplacées" },
     },
@@ -822,6 +1045,13 @@ export const fr = {
     end_before_start: "La date de fin est avant la date de début.",
     registration_deadline_after_start:
       "La date limite d'inscription doit être au plus tard le jour du début.",
+    registration_opening_after_start:
+      "L'ouverture des inscriptions doit être au plus tard le jour du début.",
+    registration_opening_after_deadline:
+      "L'ouverture des inscriptions doit être au plus tard la date limite.",
+    format_date_month: "Une course dont seul le mois est connu n'a pas de date d'épreuve.",
+    format_time_month: "Une épreuve d'une course au mois n'a pas d'heure de départ.",
+    month_start_invalid: "Pour une course dont seul le mois est connu, la date est le 1er du mois.",
     format_date_out_of_range:
       "La date de l'épreuve doit être comprise dans les dates de l'événement.",
     format_other_event: "Cette épreuve appartient à un autre événement.",
@@ -847,6 +1077,9 @@ export const fr = {
     token_invalid: "Ce jeton n'est pas valide, ou il a été révoqué.",
     token_limit: "Tu as déjà 5 jetons : révoque-en un pour en créer un autre.",
     upload_invalid: "Cet envoi n'est pas valide, ou il a expiré.",
+    push_endpoint_invalid: "Cet appareil ne peut pas être enregistré pour les notifications.",
+    push_unavailable: "Les notifications ne sont pas disponibles pour l'instant.",
+    weather_unavailable: "La météo n'a pas pu être chargée. Réessaie dans un moment.",
     // PocketBase's own validation codes.
     validation_required: "Ce champ est obligatoire.",
     validation_not_unique: "Cette valeur est déjà utilisée.",

@@ -131,6 +131,10 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	alice := newToken(t, app, fx.Alice)
 
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A format that starts at 9:00.
+	update(t, app, fx.F15, map[string]any{"start_time": "09:00"})
+	// A race that opens its registration on the 1st of May at 10:00.
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	// An old race of three days, whose last day is the one of a format nobody
 	// runs yet.
 	ultra := create(t, app, "events", map[string]any{"name": "Ultra des Lacs", "location": "Annecy", "start_date": "2026-03-01", "end_date": "2026-03-03", "created_by": fx.AliceRunner.Id})
@@ -165,6 +169,7 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	update(t, app, phone, map[string]any{"last_used_at": "2026-04-02 23:30:00.000Z"}) // 1:30 on the 3rd in Paris
 	passkeyFor(t, app, fx.Alice, "PC du boulot")
 	linkFor(t, app, fx.Alice)
+	scopedLinkFor(t, app, fx.Alice, "group")
 	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
 	update(t, app, storedRecord(t, app, "mcp_tokens", desktopID), map[string]any{"last_used_at": "2026-04-20 08:00:00.000Z"})
 
@@ -194,6 +199,21 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			[]string{"Les notes seraient remplacées", "Navette depuis la gare à 6 h."},
 		},
 		{
+			"update_event: the opening cleared, and its time with it", "update_event",
+			map[string]any{"event_id": fx.Event2.Id, "registration_opening": ""},
+			[]string{"L'ouverture des inscriptions serait effacée", "2026-05-01", "L'heure d'ouverture serait effacée", "10:00"},
+		},
+		{
+			"update_event: the time of the opening cleared", "update_event",
+			map[string]any{"event_id": fx.Event2.Id, "registration_opening_time": ""},
+			[]string{"L'heure d'ouverture serait effacée", "10:00"},
+		},
+		{
+			"update_event: a race that becomes a month loses the days of its formats", "update_event",
+			map[string]any{"event_id": fx.Event.Id, "date_precision": "month"},
+			[]string{"« Trail 42 km »", "son jour, le 2026-06-14, serait effacé", "la course n'ayant plus que son mois", "Alice (Inscrit)", "Bob (Intéressé, non confirmé)"},
+		},
+		{
 			"update_event: an old race shortened", "update_event",
 			map[string]any{"event_id": ultra.Id, "formats": []any{map[string]any{"format_id": fLast.Id, "date": "2026-03-02"}}},
 			[]string{"raccourcie", "2026-03-01 au 2026-03-03", "2026-03-01 au 2026-03-02"},
@@ -207,6 +227,11 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			"update_format: a field cleared", "update_format",
 			map[string]any{"format_id": fx.F42.Id, "elevation_gain_m": 0},
 			[]string{"« Trail 42 km »", "le D+ serait effacé", "2400"},
+		},
+		{
+			"update_format: the start time cleared", "update_format",
+			map[string]any{"format_id": fx.F15.Id, "start_time": ""},
+			[]string{"« Trail 15 km »", "l'heure de départ serait effacée", "09:00"},
 		},
 		{
 			"update_format: the day moved, with participants", "update_format",
@@ -317,6 +342,16 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			"calendar_link: deleted", "calendar_link",
 			map[string]any{"action": "delete"},
 			[]string{"Le lien cessera de marcher", "ne recevront plus tes courses", "Un nouveau lien aurait une autre adresse"},
+		},
+		{
+			"calendar_link: the group link renewed", "calendar_link",
+			map[string]any{"action": "renew", "scope": "group"},
+			[]string{"L'ancien lien cessera de marcher", "ne recevront plus les courses du groupe", "Les textes du nouveau lien seront en français"},
+		},
+		{
+			"calendar_link: the group link deleted", "calendar_link",
+			map[string]any{"action": "delete", "scope": "group"},
+			[]string{"Le lien cessera de marcher", "ne recevront plus les courses du groupe", "Un nouveau lien aurait une autre adresse"},
 		},
 		{
 			"mcp_tokens: another token revoked", "mcp_tokens",
@@ -575,6 +610,8 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	bob := newToken(t, app, fx.Bob)
 	admin := newToken(t, app, fx.Admin)
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A race that opens its registration on the 1st of May at 10:00.
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	lake, _ := newRace(t, app, fx, fx.AliceRunner, "Foulées du lac", "2026-09-05")
 	ride := rideOf(t, app, lake, fx.AliceRunner)
 	seatFor(t, app, ride, fx.BobRunner, fx.BobRunner)
@@ -586,6 +623,7 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 	// Two passkeys, a link of the calendar and a second token of Alice.
 	phone, pc := passkeyFor(t, app, fx.Alice, "iPhone"), passkeyFor(t, app, fx.Alice, "PC du boulot")
 	linkFor(t, app, fx.Alice)
+	scopedLinkFor(t, app, fx.Alice, "group")
 	_, desktopID := tokenOf(t, app, fx.Alice, "Claude Desktop")
 
 	const other = "Confirmation refusée : elle ne correspond pas à cette demande."
@@ -610,6 +648,9 @@ func TestTools_Confirmation_OtherArguments(t *testing.T) {
 		{"passkeys: another key", "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": pc.Id}},
 		{"calendar_link: the renewal for the deletion", "calendar_link", map[string]any{"action": "renew"}, alice, "calendar_link", map[string]any{"action": "delete"}},
 		{"calendar_link: another language", "calendar_link", map[string]any{"action": "renew", "lang": "fr"}, alice, "calendar_link", map[string]any{"action": "renew", "lang": "en"}},
+		{"calendar_link: the renewal of the group link for the personal one", "calendar_link", map[string]any{"action": "renew", "scope": "group"}, alice, "calendar_link", map[string]any{"action": "renew"}},
+		{"calendar_link: the renewal of the personal link for the group one", "calendar_link", map[string]any{"action": "renew"}, alice, "calendar_link", map[string]any{"action": "renew", "scope": "group"}},
+		{"calendar_link: the deletion of the group link for the renewal of the same", "calendar_link", map[string]any{"action": "delete", "scope": "group"}, alice, "calendar_link", map[string]any{"action": "renew", "scope": "group"}},
 		{"mcp_tokens: another token", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, alice, "mcp_tokens", map[string]any{"action": "revoke", "token_id": idOfToken(alice)}},
 		{"mcp_tokens: the token of Alice, through another tool", "mcp_tokens", map[string]any{"action": "revoke", "token_id": desktopID}, alice, "passkeys", map[string]any{"action": "delete", "passkey_id": phone.Id}},
 	} {
@@ -991,6 +1032,8 @@ func TestTools_Confirmation_NoLongerNeeded(t *testing.T) {
 	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
 	alice := newToken(t, app, fx.Alice)
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A race that opens its registration on the 1st of May at 10:00.
+	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	args := map[string]any{"event_id": fx.Event.Id, "notes": ""}
 
 	token, _, _ := asked(t, callTool(t, app, alice, "update_event", args))

@@ -194,6 +194,9 @@ describe("buildBatch, creation", () => {
       end_date: "",
       registration_url: "",
       registration_deadline: "",
+      registration_opening: "",
+      registration_opening_time: "",
+      date_precision: "",
       notes: "",
     });
     expect(ops[2]?.body).toEqual({
@@ -207,6 +210,7 @@ describe("buildBatch, creation", () => {
       price_eur: 0,
       route_url: "",
       date: "",
+      start_time: "",
     });
   });
 
@@ -235,6 +239,20 @@ describe("buildBatch, creation", () => {
     expect(ops[0]?.body).toMatchObject({ registration_deadline: "2026-06-10" });
     expect(ops[1]?.body).toMatchObject({ price_eur: 42.5 });
     expect(ops[2]?.body).toMatchObject({ price_eur: 0 });
+  });
+
+  test("eventBody — l'ouverture et son heure", () => {
+    const draft = newDraft({
+      registration_opening: "2026-05-01",
+      registration_opening_time: "10:00",
+    });
+
+    const { ops } = buildBatch(draft, undefined, ME);
+
+    expect(ops[0]?.body).toMatchObject({
+      registration_opening: "2026-05-01",
+      registration_opening_time: "10:00",
+    });
   });
 
   test("a format that comes with an id keeps it", () => {
@@ -361,7 +379,7 @@ describe("buildBatch, modification", () => {
 // time a request runs (server/events/hooks.go). This runs the requests of a
 // batch against those two checks, in their order.
 
-type Stored = { start: string; end: string; formats: Map<string, string> };
+type Stored = { start: string; end: string; month: boolean; formats: Map<string, string> };
 
 const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
 
@@ -372,27 +390,39 @@ function runOnServer(ops: BatchOp[], view: EventView): Stored {
   const stored: Stored = {
     start: view.event.start_date,
     end: view.event.end_date ?? "",
+    month: view.event.date_precision === "month",
     formats: new Map(view.formats.map(({ format }) => [format.id, format.date ?? ""])),
   };
   ops.forEach((op, index) => {
     if (op.collection === "events") {
       const start = textOf(op.body?.start_date);
       const end = textOf(op.body?.end_date);
+      const month = textOf(op.body?.date_precision) === "month";
       for (const [id, day] of stored.formats) {
+        if (month && day !== "") {
+          throw new Error(`request ${index}: the event becomes a month while ${id} has a date`);
+        }
         if (day !== "" && !isWithin(day, start, end)) {
           throw new Error(`request ${index}: the date ${day} of ${id} is out of the event`);
         }
       }
       stored.start = start;
       stored.end = end;
+      stored.month = month;
     } else if (op.collection === "formats") {
       if (op.action === "delete") {
         stored.formats.delete(op.id);
         return;
       }
       const day = typeof op.body?.date === "string" ? op.body.date : stored.formats.get(op.id);
+      if (day !== undefined && day !== "" && stored.month) {
+        throw new Error(`request ${index}: ${op.id} has a date, and the event is a month`);
+      }
       if (day !== undefined && day !== "" && !isWithin(day, stored.start, stored.end)) {
         throw new Error(`request ${index}: the date ${day} of ${op.id} is out of the event`);
+      }
+      if (textOf(op.body?.start_time) !== "" && stored.month) {
+        throw new Error(`request ${index}: ${op.id} has a start time, and the event is a month`);
       }
       stored.formats.set(op.id, day ?? "");
     }
@@ -926,5 +956,208 @@ describe("uploadTraces", () => {
     await expect(saveEvent(draft, undefined, ME)).rejects.toBeInstanceOf(SaveEventError);
 
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+});
+
+/** The event of the fixture as a month: June 2027, its formats with no date. */
+const monthExisting = () =>
+  toEventView({
+    ...eventRecord,
+    start_date: "2027-06-01",
+    end_date: "2027-06-30",
+    date_precision: "month",
+    expand: { formats_via_event: [{ ...f42, date: "" }, f15] },
+  });
+
+/** A draft of the fixture's formats, as a month: no date on any format. */
+function monthDraft(extra: Partial<EventDraft> = {}): EventDraft {
+  const draft = editDraft({
+    start_date: "2027-06-01",
+    end_date: "2027-06-30",
+    date_precision: "month",
+    ...extra,
+  });
+  draft.formats = draft.formats.map((format) => ({ ...format, date: undefined }));
+  return draft;
+}
+
+describe("buildBatch — la précision de la date", () => {
+  test("la précision part avec la course : `month`, et vide pour un jour (ce qui l'efface)", () => {
+    expect(buildBatch(monthDraft(), undefined, ME).ops[0]?.body).toMatchObject({
+      date_precision: "month",
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+    });
+    expect(
+      buildBatch(newDraft({ date_precision: "day" }), undefined, ME).ops[0]?.body,
+    ).toMatchObject({
+      date_precision: "",
+    });
+    expect(buildBatch(newDraft(), undefined, ME).ops[0]?.body).toMatchObject({
+      date_precision: "",
+    });
+  });
+
+  test("buildBatch — passer au mois vide d'abord les dates des épreuves", () => {
+    // 13-14 June 2026, F42 on the 14th: June 2027 as a month.
+    const { ops } = buildBatch(monthDraft(), existing(), ME);
+
+    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(ops[0]).toMatchObject({ id: "f42", body: { date: "" } });
+    expect(ops[2]?.body).toMatchObject({ date_precision: "month", start_date: "2027-06-01" });
+    // The server refuses an event that becomes a month while a format has a day.
+    expect(runOnServer(ops, existing())).toMatchObject({
+      start: "2027-06-01",
+      end: "2027-06-30",
+      month: true,
+    });
+    expect(runOnServer(ops, existing()).formats.get("f42")).toBe("");
+  });
+
+  test("buildBatch — un brouillon au mois qui garderait la date d'une épreuve ne l'envoie pas", () => {
+    const draft = monthDraft();
+    draft.formats = draft.formats.map((format) => ({ ...format, date: "2027-06-12" }));
+
+    const { ops } = buildBatch(draft, existing(), ME);
+
+    for (const op of ops.filter(({ collection }) => collection === "formats")) {
+      expect(op.body).toMatchObject({ date: "" });
+    }
+    expect(() => runOnServer(ops, existing())).not.toThrow();
+  });
+
+  test("buildBatch — une course au mois créée n'envoie aucune date d'épreuve", () => {
+    const draft = monthDraft();
+    draft.formats = draft.formats.map((format) => ({ ...format, date: "2027-06-12" }));
+
+    const { ops } = buildBatch(draft, undefined, ME);
+
+    expect(summary(ops)).toEqual(["create events", "create formats", "create formats"]);
+    expect(ops[1]?.body).toMatchObject({ date: "" });
+    expect(ops[2]?.body).toMatchObject({ date: "" });
+  });
+
+  test("buildBatch — passer au jour date les épreuves après la course", () => {
+    // June 2027 as a month: back to a day, 12-13 June, F42 on the 13th.
+    const draft = editDraft({
+      start_date: "2027-06-12",
+      end_date: "2027-06-13",
+      date_precision: "day",
+    });
+    draft.formats = draft.formats.map((format) => ({
+      ...format,
+      date: format.id === "f42" ? "2027-06-13" : undefined,
+    }));
+
+    const { ops } = buildBatch(draft, monthExisting(), ME);
+
+    // The format is kept with no date first (the stored event is a month, which
+    // offers none), then the event changes, then the format gets its day.
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    expect(ops[0]).toMatchObject({ id: "f42", body: { date: "" } });
+    expect(ops[2]?.body).toMatchObject({ date_precision: "", start_date: "2027-06-12" });
+    expect(ops[3]).toEqual({
+      action: "update",
+      collection: "formats",
+      id: "f42",
+      body: { date: "2027-06-13" },
+    });
+    expect(runOnServer(ops, monthExisting())).toMatchObject({
+      start: "2027-06-12",
+      end: "2027-06-13",
+      month: false,
+    });
+    expect(runOnServer(ops, monthExisting()).formats.get("f42")).toBe("2027-06-13");
+  });
+
+  test("buildBatch — une course qui reste au mois ne sort pas de son mois : ses épreuves restent sans date", () => {
+    const { ops } = buildBatch(monthDraft({ name: "Trail de juin" }), monthExisting(), ME);
+
+    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(ops[2]?.body).toMatchObject({ name: "Trail de juin", date_precision: "month" });
+  });
+
+  test("un jour à ajouter à une épreuve d'une course au mois attend que la course devienne un jour", () => {
+    // A format dated on a day that is in the stored month: still not in range.
+    const draft = editDraft({
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "day",
+    });
+    draft.formats = draft.formats.map((format) => ({
+      ...format,
+      date: format.id === "f42" ? "2027-06-10" : undefined,
+    }));
+
+    const { ops } = buildBatch(draft, monthExisting(), ME);
+
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    expect(ops[3]).toMatchObject({ id: "f42", body: { date: "2027-06-10" } });
+    expect(() => runOnServer(ops, monthExisting())).not.toThrow();
+  });
+});
+
+describe("buildBatch — l'heure de départ", () => {
+  test("elle part avec l'épreuve, et vide quand il n'y en a pas (ce qui l'efface)", () => {
+    const draft = editDraft();
+    const [first] = draft.formats;
+    if (first) first.start_time = "07:30";
+
+    const { ops } = buildBatch(draft, existing(), ME);
+
+    expect(ops.find((op) => op.id === "f42")?.body).toMatchObject({ start_time: "07:30" });
+    expect(ops.find((op) => op.id === "f15")?.body).toMatchObject({ start_time: "" });
+  });
+
+  test("une course au mois n'envoie aucune heure de départ, ce que garde le brouillon n'y fait rien", () => {
+    const draft = monthDraft();
+    draft.formats = draft.formats.map((format) => ({ ...format, start_time: "07:30" }));
+
+    for (const view of [undefined, existing()]) {
+      const { ops } = buildBatch(draft, view, ME);
+
+      const formats = ops.filter(({ collection }) => collection === "formats");
+      expect(formats.length).toBeGreaterThan(0);
+      for (const op of formats) expect(op.body).toMatchObject({ start_time: "" });
+    }
+  });
+});
+
+describe("buildBatch — de la course au mois à la course d'un jour, avec des heures", () => {
+  test("l'heure attend l'événement avec la date, et le serveur ne refuse rien", () => {
+    const draft = editDraft({
+      start_date: "2027-06-12",
+      end_date: "2027-06-13",
+      date_precision: "day",
+    });
+    draft.formats = [
+      { ...draft.formats[0]!, date: "2027-06-13", start_time: "07:30" },
+      { ...draft.formats[1]!, start_time: "09:00" },
+    ];
+
+    const { ops } = buildBatch(draft, monthExisting(), ME);
+
+    // Before the event, no time and no date; after it, the date and the time together.
+    const eventAt = ops.findIndex((op) => op.collection === "events");
+    for (const op of ops.slice(0, eventAt))
+      expect(op.body).toMatchObject({ start_time: "", date: "" });
+    expect(ops.slice(eventAt + 1).find((op) => op.id === "f42")?.body).toEqual({
+      date: "2027-06-13",
+      start_time: "07:30",
+    });
+    expect(ops.slice(eventAt + 1).find((op) => op.id === "f15")?.body).toEqual({
+      start_time: "09:00",
+    });
+    expect(() => runOnServer(ops, monthExisting())).not.toThrow();
   });
 });

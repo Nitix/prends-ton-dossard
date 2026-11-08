@@ -97,3 +97,32 @@
 .track-map .track-marker {
   stroke: var(--color-card);
 }
+
+/* The hint over the map (see TrackMap): it comes in softly, and at once when less
+   motion is asked for. */
+@media (prefers-reduced-motion: no-preference) {
+  .track-hint {
+    animation: track-hint-in 150ms ease-out;
+  }
+}
+@keyframes track-hint-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The portion of the track that the profile is zoomed on (see TrackMap): a thicker
+   line over the track, in the colour of the line, on a white halo like the track's.
+   In forced colours the colours are the system's: the portion is the text's colour
+   on the canvas's, so it stands out of the rest of the track, which is dimmer. */
+.track-map .track-portion {
+  stroke: var(--map-line);
+}
+@media (forced-colors: active) {
+  .track-map .track-portion-halo {
+    stroke: Canvas;
+  }
+  .track-map .track-portion {
+    stroke: CanvasText;
+  }
+}

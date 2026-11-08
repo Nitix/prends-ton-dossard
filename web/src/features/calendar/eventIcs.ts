@@ -1,4 +1,7 @@
 import type { Lang } from "../../i18n/detect";
+import type { Messages } from "../../i18n/fr";
+import { isMonthOnly, PARIS } from "../../lib/dates";
+import type { Reminder } from "../../lib/types";
 import type { EventView } from "../events/api";
 
 // The calendar file of one event, made in the browser for a calendar app to
@@ -17,6 +20,21 @@ const MAX_LINE_OCTETS = 75;
  * some of them lose it if it is revoked at once.
  */
 const REVOKE_AFTER_MS = 1000;
+
+/** How long the opening of the registration lasts in a calendar, when it has a time. */
+const OPENING_MINUTES = 30;
+
+/**
+ * When an alarm of the opening goes off, from the start of the opening
+ * (RFC 5545, 3.8.6.3). With a time: a day and an hour before it. Without one the
+ * opening is a whole day, which starts at 0 h of the calendar: the day before at
+ * 9 h and the day itself at 8 h, the moments of the notifications.
+ */
+const TIMED_TRIGGERS: Readonly<Record<Reminder, string>> = { day: "-P1D", hour: "-PT1H" };
+const WHOLE_DAY_TRIGGERS: Readonly<Record<Reminder, string>> = { day: "-PT15H", hour: "PT8H" };
+
+/** The UID of the opening of the registration of an event: its own, beside the event's. */
+const openingUid = (eventId: string) => `opening-${eventId}@prends-ton-dossard`;
 
 /** The UID of the event in a calendar: the same each time the file is downloaded, so that an app that imports it again does not add it twice. */
 const uid = (eventId: string) => `event-${eventId}@prends-ton-dossard`;
@@ -113,15 +131,29 @@ function stampValue(instant: Temporal.Instant): string {
  * the address of its page on the site at `appURL`, as of the moment `now`,
  * which is its `DTSTAMP`. An empty place is left out. `lang` is the language
  * of the site, which the `PRODID` says (`FR` or `EN`), as the feed of the
- * server does.
+ * server does. `t` is the texts of the site, from the caller: the title of the
+ * opening and « date à préciser » come from them.
+ *
+ * A race known by its month only is one whole day, the 1st of the month, with
+ * « (date à préciser) » after its name: the calendar has a reminder at the start
+ * of the month, and the same UID when the day is known (spec 5.4).
+ *
+ * An event with an opening of its registration has a second `VEVENT` for it:
+ * with a time, thirty minutes in UTC (the time is Paris time, so the instant
+ * moves with summer time); without, the whole day.
  */
 export function eventIcs(
   view: EventView,
   appURL: string,
   now: Temporal.Instant,
   lang: Lang,
+  t: Messages,
+  reminders: readonly Reminder[] = [],
 ): string {
-  const { event, start, end } = view;
+  const { event, start } = view;
+  const monthOnly = isMonthOnly(event);
+  // The end of an event of whole days is exclusive: one day for a month, the 1st.
+  const end = monthOnly ? start : view.end;
   const address = `${appURL}/evenements/${event.id}`;
   const lines: string[] = [];
   const line = (name: string, value: string) => {
@@ -141,11 +173,46 @@ export function eventIcs(
   line("DTSTART;VALUE=DATE", dateValue(start));
   // The end of an event of whole days is exclusive.
   line("DTEND;VALUE=DATE", dateValue(end.add({ days: 1 })));
-  line("SUMMARY", textValue(event.name));
+  line("SUMMARY", textValue(monthOnly ? `${event.name} (${t.event.dateToBeSet})` : event.name));
   optional("DESCRIPTION", textValue(address));
   optional("LOCATION", textValue(event.location));
   optional("URL", uriValue(address));
   line("END", "VEVENT");
+  if (event.registration_opening) {
+    const day = Temporal.PlainDate.from(event.registration_opening);
+    const time = event.registration_opening_time ?? "";
+    line("BEGIN", "VEVENT");
+    line("UID", textValue(openingUid(event.id)));
+    line("DTSTAMP", stampValue(now));
+    if (time === "") {
+      line("DTSTART;VALUE=DATE", dateValue(day));
+      line("DTEND;VALUE=DATE", dateValue(day.add({ days: 1 })));
+    } else {
+      // The later reading of a time that Paris has twice (the October change), as the server takes it.
+      const starts = day
+        .toPlainDateTime(time)
+        .toZonedDateTime(PARIS, { disambiguation: "later" })
+        .toInstant();
+      line("DTSTART", stampValue(starts));
+      line("DTEND", stampValue(starts.add({ minutes: OPENING_MINUTES })));
+    }
+    const title = t.event.openingCalendarTitle(event.name);
+    line("SUMMARY", textValue(title));
+    optional("DESCRIPTION", textValue(address));
+    optional("URL", uriValue(address));
+    // One alarm for each reminder the person chose, "day" before "hour", as the
+    // feed of the server writes them (server/calendar/entries.go).
+    const triggers = time === "" ? WHOLE_DAY_TRIGGERS : TIMED_TRIGGERS;
+    for (const kind of ["day", "hour"] as const) {
+      if (!reminders.includes(kind)) continue;
+      line("BEGIN", "VALARM");
+      line("ACTION", "DISPLAY");
+      line("TRIGGER", uriValue(triggers[kind]));
+      line("DESCRIPTION", textValue(title));
+      line("END", "VALARM");
+    }
+    line("END", "VEVENT");
+  }
   line("END", "VCALENDAR");
   return lines.join("");
 }
@@ -168,10 +235,16 @@ export function icsFileName(eventName: string, fallback: string): string {
  * Saves the calendar file of the event: the browser is handed a file made on
  * the spot, through a link that is clicked and let go. `fallbackName` names the
  * file when the name of the event gives nothing (see `icsFileName`), and `lang`
- * is the language of the site (see `eventIcs`).
+ * is the language of the site and `t` its texts (see `eventIcs`).
  */
-export function downloadEventIcs(view: EventView, fallbackName: string, lang: Lang): void {
-  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang);
+export function downloadEventIcs(
+  view: EventView,
+  fallbackName: string,
+  lang: Lang,
+  t: Messages,
+  reminders: readonly Reminder[] = [],
+): void {
+  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang, t, reminders);
   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;

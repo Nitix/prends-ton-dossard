@@ -36,6 +36,8 @@ var (
 		"add_comment", "update_comment", "delete_comment", "add_offer", "update_offer", "delete_offer", "offer_place",
 		"start_upload", "set_photo", "set_track",
 		"rename_runner", "passkeys", "calendar_link", "mcp_tokens",
+		// v7
+		"reminders", "get_weather",
 	}
 	// wantAdminTools are the tools that only the token of an admin sees, besides
 	// the member tools.
@@ -101,6 +103,11 @@ var wantHints = map[string]hints{
 	"passkeys":      {destructive: true},
 	"calendar_link": {destructive: true},
 	"mcp_tokens":    {destructive: true},
+	// A choice of the person, replaced by another: nothing is lost, and it is set
+	// to a value.
+	"reminders": {idempotent: true},
+	// The weather is read from Open-Meteo by the site: nothing is written.
+	"get_weather": {readOnly: true},
 	// The admin tools: every one that can ask for a confirmation is destructive;
 	// adding a runner or a race type, and renaming a type, never ask. A role, an
 	// account turned off or on and a type changed are set to a value: idempotent.
@@ -377,7 +384,36 @@ func specInstructions(t *testing.T) (member, admin string) {
 	if len(quotes) != 2 {
 		t.Fatalf("§ 6.2 has %d quotes, want the instructions and the admin line", len(quotes))
 	}
-	return strings.Join(quotes[0], "\n"), strings.Join(quotes[1], "\n")
+	return strings.Join(quotes[0], "\n") + "\n" + v7Instruction(t), strings.Join(quotes[1], "\n")
+}
+
+// v7Instruction is the line that the instructions gain in v7 (spec § 12.1 of the
+// v7 spec: « Les instructions du serveur gagnent une ligne : « … » »).
+func v7Instruction(t *testing.T) string {
+	t.Helper()
+	spec, err := os.ReadFile(filepath.Join(filepath.Dir(specPath(t)), "2026-11-07-courses-v7-design.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, after, ok := strings.Cut(string(spec), "Les instructions du serveur gagnent une ligne : « ")
+	if !ok {
+		t.Fatal("no new line of the instructions in the v7 spec (§ 12.1)")
+	}
+	line, _, ok := strings.Cut(after, " »")
+	if !ok {
+		t.Fatal("the new line of the instructions in the v7 spec has no end")
+	}
+	return "- " + line
+}
+
+// specPath is the file of the spec of the MCP server.
+func specPath(t *testing.T) string {
+	t.Helper()
+	_, here, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot tell where this test file is")
+	}
+	return filepath.Join(filepath.Dir(here), "..", "..", "docs", "superpowers", "specs", "2026-11-03-courses-mcp-design.md")
 }
 
 // specText is the text of the spec of the MCP server.
@@ -414,6 +450,9 @@ func specTitles(t *testing.T) map[string]string {
 			}
 		}
 	}
+	// The tools of v7 are in § 12.2 of its spec, not in the table of § 6.3.
+	titles["reminders"] = "Rappels"
+	titles["get_weather"] = "La météo d'une course"
 	return titles
 }
 
@@ -731,7 +770,9 @@ func TestMCP_TokenIsNotLogged(t *testing.T) {
 
 	secrets := map[string]string{"the session of the inner request": session}
 	for name, value := range map[string]string{"token": token, "malformed token": malformed, "token with a wrong secret": wrongSecret} {
-		secret := value[strings.LastIndexByte(value, '_')+1:]
+		// ptd_<id>_<secret>: what follows the second "_". The secret is base64url and may hold "_":
+		// cutting at the last one would give a word of a few characters that any log holds.
+		secret := strings.SplitN(value, "_", 3)[2]
 		secrets["the "+name] = value
 		secrets["the secret of the "+name] = secret
 		secrets["the hash of the secret of the "+name] = invitations.Hash(secret)

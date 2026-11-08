@@ -29,6 +29,7 @@ const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   hasTrack: false,
   gpx: { kind: "keep" },
   date: "",
+  startTime: "",
   ...extra,
 });
 
@@ -101,6 +102,18 @@ describe("eventEndDate", () => {
     expect(eventEndDate("2026-06-13", ["2026-06-1", "2026-06-15"])).toBe("2026-06-15");
     expect(eventEndDate("", ["2026-06-15"])).toBe("");
     expect(eventEndDate("2026-06-1", ["2026-06-15"])).toBe("");
+  });
+
+  test("eventEndDate — une course au mois finit le dernier jour du mois", () => {
+    expect(eventEndDate("2027-06-01", [], true)).toBe("2027-06-30");
+    expect(eventEndDate("2027-12-01", [], true)).toBe("2027-12-31");
+    expect(eventEndDate("2028-02-01", [], true)).toBe("2028-02-29");
+    expect(eventEndDate("2027-02-01", [], true)).toBe("2027-02-28");
+    // The days of its formats do not give it its end.
+    expect(eventEndDate("2027-06-01", ["2027-06-12", "2027-07-02"], true)).toBe("2027-06-30");
+    // Without a start there is no month.
+    expect(eventEndDate("", [], true)).toBe("");
+    expect(eventEndDate("2027-06", [], true)).toBe("");
   });
 });
 
@@ -188,6 +201,32 @@ describe("initialDraft", () => {
     expect(draft.joinRow).toBe(draft.rows[0]?.key);
   });
 
+  test("initialDraft — une course au mois : le mois est repris, la case est cochée", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        start_date: "2027-06-01",
+        end_date: "2027-06-30",
+        date_precision: "month",
+        expand: { formats_via_event: [{ ...f15 }] },
+      }),
+    );
+
+    expect(draft).toMatchObject({
+      monthOnly: true,
+      startMonth: "2027-06",
+      startDate: "2027-06-01",
+    });
+  });
+
+  test("initialDraft — une course datée : la case n'est pas cochée, son mois est proposé", () => {
+    expect(initialDraft(toEventView(eventRecord))).toMatchObject({
+      monthOnly: false,
+      startMonth: "2026-06",
+    });
+    expect(initialDraft(undefined)).toMatchObject({ monthOnly: false, startMonth: "" });
+  });
+
   test("an event being edited: its values, its formats by their id, and no taking part", () => {
     const draft = initialDraft(toEventView(eventRecord));
 
@@ -240,6 +279,21 @@ describe("initialDraft", () => {
     });
   });
 
+  test("initialDraft — l'ouverture et son heure d'une course modifiée", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        registration_opening: "2026-05-01",
+        registration_opening_time: "10:00",
+      }),
+    );
+
+    expect(draft).toMatchObject({
+      registrationOpening: "2026-05-01",
+      registrationOpeningTime: "10:00",
+    });
+  });
+
   test("the deadline and the price of an event being edited are in the fields", () => {
     const draft = initialDraft(
       toEventView({
@@ -285,6 +339,8 @@ describe("toEventDraft", () => {
       end_date: "",
       registration_url: undefined,
       registration_deadline: undefined,
+      registration_opening: undefined,
+      registration_opening_time: undefined,
       notes: undefined,
       formats: [
         {
@@ -351,6 +407,77 @@ describe("toEventDraft", () => {
 
     expect(saved.registration_deadline).toBe("2026-06-10");
     expect(saved.formats[0]?.price_eur).toBe(42.5);
+  });
+
+  test("toEventDraft — l'ouverture et son heure", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      registrationOpening: "2026-05-01",
+      registrationOpeningTime: "10:00",
+      rows: [row({ distanceKm: "42" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.registration_opening).toBe("2026-05-01");
+    expect(saved.registration_opening_time).toBe("10:00");
+  });
+
+  test("toEventDraft — une course au mois", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      name: "Trail de juin",
+      monthOnly: true,
+      startMonth: "2027-06",
+      // What was typed before the box was checked is kept in the draft, and not sent.
+      startDate: "2027-05-20",
+      rows: [row({ distanceKm: "42", date: "2027-06-12" }), row({ key: "k2", distanceKm: "10" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved).toMatchObject({
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+    });
+    expect(saved.formats.map(({ date }) => date)).toEqual([undefined, undefined]);
+  });
+
+  test("toEventDraft — décocher rend la date et les dates des épreuves", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      monthOnly: false,
+      startMonth: "2027-06",
+      startDate: "2027-06-12",
+      rows: [row({ distanceKm: "42", date: "2027-06-13" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved).toMatchObject({ start_date: "2027-06-12", end_date: "2027-06-13" });
+    expect(saved.date_precision).toBeUndefined();
+    expect(saved.formats[0]?.date).toBe("2027-06-13");
+  });
+
+  test("toEventDraft — un mois qui n'est pas choisi n'a pas de début", () => {
+    const draft = { ...initialDraft(undefined), monthOnly: true, startMonth: "" };
+
+    expect(toEventDraft(draft, undefined, false)).toMatchObject({ start_date: "", end_date: "" });
+  });
+
+  test("toEventDraft — une heure sans jour n'est pas envoyée", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      registrationOpening: "",
+      registrationOpeningTime: "10:00",
+      rows: [row({ distanceKm: "42" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.registration_opening).toBeUndefined();
+    expect(saved.registration_opening_time).toBeUndefined();
   });
 
   test("joins the format that was chosen, by its place in the list", () => {
@@ -431,8 +558,62 @@ describe("joinStarted", () => {
     expect(joinStarted({ ...draft, joinRow: "b" }, day("2026-06-13"))).toBe(true);
   });
 
+  test("une course au mois commence le 1er du mois, quelles que soient ses épreuves", () => {
+    const draft = typed({
+      monthOnly: true,
+      startMonth: "2027-06",
+      startDate: "",
+      rows: [row({ key: "a", date: "2027-06-20" })],
+      joinRow: "a",
+    });
+
+    expect(joinStarted(draft, day("2027-05-31"))).toBe(false);
+    expect(joinStarted(draft, day("2027-06-01"))).toBe(true);
+    expect(joinStarted({ ...draft, startMonth: "" }, day("2027-06-01"))).toBe(false);
+  });
+
   test("is false while the day is not typed (or not a day): nobody finishes a race with no day", () => {
     expect(joinStarted(typed({ startDate: "" }), day("2026-06-13"))).toBe(false);
     expect(joinStarted(typed({ startDate: "2026-06-3" }), day("2026-06-13"))).toBe(false);
+  });
+});
+
+describe("l'heure de départ", () => {
+  test("initialDraft — l'heure de l'épreuve enregistrée est dans le champ, vide sans heure", () => {
+    const draft = initialDraft(
+      toEventView({
+        ...eventRecord,
+        expand: { formats_via_event: [{ ...f42, start_time: "07:30" }, f15] },
+      }),
+    );
+
+    expect(draft.rows.map((r) => r.startTime)).toEqual(["", "07:30"]);
+    expect(initialDraft(undefined).rows[0]?.startTime).toBe("");
+  });
+
+  test("toEventDraft — l'heure part avec l'épreuve, vide n'est pas envoyée", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      startDate: "2027-06-12",
+      rows: [row({ distanceKm: "42", startTime: "07:30" }), row({ distanceKm: "15" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.formats.map(({ start_time }) => start_time)).toEqual(["07:30", undefined]);
+  });
+
+  test("toEventDraft — une course au mois n'a pas d'heure, et le brouillon garde ce qui est saisi", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      monthOnly: true,
+      startMonth: "2027-06",
+      rows: [row({ distanceKm: "42", startTime: "07:30" })],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.formats[0]?.start_time).toBeUndefined();
+    expect(draft.rows[0]?.startTime).toBe("07:30");
   });
 });

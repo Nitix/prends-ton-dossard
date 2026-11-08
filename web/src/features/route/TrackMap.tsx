@@ -1,22 +1,26 @@
 import {
   circleMarker,
   control,
+  latLngBounds,
   map as createMap,
   polyline,
   tileLayer,
   type CircleMarker,
   type LatLngTuple,
+  type Polyline,
   type LeafletMouseEvent,
   type Map as LeafletMap,
   type Point,
   type PointTuple,
   type TooltipOptions,
 } from "leaflet";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n } from "../../i18n/I18nProvider";
+import { coarsePointer, gateWheel, zoomModifier } from "./gestures";
 import type { TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
+import { pointsIn, type KmRange } from "./range";
 import { SLOPE_COLORS, SLOPE_FILLS, type SlopeZone } from "./slope";
 import { TILE_HOST } from "./tileHost";
 import { nearestKm, pointAtKm, trackIndex, type TrackIndex } from "./trackIndex";
@@ -58,6 +62,13 @@ const PADDING_BOTTOM_RIGHT: PointTuple = [16, 52];
 /** The user asks the system for less motion. */
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
+/** How long the hint stays on the map, in milliseconds. */
+const HINT_MS = 1500;
+/** Changes of the portion that follow each other within this (milliseconds) are a gesture: the map is framed with no animation. */
+const RAPID_MS = 250;
+/** How far a finger has to go, in pixels, to be moving and not tapping (less than the slop of a browser). */
+const FINGER_MOVE_PX = 4;
+
 // The colours of the track and of its two ends are properties of the theme
 // (`--map-*` in styles.css), which a skin sets. The start and the finish also
 // differ by their size (the start is a dot in the ring of the finish, so both
@@ -96,8 +107,74 @@ function labelOptions(radius: number, shift: number): TooltipOptions {
   return { permanent: true, direction: "auto", offset: [radius + 2, shift] };
 }
 
-/** The map, and the mark of the cursor of the profile that is moved on it. */
-type Layers = { map: LeafletMap; dot: CircleMarker };
+/** The map, the mark of the cursor of the profile that is moved on it, and the lines of the track. */
+type Layers = {
+  map: LeafletMap;
+  dot: CircleMarker;
+  halo: Polyline;
+  line: Polyline;
+  /** The two ends, kept over the portion's line. */
+  ends: CircleMarker[];
+  /** Whether the map moves without animation (less motion asked for). */
+  calm: boolean;
+  /** The portion that is shown now, and its two lines (made when there is one). */
+  range: KmRange | null;
+  portion: Polyline[];
+};
+
+/** The track out of the portion: half as strong as it is alone. */
+const REST_OPACITY = 0.5;
+const HALO_OPACITY = 0.85;
+
+/**
+ * Shows a portion of the track (or all of it, with `null`): the map is framed on
+ * its points with the margins of the whole track, a line of its own, thicker,
+ * is laid over it, and the rest of the track is at half opacity. `animate` is
+ * false when the map is first made (it is framed already) and with less motion.
+ */
+function showRange(
+  layers: Layers | null,
+  points: TrackPoint[],
+  range: KmRange | null,
+  animate: boolean,
+) {
+  if (layers === null) return;
+  const { map, halo, line } = layers;
+  layers.range = range;
+  for (const part of layers.portion) part.remove();
+  layers.portion = [];
+  const shown = range === null ? points : pointsIn(points, range);
+  const latLngs = shown.map((p): LatLngTuple => [p.lat, p.lon]);
+  if (range !== null && latLngs.length > 0) {
+    // A white halo under the portion, as the track has, and the line over both.
+    const edge = polyline(latLngs, {
+      className: "track-portion-halo",
+      color: "#ffffff",
+      weight: 12,
+      opacity: 1,
+      interactive: false,
+    }).addTo(map);
+    const portion = polyline(latLngs, {
+      className: "track-portion",
+      weight: 7,
+      opacity: 1,
+      interactive: false,
+    }).addTo(map);
+    // Over the line, under the marks of the start, of the finish and of the cursor.
+    layers.portion = [edge, portion];
+    for (const end of layers.ends) end.bringToFront();
+    if (map.hasLayer(layers.dot)) layers.dot.bringToFront();
+  }
+  halo.setStyle({ opacity: range === null ? HALO_OPACITY : HALO_OPACITY * REST_OPACITY });
+  line.setStyle({ opacity: range === null ? 1 : REST_OPACITY });
+  if (latLngs.length > 0) {
+    map.fitBounds(latLngBounds(latLngs), {
+      paddingTopLeft: PADDING_TOP_LEFT,
+      paddingBottomRight: PADDING_BOTTOM_RIGHT,
+      animate: animate && !layers.calm,
+    });
+  }
+}
 
 /** Where the mark of the cursor goes: a kilometer (or none) and the zone of the slope there. */
 type Wanted = { km: number | null; zone: SlopeZone | null };
@@ -129,7 +206,8 @@ function place(layers: Layers | null, index: TrackIndex, { km, zone }: Wanted) {
 
 /**
  * A track on a topographic map that can be moved and zoomed (with the buttons,
- * the keys, or two fingers: the wheel scrolls the page): the line, and two dots
+ * the keys, Ctrl or ⌘ and the wheel, or two fingers: the wheel alone scrolls the
+ * page, and on a touch screen so does one finger; a hint says so, see gestures.ts): the line, and two dots
  * for the start and the finish. Pass the whole track, with at least one point;
  * Leaflet reduces the line to what the zoom shows. `tileUrl` is where the tiles
  * come from, which only a test changes. Without tiles (offline, or blocked) the
@@ -148,6 +226,10 @@ function place(layers: Layers | null, index: TrackIndex, { km, zone }: Wanted) {
  * and no focus, and says nothing to a screen reader: the cursor of the profile
  * is what tells the place.
  *
+ * `range` is a portion of the track, in kilometers (the profile zoomed on it, see
+ * RouteSection): the map is framed on its points, a line of its own is laid over
+ * it and the rest of the track is dimmed; `null` frames the whole track again.
+ *
  * Leaflet works on the DOM itself: the map is made in an effect, on the element
  * that React gives, and removed when the effect is cleaned up. The component is
  * the default export because `React.lazy` takes one.
@@ -157,16 +239,31 @@ export default function TrackMap({
   tileUrl = TILE_URL,
   markerKm = null,
   markerZone = null,
+  range = null,
   onTrackKm,
 }: {
   points: TrackPoint[];
   tileUrl?: string;
   markerKm?: number | null;
   markerZone?: SlopeZone | null;
+  range?: KmRange | null;
   onTrackKm?: (km: number | null) => void;
 }) {
   const { t } = useI18n();
   const element = useRef<HTMLElement>(null);
+  const gate = useRef<HTMLDivElement>(null);
+  const help = useId();
+  // The hint over the map, which goes away by itself.
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef(0);
+  const showHint = useCallback((text: string) => {
+    setHint(text);
+    clearTimeout(hintTimer.current);
+    hintTimer.current = window.setTimeout(() => setHint(null), HINT_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
+  const key = zoomModifier();
+  const { wheelHint, fingersHint } = t.route;
   // Each map has its gradient: two tracks on a page have two maps.
   const gradient = useId();
   const { zoomIn, zoomOut, start, finish } = t.route;
@@ -175,6 +272,8 @@ export default function TrackMap({
   const layers = useRef<Layers | null>(null);
   // Where the mark goes, kept for a map that is made again (another language).
   const wanted = useRef<Wanted>({ km: null, zone: null });
+  // The portion shown, kept for a map that is made again too.
+  const shownRange = useRef<KmRange | null>(range);
   // Who is told of the track under the pointer, without making the map again when it changes.
   const tell = useRef(onTrackKm);
   useLayoutEffect(() => {
@@ -192,8 +291,15 @@ export default function TrackMap({
     // the tiles, not the zoom of the markers (otherwise Leaflet decides for each browser).
     const calm = window.matchMedia(REDUCED_MOTION).matches;
     const map = createMap(container, {
-      scrollWheelZoom: false,
+      // The wheel zooms with Ctrl or ⌘ only (see gateWheel); on a touch screen a
+      // finger scrolls the page, and two fingers move and zoom the map.
+      scrollWheelZoom: true,
+      dragging: !coarsePointer(),
       maxZoom: MAX_ZOOM,
+      // Half levels: a small pinch on a phone keeps its half level instead of springing back
+      // to the one it started from. A notch of the wheel still goes one level (Leaflet
+      // rounds a notch up to the snap), and the buttons keep their whole level (zoomDelta).
+      zoomSnap: 0.5,
       zoomControl: false,
       ...(calm ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {}),
     });
@@ -211,7 +317,7 @@ export default function TrackMap({
     // the track still moves the map.
     const latLngs = points.map((p): LatLngTuple => [p.lat, p.lon]);
     // A white halo under the line, so that it stands out of the map.
-    polyline(latLngs, {
+    const halo = polyline(latLngs, {
       className: "track-halo",
       color: "#ffffff",
       weight: 9,
@@ -237,10 +343,16 @@ export default function TrackMap({
       interactive: false,
     });
     // The fills of the start and of the finish are in TrackMap.css (`--map-start`, `--map-finish`).
-    circleMarker([last.lat, last.lon], mark("track-finish", "none", FINISH_RADIUS))
+    const finishMark = circleMarker(
+      [last.lat, last.lon],
+      mark("track-finish", "none", FINISH_RADIUS),
+    )
       .bindTooltip(finish, labelOptions(FINISH_RADIUS, 14))
       .addTo(map);
-    circleMarker([first.lat, first.lon], mark("track-start", "none", START_RADIUS))
+    const startMark = circleMarker(
+      [first.lat, first.lon],
+      mark("track-start", "none", START_RADIUS),
+    )
       .bindTooltip(start, labelOptions(START_RADIUS, -14))
       .addTo(map);
 
@@ -262,8 +374,19 @@ export default function TrackMap({
       [first.lat, first.lon],
       mark("track-marker", SLOPE_COLORS[1], MARKER_RADIUS),
     );
-    layers.current = { map, dot };
+    layers.current = {
+      map,
+      dot,
+      halo,
+      line,
+      calm,
+      range: null,
+      portion: [],
+      ends: [finishMark, startMark],
+    };
     place(layers.current, index, wanted.current);
+    // A portion that was chosen before the map was made (or made again): framed at once.
+    if (shownRange.current !== null) showRange(layers.current, points, shownRange.current, false);
 
     // The kilometer of the track nearest to a point of the map, if the track is
     // within `tolerance` pixels of it there. Where the track passes twice so
@@ -352,6 +475,79 @@ export default function TrackMap({
     };
   }, [points, index, tileUrl, zoomIn, zoomOut, start, finish, gradient]);
 
+  // The wheel alone scrolls the page, and says why.
+  useEffect(() => {
+    const gateElement = gate.current;
+    if (gateElement === null) return undefined;
+    return gateWheel(gateElement, () => showHint(wheelHint(key)));
+  }, [showHint, wheelHint, key]);
+
+  // On a touch screen, a finger that moves over the map scrolls the page: it says
+  // that two fingers move the map. (Two fingers are the map's, and say nothing.)
+  useEffect(() => {
+    const container = element.current;
+    if (container === null || !coarsePointer()) return undefined;
+    const down = new Map<number, { x: number; y: number }>();
+    // Whether a second finger was down during this gesture (until all are up): a pinch
+    // that the browser cancels is not a finger that scrolls.
+    let multi = false;
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      // A finger on a button or another control of the map is not trying to move the map.
+      if (event.target instanceof Element && event.target.closest(".leaflet-control")) return;
+      down.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (down.size >= 2) multi = true;
+    };
+    const onMove = (event: PointerEvent) => {
+      const from = down.get(event.pointerId);
+      if (from === undefined || down.size !== 1 || multi) return;
+      if (Math.hypot(event.clientX - from.x, event.clientY - from.y) >= FINGER_MOVE_PX) {
+        showHint(fingersHint);
+      }
+    };
+    const onEnd = (event: PointerEvent) => {
+      down.delete(event.pointerId);
+      if (down.size === 0) multi = false;
+    };
+    // The browser that takes a finger for a scroll cancels its pointer, sometimes before it
+    // has moved by `FINGER_MOVE_PX` (iOS): a lone finger that is cancelled says why too.
+    const onCancel = (event: PointerEvent) => {
+      if (down.has(event.pointerId) && down.size === 1 && !multi) showHint(fingersHint);
+      onEnd(event);
+    };
+    container.addEventListener("pointerdown", onDown);
+    container.addEventListener("pointermove", onMove);
+    container.addEventListener("pointerup", onEnd);
+    container.addEventListener("pointercancel", onCancel);
+    return () => {
+      container.removeEventListener("pointerdown", onDown);
+      container.removeEventListener("pointermove", onMove);
+      container.removeEventListener("pointerup", onEnd);
+      container.removeEventListener("pointercancel", onCancel);
+    };
+  }, [showHint, fingersHint]);
+
+  // The map follows the portion of the profile. This effect too comes after the map's.
+  // A pinch changes the portion at every move of the fingers: the map is drawn once an image
+  // at most, and without the animation of the frame while the changes come one on the
+  // other (a button or a key makes one change, and is animated).
+  const lastChange = useRef(0);
+  useEffect(() => {
+    shownRange.current = range;
+    const at = performance.now();
+    const rapid = at - lastChange.current < RAPID_MS;
+    lastChange.current = at;
+    const frame = requestAnimationFrame(() => {
+      const current = layers.current;
+      const same =
+        current?.range?.from === range?.from &&
+        current?.range?.to === range?.to &&
+        (current?.range === null) === (range === null);
+      if (!same) showRange(current, points, range, !rapid);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [points, range]);
+
   // The mark follows the cursor of the profile. This effect comes after the one
   // above, so a new track has its map before its mark.
   useEffect(() => {
@@ -374,7 +570,26 @@ export default function TrackMap({
           </linearGradient>
         </defs>
       </svg>
-      <section ref={element} aria-label={t.route.map} className={`track-map isolate ${MAP_BOX}`} />
+      <div ref={gate} className="relative isolate">
+        <section
+          ref={element}
+          aria-label={t.route.map}
+          aria-describedby={help}
+          className={`track-map isolate ${MAP_BOX}`}
+        />
+        <p id={help} className="sr-only">
+          {t.route.mapHelp(key)}
+        </p>
+        {/* The hint: over the map, for the eye only, and it takes no pointer. */}
+        {hint === null ? null : (
+          <div
+            aria-hidden="true"
+            className="track-hint pointer-events-none absolute inset-0 flex items-center justify-center rounded-[1.25rem] bg-black/55 p-4 text-center text-base font-semibold text-white"
+          >
+            {hint}
+          </div>
+        )}
+      </div>
     </>
   );
 }

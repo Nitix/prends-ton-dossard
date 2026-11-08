@@ -30,7 +30,12 @@ export type UserRecord = BaseRecord & {
   disabled: boolean;
   /** The id of the skin (the theme) the person chose, for every device: empty until they choose (see features/auth/accountSkin). */
   skin?: string;
+  /** When the person wants to be warned before a registration opens (the alarms of the calendar, the notifications): empty, none. */
+  reminders?: Reminder[];
 };
+
+/** A reminder: one day before the registrations open, or one hour before. */
+export type Reminder = "day" | "hour";
 
 export type RunnerRecord = BaseRecord & {
   name: string;
@@ -65,6 +70,12 @@ export type EventRecord = BaseRecord & {
   registration_url?: string;
   /** The last day to register, never after the start of the event: empty without a deadline. */
   registration_deadline?: string;
+  /** The day registration opens, a `YYYY-MM-DD` text, never after the deadline or the start: empty without one. */
+  registration_opening?: string;
+  /** The time it opens, `HH:MM`, Paris time: empty for no time (the site then counts 9 h). Needs a day. */
+  registration_opening_time?: string;
+  /** How much of the date is known: `day` (empty too) or `month`, a race that runs from the 1st to the last day of its month. */
+  date_precision?: "day" | "month";
   notes?: string;
   /** The runner of the user who created the event (a `runners` id). */
   created_by: string;
@@ -88,6 +99,8 @@ export type FormatRecord = BaseRecord & {
   route_url?: string;
   /** The day of the format when it differs from the start of its event. */
   date?: string;
+  /** The start time, `HH:MM` Paris time: empty or absent when it is not known. */
+  start_time?: string;
 };
 
 export type ParticipationRecord = BaseRecord & {

@@ -76,12 +76,12 @@ func result(want admin.MergeResult) string {
 // tags of MergeResult, so a renamed tag would go through them unnoticed.
 func TestMergeResult_JSONKeys(t *testing.T) {
 	got, err := json.Marshal(admin.MergeResult{
-		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, MovedComments: 5, MovedOffers: 6,
+		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, ClearedFormatTimes: 7, MovedComments: 5, MovedOffers: 6,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"movedComments":5,"movedOffers":6}`
+	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"clearedFormatTimes":7,"movedComments":5,"movedOffers":6}`
 	if string(got) != want {
 		t.Errorf("MergeResult as JSON = %s, want %s", got, want)
 	}
@@ -459,6 +459,32 @@ func TestWinner(t *testing.T) {
 	}
 }
 
+// testRowMonth merges Event (F42 dated on the 14th of June) into Event2 made a race known by
+// its month, June 2026: the date is inside the month, but a month has no format dates.
+func testRowMonth(name string, dryRun bool) testutil.Row {
+	return testutil.Row{
+		Name: name,
+		Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			setFields(t, app, "events", fx.Event2.Id, map[string]any{"date_precision": "month", "start_date": "2026-06-01"})
+		},
+		As:       "admin",
+		Method:   http.MethodPost,
+		URL:      path(mergeEvents),
+		Body:     merge(id(event2), id(event), dryRun),
+		Status:   http.StatusOK,
+		Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1})},
+		After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			if dryRun {
+				return
+			}
+			if got := mustStore(t, app, "formats", fx.F42.Id).GetString("date"); got != "" {
+				t.Errorf("the date of F42 is %q, want it empty", got)
+			}
+			gone(t, app, "events", fx.Event)
+		},
+	}
+}
+
 func TestMergeEvents(t *testing.T) {
 	// An event whose range holds the whole of Event, for the formats that must
 	// keep their date.
@@ -573,6 +599,42 @@ func TestMergeEvents(t *testing.T) {
 				}
 				mustStore(t, app, "events", fx.Event.Id)
 				gone(t, app, "events", fx.Event2)
+			},
+		},
+		unchanged(testRowMonth("a dry run into a race known by its month counts the dates of the formats it would clear", true), nil),
+		testRowMonth("a format dated in the month of a kept race known by its month loses its date", false),
+		{
+			Name: "a format with a start time merged into a race known by its month loses the time too",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "events", fx.Event2.Id, map[string]any{"date_precision": "month", "start_date": "2026-06-01"})
+				setFields(t, app, "formats", fx.F42.Id, map[string]any{"start_time": "07:30"})
+			},
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event2), id(event), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1, ClearedFormatTimes: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("start_time"); got != "" {
+					t.Errorf("the start time of F42 is %q, want it empty", got)
+				}
+			},
+		},
+		{
+			Name: "a format with a start time keeps it in a race that has days",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "formats", fx.FLyon.Id, map[string]any{"start_time": "09:00"})
+			},
+			As:     "admin",
+			Method: http.MethodPost,
+			URL:    path(mergeEvents),
+			Body:   merge(id(event), id(event2), false),
+			Status: http.StatusOK,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "formats", fx.FLyon.Id).GetString("start_time"); got != "09:00" {
+					t.Errorf("the start time of FLyon is %q, want 09:00", got)
+				}
 			},
 		},
 		{

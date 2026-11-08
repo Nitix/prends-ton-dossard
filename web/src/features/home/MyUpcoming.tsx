@@ -5,10 +5,11 @@ import { BlockTitle } from "../../components/BlockTitle";
 import { CountdownRing } from "../../components/Dawn";
 import { UNCONFIRMED } from "../../components/section";
 import { useI18n } from "../../i18n/I18nProvider";
-import { daysBetween } from "../../lib/dates";
+import { daysBetween, isMonthOnly, lastRaceDay } from "../../lib/dates";
 import type { ParticipationRecord } from "../../lib/types";
 import { useToday } from "../../lib/useToday";
 import type { EventView, FormatView, ParticipationView } from "../events/api";
+import { dayOrMonth } from "../events/eventWhen";
 import { formatDisplayName } from "../events/formatName";
 import { starters } from "../events/participants";
 
@@ -19,8 +20,13 @@ export type Upcoming = {
   /** Absent for a participation on the event alone ("format to choose", or supporter). */
   formatView?: FormatView;
   participation: ParticipationRecord;
-  /** The day of the format, or the start of the event when there is no format. */
+  /** The day of the format, or the start of the event when there is no format: as it is shown. */
   date: Temporal.PlainDate;
+  /**
+   * The day that says whether the race is behind and orders it (`lastRaceDay`): `date`, except for
+   * a race known by its month only, whose last day is the last day of the month.
+   */
+  lastDay: Temporal.PlainDate;
 };
 
 /** The starts of the runner in the list, which is theirs and not "not starting". */
@@ -39,7 +45,9 @@ function mine(list: ParticipationView[], runnerId: string): ParticipationRecord[
  * days, a format that has been run is behind, whatever the end of its event. A
  * participation on the event alone (interested with no format yet, or
  * supporter) has no day of its own: it is there until the last day of its
- * event, and sorted on the first.
+ * event, and sorted on the first. A race known by its month only is there until
+ * the end of its month, and sorted at the end of it (`lastRaceDay`), after the
+ * races of that month that have a day.
  */
 export function upcomingOf(
   views: EventView[],
@@ -50,13 +58,15 @@ export function upcomingOf(
   return views
     .flatMap(({ event, formats, interested, supporters, start, end }) => [
       ...formats
-        .filter(({ date }) => notBehind(date))
-        .flatMap((formatView) =>
+        .map((formatView) => ({ formatView, lastDay: lastRaceDay(formatView.format, event) }))
+        .filter(({ lastDay }) => notBehind(lastDay))
+        .flatMap(({ formatView, lastDay }) =>
           mine(formatView.participations, runnerId).map((participation) => ({
             event,
             formatView,
             participation,
             date: formatView.date,
+            lastDay,
           })),
         ),
       // On the event alone: the interested with no format, and the supporters.
@@ -65,12 +75,14 @@ export function upcomingOf(
             event,
             participation,
             date: start,
+            lastDay: lastRaceDay({}, event),
           }))
         : []),
     ])
     .toSorted(
       (a, b) =>
-        Temporal.PlainDate.compare(a.date, b.date) ||
+        Temporal.PlainDate.compare(a.lastDay, b.lastDay) ||
+        Number(isMonthOnly(a.event)) - Number(isMonthOnly(b.event)) ||
         a.event.name.localeCompare(b.event.name) ||
         a.participation.id.localeCompare(b.participation.id),
     );
@@ -179,6 +191,8 @@ export function UpcomingRow({
   if (formatView) what = formatDisplayName(formatView.format, formatView.raceType.label, f, t);
   else if (participation.status !== "supporter") what = t.event.formatToChoose;
 
+  // A race known by its month has no day to count to: its month, and no ring.
+  const monthOnly = isMonthOnly(event);
   const daysLeft = Math.max(0, daysBetween(today, date));
 
   return (
@@ -190,7 +204,7 @@ export function UpcomingRow({
       }`}
     >
       {/* The ring shows the days left; the words under the date say them. */}
-      {dateStyle === "countdown" && <CountdownRing days={daysLeft} />}
+      {dateStyle === "countdown" && !monthOnly && <CountdownRing days={daysLeft} />}
       <div className="flex min-w-0 flex-col">
         <h3 className="card-title">
           <Link
@@ -207,10 +221,10 @@ export function UpcomingRow({
         </p>
         <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
           <p className="text-neutral-600">
-            {dateStyle === "long" ? f.dateLong(date) : f.date(date)}
+            {dayOrMonth(event, date, f, t, dateStyle === "long" ? "long" : "short")}
           </p>
           {/* The words are the countdown: nothing here is told by a colour. */}
-          {dateStyle === "countdown" && (
+          {dateStyle === "countdown" && !monthOnly && (
             <p className="days-left font-semibold text-iris-700">{f.inDays(daysLeft)}</p>
           )}
         </div>

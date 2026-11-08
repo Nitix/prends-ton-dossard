@@ -8,6 +8,7 @@ import { INPUT } from "../../components/Field";
 import { errorCode, fieldErrors, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
+import { usePageTitle } from "../../lib/usePageTitle";
 
 /** What the server tells about a link: who it is for, and what it does. */
 type Invitation = { runnerName: string; kind: "invite" | "reset" };
@@ -94,6 +95,7 @@ function removeFragment(): void {
  */
 export function InvitationPage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.invitation);
 
   // Only read here: rendering must not change anything, and React renders
   // twice in development, so the address is cleaned in the effect below.

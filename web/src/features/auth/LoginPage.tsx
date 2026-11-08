@@ -9,6 +9,7 @@ import { errorCode, translateError } from "../../i18n/errors";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { enterDemo, fetchDemoEnabled } from "./demo";
 import { conditionalLoginAvailable, loginWithPasskey, passkeysSupported } from "./passkeys";
 import { safeRedirect } from "./session";
@@ -71,6 +72,7 @@ async function signInWithPasskey(
  */
 export function LoginPage({ redirect }: { redirect?: string }) {
   const { t } = useI18n();
+  usePageTitle(t.titles.signIn);
   const router = useRouter();
   const errorId = useId();
   const demoNoteId = useId();

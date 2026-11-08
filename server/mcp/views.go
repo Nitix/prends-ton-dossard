@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"courses/server/config"
+	"courses/server/events"
 	"courses/server/wording"
 )
 
@@ -47,17 +48,20 @@ type raceTypeRecord struct {
 
 // eventRecord is an event, with what eventExpand asks for.
 type eventRecord struct {
-	ID                   string `json:"id"`
-	Name                 string `json:"name"`
-	Location             string `json:"location"`
-	StartDate            string `json:"start_date"`
-	EndDate              string `json:"end_date"`
-	RegistrationURL      string `json:"registration_url"`
-	RegistrationDeadline string `json:"registration_deadline"`
-	Notes                string `json:"notes"`
-	CreatedBy            string `json:"created_by"`
-	Updated              string `json:"updated"`
-	Expand               struct {
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	Location                string `json:"location"`
+	StartDate               string `json:"start_date"`
+	EndDate                 string `json:"end_date"`
+	RegistrationURL         string `json:"registration_url"`
+	RegistrationDeadline    string `json:"registration_deadline"`
+	RegistrationOpening     string `json:"registration_opening"`
+	RegistrationOpeningTime string `json:"registration_opening_time"`
+	DatePrecision           string `json:"date_precision"`
+	Notes                   string `json:"notes"`
+	CreatedBy               string `json:"created_by"`
+	Updated                 string `json:"updated"`
+	Expand                  struct {
 		Formats        []formatRecord        `json:"formats_via_event"`
 		Participations []participationRecord `json:"participations_via_event"`
 		// CreatedBy is asked by the tools that write a race (eventForWrite).
@@ -78,6 +82,7 @@ type formatRecord struct {
 	GPX            string  `json:"gpx"`
 	RouteURL       string  `json:"route_url"`
 	Date           string  `json:"date"`
+	StartTime      string  `json:"start_time"`
 	Event          string  `json:"event"`
 	Updated        string  `json:"updated"`
 	Expand         struct {
@@ -241,23 +246,27 @@ type commentOut struct {
 
 // eventSummary is a race as a list shows it (spec § 6.4, EVENT_SUMMARY).
 type eventSummary struct {
-	ID                   string          `json:"id"`
-	Name                 string          `json:"name"`
-	Location             string          `json:"location"`
-	StartDate            string          `json:"start_date"`
-	EndDate              string          `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
-	RegistrationDeadline string          `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
-	URL                  string          `json:"url" jsonschema:"l'adresse de la course sur le site"`
-	Formats              []formatSummary `json:"formats"`
-	Participants         int             `json:"participants" jsonschema:"les participations de la course qui ne sont pas « Non partant » (dns), supporteurs et intéressés sans épreuve compris : ce n'est pas le nombre de coureurs au départ"`
-	Mine                 []mineOut       `json:"mine" jsonschema:"les participations de la personne au nom de qui tu agis"`
+	ID                      string          `json:"id"`
+	Name                    string          `json:"name"`
+	Location                string          `json:"location"`
+	StartDate               string          `json:"start_date"`
+	EndDate                 string          `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
+	RegistrationDeadline    string          `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
+	RegistrationOpening     string          `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée"`
+	RegistrationOpeningTime string          `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture, à l'heure de Paris ; absente : le site compte 9 h"`
+	DatePrecision           string          `json:"date_precision,omitempty" jsonschema:"month : seul le mois est connu, le jour ne l'est pas : start_date est le 1er du mois, end_date son dernier jour, et les épreuves n'ont pas de date ; absent : la course a son jour"`
+	URL                     string          `json:"url" jsonschema:"l'adresse de la course sur le site"`
+	Formats                 []formatSummary `json:"formats"`
+	Participants            int             `json:"participants" jsonschema:"les participations de la course qui ne sont pas « Non partant » (dns), supporteurs et intéressés sans épreuve compris : ce n'est pas le nombre de coureurs au départ"`
+	Mine                    []mineOut       `json:"mine" jsonschema:"les participations de la personne au nom de qui tu agis"`
 }
 
 type formatSummary struct {
-	ID       string `json:"id"`
-	Title    string `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
-	RaceType string `json:"race_type" jsonschema:"le nom du type de course"`
-	Date     string `json:"date" jsonschema:"le jour de l'épreuve (le premier jour de la course quand elle n'a pas de date)"`
+	ID        string `json:"id"`
+	Title     string `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
+	RaceType  string `json:"race_type" jsonschema:"le nom du type de course"`
+	Date      string `json:"date" jsonschema:"le jour de l'épreuve (le premier jour de la course quand elle n'a pas de date)"`
+	StartTime string `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
 }
 
 type mineOut struct {
@@ -269,23 +278,26 @@ type mineOut struct {
 
 // eventDetail is the page of a race (spec § 6.4, get_event).
 type eventDetail struct {
-	ID                   string             `json:"id"`
-	Name                 string             `json:"name"`
-	Location             string             `json:"location"`
-	StartDate            string             `json:"start_date"`
-	EndDate              string             `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
-	RegistrationURL      string             `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course"`
-	RegistrationDeadline string             `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
-	Notes                string             `json:"notes,omitempty"`
-	CreatedBy            runnerRef          `json:"created_by,omitzero"`
-	URL                  string             `json:"url" jsonschema:"l'adresse de la course sur le site"`
-	Formats              []formatDetail     `json:"formats" jsonschema:"les épreuves, par jour puis par distance"`
-	Undecided            []participationOut `json:"undecided" jsonschema:"les intéressés qui n'ont pas encore choisi d'épreuve"`
-	Supporters           []participationOut `json:"supporters" jsonschema:"ceux qui viennent encourager"`
-	Rides                []offerOut         `json:"rides" jsonschema:"les voitures proposées"`
-	Lodgings             []offerOut         `json:"lodgings" jsonschema:"les logements proposés"`
-	Comments             []commentOut       `json:"comments" jsonschema:"les 50 derniers, du plus ancien au plus récent"`
-	CommentsTotal        int                `json:"comments_total" jsonschema:"le nombre de commentaires de la course : comments n'en donne que les 50 derniers"`
+	ID                      string             `json:"id"`
+	Name                    string             `json:"name"`
+	Location                string             `json:"location"`
+	StartDate               string             `json:"start_date"`
+	EndDate                 string             `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
+	RegistrationURL         string             `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course"`
+	RegistrationDeadline    string             `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
+	RegistrationOpening     string             `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée"`
+	RegistrationOpeningTime string             `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture, à l'heure de Paris ; absente : le site compte 9 h"`
+	DatePrecision           string             `json:"date_precision,omitempty" jsonschema:"month : seul le mois est connu, le jour ne l'est pas : start_date est le 1er du mois, end_date son dernier jour, et les épreuves n'ont pas de date (leur day est le 1er) ; absent : la course a son jour"`
+	Notes                   string             `json:"notes,omitempty"`
+	CreatedBy               runnerRef          `json:"created_by,omitzero"`
+	URL                     string             `json:"url" jsonschema:"l'adresse de la course sur le site"`
+	Formats                 []formatDetail     `json:"formats" jsonschema:"les épreuves, par jour puis par distance"`
+	Undecided               []participationOut `json:"undecided" jsonschema:"les intéressés qui n'ont pas encore choisi d'épreuve"`
+	Supporters              []participationOut `json:"supporters" jsonschema:"ceux qui viennent encourager"`
+	Rides                   []offerOut         `json:"rides" jsonschema:"les voitures proposées"`
+	Lodgings                []offerOut         `json:"lodgings" jsonschema:"les logements proposés"`
+	Comments                []commentOut       `json:"comments" jsonschema:"les 50 derniers, du plus ancien au plus récent"`
+	CommentsTotal           int                `json:"comments_total" jsonschema:"le nombre de commentaires de la course : comments n'en donne que les 50 derniers"`
 }
 
 type formatDetail struct {
@@ -299,6 +311,7 @@ type formatDetail struct {
 	TimeLimitMin   int                `json:"time_limit_min,omitempty" jsonschema:"le temps maximum, en minutes"`
 	PriceEur       float64            `json:"price_eur,omitempty"`
 	Date           string             `json:"date,omitempty" jsonschema:"le jour de l'épreuve quand il n'est pas celui du début de la course"`
+	StartTime      string             `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
 	Day            string             `json:"day" jsonschema:"le jour de l'épreuve : sa date, sinon le premier jour de la course"`
 	RouteURL       string             `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	TrackURL       string             `json:"track_url,omitempty" jsonschema:"l'adresse du fichier de la trace GPX, s'il y en a un"`
@@ -518,16 +531,70 @@ func compareFormats(a, b formatView) int {
 	return cmp.Or(cmp.Compare(a.day, b.day), cmp.Compare(distance(a), distance(b)), cmp.Compare(a.record.ID, b.record.ID))
 }
 
+// precisionMonth is date_precision of an event known by its month only: the start
+// is the 1st of the month, the end its last day, and the races have no day.
+const precisionMonth = "month"
+
+// monthOnly reports whether the event is known by its month only (isMonthOnly of
+// lib/dates.ts).
+func (r eventRecord) monthOnly() bool { return r.DatePrecision == precisionMonth }
+
+// monthRank puts a race known by its month after the races of the month that have a
+// day, when they end on the same day (the sort of events, and of the races to come:
+// the site's other lists, such as the ones to confirm, do not rank them).
+func (r eventRecord) monthRank() int {
+	if r.monthOnly() {
+		return 1
+	}
+	return 0
+}
+
+// datePrecisionOf is the precision of the date to say in an answer: "month" for an
+// event known by its month, "" (left out) for a day.
+func datePrecisionOf(r eventRecord) string {
+	if r.monthOnly() {
+		return precisionMonth
+	}
+	return ""
+}
+
+// lastDayOfMonth is the last day of the month of a day (YYYY-MM-DD): the day
+// itself when it is not a real day, so that nothing is made up of it.
+func lastDayOfMonth(day string) string {
+	if last, ok := events.LastDayOfMonth(day); ok {
+		return last
+	}
+	return day
+}
+
+// lastRaceDay ports lastRaceDay of lib/dates.ts: the day that says whether a race
+// is behind and orders it, the last day of the month for an event known by its
+// month only, otherwise the day of the race (its own, or the start of the event).
+func lastRaceDay(event eventRecord, formatDate string) string {
+	if event.monthOnly() {
+		return lastDayOfMonth(event.StartDate)
+	}
+	return cmp.Or(formatDate, event.StartDate)
+}
+
 // sortEvents ports sortEvents of the site: the events that start first come first
-// (ascending false: last), and on the same day they go by name, then by id.
+// (ascending false: last), and on the same day they go by name, then by id. An event
+// known by its month only goes at the end of its month, after the events that start
+// on that day.
 func sortEvents(views []eventView, ascending bool) {
 	sign := 1
 	if !ascending {
 		sign = -1
 	}
+	orderDay := func(v eventView) string {
+		if v.record.monthOnly() {
+			return lastRaceDay(v.record, "")
+		}
+		return v.record.StartDate
+	}
 	slices.SortStableFunc(views, func(a, b eventView) int {
 		return cmp.Or(
-			sign*cmp.Compare(a.record.StartDate, b.record.StartDate),
+			sign*cmp.Or(cmp.Compare(orderDay(a), orderDay(b)), cmp.Compare(a.record.monthRank(), b.record.monthRank())),
 			compareNames(a.record.Name, b.record.Name),
 			cmp.Compare(a.record.ID, b.record.ID),
 		)
@@ -570,12 +637,14 @@ func (v eventView) summary(cfg config.Config, w wording.Words, me string) eventS
 		ID: v.record.ID, Name: v.record.Name, Location: v.record.Location,
 		StartDate: v.record.StartDate, EndDate: v.record.EndDate,
 		RegistrationDeadline: v.record.RegistrationDeadline,
-		URL:                  eventURL(cfg, v.record.ID),
-		Formats:              []formatSummary{},
-		Mine:                 []mineOut{},
+		RegistrationOpening:  v.record.RegistrationOpening, RegistrationOpeningTime: v.record.RegistrationOpeningTime,
+		DatePrecision: datePrecisionOf(v.record),
+		URL:           eventURL(cfg, v.record.ID),
+		Formats:       []formatSummary{},
+		Mine:          []mineOut{},
 	}
 	for _, f := range v.formats {
-		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day})
+		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day, StartTime: f.record.StartTime})
 	}
 	for _, p := range v.participations() {
 		if p.Status != statusDNS {
@@ -594,6 +663,8 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 		ID: v.record.ID, Name: v.record.Name, Location: v.record.Location,
 		StartDate: v.record.StartDate, EndDate: v.record.EndDate,
 		RegistrationURL: v.record.RegistrationURL, RegistrationDeadline: v.record.RegistrationDeadline,
+		RegistrationOpening: v.record.RegistrationOpening, RegistrationOpeningTime: v.record.RegistrationOpeningTime,
+		DatePrecision: datePrecisionOf(v.record),
 		Notes:         v.record.Notes,
 		CreatedBy:     v.createdBy,
 		URL:           eventURL(cfg, v.record.ID),
@@ -612,7 +683,7 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 			DistanceKm: f.record.DistanceKm, DurationMin: f.record.DurationMin,
 			ElevationGainM: f.record.ElevationGainM, TimeLimitMin: f.record.TimeLimitMin,
 			PriceEur: f.record.PriceEur,
-			Date:     f.record.Date, Day: f.day,
+			Date:     f.record.Date, Day: f.day, StartTime: f.record.StartTime,
 			RouteURL:     f.record.RouteURL,
 			Participants: participationsOut(f.participations, w),
 		}

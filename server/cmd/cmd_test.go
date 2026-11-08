@@ -3,7 +3,11 @@ package cmd_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"math"
+	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -259,8 +263,8 @@ func TestSeedDemo(t *testing.T) {
 	if got := count(t, app, "runners"); got != 5 {
 		t.Errorf("%d runners, want 5", got)
 	}
-	if got := count(t, app, "events"); got != 6 {
-		t.Errorf("%d events, want 6", got)
+	if got := count(t, app, "events"); got != 7 {
+		t.Errorf("%d events, want 7", got)
 	}
 
 	// The accounts: one admin, two members, who sign in with the password.
@@ -316,8 +320,8 @@ func TestSeedDemo(t *testing.T) {
 		switch {
 		case start >= day(today):
 			upcoming++
-			// The next three months.
-			if limit := day(today.AddDate(0, 3, 0)); last > limit {
+			// The next three months, but for the race that is known by its month, far ahead.
+			if limit := day(today.AddDate(0, 3, 0)); last > limit && event.GetString("date_precision") != "month" {
 				t.Errorf("%q ends on %s, after %s", event.GetString("name"), last, limit)
 			}
 		case last < day(today):
@@ -335,8 +339,8 @@ func TestSeedDemo(t *testing.T) {
 			t.Errorf("%q has no creator", event.GetString("name"))
 		}
 	}
-	if upcoming != 4 || past != 2 {
-		t.Errorf("%d upcoming and %d past events, want 4 and 2", upcoming, past)
+	if upcoming != 5 || past != 2 {
+		t.Errorf("%d upcoming and %d past events, want 5 and 2", upcoming, past)
 	}
 	if overMonths < 1 {
 		t.Error("no event is over two months")
@@ -357,13 +361,13 @@ func TestSeedDemo(t *testing.T) {
 	if got := count(t, app, "users"); got != 3 {
 		t.Errorf("%d accounts after the second call, want 3", got)
 	}
-	if got := count(t, app, "events"); got != 6 {
-		t.Errorf("%d events after the second call, want 6", got)
+	if got := count(t, app, "events"); got != 7 {
+		t.Errorf("%d events after the second call, want 7", got)
 	}
 }
 
 // checkRegistration checks the deadline of two events and the price of three
-// formats: the Trail des Crêtes closes in five days and the Hyrox Lyon in forty.
+// formats: the Trail des Crêtes closes in two days and the Hyrox Lyon in forty.
 func checkRegistration(t *testing.T, app core.App, today time.Time) {
 	t.Helper()
 	deadlineOf := func(event string) string {
@@ -383,7 +387,7 @@ func checkRegistration(t *testing.T, app core.App, today time.Time) {
 		return record.GetFloat("price_eur")
 	}
 
-	if got, want := deadlineOf("Trail des Crêtes"), day(today.AddDate(0, 0, 5)); got != want {
+	if got, want := deadlineOf("Trail des Crêtes"), day(today.AddDate(0, 0, 2)); got != want {
 		t.Errorf("the deadline of the Trail des Crêtes is %q, want %q", got, want)
 	}
 	if got, want := deadlineOf("Hyrox Lyon"), day(today.AddDate(0, 0, 40)); got != want {
@@ -506,8 +510,8 @@ func checkOffers(t *testing.T, app core.App, today time.Time) {
 		t.Fatalf("%d places, want 2", got)
 	}
 
-	// The race is in nine days.
-	raceDay := today.AddDate(0, 0, 9)
+	// The race is in five days.
+	raceDay := today.AddDate(0, 0, 5)
 	for _, want := range []struct {
 		kind, owner, place, member, addedBy string
 		seats                               int
@@ -709,8 +713,8 @@ func TestSeedDemo_RelativeToToday(t *testing.T) {
 					overMonths++
 				}
 			}
-			if upcoming != 4 || past != 2 || overMonths < 1 {
-				t.Errorf("%d upcoming, %d past, %d over two months; want 4, 2 and at least 1", upcoming, past, overMonths)
+			if upcoming != 5 || past != 2 || overMonths < 1 {
+				t.Errorf("%d upcoming, %d past, %d over two months; want 5, 2 and at least 1", upcoming, past, overMonths)
 			}
 		})
 	}
@@ -861,5 +865,169 @@ func TestSeedCommand_OnlyOnLocalhost(t *testing.T) {
 				t.Errorf("%d accounts, want %d", got, want)
 			}
 		})
+	}
+}
+
+// TestSeed_V7Data checks what the demo has to try the v7: the Trail des Crêtes,
+// whose weather shows and which has a track, the Grand Trail du Vercors, which
+// is known by its month and opens in two days at 10:00, and the Hyrox Lyon,
+// which opens tomorrow without a time.
+func TestSeed_V7Data(t *testing.T) {
+	app := testutil.NewApp(t)
+	today := time.Date(2026, time.October, 31, 15, 4, 5, 0, time.UTC)
+	if err := cmd.SeedDemo(app, demoPassword, today); err != nil {
+		t.Fatal(err)
+	}
+	event := func(name string) *core.Record {
+		t.Helper()
+		record, err := app.FindFirstRecordByData("events", "name", name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		return record
+	}
+	inDays := func(n int) string { return day(today.AddDate(0, 0, n)) }
+
+	// The Trail des Crêtes: in five days (the weather shows from seven days
+	// before), opened for three days, closing in two, with a track on the
+	// 42 km and nothing on the other format.
+	trail := event("Trail des Crêtes")
+	if got := trail.GetString("start_date"); got != inDays(5) {
+		t.Errorf("the Trail des Crêtes starts on %q, want %q", got, inDays(5))
+	}
+	if got := trail.GetString("registration_opening"); got != inDays(-3) || trail.GetString("registration_opening_time") != "10:00" {
+		t.Errorf("the Trail des Crêtes opened on %q at %q, want %q at 10:00", got, trail.GetString("registration_opening_time"), inDays(-3))
+	}
+	if got := trail.GetString("registration_deadline"); got != inDays(2) {
+		t.Errorf("the Trail des Crêtes closes on %q, want %q", got, inDays(2))
+	}
+	long, err := app.FindFirstRecordByData("formats", "name", "Trail long")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if long.GetFloat("distance_km") != 42 || !strings.HasSuffix(long.GetString("gpx"), ".gpx") {
+		t.Errorf("the Trail long is %v km with the file %q, want 42 km with a GPX", long.GetFloat("distance_km"), long.GetString("gpx"))
+	}
+	short, err := app.FindFirstRecordByData("formats", "name", "Trail court")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if short.GetString("gpx") != "" {
+		t.Errorf("the Trail court has the file %q, want none", short.GetString("gpx"))
+	}
+	// The 42 km starts at 07:30, so that the weather shows the line of the start in dev; the other format has no time.
+	if got := long.GetString("start_time"); got != "07:30" {
+		t.Errorf("the Trail long starts at %q, want 07:30", got)
+	}
+	if got := short.GetString("start_time"); got != "" {
+		t.Errorf("the Trail court starts at %q, want no time", got)
+	}
+	// No other format of the demo has a time: the races known by their month cannot, and the rest has none to show.
+	every, err := app.FindAllRecords("formats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTime := 0
+	for _, format := range every {
+		if format.GetString("start_time") != "" {
+			withTime++
+		}
+	}
+	if withTime != 1 {
+		t.Errorf("%d formats of the demo have a start time, want the Trail long only", withTime)
+	}
+
+	// The Grand Trail du Vercors: a month, seven months ahead.
+	vercors := event("Grand Trail du Vercors")
+	first := time.Date(today.Year(), today.Month()+7, 1, 0, 0, 0, 0, time.UTC)
+	if vercors.GetString("date_precision") != "month" || vercors.GetString("start_date") != day(first) ||
+		vercors.GetString("end_date") != day(first.AddDate(0, 1, -1)) {
+		t.Errorf("the Vercors is %q from %q to %q, want the month of %s",
+			vercors.GetString("date_precision"), vercors.GetString("start_date"), vercors.GetString("end_date"), day(first))
+	}
+	if vercors.GetString("location") != "Villard-de-Lans" {
+		t.Errorf("the Vercors is in %q, want Villard-de-Lans", vercors.GetString("location"))
+	}
+	if got := vercors.GetString("registration_opening"); got != inDays(2) || vercors.GetString("registration_opening_time") != "10:00" {
+		t.Errorf("the Vercors opens on %q at %q, want %q at 10:00", got, vercors.GetString("registration_opening_time"), inDays(2))
+	}
+	status := map[string]string{}
+	participations, err := app.FindAllRecords("participations", dbx.HashExp{"event": vercors.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range participations {
+		runner, err := app.FindRecordById("runners", p.GetString("runner"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status[runner.GetString("name")] = p.GetString("status")
+	}
+	want := map[string]string{"Alice": "interested", "Sam": "interested", "Bob": "registered"}
+	if len(status) != len(want) {
+		t.Errorf("the Vercors has %v, want %v", status, want)
+	}
+	for name, s := range want {
+		if status[name] != s {
+			t.Errorf("%s is %q at the Vercors, want %q", name, status[name], s)
+		}
+	}
+	formats, err := app.FindAllRecords("formats", dbx.HashExp{"event": vercors.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range formats {
+		if format.GetString("date") != "" {
+			t.Errorf("the format %q of a race known by its month has the date %q", format.GetString("name"), format.GetString("date"))
+		}
+	}
+
+	// The Hyrox Lyon: it opens tomorrow, with no time.
+	hyrox := event("Hyrox Lyon")
+	if got := hyrox.GetString("registration_opening"); got != inDays(1) || hyrox.GetString("registration_opening_time") != "" {
+		t.Errorf("the Hyrox Lyon opens on %q at %q, want %q and no time", got, hyrox.GetString("registration_opening_time"), inDays(1))
+	}
+
+	// Nowhere else: the other races have no opening, and none is known by its month.
+	for _, other := range []string{"Backyard des Aiguilles", "6 heures de la Doua", "Semi-marathon d'Annecy", "Cross du Salève"} {
+		record := event(other)
+		if record.GetString("registration_opening") != "" || record.GetString("date_precision") == "month" {
+			t.Errorf("%q has an opening or a month precision", other)
+		}
+	}
+}
+
+// The track of the seed has a point every few meters, so that zooming on the
+// profile and the map shows detail: a point every 213 m showed none.
+func TestSeedTrack_IsDense(t *testing.T) {
+	raw, err := os.ReadFile("seed_track.gpx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := regexp.MustCompile(`<trkpt lat="([-\d.]+)" lon="([-\d.]+)">`).FindAllStringSubmatch(string(raw), -1)
+	if len(matches) < 2000 {
+		t.Fatalf("%d points, want at least 2000", len(matches))
+	}
+	type point struct{ lat, lon float64 }
+	var points []point
+	for _, m := range matches {
+		var p point
+		if _, err := fmt.Sscan(m[1], &p.lat); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fmt.Sscan(m[2], &p.lon); err != nil {
+			t.Fatal(err)
+		}
+		points = append(points, p)
+	}
+	gaps := make([]float64, 0, len(points)-1)
+	for i := 1; i < len(points); i++ {
+		dLat := (points[i].lat - points[i-1].lat) * 111195
+		dLon := (points[i].lon - points[i-1].lon) * 111195 * math.Cos(points[i].lat*math.Pi/180)
+		gaps = append(gaps, math.Hypot(dLat, dLon))
+	}
+	sort.Float64s(gaps)
+	if median := gaps[len(gaps)/2]; median > 25 {
+		t.Errorf("the median gap between points is %.1f m, want 25 m or less", median)
 	}
 }

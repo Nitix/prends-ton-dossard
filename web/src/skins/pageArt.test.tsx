@@ -63,7 +63,9 @@ vi.mock("../lib/pb", () => ({
       Promise.resolve(
         path === "/api/app/mcp-tokens"
           ? { url: "http://localhost:5173/mcp", max: 5, tokens: [] }
-          : {},
+          : path === "/api/app/push"
+            ? { available: true, publicKey: "key", devices: [] }
+            : {},
       ),
     collection: (name: string) => ({
       getFullList: () => Promise.resolve(lists[name] ?? []),
@@ -245,7 +247,20 @@ for (const [path, width, empty, least] of [
     await chooseSkin("carnet");
     await page.viewport(width, 900);
     const screen = await openApp(path);
-    await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
+    // The page is a lazy chunk of the route, which a loaded run (many files at once) can
+    // take longer than the 1 s of `expect.element` to fetch: wait for it, as long as it takes.
+    await expect
+      .element(screen.getByRole("heading", { level: 1 }), { timeout: 10_000 })
+      .toBeVisible();
+    // The title is there before the page's data is (the profile shows its title and a
+    // « loading » line until its runner has come): wait for the words the page ends up with,
+    // as long as it takes, then check them as before.
+    await vi.waitFor(
+      () => {
+        expect(textOnPaper().length, "the words on the paper").toBeGreaterThanOrEqual(least);
+      },
+      { timeout: 10_000 },
+    );
     await fontsReady();
     const art = sheet().firstElementChild;
     if (!art) throw new Error("no art");

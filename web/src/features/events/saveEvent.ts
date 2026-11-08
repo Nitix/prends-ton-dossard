@@ -1,6 +1,7 @@
 import { ClientResponseError } from "pocketbase";
 
 import { errorCode, fieldErrors } from "../../i18n/errors";
+import { isMonthOnly } from "../../lib/dates";
 import { newId } from "../../lib/ids";
 import { pb } from "../../lib/pb";
 import type { Status } from "../../lib/types";
@@ -46,6 +47,16 @@ export type EventDraft = {
   registration_url?: string;
   /** The last day to register, a `YYYY-MM-DD` text, never after `start_date`. */
   registration_deadline?: string;
+  /** The day registration opens, a `YYYY-MM-DD` text, never after `registration_deadline` or `start_date`. */
+  registration_opening?: string;
+  /** The time of that opening, `HH:MM`, the time at the place of the race (Paris time for a race in France). Needs `registration_opening`. */
+  registration_opening_time?: string;
+  /**
+   * `month` for a race whose month is known and not its day: it runs from the 1st (`start_date`) to
+   * the last day of the month (`end_date`, which the server sets), and its formats have no `date`.
+   * `day`, or nothing, is a race with a day.
+   */
+  date_precision?: "day" | "month";
   notes?: string;
   formats: {
     id?: string;
@@ -64,6 +75,8 @@ export type EventDraft = {
     /** What the message that says a track was not sent calls the format. It defaults to its name. */
     label?: string;
     date?: string;
+    /** `HH:MM`, the time at the place of the race (Paris time for a race in France). A race known by its month has none. */
+    start_time?: string;
   }[];
   /** The member takes part in the format at `formatIndex` of `formats`. Only when the event is created. */
   join?: { formatIndex: number; status: Status };
@@ -82,6 +95,10 @@ function eventBody(draft: EventDraft): Record<string, unknown> {
     end_date: draft.end_date ?? "",
     registration_url: draft.registration_url ?? "",
     registration_deadline: draft.registration_deadline ?? "",
+    registration_opening: draft.registration_opening ?? "",
+    registration_opening_time: draft.registration_opening_time ?? "",
+    // Empty is a day: it is what every event that was there before holds.
+    date_precision: draft.date_precision === "month" ? "month" : "",
     notes: draft.notes ?? "",
   };
 }
@@ -97,12 +114,18 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
     price_eur: format.price_eur ?? 0,
     route_url: format.route_url ?? "",
     date: format.date ?? "",
+    start_time: format.start_time ?? "",
   };
 }
 
-/** Whether a day (a `YYYY-MM-DD` text, which sorts like the day) is in the dates the event has now. An empty day is. */
+/**
+ * Whether a day (a `YYYY-MM-DD` text, which sorts like the day) is in the dates the event has now. An
+ * empty day is. An event that is stored as a month offers no day to a format: the server refuses
+ * one, whatever the month.
+ */
 function isInRangeOf(event: EventView["event"], day: string | undefined): boolean {
   if (!day) return true;
+  if (isMonthOnly(event)) return false;
   return day >= event.start_date && (!event.end_date || day <= event.end_date);
 }
 
@@ -151,16 +174,36 @@ export function buildBatch(
   const formatIds: string[] = [];
   const keptOps: BatchOp[] = [];
   const lateOps: BatchOp[] = [];
-  for (const format of draft.formats) {
+  // A race known by its month is a race without days for its formats: they have no date nor start time, whatever the
+  // draft holds (the form drops them, but a draft that kept them would be refused).
+  const formats = isMonthOnly(draft)
+    ? draft.formats.map((format) => ({ ...format, date: undefined, start_time: undefined }))
+    : draft.formats;
+  for (const format of formats) {
     const id = format.id ?? newId();
     formatIds.push(id);
     if (existing && existingIds.has(id)) {
-      // A day that the event does not have yet waits for the event.
+      // A day that the event does not have yet waits for the event, and so does a start time while
+      // the stored event is a month: the server refuses it there, and the event that gains its day
+      // comes first.
       const waits = !isInRangeOf(existing.event, format.date);
-      const kept = waits ? { ...format, date: undefined } : format;
+      const waitsTime = isMonthOnly(existing.event) && !!format.start_time;
+      const kept = {
+        ...format,
+        ...(waits ? { date: undefined } : {}),
+        ...(waitsTime ? { start_time: undefined } : {}),
+      };
       keptOps.push({ action: "update", collection: "formats", id, body: formatBody(kept) });
-      if (waits) {
-        lateOps.push({ action: "update", collection: "formats", id, body: { date: format.date } });
+      if (waits || waitsTime) {
+        lateOps.push({
+          action: "update",
+          collection: "formats",
+          id,
+          body: {
+            ...(waits ? { date: format.date } : {}),
+            ...(waitsTime ? { start_time: format.start_time } : {}),
+          },
+        });
       }
     } else {
       lateOps.push({

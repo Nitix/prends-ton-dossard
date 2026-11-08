@@ -44,6 +44,8 @@ go run ./server seed
 
 La commande crée trois comptes (`admin@example.test`, `alice@example.test` et `bob@example.test`, mot de passe `courses-dev-password`, ou celui de `--password` ou de `SEED_PASSWORD`), des coureurs, des événements et des participations. Elle refuse de s'exécuter si des comptes existent déjà, et si `APP_URL` n'est pas une adresse locale (`localhost` ou `127.0.0.1`) : le binaire de production contient aussi la commande, et ce mot de passe est public. `--force` passe outre ce second refus.
 
+Les courses du `seed` ont de quoi essayer chaque nouveauté de la v7 : voir « Environnement de dev ». Pour le faire tourner sur le port 8090, avec ses données ailleurs que dans `pb_data/`, ajouter `--dir "$D"` aux commandes `seed` et `serve`.
+
 Pour tester le tableau de bord de PocketBase (`http://127.0.0.1:8090/_/`), créer un super-admin : `go run ./server superuser upsert <email> <mot de passe>`.
 
 ## Tests
@@ -76,6 +78,8 @@ GitHub Actions lance tout cela à chaque push (`.github/workflows/ci.yml`).
 > **Choisis le domaine définitivement avant d'inviter qui que ce soit.** Les passkeys sont liées au domaine : si tu en changes, elles ne fonctionnent plus, et les liens d'invitation déjà envoyés pointent vers l'ancien domaine.
 
 Il faut un nom de domaine dont l'enregistrement DNS pointe vers la machine (pas une adresse IP : WebAuthn la refuse), et les ports 80 et 443 ouverts vers Internet pour Caddy.
+
+Depuis la v7, la machine fait aussi des appels **sortants** : elle doit pouvoir joindre en HTTPS direct (port 443, sans proxy HTTP : le programme n'en utilise aucun) les quatre services de notification (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`) et Open-Meteo (`api.open-meteo.com`, `geocoding-api.open-meteo.com`).
 
 1. **Récupérer le code et régler `APP_URL`.**
 
@@ -182,6 +186,69 @@ docker compose up -d
 docker compose exec -e SEED_PASSWORD="$(openssl rand -base64 24)" courses /app/courses seed --force
 ```
 
+## Rappels et notifications
+
+Chacun choisit, dans Profil, Réglages, « Rappels », d'être prévenu **1 jour avant**, **1 heure avant**, les deux, ou jamais (c'est « Jamais » tant qu'on n'a rien choisi), quand les inscriptions d'une course où il est « Intéressé » ou « Inscrit » ouvrent. L'ouverture se saisit dans le formulaire de la course : un jour, et une heure facultative (sans heure, le site compte 9 h, heure de Paris). Le même choix commande deux canaux :
+
+- **les alarmes du flux d'agenda personnel** (une alarme de l'événement d'ouverture) ;
+- **les notifications** (Web Push) sur chaque appareil activé avec « Activer sur cet appareil ». Un bouton « Envoyer un essai » en envoie une tout de suite.
+
+Un planificateur du programme passe chaque minute (`ptd-reminders`). Il envoie un rappel **au plus une fois** : un arrêt du programme pendant un envoi perd ce rappel plutôt que d'en envoyer deux, et un arrêt attend, 5 secondes au plus, la fin du passage en cours. Le rappel « 1 jour » est dû la veille **à la même heure de Paris** (23 h ou 25 h avant les deux nuits du changement d'heure). Il n'y a ni rappel ni notification sur la démo.
+
+- **Les clés VAPID** (l'identité du site auprès des services de notification) sont dans **`pb_data/push_vapid.json`**, créé au premier démarrage de `serve`. Ce fichier n'est **jamais dans le dépôt** (`pb_data/` est ignoré par Git et par Docker) et ne passe par aucune variable d'environnement. Il est **sauvegardé avec le volume `pb_data`** (et avec les sauvegardes de PocketBase) : une restauration rend les clés *et* les abonnements qui vont avec. Le fichier est publié par un lien dur : le volume doit en accepter (ext4 et overlay le font). Le programme ne régénère jamais les clés de lui-même : un fichier illisible n'est pas remplacé (il couperait tous les appareils sans le dire), les notifications sont alors indisponibles et le journal le dit.
+- **Changer les clés** (une fuite, par exemple) : arrêter le conteneur, supprimer `pb_data/push_vapid.json`, le redémarrer. De nouvelles clés sont faites, et chaque appareil se réabonne de lui-même à la prochaine ouverture du site. Chaque instance (production, dev, démo) a les siennes, dans son volume.
+- **`PUSH_CONTACT`** (facultatif, dans `.env`) : un `mailto:` ou une adresse `https:` que les services de notification peuvent joindre au sujet du site. Sans lui, `APP_URL` est utilisée quand elle est en `https`. Le programme refuse de démarrer si la valeur n'est ni l'un ni l'autre.
+- **Les services** : seuls Google (`fcm.googleapis.com`), Mozilla, Apple et Microsoft sont acceptés, en `https` et avec des noms de domaine ASCII. Le message est chiffré (RFC 8291) : le service ne le lit pas. Dix appareils par compte au plus (le plus ancien est remplacé) ; se déconnecter retire l'appareil ; un compte désactivé perd les siens.
+- **`POST /api/app/push/renew`** s'utilise sans session : le navigateur la rappelle quand son abonnement change, et elle ne répond que si l'on donne le secret de l'ancien. Elle n'a pas de règle à elle : c'est la limite de requêtes de PocketBase pour `/api/` qui la protège, comme les autres routes.
+- **Essayer en local.** Le service worker n'est enregistré que dans un build de production, et il faut `localhost` (un contexte sûr). `pnpm --dir web build`, puis, avec un `seed` (voir « Développement local »), `APP_URL=http://localhost:8090 go run ./server serve --http=localhost:8090 --dir "$D"`, et ouvrir `http://localhost:8090`. Choisir « 1 heure avant », puis « Activer sur cet appareil » et « Envoyer un essai » : l'envoi part vraiment chez le service du navigateur (Google, Mozilla…), l'ordinateur doit donc avoir Internet. Le rappel d'une heure se voit en mettant, sur une course où l'on est « Intéressé », une ouverture dans 70 minutes.
+- **iPhone et iPad.** Les notifications ne marchent que dans **l'appli installée** (Partager, « Sur l'écran d'accueil »), avec **iOS 16.4 ou plus** ; la permission se demande par un geste (le bouton « Activer sur cet appareil »). Le site le dit sur la page des Réglages.
+- **Les alarmes d'un calendrier abonné** ne sont pas garanties : Apple Calendrier (sur Mac) retire par défaut les alertes d'un abonnement (décocher « Supprimer les alertes » dans les réglages du calendrier), et Google Agenda et Outlook les ignorent d'après des utilisateurs. Les notifications sont le canal sûr.
+
+## Météo
+
+La fiche d'une course montre la **« Météo prévue »** de ses jours, **de J-7 au dernier jour** (une course dont seul le mois est connu n'en a pas). Les données sont celles d'[Open-Meteo](https://open-meteo.com/) (licence CC BY 4.0, lieux GeoNames pour le géocodage). Son API gratuite est réservée à un **usage non commercial** : un site privé entre amis, sans abonnement ni publicité, en fait partie.
+
+- **Ce qui est envoyé**, toujours par le serveur (jamais par le navigateur : l'adresse des membres ne va pas chez Open-Meteo) : pour une prévision, des coordonnées **arrondies à 0,01°** (environ 1 km), une altitude arrondie à 50 m quand une trace en donne une, les jours voulus et la liste des grandeurs ; pour trouver un lieu, **le texte du lieu de la course** tel qu'il est saisi. Les coordonnées sont celles du départ de la **trace GPX** de la première épreuve qui en a une, sinon celles du lieu géocodé (le lieu trouvé est montré sur la fiche, pour qu'une erreur se voie). Jamais un nom de membre, un compte, le nom de la course ni qui y va. Open-Meteo voit l'adresse IP du serveur et garde ses journaux 90 jours.
+- **Le budget** : le programme fait **500 appels par heure au plus** et **2 500 par jour de Paris** (300 sur la démo), pour tous les membres ensemble. Open-Meteo limite à 10 000 appels par jour, 5 000 par heure, **par adresse IP**, et la production, la démo et le dev partagent la leur. Le journal dit quand un plafond est atteint. Au-delà, le cache (périmé s'il y en a un) ; à défaut, « La météo n'a pas pu être chargée ».
+- **Le cache** est en mémoire (un redémarrage le vide : un appel de plus par course) : une prévision 15 minutes (**changé à la demande de l'utilisateur**, c'était une heure ; la fiche la redemande toutes les 15 minutes tant qu'elle est ouverte, et aussitôt après une modification de la course ; le budget ci-dessous plafonne toujours les appels), un lieu 30 jours, une seule requête à la fois par clé. Si Open-Meteo ne répond pas (8 secondes), la dernière prévision de moins de 6 heures est montrée, marquée comme ancienne ; un échec est retenu une minute avant un nouvel essai.
+- **L'attribution** est sur la fiche (« Données : Open-Meteo.com », avec un lien) et dans la réponse de l'outil MCP `get_weather`.
+- La route (`GET /api/app/events/{id}/weather`) existe aussi sur la démo, où le budget borne les appels.
+- **L'heure de départ** (facultative, heure du lieu de la course, celle de Paris pour une course en France, jamais sur une course au mois) d'une épreuve ajoute, sous son jour, une ligne « Départ de « 42 km » à 7 h 30 : … » avec le temps de l'heure pleine du départ ; elle est demandée dans la même requête que les jours, sans appel de plus.
+
+## Flux d'agenda du groupe
+
+Dans Réglages, « Agenda », deux liens secrets, chacun avec « Nouveau lien » et « Supprimer le lien » :
+
+- **« Mes courses »**, le flux personnel : mes participations et leurs alarmes ;
+- **« Les courses du groupe »** : toutes les courses où au moins une personne va (supporteurs et intéressés sans épreuve compris, pas les « Non partants »), jusqu'à un an en arrière, avec **le nom et le statut de chacun par épreuve** dans la description. **Ce lien donne les noms des membres** : il n'est à donner à personne. Il n'a ni ouverture, ni date limite, ni alarme. Il n'existe pas sur la démo (404).
+
+Un lien de chaque sorte par compte ; en renouveler un ne touche pas l'autre. Ils survivent à un changement de mot de passe ou d'email (comme le lien personnel) : seule la désactivation du compte les coupe (404). Dans Apple Calendrier : « Fichier, Nouvel abonnement à un calendrier » ; dans Google Agenda : « Autres agendas, À partir de l'URL ».
+
+## Environnement de dev
+
+Avant de passer une version en production, on l'essaie sur un environnement à part, **`https://dev-prends-ton-dossard.ketra.fr`**, avec ses vrais services (notifications, Open-Meteo) :
+
+- son dossier `/opt/ptd-dev` (un nom différent de celui de la production : Docker Compose nomme le projet et le volume d'après le dossier), son volume `ptd-dev_pb_data` (ses données et ses clés VAPID) et son port `127.0.0.1:8130` ;
+- un `.env` à lui : son `APP_URL`, `HOST_PORT=8130`, et **sans `DEMO_LOGIN_EMAIL`** (sinon n'importe qui y entrerait avec un compte partagé : c'est la démo) ;
+- les données du `seed` (`seed --force`), avec un mot de passe au hasard gardé dans `/opt/ptd-dev-secrets/SEED_PASSWORD` (lisible par root seulement) ; comptes `alice@`, `bob@` et `admin@example.test` ;
+- un site à lui dans le Caddyfile, sur le modèle de la démo : l'en-tête `X-Robots-Tag` et un `robots.txt` qui refusent les moteurs de recherche, `/_/` en 404, un journal à part.
+
+On y redéploie depuis une archive de la version (`git archive`), pas avec `git pull` : le dossier n'a pas de `.git`. L'archive du commit est copiée sur le serveur et extraite dans `/opt/ptd-dev.new`, le `.env` est gardé, les deux dossiers sont échangés, puis `docker compose build && docker compose up -d` tourne dans `/opt/ptd-dev`. Le `seed` ne refait rien sur une base remplie. La production ne vient qu'ensuite, après la sauvegarde du volume `pb_data`.
+
+Pour remplir une base vide de dev (une première fois, ou après `docker compose down -v` dans `/opt/ptd-dev`, et là seulement) :
+
+```sh
+docker compose exec -e SEED_PASSWORD="$(cat /opt/ptd-dev-secrets/SEED_PASSWORD)" courses /app/courses seed --force
+```
+
+**Les dates du `seed` sont relatives au jour où il tourne, et vieillissent** : dans 5 jours, « Trail des Crêtes » est passé (et sa météo avec), dans 2 jours l'ouverture du Vercors aussi. Pour des données fraîches, il faut repartir d'un volume vide (`docker compose down -v`, toujours dans `/opt/ptd-dev`) et relancer la commande ci-dessus.
+
+Le `seed` donne de quoi essayer chaque nouveauté (les jours sont relatifs au jour où il tourne) :
+
+- « Trail des Crêtes » **dans 5 jours** (la météo se montre), avec une ouverture passée, une date limite dans 2 jours et une **trace GPX** sur son épreuve de 42 km (`server/cmd/seed_track.gpx`) ;
+- « Grand Trail du Vercors », **au mois** (dans 7 mois), à Villard-de-Lans, avec une **ouverture dans 2 jours à 10:00**, Alice et Sam intéressés et Bob inscrit ;
+- « Hyrox Lyon » : une ouverture demain, **sans heure**.
+
 ## Assistant IA (MCP)
 
 Un assistant IA (Claude Code, Claude Desktop…) peut faire sur le site ce que tu y fais, en ton nom, sans l'ouvrir : chercher une course, l'ajouter, t'y inscrire, saisir un résultat, commenter, proposer une voiture. Tout ce qu'il fait est signé de ton nom, comme si tu l'avais fait toi-même. Il te demande ton accord avant de supprimer ou d'effacer quoi que ce soit, et il ne voit jamais un mot de passe ni un email. Le serveur MCP est dans le même programme que le site, à l'adresse **`https://<domaine>/mcp`** ; chaque membre s'y connecte avec un jeton personnel. Le détail est dans [`docs/superpowers/specs/2026-11-03-courses-mcp-design.md`](docs/superpowers/specs/2026-11-03-courses-mcp-design.md).
@@ -251,7 +318,7 @@ Tout client MCP qui sait envoyer un en-tête fixe en « streamable HTTP » convi
 
 ### Ce que l'assistant peut faire
 
-Chaque outil se limite à ce que le site te permet : l'assistant n'a pas d'autre droit que toi, et les refus du site restent les siens (modifier la participation confirmée d'un autre, supprimer la course d'un autre auteur…). Trente-deux outils, que l'assistant choisit seul quand tu lui parles :
+Chaque outil se limite à ce que le site te permet : l'assistant n'a pas d'autre droit que toi, et les refus du site restent les siens (modifier la participation confirmée d'un autre, supprimer la course d'un autre auteur…). Trente-quatre outils, que l'assistant choisit seul quand tu lui parles :
 
 | Domaine | Outils |
 | --- | --- |
@@ -261,9 +328,10 @@ Chaque outil se limite à ce que le site te permet : l'assistant n'a pas d'autre
 | Commentaires | `add_comment`, `update_comment`, `delete_comment` |
 | Covoiturage et logement | `add_offer`, `update_offer`, `delete_offer`, `offer_place` (prendre ou libérer une place) |
 | Fichiers | `start_upload`, `set_photo`, `set_track` |
-| Profil et réglages | `rename_runner`, `passkeys` (lister, renommer, supprimer), `calendar_link`, `mcp_tokens` (lister, révoquer) |
+| Profil et réglages | `rename_runner`, `passkeys` (lister, renommer, supprimer), `calendar_link` (le lien personnel, ou celui du groupe avec `scope`), `mcp_tokens` (lister, révoquer), `reminders` (voir ou changer le choix de rappels) |
+| Météo | `get_weather` (la météo prévue des jours d'une course) |
 
-Avec le jeton d'un **admin**, onze outils `admin_…` s'ajoutent, ceux de la partie Admin du site : les membres, leurs liens d'invitation et de réinitialisation, les rôles, la désactivation d'un compte, les types de course et la fusion des doublons. Le jeton d'un membre ne les voit pas, et le rôle est relu à chaque requête : un admin rétrogradé les perd aussitôt. Un compte se crée toujours par une invitation que la personne ouvre elle-même : `admin_create_link` donne le lien, l'assistant ne choisit jamais un mot de passe.
+Avec le jeton d'un **admin**, onze outils `admin_…` (quarante-cinq en tout) s'ajoutent, ceux de la partie Admin du site : les membres, leurs liens d'invitation et de réinitialisation, les rôles, la désactivation d'un compte, les types de course et la fusion des doublons. Le jeton d'un membre ne les voit pas, et le rôle est relu à chaque requête : un admin rétrogradé les perd aussitôt. Un compte se crée toujours par une invitation que la personne ouvre elle-même : `admin_create_link` donne le lien, l'assistant ne choisit jamais un mot de passe.
 
 Ce qui n'a pas d'outil :
 
@@ -271,11 +339,14 @@ Ce qui n'a pas d'outil :
 - **créer une clé d'accès** : il faut l'appareil, dans le navigateur ;
 - **créer un jeton** : un jeton n'en fabrique pas un autre, dont le secret passerait par l'assistant ;
 - **choisir le thème, installer l'appli, se déconnecter** : ce sont des réglages de l'appareil, ou une liste de thèmes que le serveur ne connaît pas ;
+- **activer un appareil pour les notifications** : il faut le navigateur de l'appareil (la permission, l'abonnement) ; `reminders` dit combien d'appareils sont activés, et que l'on s'en occupe dans les Réglages ;
+- **partager une course** : c'est un geste du téléphone, et l'assistant a déjà le nom, les jours, les épreuves et l'adresse de la course ;
+- **les titres des pages et le zoom** : de l'interface seulement.
 - **le fichier `.ics`, la carte, le profil du D+** : le navigateur les fabrique (l'assistant a le lien d'agenda et les chiffres de la trace).
 
 ### Les confirmations
 
-Ce qui supprime ou efface ce qu'une personne a saisi, ou touche à l'accès d'un compte, **ne se fait pas au premier appel** : supprimer une course, une épreuve, une participation, un commentaire, une offre, une clé d'accès, le lien d'agenda ou un jeton ; vider un champ rempli ; remplacer des notes, un résultat, une photo ou une trace ; raccourcir une course ou changer le jour d'une épreuve où des gens sont inscrits ; toucher à la participation, à la photo ou à l'offre de quelqu'un d'autre ; libérer une place ; créer une course qui ressemble à une autre ; pour un admin, créer un lien d'invitation (toujours, même pour un membre) ou de réinitialisation, révoquer un lien, changer un rôle, désactiver un compte, supprimer un coureur ou un type, fusionner des doublons. Remplacer une valeur par une autre (corriger une distance, renommer une course) n'en demande pas.
+Ce qui supprime ou efface ce qu'une personne a saisi, ou touche à l'accès d'un compte, **ne se fait pas au premier appel** : supprimer une course, une épreuve, une participation, un commentaire, une offre, une clé d'accès, le lien d'agenda (le sien ou celui du groupe, aussi pour le renouveler) ou un jeton ; vider un champ rempli ; remplacer des notes, un résultat, une photo ou une trace ; raccourcir une course ou changer le jour d'une épreuve où des gens sont inscrits ; effacer l'ouverture des inscriptions ; passer au mois une course dont des épreuves ont une date (elles la perdent) ; toucher à la participation, à la photo ou à l'offre de quelqu'un d'autre ; libérer une place ; créer une course qui ressemble à une autre ; pour un admin, créer un lien d'invitation (toujours, même pour un membre) ou de réinitialisation, révoquer un lien, changer un rôle, désactiver un compte, supprimer un coureur ou un type, fusionner des doublons. Remplacer une valeur par une autre (corriger une distance, renommer une course) n'en demande pas.
 
 Ce que les membres ont écrit (un commentaire, des notes, le nom d'une course) est cité entre « » dans ce que le serveur dit à l'assistant, et décrit comme une donnée à lire, jamais une consigne : un commentaire ne peut pas faire passer ses mots pour ceux du site.
 
@@ -307,7 +378,7 @@ Sur le site de développement (voir « Développement local »), le serveur MCP 
 `tools/mcpcheck` est un client MCP réel, fait avec le SDK officiel : il se connecte comme un assistant, liste les outils et les appelle, une ligne par étape (`ok   whoami — Alice`, ou `FAIL …` et le code de sortie 1 à la première étape qui échoue). Il n'écrit jamais un jeton, un secret d'envoi, un lien d'invitation ni un lien d'agenda.
 
 ```sh
-# Sans -write, il ne fait que lire (initialize, tools/list, whoami, home, list_race_types, search_events, get_stats) :
+# Sans -write, il ne fait que lire (initialize, tools/list, whoami, home, list_race_types, search_events, get_stats, reminders, get_weather) :
 # il peut viser le vrai site, avec TON jeton dans PTD_MCP_TOKEN.
 PTD_MCP_TOKEN=ptd_… go run ./tools/mcpcheck -url https://courses.example.fr/mcp
 
@@ -316,12 +387,12 @@ PTD_MCP_TOKEN=ptd_… go run ./tools/mcpcheck -url https://courses.example.fr/mc
 D="$(mktemp -d)"
 go run ./server seed --dir "$D"
 APP_URL=http://localhost:8090 go run ./server serve --http=127.0.0.1:8090 --dir "$D"     # dans un autre terminal
-go run ./tools/mcpcheck -url http://localhost:8090/mcp -login alice@example.test -write    # un membre : 32 outils
-go run ./tools/mcpcheck -url http://localhost:8090/mcp -login admin@example.test -write    # un admin : 43 outils
+go run ./tools/mcpcheck -url http://localhost:8090/mcp -login alice@example.test -write    # un membre : 34 outils
+go run ./tools/mcpcheck -url http://localhost:8090/mcp -login admin@example.test -write    # un admin : 45 outils
 ```
 
-- `-write` et `-login` sont **refusés** pour toute adresse qui n'est pas `localhost` ou `127.0.0.1` : une exécution qui écrit laisserait sa trace sur un vrai site. Les données d'essai portent leurs propres noms (« Course de test MCP », « Doublon MCP », « Test MCP ») et sont supprimées en fin de course ; ne le lancer que sur une base à jeter (le `seed` ci-dessus).
-- Il passe par les confirmations (une fausse, une servie deux fois), un envoi de trace et de photo, la révocation d'un jeton (401 aussitôt) et, pour un admin, les outils `admin_…` (lien d'invitation, doublons fusionnés).
+- `-write` et `-login` sont **refusés** pour toute adresse qui n'est pas `localhost` ou `127.0.0.1` : une exécution qui écrit laisserait sa trace sur un vrai site. Les données d'essai portent leurs propres noms (« Course de test MCP », « Doublon MCP », « Course au mois MCP », « Test MCP ») et sont supprimées en fin de course ; ne le lancer que sur une base à jeter (le `seed` ci-dessus).
+- Il passe par les confirmations (une fausse, une servie deux fois), un envoi de trace et de photo, la révocation d'un jeton (401 aussitôt) et, pour un admin, les outils `admin_…` (lien d'invitation, doublons fusionnés). Il lit aussi `reminders`, puis demande la météo de « Trail des Crêtes » (`get_weather` : **un appel réel à Open-Meteo**, le seul des essais), et, avec `-write`, change le choix de rappels pour le remettre comme il était, crée une course « Course au mois MCP » (au mois, avec une ouverture), efface l'ouverture après confirmation et supprime la course après confirmation.
 - Il laisse 400 ms entre deux appels : les limites de requêtes de PocketBase valent pour les outils comme pour le navigateur.
 - Les fichiers d'essai (`tools/mcpcheck/testdata`) sont ceux des générateurs des tests du serveur ; `MCPCHECK_UPDATE=1 go test ./tools/mcpcheck/` les refait.
 
@@ -464,8 +535,16 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] **MCP, lire.** Demander à Claude « Qui suis-je, et quelles courses arrivent ? » : il donne le nom du coureur de test et des courses du site. Dans Réglages (page rechargée), le jeton dit « Utilisé le » avec la date du jour.
 - [ ] **MCP, écrire et confirmer.** Lui faire créer une course d'essai avec une épreuve, où le coureur de test est inscrit : elle apparaît sur l'iPhone, au nom du compte de test. Lui demander de retirer cette participation, puis de supprimer la course : à chaque fois il montre ce qui serait perdu et attend ton accord avant de rappeler l'outil.
 - [ ] **MCP, révoquer.** « Révoquer » le jeton dans Réglages : `claude mcp list` ne montre plus le serveur « Connected ». Le retirer de Claude Code : `claude mcp remove prends-ton-dossard --scope user`.
+- [ ] **Notifications.** Installer le site sur l'écran d'accueil (Partager, « Sur l'écran d'accueil ») et l'ouvrir **depuis l'icône** ; vérifier que l'iPhone a **iOS 16.4 ou plus**. Dans Profil, Réglages, « Rappels », choisir « 1 jour et 1 heure avant », puis « Activer sur cet appareil » : accepter la permission, puis « Envoyer un essai » : la notification arrive, un toucher ouvre le site. Dans Safari, hors de l'appli installée, le site dit que les notifications demandent l'appli.
+- [ ] **Le rappel pour de vrai.** Sur une course où le coureur de test est « Intéressé », mettre une ouverture dans 70 minutes et attendre : la notification arrive une heure avant l'ouverture (« Les inscriptions ouvrent à …, dans 60 min. »), un toucher ouvre la course. En se déconnectant, l'appareil n'en reçoit plus.
+- [ ] **Les alarmes d'un calendrier abonné.** Dans Réglages, « Agenda », copier le lien « Mes courses » puis, dans Réglages d'iOS, Calendrier, Comptes, « Ajouter un compte », « Autre », « Ajouter un calendrier avec abonnement », le coller. Sur un Mac, Apple Calendrier retire par défaut les alertes d'un abonnement : décocher « Supprimer les alertes ». Vérifier que l'événement d'ouverture porte son alarme. Faire de même avec le lien « Les courses du groupe » : les noms et statuts sont dans les notes des événements.
+- [ ] **Partager.** Sur la fiche d'une course, « Partager » ouvre la feuille de partage de l'iPhone avec le texte (nom, jours, lieu, épreuves, ouverture, date limite, adresse) et sans aucun nom de participant. L'envoyer à soi-même dans une conversation WhatsApp : le lien demande de se connecter (il n'y a pas d'aperçu). Annuler la feuille ne fait rien.
+- [ ] **Zoom.** Sur la fiche d'une course qui a une trace : un doigt fait défiler la page, **deux doigts** déplacent et zooment la carte (un message le rappelle quand un doigt seul touche la carte). Sur le profil du D+, glisser ou pincer choisit une portion, la carte la suit ; « Vue entière du profil » revient.
+- [ ] **Météo.** Sur « Trail des Crêtes » (ou une course dans les 7 jours), la section « Météo prévue » montre les jours, le lieu trouvé et la source, avec un lien vers Open-Meteo qui dit s'ouvrir dans un nouvel onglet.
 - [ ] Désactiver le compte de test (ses jetons MCP partent avec lui).
 
 ## Feuille de route
 
 Les tests de bout en bout (Playwright, sur trois navigateurs) sont prévus pour la v5.
+
+**Plus tard.** Le **matériel obligatoire d'une épreuve**, avec sa liste à cocher, est reporté à ta demande : l'idée reste dans `docs/TODO.md`.

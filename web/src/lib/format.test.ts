@@ -25,6 +25,15 @@ describe("date", () => {
   });
 });
 
+describe("dayMonth", () => {
+  test.each([
+    { locale: "fr-FR", expected: "12 janv." },
+    { locale: "en-GB", expected: "12 Jan" },
+  ])("$locale: $expected", ({ locale, expected }) => {
+    expect(plain(createFormatters(locale).dayMonth(date("2026-01-12")))).toBe(expected);
+  });
+});
+
 describe("monthTitle", () => {
   test.each([
     { locale: "fr-FR", expected: "juin 2026" },
@@ -253,5 +262,52 @@ describe("dateTime", () => {
     // 22:30 UTC on 14 June is 00:30 on 15 June in Paris (UTC+2).
     const summer = Temporal.Instant.from("2026-06-14T22:30:00Z");
     expect(plain(createFormatters("fr-FR").dateTime(summer))).toBe("15 juin 2026 à 00:30");
+  });
+});
+
+describe("time", () => {
+  test("time — l'heure de Paris", () => {
+    // 12:05 UTC in June is 14:05 in Paris (UTC+2).
+    const instant = Temporal.Instant.from("2026-06-08T12:05:00Z");
+    expect(createFormatters("fr-FR").time(instant)).toBe("14:05");
+    expect(createFormatters("en-GB").time(instant)).toBe("14:05");
+  });
+});
+
+describe("dateToDay", () => {
+  test.each([
+    { locale: "fr-FR", expected: "sam. 13" },
+    { locale: "en-GB", expected: "Sat, 13" },
+    { locale: "en-US", expected: "Sat, Jun 13" },
+  ])("dateToDay, $locale: $expected", ({ locale, expected }) => {
+    expect(plain(createFormatters(locale).dateToDay(date("2026-06-13")))).toBe(expected);
+  });
+});
+
+describe("integer", () => {
+  test("integer — arrondi, dans la langue, jamais « -0 »", () => {
+    const fr = createFormatters("fr-FR");
+    expect(fr.integer(17.3)).toBe("17");
+    expect(fr.integer(-0.4)).toBe("0");
+    expect(fr.integer(-2.6)).toBe("-3");
+    expect(plain(fr.integer(1234.5))).toBe("1 235");
+    expect(createFormatters("en-GB").integer(1234.4)).toBe("1,234");
+  });
+});
+
+describe("startTime", () => {
+  test.each([
+    { locale: "fr-FR", at: "07:30", expected: "7 h 30" },
+    { locale: "fr-FR", at: "19:05", expected: "19 h 05" },
+    { locale: "fr-FR", at: "00:00", expected: "0 h 00" },
+    { locale: "en-GB", at: "07:30", expected: "7:30" },
+    { locale: "en-US", at: "07:30", expected: "7:30 AM" },
+    { locale: "en-US", at: "19:05", expected: "7:05 PM" },
+  ])("startTime, $locale $at: $expected", ({ locale, at, expected }) => {
+    expect(plain(createFormatters(locale).startTime(at))).toBe(expected);
+  });
+
+  test("startTime — a text that is not a time is given back as it is", () => {
+    expect(createFormatters("fr-FR").startTime("tôt")).toBe("tôt");
   });
 });

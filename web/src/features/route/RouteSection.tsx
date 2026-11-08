@@ -9,8 +9,21 @@ import { trackURL, useTrack } from "./api";
 import { ElevationProfile } from "./ElevationProfile";
 import { gpxStats, type TrackPoint } from "./gpx";
 import { MAP_BOX } from "./mapBox";
+import type { KmRange } from "./range";
 import type { SlopeZone } from "./slope";
 import { TrackFigures } from "./TrackFigures";
+
+/** A number for each track that is read, so that a new one is a new `Track`: its portion does not outlive it. */
+let identified = 0;
+const identities = new WeakMap<TrackPoint[], number>();
+function identityOf(points: TrackPoint[]): number {
+  let id = identities.get(points);
+  if (id === undefined) {
+    id = ++identified;
+    identities.set(points, id);
+  }
+  return id;
+}
 
 // The map brings Leaflet along: it is loaded when a track is shown, not with the page.
 const TrackMap = lazy(() => import("./TrackMap"));
@@ -64,6 +77,9 @@ function MapLoading() {
  * under it; where the track of the map is pointed at or touched, the profile
  * reads it. Without a profile (no altitude), the map has no mark; without a
  * map (it could not be loaded), the profile works alone.
+ *
+ * The profile can zoom on a portion of the track (`range`): the map frames it
+ * and highlights it, and « Vue entière » frames the whole track again.
  */
 function Track({ points }: { points: TrackPoint[] }) {
   const { t, f } = useI18n();
@@ -71,12 +87,26 @@ function Track({ points }: { points: TrackPoint[] }) {
   // there as the profile reads it (`null` until the profile has drawn its cursor).
   const [cursorKm, setCursorKm] = useState<number | null>(null);
   const [cursorZone, setCursorZone] = useState<SlopeZone | null>(null);
+  // The portion of the track that the profile is zoomed on (`null`: all of it), which the map follows.
+  const [range, setRange] = useState<KmRange | null>(null);
+  const onRange = (next: KmRange | null) => {
+    setRange(next);
+    // The cursor stays in the portion.
+    if (next !== null) {
+      setCursorKm((km) => (km === null ? km : Math.min(next.to, Math.max(next.from, km))));
+    }
+  };
   // The track under a pointer of the map puts the cursor there. A pointer that
   // leaves the track, or the map, takes it away, but not from a profile that has
   // the focus: the keys are using it, and it goes with the focus (or Escape).
   const profile = useRef<HTMLDivElement>(null);
   const onTrackKm = (km: number | null) => {
     if (km === null && profile.current?.contains(document.activeElement)) return;
+    // A point of the map out of the portion puts no cursor on the profile.
+    if (km !== null && range !== null && (km < range.from || km > range.to)) {
+      if (!profile.current?.contains(document.activeElement)) setCursorKm(null);
+      return;
+    }
     setCursorKm(km);
   };
   // Over every point: once per track, not at every move of the cursor.
@@ -99,6 +129,7 @@ function Track({ points }: { points: TrackPoint[] }) {
             points={points}
             markerKm={cursorZone === null ? null : cursorKm}
             markerZone={cursorZone}
+            range={range}
             onTrackKm={onTrackKm}
           />
         </Suspense>
@@ -111,6 +142,8 @@ function Track({ points }: { points: TrackPoint[] }) {
           cursorKm={cursorKm}
           onCursorKm={setCursorKm}
           onCursorZone={setCursorZone}
+          range={range}
+          onRange={onRange}
         />
       </div>
     </>
@@ -138,7 +171,7 @@ export function RouteSection({ format }: { format: FormatRecord }) {
       {file !== undefined && track.isError && (
         <output className="text-sm text-neutral-700">{t.route.unreadable}</output>
       )}
-      {track.data && <Track points={track.data} />}
+      {track.data && <Track key={identityOf(track.data)} points={track.data} />}
       <div className="route-links flex flex-wrap gap-2">
         {file !== undefined && (
           <a href={file} download className={`${SECONDARY} inline-flex items-center gap-2`}>

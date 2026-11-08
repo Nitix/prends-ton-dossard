@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { ClientResponseError } from "pocketbase";
 import { expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
@@ -17,6 +17,7 @@ import {
   fillEvent,
   format,
   formatDate,
+  formatStartTime,
   gpxField,
   gpxFile,
   hoursOf,
@@ -58,6 +59,10 @@ setUpFormTests();
 
 const registrationDeadline = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationDeadline);
+const registrationOpening = (screen: Screen) =>
+  screen.getByLabelText(fr.form.registrationOpening, { exact: true });
+const registrationOpeningTime = (screen: Screen) =>
+  screen.getByLabelText(fr.form.registrationOpeningTime, { exact: true });
 const notes = (screen: Screen) => screen.getByLabelText(fr.form.notes);
 const removes = (screen: Screen) => screen.getByRole("button", { name: fr.common.remove });
 const joinBox = (screen: Screen) => screen.getByRole("checkbox", { name: fr.form.join });
@@ -257,6 +262,9 @@ test("EventForm — enregistre l'événement, ses épreuves et ma participation 
     end_date: "2026-06-14",
     registration_url: "https://trail.example.test/inscription",
     registration_deadline: "",
+    registration_opening: "",
+    registration_opening_time: "",
+    date_precision: "",
     notes: "Parking à l'arrivée.",
   });
   expect(one?.body).toMatchObject({
@@ -309,6 +317,85 @@ test("EventForm — la date limite et le prix sont envoyés", async () => {
   expect(one?.body).toMatchObject({ price_eur: 42.5 });
   // A format with no price sends 0, which is how it is cleared.
   expect(two?.body).toMatchObject({ price_eur: 0 });
+});
+
+test("EventForm — l'ouverture et son heure sont envoyées", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await registrationDeadline(screen).fill("2026-06-10");
+  await registrationOpening(screen).fill("2026-05-12");
+  await registrationOpeningTime(screen).fill("10:00");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+  expect(mocks.calls[0]?.body).toMatchObject({
+    registration_opening: "2026-05-12",
+    registration_opening_time: "10:00",
+  });
+});
+
+test("EventForm — l'heure n'est active qu'avec un jour", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+
+  // No day: the time cannot be typed, and the hint says what it is.
+  await expect.element(registrationOpeningTime(screen)).toBeDisabled();
+  await expect.element(screen.getByText(fr.form.registrationOpeningTimeHint)).toBeVisible();
+  expect(registrationOpeningTime(screen).element().getAttribute("aria-describedby")).toContain(
+    screen.getByText(fr.form.registrationOpeningTimeHint).element().id,
+  );
+  await expect.element(registrationOpeningTime(screen)).toHaveAttribute("type", "time");
+
+  await registrationOpening(screen).fill("2026-05-12");
+  await expect.element(registrationOpeningTime(screen)).toBeEnabled();
+  await registrationOpeningTime(screen).fill("10:00");
+
+  // Emptying the day empties the time: what is typed stays in the field, but is not sent.
+  await registrationOpening(screen).fill("");
+  await expect.element(registrationOpeningTime(screen)).toBeDisabled();
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
+  });
+  expect(mocks.calls[0]?.body).toMatchObject({
+    registration_opening: "",
+    registration_opening_time: "",
+  });
+});
+
+test("EventForm — l'erreur du serveur sous le champ", async () => {
+  mocks.send.mockRejectedValue(
+    refused(0, 400, {
+      registration_opening: field("registration_opening_after_deadline"),
+      registration_opening_time: field("time_invalid"),
+    }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await registrationDeadline(screen).fill("2026-05-01");
+  await registrationOpening(screen).fill("2026-05-12");
+  await registrationOpeningTime(screen).fill("10:00");
+
+  await save(screen).click();
+
+  const day = screen.getByText(fr.errors.registration_opening_after_deadline);
+  await expect.element(day).toBeVisible();
+  expect(registrationOpening(screen).element().getAttribute("aria-describedby")).toContain(
+    day.element().id,
+  );
+  expect(registrationOpening(screen).element().getAttribute("aria-invalid")).toBe("true");
+  const time = screen.getByText(fr.errors.time_invalid);
+  await expect.element(time).toBeVisible();
+  expect(registrationOpeningTime(screen).element().getAttribute("aria-describedby")).toContain(
+    time.element().id,
+  );
+  // What was typed stays.
+  await expect.element(registrationOpening(screen)).toHaveValue("2026-05-12");
+  await expect.element(registrationOpeningTime(screen)).toHaveValue("10:00");
 });
 
 test("EventForm — « Je participe » décoché : pas de participation", async () => {
@@ -812,6 +899,66 @@ test("EventForm — enregistre la modification par id, sans l'événement dans l
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["event", "event"]);
+});
+
+/**
+ * Watches the weather of the event as the page does: a query that is on screen, which asks
+ * again only when something marks it out of date. `asked` counts the requests.
+ */
+function watchWeather(queryClient: QueryClient) {
+  const asked = vi.fn<() => Promise<{ status: string }>>(() =>
+    Promise.resolve({ status: "no_day" }),
+  );
+  const observer = new QueryObserver(queryClient, {
+    queryKey: ["weather", "event"],
+    queryFn: asked,
+    staleTime: 15 * 60_000,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  return { asked, unsubscribe };
+}
+
+test("EventForm — un autre lieu enregistré : la météo de la page est redemandée", async () => {
+  const { screen, router, queryClient } = await renderEdit();
+  const weather = watchWeather(queryClient);
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(1);
+  });
+  await location(screen).fill("Chamonix");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.calls.at(-1)?.body).toMatchObject({ location: "Chamonix" });
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(2);
+  });
+  weather.unsubscribe();
+});
+
+test("EventForm — une autre date enregistrée : la météo de la page est redemandée", async () => {
+  const { screen, router, queryClient } = await renderEdit();
+  const weather = watchWeather(queryClient);
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(1);
+  });
+  await startDate(screen).fill("2026-06-20");
+  await formatDate(format(screen, 2)).fill("2026-06-21");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.calls.find(({ collection }) => collection === "events")?.body).toMatchObject({
+    start_date: "2026-06-20",
+  });
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(2);
+  });
+  weather.unsubscribe();
 });
 
 test("EventForm — l'épreuve qu'on retire est supprimée dans le même lot, et celle qu'on ajoute est créée pour l'événement", async () => {
@@ -1797,4 +1944,52 @@ test("EventForm — un fichier illisible, ou trop lourd, laisse le retrait en at
     expect(router.state.location.pathname).toBe("/evenements/event");
   });
   expect(mocks.updateFormat).toHaveBeenCalledExactlyOnceWith("f15", { gpx: null });
+});
+
+test("EventForm — l'heure de départ facultative : son indication, et elle part avec l'épreuve", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  const time = formatStartTime(row);
+
+  await expect.element(time).toHaveAttribute("type", "time");
+  await expect.element(time).toHaveAttribute("step", "60");
+  const hint = row.getByText(fr.form.formatStartTimeHint);
+  await expect.element(hint).toBeVisible();
+  expect(time.element().getAttribute("aria-describedby")).toContain(hint.element().id);
+  await time.fill("07:30");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "formats")?.body?.start_time).toBe(
+    "07:30",
+  );
+});
+
+test("EventForm — sans heure de départ, l'épreuve part avec une heure vide", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "formats")?.body?.start_time).toBe("");
+});
+
+test("EventForm — l'erreur du serveur sur l'heure de départ s'affiche sous le champ", async () => {
+  mocks.send.mockRejectedValue(refused(1, 400, { start_time: field("format_time_month") }));
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await formatStartTime(format(screen, 1)).fill("07:30");
+
+  await save(screen).click();
+
+  const message = screen.getByText(fr.errors.format_time_month);
+  await expect.element(message).toBeVisible();
+  const time = formatStartTime(format(screen, 1));
+  expect(message.element().id).not.toBe("");
+  expect(time.element().getAttribute("aria-describedby")).toContain(message.element().id);
+  expect(time.element().getAttribute("aria-invalid")).toBe("true");
+  await expect.element(time).toHaveValue("07:30");
 });

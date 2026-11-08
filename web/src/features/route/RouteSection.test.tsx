@@ -1,5 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CircleMarker, latLng, type LatLng } from "leaflet";
+import {
+  CircleMarker,
+  LatLngBounds,
+  latLng,
+  latLngBounds,
+  Map as LeafletMap,
+  type LatLng,
+  type LatLngBoundsExpression,
+} from "leaflet";
 import { afterEach, beforeEach, expect, test, vi, type MockInstance } from "vitest";
 import { render } from "vitest-browser-react";
 import { page, userEvent, type Locator } from "vitest/browser";
@@ -864,4 +872,70 @@ test("RouteSection — sur un téléphone, toucher le tracé place le curseur du
   } finally {
     await page.viewport(414, 896);
   }
+});
+
+/** The box that a call of `fitBounds` was given. */
+const boundsOf = (box: LatLngBoundsExpression | undefined): LatLngBounds =>
+  box instanceof LatLngBounds ? box : latLngBounds(box ?? []);
+
+test("RouteSection — la carte suit la portion : elle se cadre dessus, la met en avant, et Vue entière recadre la trace", async () => {
+  serve(STEADY.file);
+  const framed = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+  await expect.element(trackMap(screen)).toBeVisible();
+  const index = trackIndex(STEADY.points);
+  const lat = (km: number) => pointAtKm(index, km)?.lat ?? Number.NaN;
+  // The whole track is framed first, and nothing is highlighted.
+  expect(framed).toHaveBeenCalledTimes(1);
+  expect(screen.container.querySelector("path.track-portion")).toBeNull();
+  const line = part(screen, "path.track-line");
+  expect(getComputedStyle(line).strokeOpacity).toBe("1");
+
+  // Zoom in on the profile: twice shorter, around its middle.
+  await screen.getByRole("button", { name: fr.route.zoomProfileInLabel }).click();
+  await expect.poll(() => framed.mock.calls.length).toBe(2);
+  const bounds = boundsOf(framed.mock.calls[1]?.[0]);
+  expect(bounds.getSouth()).toBeCloseTo(lat(STEADY_KM * 0.25), 6);
+  expect(bounds.getNorth()).toBeCloseTo(lat(STEADY_KM * 0.75), 6);
+  // The portion is a line of its own over the track, which is dimmed.
+  const portion = part(screen, "path.track-portion");
+  expect(Number.parseFloat(getComputedStyle(portion).strokeWidth)).toBeGreaterThan(
+    Number.parseFloat(getComputedStyle(line).strokeWidth),
+  );
+  expect(getComputedStyle(line).strokeOpacity).toBe("0.5");
+
+  // The whole view: the track is framed again, the highlight goes.
+  await screen.getByRole("button", { name: fr.route.zoomProfileAllLabel }).click();
+  await expect.poll(() => framed.mock.calls.length).toBe(3);
+  const whole = boundsOf(framed.mock.calls[2]?.[0]);
+  expect(whole.getSouth()).toBeCloseTo(lat(0), 6);
+  expect(whole.getNorth()).toBeCloseTo(lat(STEADY_KM), 6);
+  expect(screen.container.querySelector("path.track-portion")).toBeNull();
+  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("1");
+});
+
+test("RouteSection — un point de la carte hors de la portion n'y met pas de curseur", async () => {
+  serve(STEADY.file);
+  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+  await expect.element(trackMap(screen)).toBeVisible();
+  // Zoomed in on the middle half of the profile (0.55 to 1.65 km), then the map zoomed out by
+  // hand, so that the whole track is in view again.
+  await screen.getByRole("button", { name: fr.route.zoomProfileInLabel }).click();
+  await expect.poll(() => screen.container.querySelector("path.track-portion")).not.toBeNull();
+  await screen.getByRole("button", { name: fr.route.zoomOut, exact: true }).click();
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  await screen.getByRole("button", { name: fr.route.zoomOut, exact: true }).click();
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const cursor = slider(screen);
+
+  // On the portion, the cursor goes there; out of it, the map puts none.
+  await hoverMap(screen, onScreen(screen, 0.5));
+  await expect.poll(() => valueText(cursor)).toMatch(/^1,1 km/);
+  await hoverMap(screen, onScreen(screen, 0.05));
+  await expect.poll(() => pill(screen)).toMatch(/^\d+ m$/);
+  await hoverMap(screen, onScreen(screen, 0.5));
+  await expect.poll(() => pill(screen)).toMatch(/ · /);
+  await hoverMap(screen, onScreen(screen, 0.95));
+  await expect.poll(() => pill(screen)).toMatch(/^\d+ m$/);
+  expect(cursorKm(cursor)).toBeLessThanOrEqual(STEADY_KM * 0.75 + 0.01);
 });

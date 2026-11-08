@@ -22,11 +22,14 @@ import { SECONDARY } from "./buttons";
 export function LoadFailure({
   onRetry,
   heading,
+  message,
 }: {
   /** Asks again. The button is busy until it settles, whichever way. */
   onRetry: () => Promise<unknown> | void;
   /** The title that takes the focus. */
   heading: RefObject<HTMLElement | null>;
+  /** What it says, when it is not the generic message of the site. */
+  message?: string;
 }) {
   const { t } = useI18n();
   const asking = useRef(false);
@@ -50,7 +53,7 @@ export function LoadFailure({
   return (
     <div className="load-failure flex flex-col gap-3">
       <p role="alert" className="text-sm font-medium text-red-700">
-        {t.errors.generic}
+        {message ?? t.errors.generic}
       </p>
       <button
         type="button"

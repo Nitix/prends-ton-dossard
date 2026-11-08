@@ -46,6 +46,28 @@ export function effectiveDate(
   return parseDate(format.date || event.start_date);
 }
 
+/** Whether the date of an event is known by its month only (`date_precision` is `month`): empty is a day. */
+export function isMonthOnly(event: { date_precision?: string }): boolean {
+  return event.date_precision === "month";
+}
+
+/**
+ * The day that says whether a race is behind, and orders it among the others:
+ * the last day of the month for an event known by its month only (its formats
+ * have no day), the day of the format otherwise (see `effectiveDate`). The day
+ * that says whether a race could have started stays the 1st (`raceStarted`).
+ */
+export function lastRaceDay(
+  format: { date?: string },
+  event: { start_date: string; end_date?: string; date_precision?: string },
+): Temporal.PlainDate {
+  if (isMonthOnly(event)) {
+    const start = parseDate(event.start_date);
+    return start.with({ day: start.daysInMonth });
+  }
+  return effectiveDate(format, event);
+}
+
 /**
  * Whether the race of a format has started: its day (see `effectiveDate`) is
  * `asOf` (today, for the screens) or before. The day itself counts. Nobody can

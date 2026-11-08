@@ -1,10 +1,12 @@
 import { ClientResponseError } from "pocketbase";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import { KEY_A, fakeSubscription, installFakes, restoreFakes } from "../push/fakeBrowser";
 import {
   SESSION_CHECK_INTERVAL_MS,
   isAdminSession,
   isPublicPath,
+  logout,
   restoreSession,
   safeRedirect,
   sessionCheck,
@@ -337,5 +339,69 @@ describe("safeRedirect", () => {
     "javascript:alert(1)",
   ])("sends %s to the home page", (input) => {
     expect(safeRedirect(input)).toBe("/");
+  });
+});
+
+describe("logout", () => {
+  afterEach(() => {
+    restoreFakes();
+    vi.unstubAllGlobals();
+  });
+
+  test("logout — la session est vidée tout de suite, l'appareil retiré ensuite avec l'ancien jeton", async () => {
+    mocks.token = "old-token";
+    mocks.clear.mockImplementation(() => {
+      mocks.token = "";
+    });
+    const subscription = fakeSubscription("https://push.example.test/mine", KEY_A);
+    installFakes({ permission: "granted", current: subscription });
+    const fetched = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(() =>
+      Promise.resolve(new Response(null, { status: 204 })),
+    );
+    vi.stubGlobal("fetch", fetched);
+
+    logout();
+
+    // At once, in the same turn: the session is gone and nothing was sent yet.
+    expect(mocks.clear).toHaveBeenCalledTimes(1);
+    expect(fetched).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
+    });
+    expect(fetched).toHaveBeenCalledTimes(1);
+    const [url, init] = fetched.mock.calls[0] ?? [];
+    expect(url).toBe("/api/app/push/subscriptions");
+    expect(init?.method).toBe("DELETE");
+    expect(init?.keepalive).toBe(true);
+    expect(new Headers(init?.headers).get("Authorization")).toBe("old-token");
+    const body = init?.body;
+    expect(typeof body === "string" ? (JSON.parse(body) as unknown) : null).toEqual({
+      endpoint: "https://push.example.test/mine",
+    });
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("logout — sans abonnement rien n'est envoyé, et un serveur qui ne répond pas ne retient personne", async () => {
+    mocks.token = "old-token";
+    installFakes({ permission: "granted" });
+    const fetched = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(() =>
+      Promise.resolve(new Response(null, { status: 204 })),
+    );
+    vi.stubGlobal("fetch", fetched);
+
+    logout();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetched).not.toHaveBeenCalled();
+
+    // The server is down: the browser lets go of the subscription anyway.
+    restoreFakes();
+    const subscription = fakeSubscription("https://push.example.test/mine", KEY_A);
+    installFakes({ permission: "granted", current: subscription });
+    fetched.mockImplementation(() => Promise.reject(new Error("offline")));
+    mocks.token = "old-token";
+    logout();
+    await vi.waitFor(() => {
+      expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
+    });
   });
 });

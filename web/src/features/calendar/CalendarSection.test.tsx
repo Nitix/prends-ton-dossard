@@ -44,6 +44,8 @@ vi.mock("../../lib/pb", () => ({
 
 const PATH = "/api/app/calendar";
 const link = (n: number) => `https://courses.example.test/api/app/calendar/token-${n}.ics`;
+const groupLink = (n: number) =>
+  `https://courses.example.test/api/app/calendar/group-token-${n}.ics`;
 
 const ALICE = { id: "u1", collectionName: "users", role: "member" };
 const BOB = { id: "u2", collectionName: "users", role: "member" };
@@ -72,22 +74,46 @@ const LEGACY = { exists: true, url: "" };
  * says whether there is a link and its address, makes a new one (each is
  * different, numbered from 1) when it is asked to, and deletes it.
  */
-function serve(state: { exists: boolean; url: string }) {
-  let { exists, url } = state;
-  let made = 0;
+/** The request option as an object, or undefined when it is not one. */
+function recordOf(value: unknown): Rec | undefined {
+  return typeof value === "object" && value !== null
+    ? Object.fromEntries(Object.entries(value))
+    : undefined;
+}
+
+function serve(
+  state: { exists: boolean; url: string },
+  groupState: { exists: boolean; url: string } | null = NONE,
+) {
+  const links = {
+    mine: { ...state, made: 0 },
+    group: { ...(groupState ?? NONE), made: 0 },
+  };
   mocks.send.mockImplementation((path, request) => {
     if (path !== PATH) return Promise.reject(new Error(`unexpected request to ${path}`));
+    // The link of the group is named by its scope: in the query, or in the body.
+    const query = recordOf(request.query);
+    const body = recordOf(request.body);
+    const kind =
+      (request.method === "POST" ? body?.scope : query?.scope) === "group" ? "group" : "mine";
+    if (kind === "group" && groupState === null) {
+      // The demo: the server has no link of the group.
+      return Promise.reject(
+        new ClientResponseError({ status: 404, response: { status: 404, message: "…" } }),
+      );
+    }
+    const one = links[kind];
     switch (request.method) {
       case "GET":
-        return Promise.resolve({ exists, url });
+        return Promise.resolve({ exists: one.exists, url: one.url });
       case "POST":
-        exists = true;
-        made += 1;
-        url = link(made);
-        return Promise.resolve({ url });
+        one.exists = true;
+        one.made += 1;
+        one.url = kind === "group" ? groupLink(one.made) : link(one.made);
+        return Promise.resolve({ url: one.url });
       case "DELETE":
-        exists = false;
-        url = "";
+        one.exists = false;
+        one.url = "";
         return Promise.resolve({});
       default:
         return Promise.reject(new Error(`unexpected method ${String(request.method)}`));
@@ -128,7 +154,11 @@ function mount(languages: string[] = ["fr"], client = newClient()) {
 type Screen = Awaited<ReturnType<typeof mount>>;
 
 /** The only region of the page: the section, named by its title. */
-const section = (screen: Screen) => screen.getByRole("region");
+const region = (screen: Screen) => screen.getByRole("region");
+/** The block of the personal link, which the tests of the first versions are about. */
+const section = (screen: Screen) => region(screen).getByRole("group").first();
+/** The block of the link of the group. */
+const groupSection = (screen: Screen) => region(screen).getByRole("group").nth(1);
 const field = (screen: Screen) => section(screen).getByRole("textbox");
 const button = (screen: Screen, name: string) =>
   section(screen).getByRole("button", { name, exact: true });
@@ -158,7 +188,7 @@ test("CalendarSection — créer affiche le lien, avec Copier", async () => {
   const screen = await mount();
 
   await expect.element(button(screen, fr.calendar.create)).toBeVisible();
-  await expect.element(section(screen)).toHaveAccessibleName(fr.calendar.title);
+  await expect.element(region(screen)).toHaveAccessibleName(fr.calendar.title);
   // Nothing to copy yet, and nothing said about a link that does not exist.
   await expect.element(field(screen)).not.toBeInTheDocument();
   await expect.element(section(screen).getByText(fr.calendar.exists)).not.toBeInTheDocument();
@@ -405,7 +435,7 @@ test("CalendarSection — Supprimer le lien confirmé le supprime, puis propose 
   await expect.element(section(screen).getByText(fr.calendar.exists)).not.toBeInTheDocument();
   // The button that had the focus is gone with the link: the title has it, not the page.
   await expect
-    .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
+    .element(region(screen).getByRole("heading", { name: fr.calendar.title, exact: true }))
     .toHaveFocus();
 });
 
@@ -550,7 +580,7 @@ test("CalendarSection — envoie la langue de l'interface", async () => {
 
   // The texts are in English, and so is the link that is asked for.
   const english = en.calendar;
-  await expect.element(section(screen)).toHaveAccessibleName(english.title);
+  await expect.element(region(screen)).toHaveAccessibleName(english.title);
   await button(screen, english.create).click();
   await expectSelected(screen, link(1));
   await expect.element(screen.getByText(english.help)).toBeVisible();
@@ -643,7 +673,7 @@ test("CalendarSection — un statut qu'on n'a pas pu lire le dit, et on peut ré
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
   // The button went with the request: the title has the focus, not the page.
   await expect
-    .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
+    .element(region(screen).getByRole("heading", { name: fr.calendar.title, exact: true }))
     .toHaveFocus();
   await expect.element(section(screen).getByRole("alert")).not.toBeInTheDocument();
 });
@@ -652,7 +682,7 @@ test("CalendarSection — un statut illisible relu par la fenêtre, sans « Rée
   mocks.send.mockRejectedValueOnce(new TypeError("network"));
   const screen = await mount();
   await expect.element(section(screen).getByRole("alert")).toHaveTextContent(fr.errors.generic);
-  const heading = section(screen).getByRole("heading", { name: fr.calendar.title });
+  const heading = region(screen).getByRole("heading", { name: fr.calendar.title, exact: true });
 
   // The window gets the focus again: the status is read again by itself, and it comes.
   serve(KEPT);
@@ -668,8 +698,10 @@ test("CalendarSection — « Réessayer » : le focus est sur le titre dès l'ap
   mocks.send.mockRejectedValueOnce(new TypeError("network"));
   const screen = await mount();
   await expect.element(section(screen).getByRole("alert")).toHaveTextContent(fr.errors.generic);
+  // The reads of the status of the personal link: the group block reads its own.
   const reads = () =>
-    mocks.send.mock.calls.filter(([, request]) => request.method === "GET").length;
+    mocks.send.mock.calls.filter(([, request]) => request.method === "GET" && !request.query)
+      .length;
   expect(reads()).toBe(1);
   const answer = Promise.withResolvers<unknown>();
   mocks.send.mockReturnValue(answer.promise);
@@ -680,14 +712,14 @@ test("CalendarSection — « Réessayer » : le focus est sur le titre dès l'ap
 
   await expect.element(section(screen).getByText(fr.common.loading)).toBeVisible();
   await expect
-    .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
+    .element(region(screen).getByRole("heading", { name: fr.calendar.title, exact: true }))
     .toHaveFocus();
   // The first read, and one more.
   expect(reads()).toBe(2);
   answer.resolve(KEPT);
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
   await expect
-    .element(section(screen).getByRole("heading", { name: fr.calendar.title }))
+    .element(region(screen).getByRole("heading", { name: fr.calendar.title, exact: true }))
     .toHaveFocus();
 });
 
@@ -760,4 +792,127 @@ test("CalendarSection — Supprimer le lien refusé reste dans la fenêtre, qui 
   // The window stays, and the page behind it still says the link is active.
   await expect.element(dialog(screen)).toBeVisible();
   await expect.element(section(screen).getByText(fr.calendar.exists)).toBeInTheDocument();
+});
+
+// --- The link of the group ---
+
+/** A link of the group whose address is kept. */
+const GROUP_KEPT = { exists: true, url: groupLink(0) };
+
+test("CalendarSection — deux liens, mes courses et le groupe", async () => {
+  serve(NONE, NONE);
+  const screen = await mount();
+
+  // One section, two blocks, each with its own title and its own button.
+  await expect.element(region(screen)).toHaveAccessibleName(fr.calendar.title);
+  await expect
+    .element(region(screen).getByRole("group", { name: fr.calendar.mine, exact: true }))
+    .toBeVisible();
+  await expect
+    .element(region(screen).getByRole("group", { name: fr.calendar.group, exact: true }))
+    .toBeVisible();
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  await expect
+    .element(
+      groupSection(screen).getByRole("button", { name: fr.calendar.groupCreate, exact: true }),
+    )
+    .toBeVisible();
+  // Each block reads its own status.
+  const reads = mocks.send.mock.calls
+    .filter(([, request]) => request.method === "GET")
+    .map(([, request]) => request.query ?? null);
+  expect(reads).toHaveLength(2);
+  expect(reads).toContainEqual(null);
+  expect(reads).toContainEqual({ scope: "group" });
+
+  // The link of the group is made with its scope, and shown in its block only.
+  await groupSection(screen)
+    .getByRole("button", { name: fr.calendar.groupCreate, exact: true })
+    .click();
+  await expect.element(groupSection(screen).getByRole("textbox")).toHaveValue(groupLink(1));
+  await expect.element(groupSection(screen).getByRole("textbox")).toHaveFocus();
+  await expect.element(section(screen).getByRole("textbox")).not.toBeInTheDocument();
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  expect(changes()).toEqual([["POST", { lang: "fr", scope: "group" }]]);
+
+  // The personal link is made as ever: no scope in the request.
+  await button(screen, fr.calendar.create).click();
+  await expect.element(section(screen).getByRole("textbox")).toHaveValue(link(1));
+  expect(changes()).toEqual([
+    ["POST", { lang: "fr", scope: "group" }],
+    ["POST", { lang: "fr" }],
+  ]);
+  // The two fields are named by their blocks.
+  await expect
+    .element(region(screen).getByRole("textbox", { name: fr.calendar.group, exact: true }))
+    .toHaveValue(groupLink(1));
+  await expect
+    .element(region(screen).getByRole("textbox", { name: fr.calendar.mine, exact: true }))
+    .toHaveValue(link(1));
+});
+
+test("CalendarSection — renouveler le lien du groupe garde le mien", async () => {
+  serve(KEPT, GROUP_KEPT);
+  const screen = await mount();
+  await section(screen).getByRole("button", { name: fr.calendar.show, exact: true }).click();
+  await expect.element(section(screen).getByRole("textbox")).toHaveValue(link(0));
+  await groupSection(screen).getByRole("button", { name: fr.calendar.show, exact: true }).click();
+  await expect.element(groupSection(screen).getByRole("textbox")).toHaveValue(groupLink(0));
+
+  await groupSection(screen).getByRole("button", { name: fr.calendar.renew, exact: true }).click();
+  await inDialog(screen, fr.calendar.renew).click();
+
+  await expect.element(dialog(screen)).not.toBeInTheDocument();
+  await expect.element(groupSection(screen).getByRole("textbox")).toHaveValue(groupLink(1));
+  await expect.element(groupSection(screen).getByRole("textbox")).toHaveFocus();
+  // The personal link is as it was, address included.
+  await expect.element(section(screen).getByRole("textbox")).toHaveValue(link(0));
+  expect(changes()).toEqual([["POST", { lang: "fr", scope: "group" }]]);
+
+  // Deleting the group link, which asks first, leaves the personal one.
+  await groupSection(screen).getByRole("button", { name: fr.calendar.remove, exact: true }).click();
+  await inDialog(screen, fr.calendar.remove).click();
+  await expect
+    .element(groupSection(screen).getByRole("button", { name: fr.calendar.groupCreate }))
+    .toBeVisible();
+  await expect.element(section(screen).getByRole("textbox")).toHaveValue(link(0));
+  expect(mocks.send).toHaveBeenLastCalledWith(PATH, {
+    method: "DELETE",
+    query: { scope: "group" },
+  });
+  expect(changes()).toHaveLength(2);
+  // The status of the group link is the one that went, not the personal one.
+  await expect.element(section(screen).getByText(fr.calendar.exists)).toBeVisible();
+});
+
+test("CalendarSection — l'aide du lien du groupe", async () => {
+  serve(NONE, NONE);
+  const screen = await mount();
+
+  // It says what the link is, and that it is secret because it gives names; the
+  // block of the personal link has none of it.
+  await expect.element(groupSection(screen).getByText(fr.calendar.groupHelp)).toBeVisible();
+  await expect.element(section(screen).getByText(fr.calendar.groupHelp)).not.toBeInTheDocument();
+  expect(fr.calendar.groupHelp).toBe(
+    "Toutes les courses où au moins un membre va, avec qui y va. Ce lien est secret : il donne les noms des membres.",
+  );
+  await screen.unmount();
+
+  const english = await mount(["en-GB"]);
+  await expect.element(groupSection(english).getByText(en.calendar.groupHelp)).toBeVisible();
+  await expect
+    .element(groupSection(english).getByRole("button", { name: en.calendar.groupCreate }))
+    .toBeVisible();
+});
+
+test("CalendarSection — sans lien du groupe côté serveur (la démo), le bloc du groupe est absent", async () => {
+  serve(NONE, null);
+  const screen = await mount();
+
+  await expect.element(button(screen, fr.calendar.create)).toBeVisible();
+  await expect
+    .element(region(screen).getByRole("group", { name: fr.calendar.group }))
+    .not.toBeInTheDocument();
+  await expect.element(region(screen).getByText(fr.calendar.groupHelp)).not.toBeInTheDocument();
+  await expect.element(region(screen).getByRole("alert")).not.toBeInTheDocument();
 });

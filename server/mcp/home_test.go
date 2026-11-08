@@ -171,6 +171,66 @@ func TestTodosOf_SortedByDeadlineThenName(t *testing.T) {
 	}
 }
 
+// openingOf is the trail, with this opening (and this time), and the deadline of 10 June.
+func openingOf(opening, time string) mcp.EventRecord {
+	event := trailEvent("2026-06-10")
+	event.RegistrationOpening, event.RegistrationOpeningTime = opening, time
+	return event
+}
+
+func TestTodosOf_AnOpeningToComeIsARegistrationToDo(t *testing.T) {
+	// registrationState of registration.test.ts: the opening of 12 May at 10:00.
+	trail := openingOf("2026-05-12", "10:00")
+	row := todoOn("p2", "interested", trail)
+
+	// The day before: soon, which is the day that orders it, with the days to it.
+	got := mcp.TodosOf([]mcp.ParticipationRow{row}, "2026-05-11")
+	if len(got) != 1 || got[0].State != "soon" || got[0].Day != "2026-05-12" || got[0].Opening != "2026-05-12" ||
+		got[0].OpeningTime != "10:00" || got[0].DaysLeft != 1 || got[0].Deadline != "2026-06-10" {
+		t.Errorf("the day before: %+v", got)
+	}
+	// The day itself: today, all day.
+	got = mcp.TodosOf([]mcp.ParticipationRow{row}, "2026-05-12")
+	if len(got) != 1 || got[0].State != "today" || got[0].Day != "2026-05-12" || got[0].DaysLeft != 0 {
+		t.Errorf("the day itself: %+v", got)
+	}
+	// The day after: open, with the deadline.
+	got = mcp.TodosOf([]mcp.ParticipationRow{row}, "2026-05-13")
+	if len(got) != 1 || got[0].State != "open" || got[0].Day != "2026-06-10" || got[0].DaysLeft != 28 {
+		t.Errorf("the day after: %+v", got)
+	}
+	// With no time: the time is empty.
+	got = mcp.TodosOf([]mcp.ParticipationRow{todoOn("p2", "interested", openingOf("2026-05-12", ""))}, "2026-05-01")
+	if len(got) != 1 || got[0].State != "soon" || got[0].OpeningTime != "" || got[0].DaysLeft != 11 {
+		t.Errorf("no time: %+v", got)
+	}
+	// An opening with no deadline: to come, it is to do; passed, nothing.
+	noDeadline := openingOf("2026-05-12", "10:00")
+	noDeadline.RegistrationDeadline = ""
+	if got := mcp.TodosOf([]mcp.ParticipationRow{todoOn("p2", "interested", noDeadline)}, "2026-05-01"); len(got) != 1 || got[0].Deadline != "" {
+		t.Errorf("no deadline, to come: %+v", got)
+	}
+	if got := mcp.TodosOf([]mcp.ParticipationRow{todoOn("p2", "interested", noDeadline)}, "2026-05-13"); len(got) != 0 {
+		t.Errorf("no deadline, passed: %v", todoIDs(got))
+	}
+	// A registered runner is not in it.
+	if got := mcp.TodosOf([]mcp.ParticipationRow{todoOn("p2", "registered", trail)}, "2026-05-01"); len(got) != 0 {
+		t.Errorf("registered: %v", todoIDs(got))
+	}
+}
+
+func TestTodosOf_AnOpeningIsSortedByItsDay(t *testing.T) {
+	lyon := mcp.EventRecord{ID: "lyon", Name: "10 km de Lyon", StartDate: "2026-06-22", RegistrationDeadline: "2026-05-20"}
+	rows := []mcp.ParticipationRow{
+		todoOn("p-trail", "interested", openingOf("2026-05-12", "10:00")),
+		todoOn("p-lyon", "interested", lyon),
+	}
+	// Lyon is open with a deadline of 20 May; the trail opens on 12 May, earlier.
+	if got := todoIDs(mcp.TodosOf(rows, "2026-05-01")); !slices.Equal(got, []string{"p-trail", "p-lyon"}) {
+		t.Errorf("the order is %v, want the opening first", got)
+	}
+}
+
 func TestTodosOf_AParticipationOnTheEventCounts(t *testing.T) {
 	trail := trailEvent("2026-06-10")
 	// Nina is interested in the event, and has not chosen a race.
@@ -549,7 +609,7 @@ func TestTools_Home(t *testing.T) {
 		want = func(daysLeft int) []any {
 			return []any{map[string]any{
 				"participation_id": todo.Id, "event": eventRefOf(semi), "format_title": "Route 21,1 km",
-				"deadline": "2026-06-05", "days_left": daysLeft, "registration_url": "https://inscriptions.example.test/semi",
+				"state": "open", "deadline": "2026-06-05", "days_left": daysLeft, "registration_url": "https://inscriptions.example.test/semi",
 			}}
 		}
 		return app, fx, todo, want
@@ -733,4 +793,49 @@ func TestTools_Home(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestHome_RegistrationsToDo_Opening(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	semi := create(t, app, "events", map[string]any{
+		"name": "Semi de Chambéry", "location": "Chambéry", "start_date": "2026-06-28",
+		"registration_opening": "2026-05-12", "registration_opening_time": "10:00", "registration_deadline": "2026-06-05",
+		"registration_url": "https://inscriptions.example.test/semi", "created_by": fx.AliceRunner.Id,
+	})
+	fSemi := create(t, app, "formats", map[string]any{"event": semi.Id, "race_type": fx.Road.Id, "distance_km": 21.1})
+	todo := create(t, app, "participations", map[string]any{
+		"runner": fx.AliceRunner.Id, "format": fSemi.Id, "status": "interested", "confirmed": true, "added_by": fx.AliceRunner.Id,
+	})
+	row := func(fields map[string]any) []any {
+		base := map[string]any{
+			"participation_id": todo.Id, "event": eventRefOf(semi), "format_title": "Route 21,1 km",
+			"registration_url": "https://inscriptions.example.test/semi",
+		}
+		for k, v := range fields {
+			base[k] = v
+		}
+		return []any{base}
+	}
+
+	// The day before: soon, with the opening, its time and the deadline, and no days left (they are the deadline's).
+	assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 5, 11, 10, 0)), "registrations_to_do"), row(map[string]any{
+		"state": "soon", "opening": "2026-05-12", "opening_time": "10:00", "deadline": "2026-06-05",
+	}))
+	// The day itself: today.
+	assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 5, 12, 10, 0)), "registrations_to_do"), row(map[string]any{
+		"state": "today", "opening": "2026-05-12", "opening_time": "10:00", "deadline": "2026-06-05",
+	}))
+	// Once it is open, the deadline is what counts: the 13th of May is 23 days before the 5th of June.
+	assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 5, 13, 10, 0)), "registrations_to_do"), row(map[string]any{
+		"state": "open", "deadline": "2026-06-05", "days_left": 23,
+	}))
+	// With no time, none is said.
+	update(t, app, semi, map[string]any{"registration_opening_time": ""})
+	assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 5, 11, 10, 0)), "registrations_to_do"), row(map[string]any{
+		"state": "soon", "opening": "2026-05-12", "deadline": "2026-06-05",
+	}))
+	// Registered: nothing to do.
+	update(t, app, todo, map[string]any{"status": "registered"})
+	assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 5, 11, 10, 0)), "registrations_to_do"), []any{})
 }

@@ -12,6 +12,8 @@ import (
 	"unicode/utf8"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+
+	"courses/server/apperr"
 )
 
 // The messages of a refusal of the site, as the tools give them to the
@@ -23,13 +25,18 @@ import (
 // (TestMessages_SameWordsAsTheSite reads them).
 var messages = map[string]string{
 	// Races and formats.
-	"date_invalid":                      "Cette date n'est pas valide.",
-	"end_before_start":                  "La date de fin est avant la date de début.",
-	"registration_deadline_after_start": "La date limite d'inscription doit être au plus tard le jour du début.",
-	"format_date_out_of_range":          "La date de l'épreuve doit être comprise dans les dates de l'événement.",
-	"format_other_event":                "Cette épreuve appartient à un autre événement.",
-	"format_measure_required":           "Indique au moins une distance, une durée ou un temps max.",
-	"price_invalid":                     "Le prix se donne au centime près.",
+	"date_invalid":                        "Cette date n'est pas valide.",
+	"end_before_start":                    "La date de fin est avant la date de début.",
+	"registration_deadline_after_start":   "La date limite d'inscription doit être au plus tard le jour du début.",
+	"registration_opening_after_start":    "L'ouverture des inscriptions doit être au plus tard le jour du début.",
+	"registration_opening_after_deadline": "L'ouverture des inscriptions doit être au plus tard la date limite.",
+	"format_date_month":                   "Une course dont seul le mois est connu n'a pas de date d'épreuve.",
+	"format_time_month":                   "Une épreuve d'une course au mois n'a pas d'heure de départ.",
+	"month_start_invalid":                 "Pour une course dont seul le mois est connu, la date est le 1er du mois.",
+	"format_date_out_of_range":            "La date de l'épreuve doit être comprise dans les dates de l'événement.",
+	"format_other_event":                  "Cette épreuve appartient à un autre événement.",
+	"format_measure_required":             "Indique au moins une distance, une durée ou un temps max.",
+	"price_invalid":                       "Le prix se donne au centime près.",
 	// Participations and results.
 	"format_required":       "Il faut choisir une épreuve.",
 	"status_before_race":    "La course n'a pas encore eu lieu.",
@@ -52,6 +59,11 @@ var messages = map[string]string{
 	"merge_formats_different_events": "Ces deux épreuves ne sont pas du même événement.",
 	// The files of the MCP server.
 	"upload_invalid": "Cet envoi n'est pas valide, ou il a expiré.",
+	// The notifications.
+	"push_endpoint_invalid": "Cet appareil ne peut pas être enregistré pour les notifications.",
+	"push_unavailable":      "Les notifications ne sont pas disponibles pour l'instant.",
+	// The weather.
+	"weather_unavailable": "La météo n'a pas pu être chargée. Réessaie dans un moment.",
 	// Any request.
 	"not_found": "Introuvable : il a peut-être été supprimé.",
 	"forbidden": "Tu n'as pas le droit de faire ça.",
@@ -88,42 +100,46 @@ var fieldMessages = map[string]map[string]string{
 // fieldNames are the French names of the fields of the site's collections.
 // A field without one is named as the API names it.
 var fieldNames = map[string]string{
-	"name":                  "nom",
-	"location":              "lieu",
-	"start_date":            "date de début",
-	"end_date":              "date de fin",
-	"registration_url":      "lien d'inscription",
-	"registration_deadline": "date limite d'inscription",
-	"notes":                 "notes",
-	"event":                 "course",
-	"format":                "épreuve",
-	"race_type":             "type de course",
-	"date":                  "date de l'épreuve",
-	"distance_km":           "distance",
-	"duration_min":          "durée",
-	"time_limit_min":        "temps max",
-	"elevation_gain_m":      "D+",
-	"price_eur":             "prix",
-	"route_url":             "lien du parcours",
-	"gpx":                   "trace",
-	"runner":                "coureur",
-	"status":                "statut",
-	"finish_time_s":         "temps",
-	"rank":                  "classement",
-	"rank_of":               "nombre de classés",
-	"result_note":           "note du résultat",
-	"body":                  "texte",
-	"kind":                  "sorte",
-	"place":                 "lieu",
-	"seats":                 "places",
-	"time":                  "heure",
-	"url":                   "lien",
-	"offer":                 "offre",
-	"avatar":                "photo",
-	"label":                 "nom du type",
-	"measures":              "mesures",
-	"role":                  "rôle",
-	"disabled":              "désactivé",
+	"name":                      "nom",
+	"location":                  "lieu",
+	"start_date":                "date de début",
+	"end_date":                  "date de fin",
+	"registration_url":          "lien d'inscription",
+	"registration_deadline":     "date limite d'inscription",
+	"registration_opening":      "ouverture des inscriptions",
+	"registration_opening_time": "heure d'ouverture",
+	"date_precision":            "précision de la date",
+	"notes":                     "notes",
+	"event":                     "course",
+	"format":                    "épreuve",
+	"race_type":                 "type de course",
+	"date":                      "date de l'épreuve",
+	"start_time":                "heure de départ",
+	"distance_km":               "distance",
+	"duration_min":              "durée",
+	"time_limit_min":            "temps max",
+	"elevation_gain_m":          "D+",
+	"price_eur":                 "prix",
+	"route_url":                 "lien du parcours",
+	"gpx":                       "trace",
+	"runner":                    "coureur",
+	"status":                    "statut",
+	"finish_time_s":             "temps",
+	"rank":                      "classement",
+	"rank_of":                   "nombre de classés",
+	"result_note":               "note du résultat",
+	"body":                      "texte",
+	"kind":                      "sorte",
+	"place":                     "lieu",
+	"seats":                     "places",
+	"time":                      "heure",
+	"url":                       "lien",
+	"offer":                     "offre",
+	"avatar":                    "photo",
+	"label":                     "nom du type",
+	"measures":                  "mesures",
+	"role":                      "rôle",
+	"disabled":                  "désactivé",
 }
 
 // The messages that are not the one of a code (spec § 6.12).
@@ -168,6 +184,11 @@ func describeNamed(app core.App, err error, subject func(request int) string, na
 		// the session of an inner request is in none of them.
 		app.Logger().Error("mcp: a tool failed", "error", err)
 		return errors.New(msgSiteError)
+	}
+	// The weather that Open-Meteo could not give is a failure that the person is
+	// told, not a fault of the site: a 502 with its code, and its own words.
+	if refused.Code == apperr.CodeWeatherUnavailable {
+		return errors.New(messages[apperr.CodeWeatherUnavailable])
 	}
 	if refused.Status >= http.StatusInternalServerError || refused.Status < http.StatusBadRequest {
 		app.Logger().Error("mcp: the site failed a request of a tool", "error", refused.Error())
@@ -258,4 +279,25 @@ func lowerFirst(s string) string {
 		return s
 	}
 	return string(unicode.ToLower(r)) + s[size:]
+}
+
+// monthEndMessages say the two « after the start » refusals of a race known by
+// its month in the words of the form (fr.form.deadlineAfterMonthEnd and
+// openingAfterMonthEnd): its first day is the last day of the month, so « le jour
+// du début » would mislead.
+var monthEndMessages = map[string]string{
+	"registration_deadline_after_start": "la date limite d'inscription ne peut pas être après la fin du mois de la course.",
+	"registration_opening_after_start":  "l'ouverture des inscriptions ne peut pas être après la fin du mois de la course.",
+}
+
+// fieldTextFor is fieldText for a race that is known by its month or not.
+func fieldTextFor(field, code string, monthOnly bool) string {
+	if message, ok := monthEndMessages[code]; ok && monthOnly {
+		name, known := fieldNames[field]
+		if !known {
+			name = field
+		}
+		return name + " : " + message + " (" + code + ")"
+	}
+	return fieldText(field, code)
 }

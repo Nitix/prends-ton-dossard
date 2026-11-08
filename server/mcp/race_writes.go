@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"courses/server/events"
 	"courses/server/wording"
 )
 
@@ -51,6 +52,7 @@ type formatIn struct {
 	PriceEur       float64 `json:"price_eur,omitempty" jsonschema:"le prix en euros, au centime"`
 	RouteURL       string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	Date           string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve quand ce n'est pas le premier jour de la course, jamais avant ; la fin de la course en découle"`
+	StartTime      string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, facultative ; elle donne la météo de l'heure du départ. Pas pour une course dont seul le mois est connu"`
 }
 
 // formatPatchIn is a change of a format (update_event.formats, update_format): a
@@ -66,6 +68,7 @@ type formatPatchIn struct {
 	PriceEur       *float64 `json:"price_eur,omitempty" jsonschema:"le prix en euros, au centime ; 0 l'efface"`
 	RouteURL       *string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours ; vide l'efface"`
 	Date           *string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve ; vide : le premier jour de la course. La fin de la course en découle"`
+	StartTime      *string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve ; vide l'efface. Pas pour une course dont seul le mois est connu"`
 }
 
 // The numbers of a format, which are never below 0 (the minimum of the form,
@@ -117,6 +120,8 @@ func storedOf(view eventView) *storedEvent {
 	stored := &storedEvent{
 		ID: r.ID, StartDate: r.StartDate, EndDate: r.EndDate,
 		Name: r.Name, Location: r.Location, RegistrationURL: r.RegistrationURL, RegistrationDeadline: r.RegistrationDeadline, Notes: r.Notes,
+		RegistrationOpening: r.RegistrationOpening, RegistrationOpeningTime: r.RegistrationOpeningTime,
+		DatePrecision: datePrecisionOf(r),
 	}
 	for _, f := range view.formats {
 		stored.Formats = append(stored.Formats, draftOfRecord(f.record))
@@ -127,7 +132,7 @@ func storedOf(view eventView) *storedEvent {
 // draftOfRecord is a stored format as the form holds it.
 func draftOfRecord(f formatRecord) formatDraft {
 	return formatDraft{
-		ID: f.ID, Name: f.Name, RaceType: f.RaceType, RouteURL: f.RouteURL, Date: f.Date,
+		ID: f.ID, Name: f.Name, RaceType: f.RaceType, RouteURL: f.RouteURL, Date: f.Date, StartTime: f.StartTime,
 		DistanceKm: f.DistanceKm, PriceEur: f.PriceEur,
 		DurationMin: f.DurationMin, TimeLimitMin: f.TimeLimitMin, ElevationGainM: f.ElevationGainM,
 	}
@@ -140,6 +145,8 @@ func draftOf(view eventView) eventDraft {
 	draft := eventDraft{
 		ID: r.ID, Name: r.Name, Location: r.Location, StartDate: r.StartDate, EndDate: r.EndDate,
 		RegistrationURL: r.RegistrationURL, RegistrationDeadline: r.RegistrationDeadline, Notes: r.Notes,
+		RegistrationOpening: r.RegistrationOpening, RegistrationOpeningTime: r.RegistrationOpeningTime,
+		DatePrecision: datePrecisionOf(r),
 	}
 	for _, f := range view.formats {
 		draft.Formats = append(draft.Formats, draftOfRecord(f.record))
@@ -206,6 +213,88 @@ func dateRefusal(w wording.Words, draft eventDraft, labels map[string]string, hi
 	return nil
 }
 
+// monthRefusal is the refusal of the site for a race known by its month only
+// (validateEvent and validateFormat of the events package): a start that is not the
+// 1st of its month (month_start_invalid on start_date), then a format that has a
+// day (format_date_month on date). The form does not send them (toEventDraft of
+// formDraft.ts: the 1st of the month chosen, and no date on the formats), and a
+// tool is given a day or a date, so it says so before any write.
+func monthRefusal(w wording.Words, draft eventDraft, labels map[string]string) error {
+	if !draft.monthOnly() {
+		return nil
+	}
+	if draft.StartDate != "" && !strings.HasSuffix(draft.StartDate, "-01") {
+		return errors.New("La course, " + fieldText("start_date", "month_start_invalid"))
+	}
+	for i, f := range draft.Formats {
+		if f.Date != "" {
+			return errors.New(formatSubject(i, titleOf(w, f, labels)) + ", " + fieldText("date", "format_date_month") + monthHint)
+		}
+		if f.StartTime != "" {
+			return errors.New(formatSubject(i, titleOf(w, f, labels)) + ", " + fieldText("start_time", "format_time_month") + monthTimeHint)
+		}
+	}
+	return nil
+}
+
+// monthHint says what to do with the day of a format of a race known by its month.
+// monthTimeHint says what to do with the start time of a format of a race known by its month.
+const monthTimeHint = " Donne la date de la course (date_precision: day) pour donner l'heure de départ de ses épreuves."
+
+const monthHint = " Donne la date de la course (date_precision: day) pour dater ses épreuves."
+
+// openingRefusal is the refusal of the site for the registration deadline and the
+// opening of the registration of a draft, in the site's own words and in its own
+// order (validateEvent of the events package): a deadline after the first day
+// (registration_deadline_after_start), which the site checks before the opening, so
+// that a draft that is wrong in both is told the same as by the site; then an opening
+// after the first day or after the deadline (registration_opening_after_start,
+// registration_opening_after_deadline), a time that is not HH:MM (time_invalid), and
+// a time without a day (validation_required on registration_opening). The first
+// day of a race known by its month is the last day of that month. The form does not
+// send a time without a day (toEventDraft of formDraft.ts), and a tool has no field
+// to be left alone, so it says so before any write. It says all of them before a
+// confirmation too: a person is not asked to agree to what the site then refuses.
+//
+// The days are compared as text, as the site does (they were checked to be days).
+func openingRefusal(draft eventDraft) error {
+	refuse := func(field, code string) error {
+		return errors.New("La course, " + fieldTextFor(field, code, draft.monthOnly()))
+	}
+	firstDay := draft.StartDate
+	if draft.monthOnly() {
+		firstDay = lastDayOfMonth(draft.StartDate)
+	}
+	if deadline := draft.RegistrationDeadline; deadline != "" {
+		if _, ok := events.ParseDay(deadline); !ok {
+			return refuse("registration_deadline", "date_invalid")
+		}
+		if firstDay != "" && deadline > firstDay {
+			return refuse("registration_deadline", "registration_deadline_after_start")
+		}
+	}
+	if opening := draft.RegistrationOpening; opening != "" {
+		if _, ok := events.ParseDay(opening); !ok {
+			return refuse("registration_opening", "date_invalid")
+		}
+		if firstDay != "" && opening > firstDay {
+			return refuse("registration_opening", "registration_opening_after_start")
+		}
+		if deadline := draft.RegistrationDeadline; deadline != "" && opening > deadline {
+			return refuse("registration_opening", "registration_opening_after_deadline")
+		}
+	}
+	if hhmm := draft.RegistrationOpeningTime; hhmm != "" {
+		if !events.ValidTime(hhmm) {
+			return refuse("registration_opening_time", "time_invalid")
+		}
+		if draft.RegistrationOpening == "" {
+			return refuse("registration_opening", "validation_required")
+		}
+	}
+	return nil
+}
+
 // normalizeFormat is a format of create_event or add_format as the form saves
 // it: its race type by id, its texts trimmed, its day checked.
 func normalizeFormat(in formatIn, raceTypes []raceTypeRecord) (formatDraft, error) {
@@ -217,8 +306,12 @@ func normalizeFormat(in formatIn, raceTypes []raceTypeRecord) (formatDraft, erro
 	if err != nil {
 		return formatDraft{}, err
 	}
+	startTime, err := checkStartTime("start_time", in.StartTime)
+	if err != nil {
+		return formatDraft{}, err
+	}
 	return formatDraft{
-		Name: strings.TrimSpace(in.Name), RaceType: raceType.ID, RouteURL: strings.TrimSpace(in.RouteURL), Date: date,
+		Name: strings.TrimSpace(in.Name), RaceType: raceType.ID, RouteURL: strings.TrimSpace(in.RouteURL), Date: date, StartTime: startTime,
 		DistanceKm: in.DistanceKm, PriceEur: in.PriceEur,
 		DurationMin: in.DurationMin, TimeLimitMin: in.TimeLimitMin, ElevationGainM: in.ElevationGainM,
 	}, nil
@@ -250,6 +343,13 @@ func normalizePatch(in formatPatchIn, raceTypes []raceTypeRecord) (formatPatchIn
 		}
 		out.Date = ptr(date)
 	}
+	if in.StartTime != nil {
+		at, err := checkStartTime("start_time", *in.StartTime)
+		if err != nil {
+			return formatPatchIn{}, err
+		}
+		out.StartTime = ptr(at)
+	}
 	return out, nil
 }
 
@@ -264,6 +364,7 @@ func (p formatPatchIn) apply(f *formatDraft) {
 	set(&f.Name, p.Name)
 	set(&f.RouteURL, p.RouteURL)
 	set(&f.Date, p.Date)
+	set(&f.StartTime, p.StartTime)
 	if p.DistanceKm != nil {
 		f.DistanceKm = *p.DistanceKm
 	}
@@ -369,9 +470,15 @@ func (t *tools) changeEvent(ctx context.Context, tool string, view eventView, la
 	stored := storedOf(view)
 	draft := draftOf(view)
 	change(&draft)
-	draft.EndDate = eventEndDate(draft.StartDate, datesOf(draft))
+	draft.EndDate = draft.endDate()
 
 	if err := measureRefusal(w, draft, labels); err != nil {
+		return eventWriteOut{}, err
+	}
+	if err := monthRefusal(w, draft, labels); err != nil {
+		return eventWriteOut{}, err
+	}
+	if err := openingRefusal(draft); err != nil {
 		return eventWriteOut{}, err
 	}
 	if err := dateRefusal(w, draft, labels, moveHint); err != nil {
@@ -455,16 +562,19 @@ func shortenedLine(start, end, newStart, newEnd string) string {
 // clearedPhrases say that a field would be cleared, by field: the optional
 // fields of a race, and the fields of a format.
 var clearedPhrases = map[string]string{
-	"registration_url":      "le lien d'inscription serait effacé",
-	"registration_deadline": "la date limite d'inscription serait effacée",
-	"name":                  "le nom serait effacé",
-	"distance_km":           "la distance serait effacée",
-	"elevation_gain_m":      "le D+ serait effacé",
-	"duration_min":          "la durée serait effacée",
-	"time_limit_min":        "le temps max serait effacé",
-	"price_eur":             "le prix serait effacé",
-	"route_url":             "le lien du parcours serait effacé",
-	"date":                  "la date de l'épreuve serait effacée",
+	"registration_url":          "le lien d'inscription serait effacé",
+	"registration_deadline":     "la date limite d'inscription serait effacée",
+	"registration_opening":      "l'ouverture des inscriptions serait effacée",
+	"registration_opening_time": "l'heure d'ouverture serait effacée",
+	"name":                      "le nom serait effacé",
+	"distance_km":               "la distance serait effacée",
+	"elevation_gain_m":          "le D+ serait effacé",
+	"duration_min":              "la durée serait effacée",
+	"time_limit_min":            "le temps max serait effacé",
+	"price_eur":                 "le prix serait effacé",
+	"route_url":                 "le lien du parcours serait effacé",
+	"date":                      "la date de l'épreuve serait effacée",
+	"start_time":                "l'heure de départ serait effacée",
 }
 
 // days are the days of a race, as the messages write them: "2026-06-13", or
@@ -489,16 +599,23 @@ func period(start, end string) string {
 // people entered (spec § 6.13, update_event and update_format): a filled field
 // cleared, notes replaced, the race shortened (shortens), the day of a format
 // that has participants changed (its own date, or the start for a format that
-// has none). nil when nothing.
+// has none), the days of the formats that a race becoming a month loses (spec
+// § 12.3). Going the other way, from a month to a day, loses nothing: the days of the
+// race are not the ones people entered, and nothing asks. nil when nothing.
 func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	var r risk
 	event := view.record
 	eventShown := false
+	// A race that becomes a month loses the days of its formats; one that stops being a
+	// month had none to lose.
+	toMonth, fromMonth := draft.monthOnly() && !event.monthOnly(), event.monthOnly() && !draft.monthOnly()
 	// The link is a text that a member wrote, quoted; the deadline is a day that
 	// the site checked.
 	for _, field := range []struct{ name, was, now, shown string }{
 		{"registration_url", event.RegistrationURL, draft.RegistrationURL, quote(event.RegistrationURL)},
 		{"registration_deadline", event.RegistrationDeadline, draft.RegistrationDeadline, event.RegistrationDeadline},
+		{"registration_opening", event.RegistrationOpening, draft.RegistrationOpening, event.RegistrationOpening},
+		{"registration_opening_time", event.RegistrationOpeningTime, draft.RegistrationOpeningTime, event.RegistrationOpeningTime},
 	} {
 		if strings.TrimSpace(field.was) != "" && field.now == "" {
 			r.Details = append(r.Details, upperFirst(clearedPhrases[field.name])+" (actuellement : "+field.shown+").")
@@ -513,7 +630,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		r.Details = append(r.Details, "Les notes seraient "+verb+" (actuellement : "+quote(event.Notes)+").")
 		eventShown = true
 	}
-	if shortens(event.StartDate, event.EndDate, draft.EndDate) {
+	if !fromMonth && shortens(event.StartDate, event.EndDate, draft.EndDate) {
 		r.Details = append(r.Details, shortenedLine(event.StartDate, event.EndDate, draft.StartDate, draft.EndDate))
 		eventShown = true
 	}
@@ -528,7 +645,15 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 		var lines []string
 
 		dayWas, dayNow := cmp.Or(was.Date, event.StartDate), cmp.Or(now.Date, draft.StartDate)
-		dayMoves := dayWas != dayNow && len(f.participations) > 0
+		dayMoves := dayWas != dayNow && len(f.participations) > 0 && !toMonth && !fromMonth
+		lostToMonth := toMonth && was.Date != ""
+		if lostToMonth {
+			line := "Épreuve " + quote(title) + " : son jour, le " + was.Date + ", serait effacé, la course n'ayant plus que son mois"
+			if len(f.participations) > 0 {
+				line += ", pour ses participants : " + participantLabels(w, f.participations)
+			}
+			lines = append(lines, line+".")
+		}
 		if dayMoves {
 			lines = append(lines, "Le jour de l'épreuve "+quote(title)+" passerait du "+dayWas+" au "+dayNow+
 				", pour ses participants : "+participantLabels(w, f.participations)+".")
@@ -546,7 +671,8 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			{"price_eur", was.PriceEur != 0, now.PriceEur != 0, number(was.PriceEur) + " €"},
 			{"route_url", was.RouteURL != "", now.RouteURL != "", quote(was.RouteURL)},
 			// The day that moves says it already.
-			{"date", was.Date != "" && !dayMoves, now.Date != "", was.Date},
+			{"date", was.Date != "" && !dayMoves && !lostToMonth, now.Date != "", was.Date},
+			{"start_time", was.StartTime != "", now.StartTime != "", was.StartTime},
 		} {
 			if field.was && !field.now {
 				lines = append(lines, "Épreuve "+quote(title)+" : "+clearedPhrases[field.name]+" (actuellement : "+field.value+").")
@@ -556,7 +682,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			r.Details = append(r.Details, lines...)
 			r.Records = append(r.Records, stamp{Collection: "formats", ID: f.record.ID, Updated: f.record.Updated})
 		}
-		if dayMoves {
+		if dayMoves || lostToMonth {
 			r.Records = append(r.Records, stampsOf(f.participations)...)
 		}
 	}
@@ -566,4 +692,15 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	}
 	r.Message = "Cette modification de " + quote(event.Name) + " efface ou change ce que des personnes ont saisi : " + strings.Join(r.Details, " ")
 	return &r
+}
+
+// checkStartTime is the start time of a format that a tool was given (HH:MM, Paris
+// time, from 00:00 to 23:59; "" for none), or the refusal that says which argument
+// is not one.
+func checkStartTime(argument, at string) (string, error) {
+	at = strings.TrimSpace(at)
+	if at != "" && !events.ValidTime(at) {
+		return "", fmt.Errorf("%s : « %s » n'est pas une heure valide (HH:MM, de 00:00 à 23:59).", argument, at)
+	}
+	return at, nil
 }

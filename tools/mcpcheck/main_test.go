@@ -231,7 +231,7 @@ var (
 		"add_comment", "update_comment", "delete_comment",
 		"add_offer", "update_offer", "delete_offer", "offer_place",
 		"start_upload", "set_photo", "set_track",
-		"rename_runner", "passkeys", "calendar_link", "mcp_tokens",
+		"rename_runner", "passkeys", "calendar_link", "mcp_tokens", "reminders", "get_weather",
 	}
 	fakeAdminTools = []string{
 		"admin_list_members", "admin_create_runner", "admin_delete_runner", "admin_create_link", "admin_revoke_link",
@@ -256,23 +256,29 @@ type fakeSite struct {
 	// asLocalhost is a site that knows itself as localhost (its APP_URL) while it is
 	// reached by 127.0.0.1; elsewhere is one whose APP_URL is not this server.
 	asLocalhost, elsewhere bool
+	// noDemoRace is a site without the Trail des Crêtes of the seed.
+	noDemoRace bool
 
-	mu         sync.Mutex
-	tokens     map[string]string // the tokens that work: secret -> id
-	made       int               // the tokens made through the route
-	confirms   map[string]string // the confirmations that wait: token -> the call
-	issued     []string          // every confirmation token handed out
-	used       map[string]bool
-	counts     map[string]int    // how many races have a name
-	names      map[string]string // race id -> name
-	seq        int
-	calls      []string
-	uploaded   []byte
-	slotOpen   bool
-	hasPhoto   bool
-	formats    []*fakeFormat
-	end        string
-	eventName  string
+	mu        sync.Mutex
+	tokens    map[string]string // the tokens that work: secret -> id
+	made      int               // the tokens made through the route
+	confirms  map[string]string // the confirmations that wait: token -> the call
+	issued    []string          // every confirmation token handed out
+	used      map[string]bool
+	counts    map[string]int    // how many races have a name
+	names     map[string]string // race id -> name
+	seq       int
+	calls     []string
+	uploaded  []byte
+	slotOpen  bool
+	hasPhoto  bool
+	formats   []*fakeFormat
+	end       string
+	eventName string
+	// What the race made has of the v7: its opening and its precision.
+	opening, openingTime, precision string
+	// The choice of reminders of the person.
+	reminders  []string
 	eventID    string
 	start      string
 	deleted    map[string]bool
@@ -506,7 +512,17 @@ func (f *fakeSite) eventDetail() obj {
 		}
 		formats = append(formats, detail)
 	}
-	return obj{"id": f.eventID, "name": f.eventName, "start_date": f.start, "end_date": f.end, "formats": formats}
+	detail := obj{"id": f.eventID, "name": f.eventName, "start_date": f.start, "end_date": f.end, "formats": formats}
+	if f.opening != "" {
+		detail["registration_opening"] = f.opening
+	}
+	if f.openingTime != "" {
+		detail["registration_opening_time"] = f.openingTime
+	}
+	if f.precision == "month" {
+		detail["date_precision"] = "month"
+	}
+	return detail
 }
 
 func (f *fakeSite) handle(tool string, args obj) (obj, string) {
@@ -540,6 +556,9 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 	case "search_events":
 		if query := str("query"); query != "" {
 			events := []any{}
+			if seeded := f.text("Trail des Crêtes"); !f.noDemoRace && strings.Contains(seeded, query) {
+				events = append(events, obj{"id": "evt000000000901", "name": seeded, "start_date": "2026-11-20", "url": f.base() + "/evenements/evt000000000901"})
+			}
 			for name, n := range f.counts {
 				if strings.Contains(name, query) {
 					for range n {
@@ -555,6 +574,25 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 		}, "count": 2, "truncated": false}, ""
 	case "get_stats":
 		return obj{"year": 2026, "runners": []any{}}, ""
+	case "reminders":
+		if str("action") == "set" {
+			when, _ := args["when"].([]any)
+			f.reminders = nil
+			for _, w := range when {
+				f.reminders = append(f.reminders, fmt.Sprint(w))
+			}
+		}
+		return done(f.text("Rappels : "+strings.Join(f.reminders, ", ")+"."), obj{"reminders": append([]string{}, f.reminders...), "devices": []any{}})
+	case "get_weather":
+		// The race of the demo is in five days: its weather shows.
+		if str("event_id") == "evt000000000901" && !f.noDemoRace {
+			return obj{"status": "ok", "summary": f.text("Météo prévue pour 1 jour(s) de course."),
+				"place":       obj{"source": "track", "format": "« Trail long »"},
+				"days":        []any{obj{"date": fakeToday(), "code": 61, "label": "Averses", "tMin": 9.1, "tMax": 17.3}},
+				"attribution": "Données : Open-Meteo.com (CC BY 4.0), https://open-meteo.com/"}, ""
+		}
+		return obj{"status": "not_yet", "summary": "La météo arrive 7 jours avant la course.", "from": fakeToday(),
+			"attribution": "Données : Open-Meteo.com (CC BY 4.0), https://open-meteo.com/"}, ""
 
 	case "create_event":
 		name := str("name")
@@ -567,6 +605,15 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 		}
 		f.eventID, f.eventName, f.start = f.id("evt"), name, str("start_date")
 		f.end = f.start
+		f.opening, f.openingTime, f.precision = str("registration_opening"), str("registration_opening_time"), str("date_precision")
+		if f.precision == "month" {
+			// The site makes the 1st of the month, and ends the race on its last day.
+			first, err := time.Parse("2006-01", f.start[:7])
+			if err != nil {
+				return nil, "start_date : AAAA-MM attendu"
+			}
+			f.start, f.end = first.Format(time.DateOnly), first.AddDate(0, 1, -1).Format(time.DateOnly)
+		}
 		f.counts[name]++
 		f.names[f.eventID] = name
 		f.formats = nil
@@ -575,7 +622,7 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 			format, _ := raw.(obj)
 			date, _ := format["date"].(string)
 			f.formats = append(f.formats, &fakeFormat{id: f.id("fmt"), date: date, distance: 10})
-			if date != "" {
+			if date != "" && f.precision != "month" {
 				f.end = date
 			}
 		}
@@ -586,6 +633,14 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 		}
 		return done("La course est créée.", f.eventDetail())
 	case "update_event":
+		if opening, clears := args["registration_opening"].(string); clears && opening == "" {
+			// An opening that is emptied is asked first, with its time.
+			proceed, answer := f.guard(tool, args, f.opening != "", "L'ouverture du "+f.opening+" serait effacée.")
+			if !proceed {
+				return answer, ""
+			}
+			f.opening, f.openingTime = "", ""
+		}
 		if name := str("name"); name != "" {
 			f.counts[f.eventName]--
 			f.eventName = name
@@ -762,7 +817,7 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 		}
 		f.counts[f.names[str("merge_id")]]--
 		return done("Les courses sont fusionnées.", obj{
-			"result": obj{"movedFormats": 1, "movedParticipations": 0, "droppedParticipations": 0, "clearedFormatDates": 0, "movedComments": 0, "movedOffers": 0},
+			"result": obj{"movedFormats": 1, "movedParticipations": 0, "droppedParticipations": 0, "clearedFormatDates": 0, "clearedFormatTimes": 0, "movedComments": 0, "movedOffers": 0},
 			"kept":   obj{"id": str("keep_id"), "name": f.names[str("keep_id")]},
 		})
 	case "admin_delete_runner":
@@ -893,14 +948,18 @@ func TestRun_ReadOnly(t *testing.T) {
 
 	wantLines(t, out,
 		"ok   initialize — prends-ton-dossard",
-		"ok   tools/list — 32 outils (membre)",
+		"ok   tools/list — 34 outils (membre)",
 		"ok   whoami — Alice",
 	)
 	wantPrefixes(t, out, "ok   home — ", "ok   list_race_types — 2 types", "ok   search_events — 2 courses à venir", "ok   get_stats — année 2026")
+	wantLines(t, out,
+		"ok   reminders — aucun rappel, 0 appareil activé",
+		"ok   get_weather — « Trail des Crêtes » : ok, 1 jour, au départ d'une trace",
+	)
 	wantLines(t, out, "ok   jeton révoqué — 401")
 
 	for _, tool := range f.calls {
-		if !slices.Contains([]string{"whoami", "home", "list_race_types", "search_events", "get_stats"}, tool) {
+		if !slices.Contains([]string{"whoami", "home", "list_race_types", "search_events", "get_stats", "reminders", "get_weather"}, tool) {
 			t.Errorf("the read-only run called %s", tool)
 		}
 	}
@@ -930,7 +989,7 @@ func TestRun_Write_AsAMember(t *testing.T) {
 
 	wantLines(t, out,
 		"ok   initialize — prends-ton-dossard",
-		"ok   tools/list — 32 outils (membre)",
+		"ok   tools/list — 34 outils (membre)",
 		"ok   whoami — Alice",
 		"ok   admin_merge — outil inconnu pour un membre",
 		"ok   create_event — « Course de test MCP »",
@@ -941,6 +1000,10 @@ func TestRun_Write_AsAMember(t *testing.T) {
 		"ok   remove_participation — confirmation déjà servie, refusée",
 		fmt.Sprintf("ok   set_track — envoi en deux temps, %d points", bytes.Count(trackGPX, []byte("<trkpt"))),
 		"ok   delete_event — confirmé",
+		"ok   reminders — changés (1 heure avant), puis remis comme avant",
+		"ok   create_event — course au mois, ouverture à 10:00",
+		"ok   update_event — ouverture effacée après confirmation",
+		"ok   delete_event — course au mois, confirmé",
 		"ok   jeton révoqué — 401",
 	)
 	for _, tool := range f.calls {
@@ -959,7 +1022,7 @@ func TestRun_Write_AsAnAdmin(t *testing.T) {
 
 	wantLines(t, out,
 		"ok   initialize — prends-ton-dossard",
-		"ok   tools/list — 43 outils (admin)",
+		"ok   tools/list — 45 outils (admin)",
 		"ok   whoami — Admin",
 		"ok   create_event — « Course de test MCP »",
 		"ok   delete_event — confirmé",
@@ -1129,4 +1192,26 @@ func TestRun_Write_TheUploadAddressIsNotThisServer(t *testing.T) {
 	if f.uploaded != nil {
 		t.Error("a file was sent although the address is not this server's")
 	}
+}
+
+// A site that repeats secrets in what it says must not have them in the lines
+// of the steps of the v7: the summaries of reminders and get_weather are read,
+// never written.
+func TestRun_ReadOnly_ASiteThatLeaksIsNotRepeated(t *testing.T) {
+	f := newFakeSite(t, false)
+	f.leak = true
+	out, err := runAgainst(t, f, []string{"-login", "alice@example.test"}, nil)
+	noFailure(t, out, err)
+	noSecret(t, f, out)
+	wantPrefixes(t, out, "ok   reminders — ", "ok   get_weather — ")
+}
+
+// Without the Trail des Crêtes (a site that was not seeded), get_weather is tried
+// on the first race to come, and says so.
+func TestRun_ReadOnly_WeatherOfTheFirstRaceWithoutTheDemo(t *testing.T) {
+	f := newFakeSite(t, false)
+	f.noDemoRace = true
+	out, err := runAgainst(t, f, []string{"-login", "alice@example.test"}, nil)
+	noFailure(t, out, err)
+	wantLines(t, out, "ok   get_weather — la première course à venir : not_yet")
 }

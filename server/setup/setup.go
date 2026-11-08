@@ -21,6 +21,9 @@ import (
 	"courses/server/offers"
 	"courses/server/participations"
 	"courses/server/passkeys"
+	"courses/server/push"
+	"courses/server/reminders"
+	"courses/server/weather"
 
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
@@ -47,6 +50,12 @@ func Register(app core.App, cfg config.Config) error {
 	mcpauth.Register(app, cfg)
 	mcp.Register(app, cfg)
 	calendar.Register(app, cfg)
+	// The service is what the scheduler sends with, and its keys are read at the
+	// start of the server, before the scheduler looks whether it can send: it is
+	// registered first.
+	notifier := push.Register(app, cfg)
+	reminders.Register(app, cfg, notifier)
+	weather.Register(app, cfg)
 	demo.Register(app, cfg)
 	admin.Register(app)
 	if err := passkeys.Register(app, cfg); err != nil {

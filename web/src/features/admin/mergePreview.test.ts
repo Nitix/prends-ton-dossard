@@ -9,6 +9,7 @@ const none: MergeResult = {
   movedParticipations: 0,
   droppedParticipations: 0,
   clearedFormatDates: 0,
+  clearedFormatTimes: 0,
   movedComments: 0,
   movedOffers: 0,
 };
@@ -42,6 +43,7 @@ describe("describeMerge", () => {
       movedParticipations: 5,
       droppedParticipations: 1,
       clearedFormatDates: 1,
+      clearedFormatTimes: 2,
       movedComments: 4,
       movedOffers: 2,
     };
@@ -50,6 +52,7 @@ describe("describeMerge", () => {
       "5 participations déplacées",
       "1 participation en double supprimée",
       "1 date d'épreuve effacée (hors des dates de l'événement)",
+      "2 heures de départ effacées (la course gardée n'a que son mois)",
       "4 commentaires déplacés",
       "2 offres déplacées",
     ]);
@@ -58,6 +61,7 @@ describe("describeMerge", () => {
       "5 participations moved",
       "1 duplicate participation removed",
       "1 race date cleared (outside the event's dates)",
+      "2 start times cleared (the kept race has only its month)",
       "4 comments moved",
       "2 offers moved",
     ]);

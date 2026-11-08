@@ -9,8 +9,12 @@ import { PARIS } from "./dates";
 export type Formatters = {
   /** Short weekday, day and short month: "dim. 14 juin", "Sun 14 Jun". */
   date(d: Temporal.PlainDate): string;
+  /** Day and short month, with no weekday: "12 janv.", "12 Jan". */
+  dayMonth(d: Temporal.PlainDate): string;
   /** Like `date`, with the year. */
   dateLong(d: Temporal.PlainDate): string;
+  /** A date up to its day, with the same punctuation as `dateLong`, for the start of a range in one month: "sam. 13", "Sat, 13". */
+  dateToDay(d: Temporal.PlainDate): string;
   /** The weekday of a date, alone: "lun." ("short"), "lundi" ("long"), "L" ("narrow"). */
   weekday(d: Temporal.PlainDate, style: "narrow" | "short" | "long"): string;
   /** Month and year: "juin 2026". */
@@ -26,6 +30,16 @@ export type Formatters = {
   ago(value: number, unit: Intl.RelativeTimeFormatUnit): string;
   /** An instant as a long date and the time, in Paris: "1 novembre 2026 à 05:30". */
   dateTime(instant: Temporal.Instant): string;
+  /** The time of an instant, in Paris: "14:05". */
+  time(instant: Temporal.Instant): string;
+  /**
+   * The start time of a format, `HH:MM` as the site keeps it (a time of the day, at the place of the race: Paris time for a race in France; there
+   * is no zone to convert): "7 h 30" in French, "7:30" in en-GB, "7:30 AM" in en-US. A text that is
+   * not a time is given back as it is.
+   */
+  startTime(hhmm: string): string;
+  /** A whole number in the language of the site, rounded; a small negative one is "0", never "-0". */
+  integer(n: number): string;
   /** Kilometers, at most one decimal: "42,2 km". */
   km(n: number): string;
   /** Meters, no decimal: "2 400 m". */
@@ -78,6 +92,10 @@ export function createFormatters(locale: string): Formatters {
     unit: "kilometer",
     maximumFractionDigits: 1,
   });
+  const integers = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    signDisplay: "negative",
+  });
   const meters = new Intl.NumberFormat(locale, {
     style: "unit",
     unit: "meter",
@@ -95,6 +113,12 @@ export function createFormatters(locale: string): Formatters {
     style: "narrow",
     minutesDisplay: "always",
   });
+  // The start time of a format: a time of the day, so it is formatted in UTC as it is written.
+  const clock = new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
   const ordinals = new Intl.PluralRules(locale, { type: "ordinal" });
   // The app is in French or in English, and the locale may be a regional one (`fr-CA`): its language says which.
   const endings = ORDINAL_ENDINGS[new Intl.Locale(locale).language === "fr" ? "fr" : "en"];
@@ -102,10 +126,25 @@ export function createFormatters(locale: string): Formatters {
   // The date goes through `toLocaleString`, which works with the native
   // Temporal as well as with the polyfill.
   const dayOptions = { weekday: "short", day: "numeric", month: "short" } as const;
+  const dateParts = new Intl.DateTimeFormat(locale, {
+    ...dayOptions,
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
   return {
     date: (d) => d.toLocaleString(locale, dayOptions),
+    dayMonth: (d) => d.toLocaleString(locale, { day: "numeric", month: "short" }),
     dateLong: (d) => d.toLocaleString(locale, { ...dayOptions, year: "numeric" }),
+    dateToDay: (d) => {
+      // A civil date as the UTC day of a `Date`, which is what `formatToParts` takes.
+      const parts = dateParts.formatToParts(Date.UTC(d.year, d.month - 1, d.day));
+      const day = parts.findIndex((part) => part.type === "day");
+      return parts
+        .slice(0, day + 1)
+        .map((part) => part.value)
+        .join("");
+    },
     weekday: (d, style) => d.toLocaleString(locale, { weekday: style }),
     // A year and month in the ISO calendar cannot be formatted with the
     // calendar of the locale ("Mismatched calendars"), a date can.
@@ -116,6 +155,17 @@ export function createFormatters(locale: string): Formatters {
       (unit === "month" || unit === "year" ? counted : relativeTime).format(value, unit),
     dateTime: (instant) =>
       instant.toLocaleString(locale, { dateStyle: "long", timeStyle: "short", timeZone: PARIS }),
+    time: (instant) => instant.toLocaleString(locale, { timeStyle: "short", timeZone: PARIS }),
+    startTime: (hhmm) => {
+      const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hhmm);
+      if (!m) return hhmm;
+      const parts = clock.formatToParts(Date.UTC(2000, 0, 1, Number(m[1]), Number(m[2])));
+      // French writes « 7 h 30 », not « 7:30 »: the digits and the day period are the locale's, the colon is not.
+      if (new Intl.Locale(locale).language !== "fr")
+        return parts.map((part) => part.value).join("");
+      return parts.map((part) => (part.type === "literal" ? "\u00A0h\u00A0" : part.value)).join("");
+    },
+    integer: (n) => integers.format(n),
     km: (n) => kilometers.format(n),
     meters: (n) => meters.format(n),
     price: (eur) => euros.format(eur),

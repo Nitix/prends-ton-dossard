@@ -34,6 +34,9 @@ type MergeResult struct {
 	// ClearedFormatDates is the number of formats that lost their date, which
 	// was outside the range of the kept event.
 	ClearedFormatDates int `json:"clearedFormatDates"`
+	// ClearedFormatTimes is the number of formats that lost their start time,
+	// which a race known by its month does not have.
+	ClearedFormatTimes int `json:"clearedFormatTimes"`
 	// MovedComments is the number of comments of the merged event that went to
 	// the kept event. A merge of formats moves none.
 	MovedComments int `json:"movedComments"`
@@ -152,10 +155,17 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 
 			format.Set("event", keep.Id)
 			// The date is cleared before the save: the validation of a format
-			// refuses a date outside the range of its event.
-			if day := format.GetString("date"); day != "" && !events.InRange(day, start, end) {
+			// refuses a date outside the range of its event, and any date on a race
+			// known by its month only.
+			if day := format.GetString("date"); day != "" && (events.MonthOnly(keep) || !events.InRange(day, start, end)) {
 				format.Set("date", "")
 				result.ClearedFormatDates++
+			}
+			// A race known by its month has no start time for a format either. A
+			// time on a race with days stays: it is a time of the day, not a day.
+			if events.MonthOnly(keep) && format.GetString("start_time") != "" {
+				format.Set("start_time", "")
+				result.ClearedFormatTimes++
 			}
 			if dryRun {
 				continue

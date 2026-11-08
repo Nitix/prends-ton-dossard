@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 // This file has the tools of the profile and the settings (spec § 6.10):
-// rename_runner, passkeys, calendar_link and mcp_tokens. Each does what the
+// rename_runner, passkeys, calendar_link, mcp_tokens and reminders. Each does what the
 // settings page of the site does, through the requests it sends: the rules of
 // the collections and the routes of the site decide, and a tool only announces the
 // refusal that it knows the site will give.
@@ -477,6 +478,10 @@ func ofOwner(owner string) string {
 // anybody who has it reads the races of the person.
 const calendarSecret = "Ce lien est secret : quiconque l'a peut lire tes courses et leurs dates limites d'inscription. Ne le partage pas, et ne le colle que dans l'agenda qui s'y abonne."
 
+// groupSecret is the same for the link of the group, which gives the names of the
+// members.
+const groupSecret = "Ce lien est secret : quiconque l'a peut lire toutes les courses où un membre va, avec les noms des membres qui y vont. Ne le partage pas, et ne le colle que dans l'agenda qui s'y abonne."
+
 // calendarLangs are the languages of the texts of a feed, as the site names them.
 var calendarLangs = map[string]string{"fr": "français", "en": "anglais"}
 
@@ -489,8 +494,29 @@ var renewLangLines = map[string]string{
 	"en": `Les textes du nouveau lien seront en anglais : la langue de l'ancien ne peut pas être lue, et lang: "fr" les met en français.`,
 }
 
+// The two kinds of link, as the routes of the site name them (scope).
+const (
+	scopeMine  = "mine"
+	scopeGroup = "group"
+)
+
+// calendarWords are the texts of an answer that depend on the kind of link.
+type calendarWords struct {
+	// what is the link in a sentence, secret is what it says of its secret, feeds
+	// is what the calendars that follow it stop receiving, and lost is what the
+	// subscribed agendas do not receive any more.
+	what, secret, lost string
+}
+
+var calendarScopes = map[string]calendarWords{
+	scopeMine: {what: "lien d'agenda", secret: calendarSecret, lost: "tes courses"},
+	scopeGroup: {what: "lien d'agenda des courses du groupe", secret: groupSecret,
+		lost: "les courses du groupe"},
+}
+
 type calendarLinkIn struct {
 	Action       string `json:"action" jsonschema:"show pour voir le lien, create pour en faire un quand il n'y en a pas, renew pour le remplacer par un nouveau, delete pour le supprimer"`
+	Scope        string `json:"scope,omitempty" jsonschema:"quel lien : mine (par défaut) pour celui de ses courses, group pour celui des courses du groupe, avec les noms des membres qui y vont. La personne a un lien de chaque sorte, et agir sur l'un ne touche pas l'autre"`
 	Lang         string `json:"lang,omitempty" jsonschema:"create et renew : la langue des textes du flux, fr (par défaut) ou en"`
 	Confirmation string `json:"confirmation,omitempty" jsonschema:"renew et delete : le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
@@ -499,7 +525,7 @@ func (in calendarLinkIn) confirmationGiven() string { return in.Confirmation }
 
 type calendarLinkOut struct {
 	writeStatus
-	Exists *bool  `json:"exists,omitempty" jsonschema:"vrai quand la personne a un lien d'agenda, faux quand elle n'en a pas ; absent quand rien n'a été fait faute d'accord"`
+	Exists *bool  `json:"exists,omitempty" jsonschema:"vrai quand la personne a un lien d'agenda de cette sorte, faux quand elle n'en a pas ; absent quand rien n'a été fait faute d'accord"`
 	URL    string `json:"url,omitempty" jsonschema:"l'adresse du lien, à ajouter comme abonnement dans un agenda : un secret, que la personne seule doit avoir ; absente quand elle n'a pas de lien, ou que le sien date d'avant que le site en garde l'adresse"`
 }
 
@@ -509,12 +535,12 @@ func addCalendarLink(s *mcpsdk.Server, t *tools) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:  "calendar_link",
 		Title: "Lien d'agenda",
-		Description: "Le lien d'agenda de la personne (Réglages → « Agenda ») : une adresse à laquelle un agenda (Google Agenda, Apple Calendrier, Outlook) s'abonne pour montrer ses courses et ses dates limites d'inscription. " +
-			"C'est un secret : quiconque a l'adresse lit ces courses, sans compte. show la donne, à son propriétaire seul : le site ne connaît que le lien de la personne au nom de qui tu agis. " +
+		Description: "Les liens d'agenda de la personne (Réglages → « Agenda ») : une adresse à laquelle un agenda (Google Agenda, Apple Calendrier, Outlook) s'abonne pour montrer ses courses et ses dates limites d'inscription (scope mine, par défaut), ou toutes les courses où un membre va, avec les noms de ceux qui y vont (scope group). " +
+			"C'est un secret : quiconque a l'adresse lit ces courses, sans compte, et le lien du groupe donne les noms des membres. show la donne, à son propriétaire seul : le site ne connaît que les liens de la personne au nom de qui tu agis. " +
 			"create en fait un quand il n'y en a pas (lang : la langue des textes, fr par défaut). " +
-			"renew (« Nouveau lien ») le remplace et delete (« Supprimer le lien ») le supprime : tous deux demandent toujours une confirmation, car l'ancien lien cesse de marcher et les agendas abonnés ne reçoivent plus ses courses. " +
+			"renew (« Nouveau lien ») le remplace et delete (« Supprimer le lien ») le supprime : tous deux demandent toujours une confirmation, car l'ancien lien de cette sorte cesse de marcher et les agendas abonnés ne reçoivent plus ses courses. " +
 			"Ne montre l'adresse qu'à la personne, et ne l'écris nulle part ailleurs.",
-		InputSchema:  inputSchema[calendarLinkIn](map[string][]string{"action": {"show", "create", "renew", "delete"}, "lang": {"fr", "en"}}),
+		InputSchema:  inputSchema[calendarLinkIn](map[string][]string{"action": {"show", "create", "renew", "delete"}, "scope": {scopeMine, scopeGroup}, "lang": {"fr", "en"}}),
 		OutputSchema: calendarLinkSchema(),
 		Annotations:  writeAnnotations(true, false),
 	}, usesUpConfirmation(t, t.calendarLink))
@@ -550,101 +576,118 @@ func (t *tools) calendarLink(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 	if _, ok := calendarLangs[lang]; !ok {
 		return refuse(errors.New("lang est fr ou en."))
 	}
+	scope := strings.TrimSpace(in.Scope)
+	if scope == "" {
+		scope = scopeMine
+	}
+	words, ok := calendarScopes[scope]
+	if !ok {
+		return refuse(errors.New("scope est mine ou group."))
+	}
 	if in.Action != "show" && in.Action != "create" && in.Action != "renew" && in.Action != "delete" {
 		return refuse(errors.New("action est show, create, renew ou delete."))
 	}
+	// What the confirmation is bound to, besides the action: the language that the
+	// new feed will be in, and which of the two links it is about.
+	bound := struct{ Action, Scope, Lang string }{in.Action, scope, lang}
+	route := "/api/app/calendar?scope=" + scope
 
-	// What there is now: only the caller's own link is known to the route.
+	// What there is now: only the caller's own links are known to the route.
 	var status calendarStatus
-	if err := t.inner.get(ctx, "/api/app/calendar", &status); err != nil {
+	if err := t.inner.get(ctx, route, &status); err != nil {
 		return fail(err)
 	}
 	given := strings.TrimSpace(in.Confirmation)
 	answer := func(summary string) calendarLinkOut {
 		return calendarLinkOut{writeStatus: writeStatus{Done: true, Summary: summary}, Exists: ptr(status.Exists), URL: status.URL}
 	}
+	record := stamp{Collection: "calendar_feeds", ID: "link", Updated: linkMark(status)}
+	if scope == scopeGroup {
+		record.ID = "link-group"
+	}
 
 	switch in.Action {
 	case "show":
 		switch {
 		case !status.Exists:
-			return nil, answer("Tu n'as pas de lien d'agenda : l'action create en fait un."), nil
+			return nil, answer("Tu n'as pas de " + words.what + " : l'action create en fait un."), nil
 		case status.URL == "":
-			return nil, answer("Tu as un lien d'agenda, fait avant que le site en garde l'adresse : il marche, mais on ne peut plus l'afficher. L'action renew en fait un nouveau (l'ancien cessera de marcher)."), nil
+			return nil, answer("Tu as un " + words.what + ", fait avant que le site en garde l'adresse : il marche, mais on ne peut plus l'afficher. L'action renew en fait un nouveau (l'ancien cessera de marcher)."), nil
 		}
-		return nil, answer("Ton lien d'agenda, à ajouter comme abonnement dans un agenda (Google Agenda, Apple Calendrier, Outlook). " + calendarSecret), nil
+		return nil, answer("Ton " + words.what + ", à ajouter comme abonnement dans un agenda (Google Agenda, Apple Calendrier, Outlook). " + words.secret), nil
 
 	case "create":
 		if status.Exists {
 			return refuse(errors.New("Tu as déjà un lien : renew le remplace."))
 		}
-		proceed, out, notice, err := t.guard(ctx, "calendar_link", struct{ Action, Lang string }{"create", lang}, nil, given)
+		bound.Action = "create"
+		proceed, out, notice, err := t.guard(ctx, "calendar_link", bound, nil, given)
 		if err != nil {
 			return fail(err)
 		}
 		if !proceed {
 			return nil, calendarLinkOut{writeStatus: notDoneOut(out, notice)}, nil
 		}
-		made, err := t.makeLink(ctx, lang)
+		made, err := t.makeLink(ctx, scope, lang)
 		if err != nil {
 			return fail(err)
 		}
 		status = calendarStatus{Exists: true, URL: made}
-		return nil, answer(fmt.Sprintf("Ton lien d'agenda est créé (textes en %s). %s", calendarLangs[lang], calendarSecret)), nil
+		return nil, answer(fmt.Sprintf("Ton %s est créé (textes en %s). %s", words.what, calendarLangs[lang], words.secret)), nil
 
 	case "renew":
 		if !status.Exists {
-			return refuse(errors.New("Tu n'as pas encore de lien d'agenda : l'action create en fait un."))
+			return refuse(errors.New("Tu n'as pas encore de " + words.what + " : l'action create en fait un."))
 		}
 		lines := []string{
-			"L'ancien lien cessera de marcher : les agendas abonnés ne recevront plus tes courses.",
+			"L'ancien lien cessera de marcher : les agendas abonnés ne recevront plus " + words.lost + ".",
 			"Un nouveau lien le remplace : il faudra l'ajouter dans chaque agenda abonné.",
 			renewLangLines[lang],
 		}
-		r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{{Collection: "calendar_feeds", ID: "link", Updated: linkMark(status)}}}
-		proceed, out, notice, err := t.guard(ctx, "calendar_link", struct{ Action, Lang string }{"renew", lang}, r, given)
+		r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{record}}
+		proceed, out, notice, err := t.guard(ctx, "calendar_link", bound, r, given)
 		if err != nil {
 			return fail(err)
 		}
 		if !proceed {
 			return nil, calendarLinkOut{writeStatus: notDoneOut(out, notice)}, nil
 		}
-		made, err := t.makeLink(ctx, lang)
+		made, err := t.makeLink(ctx, scope, lang)
 		if err != nil {
 			return fail(err)
 		}
 		status = calendarStatus{Exists: true, URL: made}
-		return nil, answer(fmt.Sprintf("Nouveau lien d'agenda fait (textes en %s) : l'ancien ne marche plus. %s", calendarLangs[lang], calendarSecret)), nil
+		return nil, answer(fmt.Sprintf("Nouveau %s fait (textes en %s) : l'ancien ne marche plus. %s", words.what, calendarLangs[lang], words.secret)), nil
 	}
 
 	// delete
 	if !status.Exists {
-		return nil, answer("Rien à changer : tu n'as pas de lien d'agenda."), nil
+		return nil, answer("Rien à changer : tu n'as pas de " + words.what + "."), nil
 	}
-	lines := []string{"Le lien cessera de marcher : les agendas abonnés ne recevront plus tes courses. " +
+	lines := []string{"Le lien cessera de marcher : les agendas abonnés ne recevront plus " + words.lost + ". " +
 		"Un nouveau lien aurait une autre adresse, à ajouter de nouveau dans chaque agenda abonné."}
-	r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{{Collection: "calendar_feeds", ID: "link", Updated: linkMark(status)}}}
-	proceed, out, notice, err := t.guard(ctx, "calendar_link", struct{ Action, Lang string }{"delete", lang}, r, given)
+	r := &risk{Message: strings.Join(lines, " "), Details: lines, Records: []stamp{record}}
+	proceed, out, notice, err := t.guard(ctx, "calendar_link", bound, r, given)
 	if err != nil {
 		return fail(err)
 	}
 	if !proceed {
 		return nil, calendarLinkOut{writeStatus: notDoneOut(out, notice)}, nil
 	}
-	if err := t.inner.send(ctx, http.MethodDelete, "/api/app/calendar", nil, nil); err != nil {
+	if err := t.inner.send(ctx, http.MethodDelete, route, nil, nil); err != nil {
 		return fail(err)
 	}
 	status = calendarStatus{}
-	return nil, answer("Le lien d'agenda est supprimé : il ne marche plus."), nil
+	return nil, answer("Le " + words.what + " est supprimé : il ne marche plus."), nil
 }
 
-// makeLink asks the site for a link, which replaces the one there is, and returns
-// its address.
-func (t *tools) makeLink(ctx context.Context, lang string) (string, error) {
+// makeLink asks the site for a link of that scope, which replaces the one of that
+// scope there is, and returns its address.
+func (t *tools) makeLink(ctx context.Context, scope, lang string) (string, error) {
 	var made struct {
 		URL string `json:"url"`
 	}
-	if err := t.inner.send(ctx, http.MethodPost, "/api/app/calendar", map[string]any{"lang": lang}, &made); err != nil {
+	if err := t.inner.send(ctx, http.MethodPost, "/api/app/calendar", map[string]any{"lang": lang, "scope": scope}, &made); err != nil {
 		return "", err
 	}
 	return made.URL, nil
@@ -799,4 +842,126 @@ func (t *tools) mcpTokens(ctx context.Context, _ *mcpsdk.CallToolRequest, in mcp
 		writeStatus: writeStatus{Done: true, Summary: summary},
 		Revoked:     &revokedToken{ID: token.ID, Name: token.Name, Current: current},
 	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// reminders
+
+// The reminders are one choice of the person for two channels (spec § 4.1): the
+// alarms of the calendar feed, which a tool reads and writes through the routes of
+// the site, and the notifications, which want a device that only the browser of
+// that device activates, so no tool does it.
+
+// remindersNote is what the answer of the tool says of the two channels.
+const remindersNote = "Les alarmes vont dans l'agenda abonné (le lien d'agenda de la personne, outil calendar_link). " +
+	"Les notifications demandent en plus d'activer un appareil dans les Réglages du site : l'assistant ne peut pas le faire."
+
+// remindersOf is how a choice is said: the words of the settings of the site.
+func remindersOf(chosen []string) string {
+	switch {
+	case slices.Contains(chosen, "day") && slices.Contains(chosen, "hour"):
+		return "1 jour et 1 heure avant"
+	case slices.Contains(chosen, "day"):
+		return "1 jour avant"
+	case slices.Contains(chosen, "hour"):
+		return "1 heure avant"
+	}
+	return "jamais"
+}
+
+type remindersIn struct {
+	Action string   `json:"action" jsonschema:"show pour voir le choix, set pour le remplacer"`
+	When   []string `json:"when,omitempty" jsonschema:"set : les rappels voulus, parmi day (1 jour avant) et hour (1 heure avant), dans l'ordre et en nombre qu'on veut ; une liste vide ne veut aucun rappel"`
+}
+
+// deviceOut is a device that is subscribed to the notifications: never its address
+// or its keys, which the site does not give either.
+type deviceOut struct {
+	Label         string `json:"label" jsonschema:"comment l'appareil se nomme, entre « » (un texte de la personne), vide s'il n'a pas de nom"`
+	Created       string `json:"created" jsonschema:"depuis quand"`
+	LastSuccessAt string `json:"lastSuccessAt" jsonschema:"le dernier rappel reçu, vide s'il n'y en a pas"`
+}
+
+type remindersOut struct {
+	Done      bool        `json:"done" jsonschema:"toujours vrai : ce que le site refuse est une erreur"`
+	Summary   string      `json:"summary" jsonschema:"le choix, et ce qu'il fait, en quelques phrases"`
+	Reminders []string    `json:"reminders" jsonschema:"le choix de la personne, day avant hour : vide quand elle ne veut aucun rappel"`
+	Devices   []deviceOut `json:"devices" jsonschema:"les appareils de la personne qui reçoivent les notifications (vide : aucun n'est activé)"`
+}
+
+func addReminders(s *mcpsdk.Server, t *tools) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name:  "reminders",
+		Title: "Rappels",
+		Description: "Les rappels de la personne (Réglages → « Rappels ») : être prévenue 1 jour avant (day), 1 heure avant (hour), les deux, ou jamais, quand les inscriptions d'une course où elle est intéressée ou inscrite ouvrent. " +
+			"Un seul choix pour les deux canaux : l'alarme dans l'agenda abonné et la notification. " +
+			"show donne le choix ; set le remplace par la liste when (day, hour, les deux, ou une liste vide pour aucun rappel). " +
+			"Aucune confirmation : c'est un choix de la personne, remplacé par un autre. " +
+			"Les notifications demandent d'activer un appareil dans les Réglages du site, ce que tu ne peux pas faire : dis-le à la personne.",
+		InputSchema: inputSchema[remindersIn](map[string][]string{"action": {"show", "set"}, "when": {"day", "hour"}}),
+		Annotations: writeAnnotations(false, true),
+	}, t.reminders)
+}
+
+func (t *tools) reminders(ctx context.Context, _ *mcpsdk.CallToolRequest, in remindersIn) (*mcpsdk.CallToolResult, remindersOut, error) {
+	fail := func(err error) (*mcpsdk.CallToolResult, remindersOut, error) {
+		return nil, remindersOut{}, describe(t.app, err, nil)
+	}
+	refuse := func(err error) (*mcpsdk.CallToolResult, remindersOut, error) {
+		return nil, remindersOut{}, err
+	}
+	var stored struct {
+		Reminders []string `json:"reminders"`
+	}
+	switch in.Action {
+	case "show":
+		if err := t.inner.get(ctx, "/api/app/me/reminders", &stored); err != nil {
+			return fail(err)
+		}
+	case "set":
+		// A missing list is not an empty one: the person who wants none says so.
+		if in.When == nil {
+			return refuse(errors.New("when est la liste des rappels voulus (day, hour), vide pour aucun : set ne l'invente pas."))
+		}
+		if err := t.inner.send(ctx, http.MethodPut, "/api/app/me/reminders", map[string]any{"reminders": in.When}, &stored); err != nil {
+			return fail(err)
+		}
+	default:
+		return refuse(errors.New("action est show ou set."))
+	}
+
+	var push struct {
+		Devices []deviceOut `json:"devices"`
+	}
+	if err := t.inner.get(ctx, "/api/app/push", &push); err != nil {
+		return fail(err)
+	}
+	devices := push.Devices
+	for i := range devices {
+		// The label is what the device called itself: member text, so quoted.
+		if devices[i].Label != "" {
+			devices[i].Label = quote(devices[i].Label)
+		}
+	}
+	if devices == nil {
+		devices = []deviceOut{}
+	}
+	chosen := stored.Reminders
+	if chosen == nil {
+		chosen = []string{}
+	}
+	summary := "Rappels : " + remindersOf(chosen) + "."
+	if in.Action == "set" {
+		summary = "Les rappels sont changés : " + remindersOf(chosen) + "."
+	}
+	switch {
+	case len(chosen) > 0 && len(devices) == 0:
+		summary += " " + remindersNote + " Aucun appareil n'est activé pour le moment."
+	case len(chosen) > 0:
+		summary += " " + remindersNote + fmt.Sprintf(" Appareils activés : %d.", len(devices))
+	case len(devices) == 0:
+		// Even with no reminder, the person may ask how to be warned.
+		summary += " Pour recevoir des notifications, il faut activer un appareil dans les Réglages du site : l'assistant ne peut pas le faire."
+	}
+	return nil, remindersOut{Done: true, Summary: summary, Reminders: chosen, Devices: devices}, nil
 }

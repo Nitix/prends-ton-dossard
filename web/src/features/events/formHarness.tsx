@@ -188,6 +188,7 @@ export const minutesOf = (row: Row, label: string) =>
 export const elevation = (row: Row) => row.getByLabelText(fr.form.elevation);
 export const price = (row: Row) => row.getByLabelText(fr.format.price);
 export const formatDate = (row: Row) => row.getByLabelText(fr.form.formatDate);
+export const formatStartTime = (row: Row) => row.getByLabelText(fr.form.formatStartTime);
 export const gpxField = (row: Row) => row.getByLabelText(fr.format.gpx, { exact: true });
 export const routeUrl = (row: Row) => row.getByLabelText(fr.format.routeUrl, { exact: true });
 

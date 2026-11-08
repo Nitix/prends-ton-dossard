@@ -147,6 +147,9 @@ beforeEach(() => {
 /** What the server says of the tokens of the assistants of an account that has none. */
 const NO_TOKENS = { url: "http://localhost:5173/mcp", max: 5, tokens: [] };
 
+/** The notifications of this device: the server has its keys, and no device is turned on. */
+const NO_DEVICES = { available: true, publicKey: "key", devices: [] };
+
 /**
  * Makes the server answer every request with `answer` (a refusal, when it is an
  * error), except the one for the tokens of the assistants, which has its own
@@ -156,6 +159,7 @@ const NO_TOKENS = { url: "http://localhost:5173/mcp", max: 5, tokens: [] };
 function sendAs(answer: unknown) {
   mocks.send.mockImplementation((path) => {
     if (path === "/api/app/mcp-tokens") return Promise.resolve(NO_TOKENS);
+    if (path === "/api/app/push") return Promise.resolve(NO_DEVICES);
     return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
   });
 }
@@ -296,11 +300,12 @@ test("SettingsPage — « Assistant IA (MCP) » vient après « Agenda », et av
 });
 
 test("SettingsPage — sans serveur MCP (la démo), la page n'a pas la section « Assistant IA (MCP) »", async () => {
-  mocks.send.mockImplementation((path) =>
-    path === "/api/app/mcp-tokens"
+  mocks.send.mockImplementation((path) => {
+    if (path === "/api/app/push") return Promise.resolve(NO_DEVICES);
+    return path === "/api/app/mcp-tokens"
       ? Promise.reject(refusal(404, { message: "The requested resource wasn't found." }))
-      : Promise.resolve({ exists: false }),
-  );
+      : Promise.resolve({ exists: false });
+  });
   const screen = await renderSettings();
 
   // The rest of the page is there: the sections around it, and the calendar that asked too.

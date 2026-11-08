@@ -122,6 +122,7 @@
       0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
       0 6px 24px -12px rgb(94 74 227 / 0.45);
     --map-veil: none;
+    --profile-selection: rgb(94 74 227 / 0.2);
     --sheet-glow: none;
 
     /* The map of a track (features/route/TrackMap): the gradient of its line,
@@ -280,6 +281,7 @@
     --shade-bar: rgb(3 1 12 / 0.75);
     --map-frame: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(3 1 12 / 0.85);
     --map-veil: inset 0 0 0 1px rgb(18 15 37 / 0.4), inset 0 0 36px 2px rgb(18 15 37 / 0.45);
+    --profile-selection: rgb(172 160 255 / 0.32);
     --sheet-glow: radial-gradient(120% 20rem at 50% 0, rgb(94 74 227 / 0.16), transparent 75%);
   }
   @media (prefers-color-scheme: dark) {
@@ -335,6 +337,7 @@
       --shade-bar: rgb(3 1 12 / 0.75);
       --map-frame: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(3 1 12 / 0.85);
       --map-veil: inset 0 0 0 1px rgb(18 15 37 / 0.4), inset 0 0 36px 2px rgb(18 15 37 / 0.45);
+      --profile-selection: rgb(172 160 255 / 0.32);
       --sheet-glow: radial-gradient(120% 20rem at 50% 0, rgb(94 74 227 / 0.16), transparent 75%);
     }
   }
@@ -400,6 +403,7 @@
       0 0 0 1px rgb(233 226 242), 0 18px 40px -16px rgb(214 51 111 / 0.5),
       0 6px 24px -12px rgb(94 74 227 / 0.45);
     --map-veil: none;
+    --profile-selection: rgb(94 74 227 / 0.2);
     --sheet-glow: none;
   }
 
@@ -702,6 +706,19 @@
 
 /* The cursor of the elevation profile: a range with no track and no thumb to
    see, since the profile draws it (see ElevationProfile). The focus ring stays. */
+/* The band of a drag that chooses a portion of the profile (see ElevationProfile):
+   the fill of the theme, and in forced colours the edge only, in the text's colour. */
+.profile-selection {
+  fill: var(--profile-selection);
+}
+@media (forced-colors: active) {
+  .profile-selection {
+    fill: transparent;
+    stroke: CanvasText;
+    stroke-opacity: 1;
+  }
+}
+
 .profile-cursor::-webkit-slider-runnable-track {
   height: 100%;
   background: transparent;

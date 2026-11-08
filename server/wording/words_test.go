@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"slices"
 	"testing"
+	"time"
 )
 
 // i18nFile reads web/src/i18n/<lang>.ts, from the place of this file.
@@ -85,6 +86,12 @@ func TestWords_Status(t *testing.T) {
 	}
 	if got := Of("en").Deadline(); got != "Registration closes" {
 		t.Errorf("the English deadline is %q", got)
+	}
+	if got := Of("en").Opening(); got != "Registration opens" {
+		t.Errorf("the English opening is %q", got)
+	}
+	if got := Of("fr").Opening(); got != "Ouverture des inscriptions" {
+		t.Errorf("the French opening is %q", got)
 	}
 	if got := Of("fr").Deadline(); got != "Clôture des inscriptions" {
 		t.Errorf("the French deadline is %q", got)
@@ -268,5 +275,100 @@ func TestTexts_SameRankWordAsTheSite(t *testing.T) {
 				t.Errorf("the word between a rank and the number ranked is %q in words.go, %q in %s.ts", w.rankOf, word[1], lang)
 			}
 		})
+	}
+}
+
+func TestWording_ReminderBody(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := func(day, hhmm string) time.Time {
+		t.Helper()
+		moment, err := time.ParseInLocation("2006-01-02 15:04", day+" "+hhmm, paris)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return moment
+	}
+	opening := at("2026-12-01", "10:00")
+	summer := at("2026-07-15", "10:00") // UTC+2: the text is the wall clock of Paris
+	for _, row := range []struct {
+		name      string
+		T         time.Time
+		timeKnown bool
+		now       time.Time
+		fr, en    string
+	}{
+		{"the day before, more than 2 hours", opening, true, at("2026-11-30", "10:00"),
+			"Les inscriptions ouvrent demain à 10:00.", "Registration opens tomorrow at 10:00."},
+		{"the day before late in the evening", opening, true, at("2026-11-30", "23:59"),
+			"Les inscriptions ouvrent demain à 10:00.", "Registration opens tomorrow at 10:00."},
+		{"the same day, more than 2 hours", opening, true, at("2026-12-01", "07:30"),
+			"Les inscriptions ouvrent aujourd'hui à 10:00.", "Registration opens today at 10:00."},
+		{"just over 2 hours", opening, true, at("2026-12-01", "07:59"),
+			"Les inscriptions ouvrent aujourd'hui à 10:00.", "Registration opens today at 10:00."},
+		{"2 hours exactly", opening, true, at("2026-12-01", "08:00"),
+			"Les inscriptions ouvrent à 10:00, dans 120 min.", "Registration opens at 10:00, in 120 min."},
+		{"an hour before", opening, true, at("2026-12-01", "09:00"),
+			"Les inscriptions ouvrent à 10:00, dans 60 min.", "Registration opens at 10:00, in 60 min."},
+		{"45 minutes", opening, true, at("2026-12-01", "09:15"),
+			"Les inscriptions ouvrent à 10:00, dans 45 min.", "Registration opens at 10:00, in 45 min."},
+		{"seconds are counted up", opening, true, opening.Add(-30 * time.Second),
+			"Les inscriptions ouvrent à 10:00, dans 1 min.", "Registration opens at 10:00, in 1 min."},
+		{"no hour, the day before", opening, false, at("2026-11-30", "09:00"),
+			"Les inscriptions ouvrent demain.", "Registration opens tomorrow."},
+		{"no hour, the same day", opening, false, at("2026-12-01", "08:00"),
+			"Les inscriptions ouvrent aujourd'hui.", "Registration opens today."},
+		{"no hour, within 2 hours", opening, false, at("2026-12-01", "09:30"),
+			"Les inscriptions ouvrent aujourd'hui.", "Registration opens today."},
+		{"in summer the hour is still the one of Paris", summer, true, at("2026-07-14", "10:00"),
+			"Les inscriptions ouvrent demain à 10:00.", "Registration opens tomorrow at 10:00."},
+		{"the day of Paris, not of UTC", at("2026-12-02", "00:30"), true, at("2026-12-01", "20:00"),
+			"Les inscriptions ouvrent demain à 00:30.", "Registration opens tomorrow at 00:30."},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if got := Of("fr").ReminderBody(row.T, row.timeKnown, row.now); got != row.fr {
+				t.Errorf("fr = %q, want %q", got, row.fr)
+			}
+			if row.en == "" {
+				return
+			}
+			if got := Of("en").ReminderBody(row.T, row.timeKnown, row.now); got != row.en {
+				t.Errorf("en = %q, want %q", got, row.en)
+			}
+		})
+	}
+}
+
+func TestWords_DateToBeSet(t *testing.T) {
+	for lang, want := range map[string]string{"fr": "date à préciser", "en": "date to be set", "de": "date à préciser"} {
+		if got := Of(lang).DateToBeSet(); got != want {
+			t.Errorf("Of(%q).DateToBeSet() = %q, want %q", lang, got, want)
+		}
+	}
+}
+
+func TestWords_Group(t *testing.T) {
+	for _, row := range []struct {
+		lang, name, undecided, supporters, roster string
+	}{
+		{"fr", "Prends ton dossard · groupe", "Intéressés, format à choisir", "Supporteurs", "Trail 42 km : Alice (Inscrit), Bob"},
+		{"en", "Prends ton dossard · group", "Interested, format to be chosen", "Supporters", "Trail 42 km: Alice (Inscrit), Bob"},
+		{"de", "Prends ton dossard · groupe", "Intéressés, format à choisir", "Supporteurs", "Trail 42 km : Alice (Inscrit), Bob"},
+	} {
+		w := Of(row.lang)
+		if got := w.GroupName(); got != row.name {
+			t.Errorf("Of(%q).GroupName() = %q, want %q", row.lang, got, row.name)
+		}
+		if got := w.Undecided(); got != row.undecided {
+			t.Errorf("Of(%q).Undecided() = %q, want %q", row.lang, got, row.undecided)
+		}
+		if got := w.Supporters(); got != row.supporters {
+			t.Errorf("Of(%q).Supporters() = %q, want %q", row.lang, got, row.supporters)
+		}
+		if got := w.Roster("Trail 42 km", []string{"Alice (Inscrit)", "Bob"}); got != row.roster {
+			t.Errorf("Of(%q).Roster() = %q, want %q", row.lang, got, row.roster)
+		}
 	}
 }

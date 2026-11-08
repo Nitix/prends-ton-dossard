@@ -174,7 +174,12 @@ func TestNewWebAuthn(t *testing.T) {
 		"http://127.0.0.1:8090":      true,
 		"http://[::1]:8090":          true,
 	} {
-		cfg, err := config.Load(func(string) string { return appURL })
+		cfg, err := config.Load(func(key string) string {
+			if key == "APP_URL" {
+				return appURL
+			}
+			return ""
+		})
 		if err != nil {
 			t.Fatalf("config.Load(%q): %v", appURL, err)
 		}

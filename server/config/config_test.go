@@ -119,3 +119,47 @@ func TestLoad_Demo(t *testing.T) {
 		})
 	}
 }
+
+// The "sub" of the VAPID token: PUSH_CONTACT when set, else the https APP_URL,
+// else a placeholder (a local site has no address worth giving a push service).
+func TestConfig_PushContact(t *testing.T) {
+	cases := []struct {
+		name, appURL, contact, want string
+		wantErr                     bool
+	}{
+		{name: "set, a mailto", appURL: "https://courses.example.fr", contact: "mailto:admin@example.fr", want: "mailto:admin@example.fr"},
+		{name: "set, an https URL", appURL: "http://localhost:8090", contact: "https://example.fr/contact", want: "https://example.fr/contact"},
+		{name: "set, with spaces around", appURL: "", contact: "  mailto:admin@example.fr \n", want: "mailto:admin@example.fr"},
+		{name: "https APP_URL", appURL: "https://courses.example.fr", want: "https://courses.example.fr"},
+		{name: "http APP_URL", appURL: "http://localhost:8090", want: "mailto:push@example.invalid"},
+		{name: "default APP_URL", appURL: "", want: "mailto:push@example.invalid"},
+		{name: "set, but not a mailto or https", appURL: "https://courses.example.fr", contact: "http://example.fr", wantErr: true},
+		{name: "set, a bare address", appURL: "https://courses.example.fr", contact: "admin@example.fr", wantErr: true},
+		{name: "set, an empty mailto", appURL: "https://courses.example.fr", contact: "mailto:", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Load(func(key string) string {
+				switch key {
+				case "APP_URL":
+					return tc.appURL
+				case "PUSH_CONTACT":
+					return tc.contact
+				}
+				return ""
+			})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Load = %+v, want an error", cfg)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.PushContact != tc.want {
+				t.Errorf("PushContact = %q, want %q", cfg.PushContact, tc.want)
+			}
+		})
+	}
+}

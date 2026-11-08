@@ -1,12 +1,14 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
 
+import { BlockTitle } from "../../components/BlockTitle";
 import { SECONDARY } from "../../components/buttons";
 import { EmptyState } from "../../components/EmptyState";
 import { useI18n } from "../../i18n/I18nProvider";
-import { monthGrid } from "../../lib/dates";
+import { isMonthOnly, monthGrid } from "../../lib/dates";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
-import { applyFilters, sortEvents, useEvents } from "../events/api";
+import { applyFilters, sortEvents, useEvents, type EventView } from "../events/api";
 import { Filters, useFilterCriteria } from "../events/Filters";
 import { DayList } from "./DayList";
 import { eventsByDay } from "./eventsByDay";
@@ -31,6 +33,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
   // Anything that is not a month was dropped from the search (see
   // `validateAgendaSearch`): the month is the current one then.
   const month = search.mois ? Temporal.PlainYearMonth.from(search.mois) : today.toPlainYearMonth();
+  usePageTitle(t.titles.calendar(f.monthTitle(month)));
   const weeks = monthGrid(month, f.firstDayOfWeek());
   const days = weeks.flat();
   // The grid reaches into the neighbouring months: so do the events asked for.
@@ -42,6 +45,14 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
   const loaded = data !== undefined && ready;
   const views = loaded ? sortEvents(applyFilters(data, criteria), "asc") : [];
   const byDay = eventsByDay(views, days);
+  // The races of the shown month whose day is not known: on no day of the grid.
+  const monthOnly = views.filter(
+    (view) => isMonthOnly(view.event) && view.start.toPlainYearMonth().equals(month),
+  );
+  // Empty is what the page shows, not what was fetched: the grid reaches into
+  // the neighbouring months, and a race known by its month there is in `views`
+  // but on no day, and not in the block either.
+  const empty = monthOnly.length === 0 && [...byDay.values()].every((day) => day.length === 0);
   // A day outside the grid cannot be chosen.
   const selected = search.jour !== undefined && byDay.has(search.jour) ? search.jour : undefined;
 
@@ -74,6 +85,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
           </h2>
           <MonthLink target={month.add({ months: 1 })} label={t.agenda.next} glyph="›" />
         </div>
+        {monthOnly.length > 0 && <MonthOnlyBlock views={monthOnly} />}
         <MonthGrid
           weeks={weeks}
           month={month}
@@ -101,7 +113,7 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
         </div>
       ) : !loaded ? (
         <output>{t.common.loading}</output>
-      ) : views.length === 0 ? (
+      ) : empty ? (
         <EmptyState title={t.list.empty} hint={t.list.emptyHint} />
       ) : (
         <DayList
@@ -110,6 +122,30 @@ export function AgendaPage({ search }: { search: AgendaSearch }) {
         />
       )}
     </div>
+  );
+}
+
+/** « Ce mois-ci, date à préciser »: the races of the month with no day, each a link to its page. */
+function MonthOnlyBlock({ views }: { views: EventView[] }) {
+  const { t } = useI18n();
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="agenda-month-only flex flex-col gap-2">
+      <BlockTitle id={headingId}>{t.agenda.monthToBeSet}</BlockTitle>
+      <ul className="flex flex-col gap-1">
+        {views.map((view) => (
+          <li key={view.event.id}>
+            <Link
+              to="/evenements/$id"
+              params={{ id: view.event.id }}
+              className="flex min-h-11 items-center underline underline-offset-4 hover:text-iris-700"
+            >
+              {view.event.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

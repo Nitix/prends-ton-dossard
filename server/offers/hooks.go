@@ -11,8 +11,6 @@
 package offers
 
 import (
-	"regexp"
-
 	"ganigeorgiev.com/pocketbase/dbx"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 
@@ -27,9 +25,6 @@ const (
 	// maxRideSeats is the most seats that a car offers, the owner not counted.
 	maxRideSeats = 8
 )
-
-// timePattern is a time of the day written HH:MM, from 00:00 to 23:59.
-var timePattern = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 // Register attaches the hooks of the offers and offer_members collections to app.
 func Register(app core.App) {
@@ -144,7 +139,7 @@ func validateOffer(app core.App, offer *core.Record) error {
 		}
 	}
 
-	if at := offer.GetString("time"); at != "" && !timePattern.MatchString(at) {
+	if at := offer.GetString("time"); at != "" && !events.ValidTime(at) {
 		return apperr.Field("time", apperr.CodeTimeInvalid)
 	}
 

@@ -1,6 +1,6 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { effectiveDate } from "../../lib/dates";
+import { effectiveDate, lastRaceDay } from "../../lib/dates";
 import { pb } from "../../lib/pb";
 import type {
   EventRecord,
@@ -24,8 +24,13 @@ export type PendingView = ParticipationView & {
   /** Absent for a participation without a format. */
   format?: FormatRecord;
   raceType?: RaceTypeRecord;
-  /** The day of the format, or the start of the event without a format. */
+  /** The day of the format, or the start of the event without a format: as it is shown. */
   date: Temporal.PlainDate;
+  /**
+   * The day that says whether the race is over and orders it (`lastRaceDay`): `date`, except for
+   * a race known by its month only, whose last day is the last day of the month.
+   */
+  lastDay: Temporal.PlainDate;
 };
 
 /** The key of the query: the changes of a participation refresh it (see `invalidateEvents`). */
@@ -55,7 +60,8 @@ function toPendingView(record: ExpandedPending): PendingView {
   const event = record.expand?.event;
   if (!event) throw new Error(`participation ${record.id}: its event is missing from the answer`);
   const view = toParticipationView(record);
-  if (!record.format) return { ...view, event, date: effectiveDate({}, event) };
+  if (!record.format)
+    return { ...view, event, date: effectiveDate({}, event), lastDay: lastRaceDay({}, event) };
 
   const format = record.expand?.format;
   const raceType = format?.expand?.race_type;
@@ -64,7 +70,14 @@ function toPendingView(record: ExpandedPending): PendingView {
       `participation ${record.id}: its format or race type is missing from the answer`,
     );
   }
-  return { ...view, event, format, raceType, date: effectiveDate(format, event) };
+  return {
+    ...view,
+    event,
+    format,
+    raceType,
+    date: effectiveDate(format, event),
+    lastDay: lastRaceDay(format, event),
+  };
 }
 
 /** The participations of the answer, the ones that come first on top. */
@@ -73,7 +86,7 @@ function toPendingViews(records: ExpandedPending[]): PendingView[] {
     .map(toPendingView)
     .toSorted(
       (a, b) =>
-        Temporal.PlainDate.compare(a.date, b.date) ||
+        Temporal.PlainDate.compare(a.lastDay, b.lastDay) ||
         a.event.name.localeCompare(b.event.name) ||
         a.participation.id.localeCompare(b.participation.id),
     );
@@ -89,7 +102,7 @@ function toPendingViews(records: ExpandedPending[]): PendingView[] {
  */
 export function pendingOf(views: PendingView[], today: Temporal.PlainDate): PendingView[] {
   return views.filter(
-    ({ participation, date }) => !isResultToEnter(participation.status, date, today),
+    ({ participation, lastDay }) => !isResultToEnter(participation.status, lastDay, today),
   );
 }
 

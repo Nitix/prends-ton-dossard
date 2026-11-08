@@ -16,6 +16,7 @@ import type {
   Role,
 } from "../../lib/types";
 import { invalidateEvents } from "../events/api";
+import { invalidateWeather } from "../weather/api";
 import { isStale } from "./errors";
 import { toMembers, type ExpandedRunner, type Member } from "./memberState";
 import type { MergeResult } from "./mergePreview";
@@ -264,6 +265,8 @@ export function useMergeActions() {
         if (kind === "events") queryClient.removeQueries({ queryKey: ["event", ids.mergeId] });
         await Promise.all([
           invalidateEvents(queryClient, eventId),
+          // The kept event has the formats, so the days, of both.
+          invalidateWeather(queryClient, eventId),
           // The comments and the offers of the merged event moved to the one that stays: the
           // lists, and the latest comments of the home page, still name the one that is gone.
           ...(kind === "events"

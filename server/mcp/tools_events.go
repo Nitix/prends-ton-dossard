@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"courses/server/events"
 	"courses/server/wording"
 )
 
@@ -31,6 +33,39 @@ const maxFormats = 20
 // ones of a participation on a format.
 var formatStatuses = []string{"interested", "registered", "finished", "dnf", "dns"}
 
+// datePrecisions are the precisions of the date of a race (date_precision).
+var datePrecisions = []string{"day", precisionMonth}
+
+// precisionOf is the date_precision that a tool was given, as the form saves it:
+// "month", or "" for a day. It refuses what is neither.
+func precisionOf(argument, value string) (string, error) {
+	switch strings.TrimSpace(value) {
+	case "", "day":
+		return "", nil
+	case precisionMonth:
+		return precisionMonth, nil
+	}
+	return "", fmt.Errorf("%s : « %s » n'est ni day ni month.", argument, strings.TrimSpace(value))
+}
+
+// monthPattern is a month written AAAA-MM.
+var monthPattern = regexp.MustCompile("^[0-9]{4}-[0-9]{2}$")
+
+// checkStart is the start of a race that a tool was given. A race known by its month
+// (monthOnly) can be given as AAAA-MM, which is its 1st; any other start is a day
+// (checkDay), and the 1st is checked after (monthRefusal).
+func checkStart(argument, value string, monthOnly bool) (string, error) {
+	value = strings.TrimSpace(value)
+	if monthOnly && monthPattern.MatchString(value) {
+		start := value + "-01"
+		if _, ok := events.ParseDay(start); !ok {
+			return "", fmt.Errorf("%s : « %s » n'est pas un mois valide (AAAA-MM).", argument, value)
+		}
+		return start, nil
+	}
+	return checkDay(argument, value)
+}
+
 // ---------------------------------------------------------------------------
 // create_event
 
@@ -41,19 +76,22 @@ type joinIn struct {
 }
 
 type createEventIn struct {
-	Name                 string     `json:"name" jsonschema:"le nom de la course, 1 à 120 caractères"`
-	Location             string     `json:"location" jsonschema:"une ville ou un lieu"`
-	StartDate            string     `json:"start_date" jsonschema:"AAAA-MM-JJ : le premier jour"`
-	RegistrationURL      string     `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle"`
-	RegistrationDeadline string     `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date"`
-	Notes                string     `json:"notes,omitempty"`
-	Formats              []formatIn `json:"formats" jsonschema:"les épreuves, de 1 à 20"`
-	Join                 *joinIn    `json:"join,omitempty" jsonschema:"« Je participe » : ajoute la personne au nom de qui tu agis à une épreuve de la course, avec ce statut"`
-	Confirmation         string     `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
+	Name                    string     `json:"name" jsonschema:"le nom de la course, 1 à 120 caractères"`
+	Location                string     `json:"location" jsonschema:"une ville ou un lieu"`
+	StartDate               string     `json:"start_date" jsonschema:"AAAA-MM-JJ : le premier jour ; avec date_precision month, AAAA-MM (le 1er du mois)"`
+	DatePrecision           string     `json:"date_precision,omitempty" jsonschema:"day (par défaut) : la course a son jour ; month : seul le mois est connu, le jour ne l'est pas. La course va alors du 1er au dernier jour du mois (le site pose la fin) et ses épreuves n'ont pas de date"`
+	RegistrationURL         string     `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle"`
+	RegistrationDeadline    string     `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date"`
+	RegistrationOpening     string     `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date"`
+	RegistrationOpeningTime string     `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de l'ouverture, facultative ; sans heure, le site compte 9 h. Demande registration_opening"`
+	Notes                   string     `json:"notes,omitempty"`
+	Formats                 []formatIn `json:"formats" jsonschema:"les épreuves, de 1 à 20"`
+	Join                    *joinIn    `json:"join,omitempty" jsonschema:"« Je participe » : ajoute la personne au nom de qui tu agis à une épreuve de la course, avec ce statut"`
+	Confirmation            string     `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
 
 var createEventSchema = sync.OnceValue(func() *jsonschema.Schema {
-	schema := inputSchema[createEventIn](map[string][]string{"join.status": formatStatuses})
+	schema := inputSchema[createEventIn](map[string][]string{"join.status": formatStatuses, "date_precision": datePrecisions})
 	withMinimum(schema, 0, "join.format_index")
 	return withMinimum(schema, 0, prefixed("formats", formatNumbers)...)
 })
@@ -67,6 +105,8 @@ func addCreateEvent(s *mcpsdk.Server, t *tools) {
 			"rien n'est créé au premier appel : la réponse les nomme et donne un jeton de confirmation. " +
 			"Chaque épreuve a au moins une mesure, distance_km, duration_min ou time_limit_min : de préférence celles de son type (list_race_types). " +
 			"La date de fin vient des épreuves : une épreuve datée après start_date allonge la course. " +
+			"Quand seul le mois est connu, date_precision: month et start_date AAAA-MM : la course va du 1er au dernier jour du mois, le site pose la fin, et ses épreuves n'ont pas de date. " +
+			"registration_opening (AAAA-MM-JJ) et registration_opening_time (HH:MM, heure de Paris, facultative : sans heure, le site compte 9 h) disent quand les inscriptions ouvrent. " +
 			"join ajoute la personne au nom de qui tu agis à une épreuve, comme « Je participe ». La trace GPX d'une épreuve passe par set_track. " +
 			"Donne la course comme get_event.",
 		InputSchema:  createEventSchema(),
@@ -113,9 +153,16 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 		Name: strings.TrimSpace(in.Name), Location: strings.TrimSpace(in.Location),
 		RegistrationURL: strings.TrimSpace(in.RegistrationURL), Notes: strings.TrimSpace(in.Notes),
 	}
-	if draft.StartDate, err = checkDay("start_date", in.StartDate); err != nil {
+	if draft.DatePrecision, err = precisionOf("date_precision", in.DatePrecision); err != nil {
 		return refuse(err)
 	}
+	if draft.StartDate, err = checkStart("start_date", in.StartDate, draft.monthOnly()); err != nil {
+		return refuse(err)
+	}
+	if draft.RegistrationOpening, err = checkDay("registration_opening", in.RegistrationOpening); err != nil {
+		return refuse(err)
+	}
+	draft.RegistrationOpeningTime = strings.TrimSpace(in.RegistrationOpeningTime)
 	if draft.RegistrationDeadline, err = checkDay("registration_deadline", in.RegistrationDeadline); err != nil {
 		return refuse(err)
 	}
@@ -138,11 +185,17 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 		}
 		draft.Join = &joinDraft{FormatIndex: in.Join.FormatIndex, Status: in.Join.Status}
 	}
-	draft.EndDate = eventEndDate(draft.StartDate, datesOf(draft))
+	draft.EndDate = draft.endDate()
 
 	// What the form refuses before sending.
 	labels := labelsOf(eventView{}, raceTypes)
 	if err := measureRefusal(w, draft, labels); err != nil {
+		return refuse(err)
+	}
+	if err := monthRefusal(w, draft, labels); err != nil {
+		return refuse(err)
+	}
+	if err := openingRefusal(draft); err != nil {
 		return refuse(err)
 	}
 	if err := dateRefusal(w, draft, labels, startHint); err != nil {
@@ -198,19 +251,22 @@ func (t *tools) duplicateRisk(w wording.Words, duplicates []eventView) *risk {
 // update_event
 
 type updateEventIn struct {
-	EventID              string          `json:"event_id" jsonschema:"l'identifiant de la course, tel que search_events le donne"`
-	Name                 *string         `json:"name,omitempty" jsonschema:"le nom de la course, 1 à 120 caractères"`
-	Location             *string         `json:"location,omitempty" jsonschema:"une ville ou un lieu"`
-	StartDate            *string         `json:"start_date,omitempty" jsonschema:"AAAA-MM-JJ : le premier jour. Les épreuves sans date le suivent ; une épreuve datée se déplace avec formats"`
-	RegistrationURL      *string         `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle ; vide l'efface"`
-	RegistrationDeadline *string         `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date ; vide l'efface"`
-	Notes                *string         `json:"notes,omitempty" jsonschema:"vide les efface"`
-	Formats              []formatPatchIn `json:"formats,omitempty" jsonschema:"des modifications d'épreuves, écrites avec la course"`
-	Confirmation         string          `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
+	EventID                 string          `json:"event_id" jsonschema:"l'identifiant de la course, tel que search_events le donne"`
+	Name                    *string         `json:"name,omitempty" jsonschema:"le nom de la course, 1 à 120 caractères"`
+	Location                *string         `json:"location,omitempty" jsonschema:"une ville ou un lieu"`
+	StartDate               *string         `json:"start_date,omitempty" jsonschema:"AAAA-MM-JJ : le premier jour. Les épreuves sans date le suivent ; une épreuve datée se déplace avec formats. Pour une course dont seul le mois est connu, AAAA-MM (le 1er du mois)"`
+	DatePrecision           *string         `json:"date_precision,omitempty" jsonschema:"day : la course a son jour ; month : seul le mois est connu, le jour ne l'est pas : la course va du 1er au dernier jour du mois (le site pose la fin) et ses épreuves perdent leur date. Passer de month à day ne demande rien : donne ensuite start_date et les dates des épreuves"`
+	RegistrationURL         *string         `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle ; vide l'efface"`
+	RegistrationDeadline    *string         `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date ; vide l'efface"`
+	RegistrationOpening     *string         `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date ; vide l'efface, avec son heure"`
+	RegistrationOpeningTime *string         `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de l'ouverture ; vide l'efface ; sans heure, le site compte 9 h. Demande registration_opening"`
+	Notes                   *string         `json:"notes,omitempty" jsonschema:"vide les efface"`
+	Formats                 []formatPatchIn `json:"formats,omitempty" jsonschema:"des modifications d'épreuves, écrites avec la course"`
+	Confirmation            string          `json:"confirmation,omitempty" jsonschema:"le jeton de la confirmation que la réponse au premier appel a donné, quand la personne a accepté"`
 }
 
 var updateEventSchema = sync.OnceValue(func() *jsonschema.Schema {
-	return withMinimum(inputSchema[updateEventIn](nil), 0, prefixed("formats", formatNumbers)...)
+	return withMinimum(inputSchema[updateEventIn](map[string][]string{"date_precision": datePrecisions}), 0, prefixed("formats", formatNumbers)...)
 })
 
 // updateEventArgs are the arguments of update_event, normalized: the texts
@@ -218,6 +274,8 @@ var updateEventSchema = sync.OnceValue(func() *jsonschema.Schema {
 type updateEventArgs struct {
 	Event                                                                   string
 	Name, Location, StartDate, RegistrationURL, RegistrationDeadline, Notes *string
+	RegistrationOpening, RegistrationOpeningTime                            *string
+	DatePrecision                                                           *string // "month", or "" for a day
 	Formats                                                                 []formatPatchIn
 }
 
@@ -228,8 +286,10 @@ func addUpdateEvent(s *mcpsdk.Server, t *tools) {
 		Description: "Modifie une course, comme le formulaire « Modifier » du site (tout membre le peut, pas seulement son auteur). " +
 			"Un champ absent ne change pas ; un texte vide efface un champ facultatif. " +
 			"formats modifie des épreuves dans la même écriture (format_id obligatoire, mêmes règles) : c'est ce qui déplace une course avec ses épreuves datées en un appel. " +
+			"registration_opening et registration_opening_time (heure de Paris) disent quand les inscriptions ouvrent ; vider le jour vide aussi l'heure. " +
+			"date_precision: month (avec start_date AAAA-MM) dit que seul le mois est connu : la course va du 1er au dernier jour du mois, le site pose la fin, et les épreuves perdent leur date ; day la rend à un jour. " +
 			"La date de fin vient des épreuves. Ce qui effacerait ou changerait ce que des personnes ont saisi " +
-			"(un champ vidé, des notes remplacées, une course raccourcie, le jour d'une épreuve qui a des participants) " +
+			"(un champ vidé, des notes remplacées, une course raccourcie, le jour d'une épreuve qui a des participants, des épreuves datées qui passent au mois) " +
 			"n'est fait qu'au second appel, avec le jeton de confirmation que le premier donne. Donne la course comme get_event.",
 		InputSchema:  updateEventSchema(),
 		OutputSchema: eventWriteSchema(),
@@ -257,13 +317,26 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	// The input, normalized.
 	args := updateEventArgs{Event: id}
 	args.Name, args.Location, args.RegistrationURL, args.Notes = trimmed(in.Name), trimmed(in.Location), trimmed(in.RegistrationURL), trimmed(in.Notes)
+	if in.DatePrecision != nil {
+		precision, err := precisionOf("date_precision", *in.DatePrecision)
+		if err != nil {
+			return nil, eventWriteOut{}, err
+		}
+		args.DatePrecision = &precision
+	}
+	// Whether the race is known by its month once saved: what is asked, or what it is.
+	monthOnly := view.record.monthOnly()
+	if args.DatePrecision != nil {
+		monthOnly = *args.DatePrecision == precisionMonth
+	}
+	args.RegistrationOpeningTime = trimmed(in.RegistrationOpeningTime)
 	for _, day := range []struct {
 		name   string
 		in     *string
 		normal **string
 	}{
-		{"start_date", in.StartDate, &args.StartDate},
 		{"registration_deadline", in.RegistrationDeadline, &args.RegistrationDeadline},
+		{"registration_opening", in.RegistrationOpening, &args.RegistrationOpening},
 	} {
 		if day.in == nil {
 			continue
@@ -273,6 +346,13 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 			return nil, eventWriteOut{}, err
 		}
 		*day.normal = &checked
+	}
+	if in.StartDate != nil {
+		checked, err := checkStart("start_date", *in.StartDate, monthOnly)
+		if err != nil {
+			return nil, eventWriteOut{}, err
+		}
+		args.StartDate = &checked
 	}
 	// The start is required, as the field of the form is: the days of the
 	// formats are read from it.
@@ -285,6 +365,19 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 	}
 	args.Formats = patches
 	labels := labelsOf(view, raceTypes)
+	// Back to a day with no day given would make up one (the 1st): the form makes the person choose.
+	if !monthOnly && view.record.monthOnly() && args.StartDate == nil {
+		return nil, eventWriteOut{}, errors.New("date_precision : pour passer de month à day, donne aussi start_date (AAAA-MM-JJ), le jour de la course.")
+	}
+	// A race that becomes a month with no start given is the month of the one it has: the form
+	// offers the month of the day (initialDraft of formDraft.ts).
+	if monthOnly && !view.record.monthOnly() && args.StartDate == nil {
+		start := view.record.StartDate
+		if len(start) == len("2006-01-02") {
+			start = start[:len("2006-01-")] + "01"
+		}
+		args.StartDate = &start
+	}
 
 	change := func(draft *eventDraft) {
 		set := func(to *string, from *string) {
@@ -295,8 +388,24 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 		set(&draft.Name, args.Name)
 		set(&draft.Location, args.Location)
 		set(&draft.StartDate, args.StartDate)
+		if args.DatePrecision != nil {
+			draft.DatePrecision = *args.DatePrecision
+		}
+		// A race that becomes a month loses the days and the start times of its formats (the form empties them first);
+		// a day that this call gives to one is refused (monthRefusal).
+		if monthOnly && !view.record.monthOnly() {
+			for i := range draft.Formats {
+				draft.Formats[i].Date, draft.Formats[i].StartTime = "", ""
+			}
+		}
 		set(&draft.RegistrationURL, args.RegistrationURL)
 		set(&draft.RegistrationDeadline, args.RegistrationDeadline)
+		set(&draft.RegistrationOpening, args.RegistrationOpening)
+		set(&draft.RegistrationOpeningTime, args.RegistrationOpeningTime)
+		// Emptying the day empties the time, as the form does: a time needs a day.
+		if args.RegistrationOpening != nil && *args.RegistrationOpening == "" && args.RegistrationOpeningTime == nil {
+			draft.RegistrationOpeningTime = ""
+		}
 		set(&draft.Notes, args.Notes)
 		applyPatches(draft, patches)
 	}
@@ -324,6 +433,8 @@ type removedEvent struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	StartDate string `json:"start_date"`
+	// DatePrecision is "month" when only the month of the race was known.
+	DatePrecision string `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course était connu, start_date en est le 1er ; absent : start_date est le jour"`
 }
 
 var deleteEventSchema = sync.OnceValue(writeSchema[deleteEventOut])
@@ -429,7 +540,7 @@ func (t *tools) deleteEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in d
 		writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("La course %s est supprimée, avec %s, %s, %s et %s.", quote(event.Name),
 			plural(len(view.formats), "épreuve", "épreuves"), plural(len(view.participations()), "participation", "participations"),
 			plural(comments, "commentaire", "commentaires"), plural(offers, "offre", "offres"))},
-		Removed: &removedEvent{ID: event.ID, Name: event.Name, StartDate: event.StartDate},
+		Removed: &removedEvent{ID: event.ID, Name: event.Name, StartDate: event.StartDate, DatePrecision: datePrecisionOf(event)},
 	}, nil
 }
 

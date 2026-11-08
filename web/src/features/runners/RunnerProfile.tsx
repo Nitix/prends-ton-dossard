@@ -5,6 +5,7 @@ import { BlockTitle } from "../../components/BlockTitle";
 import { LoadFailure } from "../../components/LoadFailure";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useRunners } from "../events/api";
+import { dayOrMonth } from "../events/eventWhen";
 import { formatDisplayName } from "../events/formatName";
 import { resultParts } from "../results/resultText";
 import { byYear, useResults, type ResultRow } from "../stats/stats";
@@ -153,7 +154,7 @@ function HistoryRow({ row }: { row: ResultRow }) {
         {SEPARATOR}
         {t.status[participation.status]}
       </p>
-      <p className="text-sm text-neutral-600">{f.dateLong(date)}</p>
+      <p className="text-sm text-neutral-600">{dayOrMonth(event, date, f, t, "long")}</p>
       {result.length > 0 && (
         <p className="result-tag mt-1 self-start rounded-full bg-iris-50 px-2.5 py-1 text-sm font-semibold text-iris-800 ring-1 ring-iris-100">
           {result.join(SEPARATOR)}

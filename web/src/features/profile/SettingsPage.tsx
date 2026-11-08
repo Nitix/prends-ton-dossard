@@ -11,10 +11,12 @@ import { translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
 import type { RunnerRecord, UserRecord } from "../../lib/types";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { logout, useSession } from "../auth/session";
 import { CalendarSection } from "../calendar/CalendarSection";
 import { McpSection } from "../mcp/McpSection";
 import { InstallSection } from "../pwa/InstallSection";
+import { RemindersSection } from "../reminders/RemindersSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { failureOf, text, type Failure } from "./forms";
 import { PasskeyList } from "./PasskeyList";
@@ -33,6 +35,7 @@ const BUTTON = `${PRIMARY} self-start`;
  */
 export function SettingsPage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.settings);
   const { user, runner, signedIn } = useSession();
 
   // The pages behind the sign-in are only shown to somebody signed in: this
@@ -88,12 +91,13 @@ function AccountSections({ user, runner }: { user: UserRecord; runner: RunnerRec
 }
 
 /**
- * What a member has after the look of the app: the link of their calendar, the
+ * What a member has after the look of the app: their reminders, the link of their calendar, the
  * tokens of their AI assistants (absent on the demo), and how to install the app.
  */
 function AppSections() {
   return (
     <>
+      <RemindersSection />
       <CalendarSection />
       <McpSection />
       <InstallSection />

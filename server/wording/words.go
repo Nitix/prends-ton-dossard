@@ -8,6 +8,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Words are the texts of the site in one language, for what is read away from it
@@ -22,6 +24,19 @@ type Words struct {
 	unconfirmed string
 	// deadline is what the day that registrations close is called.
 	deadline string
+	// opening is what the day that registrations open is called.
+	opening string
+	// dateToBeSet is what a race known by its month only says of its day.
+	dateToBeSet string
+	// undecided, supporters and groupName are the texts of the group calendar:
+	// the line of those interested who have not chosen a race, the line of the
+	// supporters, and the name of the calendar.
+	undecided, supporters, groupName string
+	// colon is what follows the name of a race, or of a group of people, before
+	// those it holds (a space comes before it in French).
+	colon string
+	// reminder holds the pieces of the body of a reminder of an opening.
+	reminder reminderWords
 	// decimal is the separator of the decimals of a distance.
 	decimal string
 	// minute is the unit of the minutes of a duration, in the narrow style of
@@ -47,6 +62,13 @@ var texts = map[string]Words{
 		},
 		unconfirmed: "non confirmé",
 		deadline:    "Clôture des inscriptions",
+		opening:     "Ouverture des inscriptions",
+		dateToBeSet: "date à préciser",
+		undecided:   "Intéressés, format à choisir",
+		supporters:  "Supporteurs",
+		groupName:   "Prends ton dossard · groupe",
+		colon:       " : ",
+		reminder:    reminderWords{opens: "Les inscriptions ouvrent", today: "aujourd'hui", tomorrow: "demain", at: "à", in: "dans", min: "min"},
 		decimal:     ",",
 		minute:      "min",
 		rankOf:      "sur",
@@ -69,6 +91,13 @@ var texts = map[string]Words{
 		},
 		unconfirmed: "not confirmed",
 		deadline:    "Registration closes",
+		opening:     "Registration opens",
+		dateToBeSet: "date to be set",
+		undecided:   "Interested, format to be chosen",
+		supporters:  "Supporters",
+		groupName:   "Prends ton dossard · group",
+		colon:       ": ",
+		reminder:    reminderWords{opens: "Registration opens", today: "today", tomorrow: "tomorrow", at: "at", in: "in", min: "min"},
 		decimal:     ".",
 		minute:      "m",
 		rankOf:      "out of",
@@ -230,4 +259,78 @@ func (w Words) ResultParts(finishTimeS, rank, rankOf int, note string) []string 
 		parts = append(parts, note)
 	}
 	return parts
+}
+
+// Opening is what the day that registrations open is called.
+func (w Words) Opening() string {
+	return w.opening
+}
+
+// reminderWords are the pieces of the body of a reminder of an opening.
+type reminderWords struct{ opens, today, tomorrow, at, in, min string }
+
+// parisZone is Paris, loaded once: the days and hours of an opening are the wall
+// clock of Paris, as everywhere on the site.
+var parisZone = sync.OnceValue(func() *time.Location {
+	zone, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		// The program embeds time/tzdata; a build that does not reads UTC.
+		return time.UTC
+	}
+	return zone
+})
+
+// ReminderBody is the body of the reminder of an opening at T, sent at now (spec
+// § 4.3). More than 2 hours before, it says the day, "demain" or "aujourd'hui"
+// by the days of Paris, and the hour when there is one (timeKnown); within 2
+// hours, what is left, "à 10:00, dans 45 min" (the minutes are counted up, so
+// that the text never says 0). An opening with no hour says the day only.
+func (w Words) ReminderBody(T time.Time, timeKnown bool, now time.Time) string {
+	r := w.reminder
+	paris := parisZone()
+	left := T.Sub(now)
+	hhmm := T.In(paris).Format("15:04")
+	if timeKnown && left <= 2*time.Hour {
+		minutes := max(int((left+time.Minute-1)/time.Minute), 1)
+		return fmt.Sprintf("%s %s %s, %s %d %s.", r.opens, r.at, hhmm, r.in, minutes, r.min)
+	}
+	day := r.tomorrow
+	ty, tm, td := T.In(paris).Date()
+	if ny, nm, nd := now.In(paris).Date(); ty == ny && tm == nm && td == nd {
+		day = r.today
+	}
+	if timeKnown {
+		return fmt.Sprintf("%s %s %s %s.", r.opens, day, r.at, hhmm)
+	}
+	return fmt.Sprintf("%s %s.", r.opens, day)
+}
+
+// DateToBeSet is what a race known by its month only says of its day: "date à
+// préciser", "date to be set".
+func (w Words) DateToBeSet() string {
+	return w.dateToBeSet
+}
+
+// GroupName is the name of the calendar of the group: "Prends ton dossard ·
+// groupe".
+func (w Words) GroupName() string {
+	return w.groupName
+}
+
+// Undecided is the label of those who are interested in a race and have not
+// chosen a format: "Intéressés, format à choisir".
+func (w Words) Undecided() string {
+	return w.undecided
+}
+
+// Supporters is the label of those who come to support: "Supporteurs".
+func (w Words) Supporters() string {
+	return w.supporters
+}
+
+// Roster is a line of the description of a race in the group calendar: the label,
+// the colon of the language, then the people, which are written as they are given
+// and joined by a comma and a space ("Trail 42 km : Alice (Inscrit), Bob").
+func (w Words) Roster(label string, people []string) string {
+	return label + w.colon + strings.Join(people, ", ")
 }

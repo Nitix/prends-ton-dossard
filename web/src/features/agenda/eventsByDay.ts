@@ -1,4 +1,4 @@
-import { eventDays } from "../../lib/dates";
+import { eventDays, isMonthOnly } from "../../lib/dates";
 import type { EventView } from "../events/api";
 
 /**
@@ -10,6 +10,9 @@ import type { EventView } from "../events/api";
  * day; the days of an event that are not in `days` are left out. The events
  * keep the order they are given in, so sort them first (see `sortEvents`):
  * each day then lists them by start and by name.
+ *
+ * An event known by its month only is on no day: the agenda lists it above the
+ * grid (see `AgendaPage`).
  */
 export function eventsByDay(
   views: EventView[],
@@ -17,6 +20,7 @@ export function eventsByDay(
 ): Map<string, EventView[]> {
   const byDay = new Map<string, EventView[]>(days.map((day) => [day.toString(), []]));
   for (const view of views) {
+    if (isMonthOnly(view.event)) continue;
     for (const day of eventDays(view.event)) {
       byDay.get(day.toString())?.push(view);
     }

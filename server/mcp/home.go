@@ -30,7 +30,9 @@ import (
 // participationRow is a participation with what it is on: its event, and, unless it
 // is on the event alone ("format to choose", or supporter), its race with the type
 // that gives it its name. Runner is who it is for. Day is the day of the race
-// (effectiveDate of lib/dates.ts), or the start of the event with no race.
+// (effectiveDate of lib/dates.ts), or the start of the event with no race: the 1st
+// for an event known by its month only. lastDay is the day that says whether it is
+// behind and orders it.
 //
 // The fields are exported for the tests, which are in an external package.
 type participationRow struct {
@@ -91,6 +93,21 @@ func (t *tools) participationRows(ctx context.Context, filter, expand string, ru
 	return rows, nil
 }
 
+// lastDay ports lastRaceDay of lib/dates.ts: the day that says whether the race is
+// behind and orders it among the others. It is the Day of the row, except for an
+// event known by its month only, whose formats have no day: the last day of the
+// month.
+func (r participationRow) lastDay() string {
+	if r.Event.monthOnly() {
+		return lastRaceDay(r.Event, "")
+	}
+	return r.Day
+}
+
+// datePrecision is the precision of the day of the row to say in an answer: "month"
+// when the event is known by its month only, "" (left out) for a day.
+func (r participationRow) datePrecision() string { return datePrecisionOf(r.Event) }
+
 // formatTitle is what the race is called, as the site does: "" for a participation
 // on the event alone.
 func (r participationRow) formatTitle(w wording.Words) string {
@@ -122,12 +139,21 @@ func daysBetween(from, to string) (int, bool) {
 // The orders of the rows, as the site sorts them, then by name of the event (as a
 // person reads a list), then by id so that they never depend on the order of the
 // answer.
+//
+// The days that order the rows of the home page are the days that say whether a race
+// is behind (lastDay): a race known by its month only is at the end of its month.
+// The history of a runner is ordered by Day (latestFirst): the year of the month is
+// the year of its 1st.
 func soonestFirst(a, b participationRow) int {
-	return cmp.Or(cmp.Compare(a.Day, b.Day), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
+	return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 }
 
 func latestFirst(a, b participationRow) int {
 	return cmp.Or(cmp.Compare(b.Day, a.Day), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
+}
+
+func latestEndFirst(a, b participationRow) int {
+	return cmp.Or(cmp.Compare(b.lastDay(), a.lastDay()), compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +166,7 @@ const resultsWindowDays = 60
 // isResultToEnter ports isResultToEnter of features/results/resultsToEnter.ts: a
 // participation is "registered" and its race is over (the day of a race is not: it
 // may still be on) for no more than resultsWindowDays days. day is the day of the
-// race. "Résultats à saisir" shows these, and "À confirmer" leaves them out
+// race (lastDay: a race known by its month only is over the day after its month). "Résultats à saisir" shows these, and "À confirmer" leaves them out
 // (pendingOf): both ask this, so they cannot disagree.
 func isResultToEnter(status, day, today string) bool {
 	if status != "registered" {
@@ -155,9 +181,9 @@ func isResultToEnter(status, day, today string) bool {
 // event, then the id of the participation. rows is left as it is.
 func toEnterOf(rows []participationRow, today string) []participationRow {
 	kept := slices.DeleteFunc(slices.Clone(rows), func(r participationRow) bool {
-		return !isResultToEnter(r.Participation.Status, r.Day, today)
+		return !isResultToEnter(r.Participation.Status, r.lastDay(), today)
 	})
-	slices.SortFunc(kept, latestFirst)
+	slices.SortFunc(kept, latestEndFirst)
 	return kept
 }
 
@@ -169,41 +195,90 @@ func toEnterOf(rows []participationRow, today string) []participationRow {
 // here. The order is the one of rows, which is left as it is.
 func pendingOf(rows []participationRow, today string) []participationRow {
 	return slices.DeleteFunc(slices.Clone(rows), func(r participationRow) bool {
-		return isResultToEnter(r.Participation.Status, r.Day, today)
+		return isResultToEnter(r.Participation.Status, r.lastDay(), today)
 	})
 }
 
+// The states of a registration to make (the kinds of RegistrationState of
+// features/events/registration.ts that are to do): it opens later (soon), it opens
+// today, or it is open.
+const (
+	stateSoon  = "soon"
+	stateToday = "today"
+	stateOpen  = "open"
+)
+
 // registrationTodo is a registration that the runner has to make: a participation
-// they are only interested in, in an event whose registration is still open.
+// they are only interested in, in an event whose registration is open or about to be.
 type registrationTodo struct {
-	Row      participationRow
+	Row participationRow
+	// State is "soon", "today" or "open".
+	State string
+	// Day is the day that orders it: the opening for "soon" and "today", the deadline
+	// for "open".
+	Day string
+	// Opening and OpeningTime are the day and the time (HH:MM, "" when there is none)
+	// of the opening, for "soon" and "today".
+	Opening, OpeningTime string
+	// Deadline is the last day to register, "" for "soon" and "today" of an event that
+	// has none.
 	Deadline string
-	// DaysLeft is 0 on the day of the deadline, on which one can still register.
+	// DaysLeft is the days to the opening for "soon", 0 on the day of the opening
+	// ("today") and on the day of the deadline, on which one can still register
+	// ("open"), the days to the deadline otherwise.
 	DaysLeft int
+}
+
+// registrationStateOf ports registrationState of features/events/registration.ts, for
+// the states that are to do: "" for the others (closed, or nothing to say). An opening
+// after today is "soon", on today it is "today" (to the day, not to the hour); once it
+// is behind, only the deadline counts. A deadline today or later is open.
+func registrationStateOf(event eventRecord, today string) (todo registrationTodo, ok bool) {
+	deadline := event.RegistrationDeadline
+	if opening := event.RegistrationOpening; opening != "" {
+		if daysLeft, parsed := daysBetween(today, opening); parsed && daysLeft >= 0 {
+			state := stateSoon
+			if daysLeft == 0 {
+				state = stateToday
+			}
+			return registrationTodo{
+				State: state, Day: opening, Opening: opening, OpeningTime: event.RegistrationOpeningTime,
+				Deadline: deadline, DaysLeft: daysLeft,
+			}, true
+		}
+	}
+	if deadline == "" {
+		return registrationTodo{}, false
+	}
+	if daysLeft, parsed := daysBetween(today, deadline); parsed && daysLeft >= 0 {
+		return registrationTodo{State: stateOpen, Day: deadline, Deadline: deadline, DaysLeft: daysLeft}, true
+	}
+	return registrationTodo{}, false
 }
 
 // todosOf ports todosOf of features/home/registrationTodo.ts, with
 // registrationState of features/events/registration.ts: what the runner has to
 // register for, which is their "Interested" participations (on a race, or on the
-// event alone) in the events whose registration is open, the deadline being today
-// or later. An event with no deadline, or whose registration is closed, has
-// nothing to do. rows are the runner's own (the site's function is given the
-// events and the runner). The nearest deadline comes first, then the name of the
-// event, then the id of the participation.
+// event alone) in the events whose registration is open (the deadline being today
+// or later) or opens today or later. An event with no deadline and no opening to
+// come, or whose registration is closed, has nothing to do. rows are the runner's
+// own (the site's function is given the events and the runner). The nearest day
+// comes first (the opening of one that is not open yet, the deadline of the
+// others), then the name of the event, then the id of the participation.
 func todosOf(rows []participationRow, today string) []registrationTodo {
 	var todos []registrationTodo
 	for _, row := range rows {
-		deadline := row.Event.RegistrationDeadline
-		if row.Participation.Status != "interested" || deadline == "" {
+		if row.Participation.Status != "interested" {
 			continue
 		}
-		if daysLeft, ok := daysBetween(today, deadline); ok && daysLeft >= 0 {
-			todos = append(todos, registrationTodo{Row: row, Deadline: deadline, DaysLeft: daysLeft})
+		if todo, ok := registrationStateOf(row.Event, today); ok {
+			todo.Row = row
+			todos = append(todos, todo)
 		}
 	}
 	slices.SortFunc(todos, func(a, b registrationTodo) int {
 		return cmp.Or(
-			cmp.Compare(a.Deadline, b.Deadline),
+			cmp.Compare(a.Day, b.Day),
 			compareNames(a.Row.Event.Name, b.Row.Event.Name),
 			cmp.Compare(a.Row.Participation.ID, b.Row.Participation.ID),
 		)
@@ -219,19 +294,24 @@ func todosOf(rows []participationRow, today string) []registrationTodo {
 // On a race, it is the day of the race that counts: on an event of several days, a
 // race that has been run is behind, whatever the end of its event. A participation
 // on the event alone (interested with no race yet, or supporter) has no day of its
-// own: it is there until the last day of its event, and sorted on the first.
+// own: it is there until the last day of its event, and sorted on the first. A race
+// known by its month only is there until the end of its month, and sorted at the end
+// of it (lastDay), after the races of that month that have a day.
 func upcomingOf(rows []participationRow, today string) []participationRow {
 	kept := slices.DeleteFunc(slices.Clone(rows), func(r participationRow) bool {
 		if r.Participation.Status == statusDNS {
 			return true
 		}
-		day := r.Day
-		if r.Participation.Format == "" {
+		day := r.lastDay()
+		if r.Participation.Format == "" && !r.Event.monthOnly() {
 			day = cmp.Or(r.Event.EndDate, r.Event.StartDate)
 		}
 		return day < today
 	})
-	slices.SortFunc(kept, soonestFirst)
+	slices.SortFunc(kept, func(a, b participationRow) int {
+		return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), cmp.Compare(a.Event.monthRank(), b.Event.monthRank()),
+			compareNames(a.Event.Name, b.Event.Name), cmp.Compare(a.Participation.ID, b.Participation.ID))
+	})
 	return kept
 }
 
@@ -291,6 +371,8 @@ type toConfirmOut struct {
 	Event       eventRef `json:"event"`
 	FormatTitle string   `json:"format_title,omitempty" jsonschema:"l'épreuve, comme le site l'écrit ; absent pour une participation à la course seule (intéressé sans épreuve, supporteur)"`
 	Day         string   `json:"day" jsonschema:"le jour de l'épreuve, ou le début de la course pour une participation à la course seule"`
+	// DatePrecision is "month" when only the month of the race is known.
+	DatePrecision string `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 }
 
 // registrationToDoOut is a registration to make.
@@ -298,8 +380,11 @@ type registrationToDoOut struct {
 	ParticipationID string   `json:"participation_id"`
 	Event           eventRef `json:"event"`
 	FormatTitle     string   `json:"format_title,omitempty" jsonschema:"l'épreuve, comme le site l'écrit ; absent pour une participation à la course seule"`
-	Deadline        string   `json:"deadline" jsonschema:"le dernier jour pour s'inscrire, ce jour compris"`
-	DaysLeft        int      `json:"days_left" jsonschema:"les jours qu'il reste : 0 le jour de la date limite"`
+	State           string   `json:"state" jsonschema:"open : les inscriptions sont ouvertes ; soon : elles ouvrent un autre jour (opening) ; today : elles ouvrent aujourd'hui (le site le dit toute la journée, avant comme après l'heure)"`
+	Opening         string   `json:"opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'ouverture des inscriptions, pour soon et today"`
+	OpeningTime     string   `json:"opening_time,omitempty" jsonschema:"HH:MM, à l'heure de Paris : l'heure de l'ouverture, absente quand la course n'en a pas"`
+	Deadline        string   `json:"deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absent quand la course n'a pas de date limite (une ouverture à venir)"`
+	DaysLeft        *int     `json:"days_left,omitempty" jsonschema:"pour open : les jours qu'il reste, 0 le jour de la date limite ; absent pour soon et today"`
 	RegistrationURL string   `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course ; absent quand le site n'en connaît pas"`
 }
 
@@ -309,6 +394,7 @@ type resultToEnterOut struct {
 	Event           eventRef `json:"event"`
 	FormatTitle     string   `json:"format_title,omitempty" jsonschema:"l'épreuve, comme le site l'écrit"`
 	Day             string   `json:"day" jsonschema:"le jour de l'épreuve"`
+	DatePrecision   string   `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 }
 
 // upcomingOut is a race that a runner is down for.
@@ -319,6 +405,7 @@ type upcomingOut struct {
 	Day             string   `json:"day" jsonschema:"le jour de l'épreuve, ou le début de la course pour une participation à la course seule"`
 	Status          string   `json:"status" jsonschema:"interested, registered, finished, dnf ou supporter"`
 	StatusLabel     string   `json:"status_label" jsonschema:"le libellé du statut, comme le site"`
+	DatePrecision   string   `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 	Confirmed       bool     `json:"confirmed" jsonschema:"faux : la participation a été ajoutée par un autre et son coureur ne l'a pas encore confirmée (le site écrit « Non confirmé ») ; ne la présente pas comme un fait acquis"`
 }
 
@@ -333,7 +420,7 @@ type latestCommentOut struct {
 
 type homeOut struct {
 	ToConfirm         []toConfirmOut        `json:"to_confirm" jsonschema:"ses participations ajoutées par d'autres et qu'il n'a pas encore confirmées, par jour (« À confirmer » du site)"`
-	RegistrationsToDo []registrationToDoOut `json:"registrations_to_do" jsonschema:"ses participations « Intéressé » dont la course a une date limite d'inscription pas passée (le jour même compte), la plus proche d'abord"`
+	RegistrationsToDo []registrationToDoOut `json:"registrations_to_do" jsonschema:"ses participations « Intéressé » dont les inscriptions sont ouvertes (date limite pas passée, le jour même compte) ou ouvrent bientôt (state soon ou today : le site les range à l'ouverture, et n'y propose pas « Je suis inscrit » avant le jour), la plus proche d'abord"`
 	ResultsToEnter    []resultToEnterOut    `json:"results_to_enter" jsonschema:"ses participations « Inscrit » dont la course est passée depuis 60 jours au plus, la plus récente d'abord"`
 	MyUpcoming        []upcomingOut         `json:"my_upcoming" jsonschema:"ses prochaines courses, sauf « Non partant », la plus proche d'abord"`
 	GroupSoon         []eventSummary        `json:"group_soon" jsonschema:"les 5 prochaines courses qui ont des participants autres que « Non partant » et supporteurs"`
@@ -345,7 +432,7 @@ func addHome(s *mcpsdk.Server, t *tools) {
 		Name:  "home",
 		Title: "Accueil",
 		Description: "Donne ce que la personne au nom de qui tu agis voit sur son accueil, avec les mêmes règles que le site : " +
-			"ses participations à confirmer (ajoutées par d'autres), ses inscriptions à faire avant leur date limite, " +
+			"ses participations à confirmer (ajoutées par d'autres), ses inscriptions à faire (avant leur date limite, ou à l'ouverture), " +
 			"les résultats à saisir (courses où elle est inscrite, passées depuis 60 jours au plus), ses prochaines courses, " +
 			"les 5 prochaines courses du groupe et les 5 derniers commentaires (le début du texte). " +
 			"Une participation de my_upcoming ou de to_confirm qui a confirmed: false n'est pas confirmée par son coureur (le site écrit « Non confirmé ») : ne la présente pas comme un fait acquis. " +
@@ -427,17 +514,24 @@ func (t *tools) home(ctx context.Context, _ *mcpsdk.CallToolRequest, _ struct{})
 		out.ToConfirm = append(out.ToConfirm, toConfirmOut{
 			participationOut: row.Participation.out(w),
 			Event:            row.eventRef(t.cfg), FormatTitle: row.formatTitle(w), Day: row.Day,
+			DatePrecision: row.datePrecision(),
 		})
 	}
 	for _, todo := range todosOf(rows, day) {
-		out.RegistrationsToDo = append(out.RegistrationsToDo, registrationToDoOut{
+		item := registrationToDoOut{
 			ParticipationID: todo.Row.Participation.ID, Event: todo.Row.eventRef(t.cfg), FormatTitle: todo.Row.formatTitle(w),
-			Deadline: todo.Deadline, DaysLeft: todo.DaysLeft, RegistrationURL: todo.Row.Event.RegistrationURL,
-		})
+			State: todo.State, Opening: todo.Opening, OpeningTime: todo.OpeningTime, Deadline: todo.Deadline,
+			RegistrationURL: todo.Row.Event.RegistrationURL,
+		}
+		if todo.State == stateOpen {
+			item.DaysLeft = &todo.DaysLeft
+		}
+		out.RegistrationsToDo = append(out.RegistrationsToDo, item)
 	}
 	for _, row := range toEnterOf(rows, day) {
 		out.ResultsToEnter = append(out.ResultsToEnter, resultToEnterOut{
 			ParticipationID: row.Participation.ID, Event: row.eventRef(t.cfg), FormatTitle: row.formatTitle(w), Day: row.Day,
+			DatePrecision: row.datePrecision(),
 		})
 	}
 	for _, row := range upcomingOf(rows, day) {
@@ -494,7 +588,7 @@ func (t *tools) latestOnHome(ctx context.Context) ([]commentRecord, error) {
 // upcomingOut is the row as a race that the runner is down for.
 func (r participationRow) upcomingOut(cfg config.Config, w wording.Words) upcomingOut {
 	return upcomingOut{
-		ParticipationID: r.Participation.ID, Event: r.eventRef(cfg), FormatTitle: r.formatTitle(w), Day: r.Day,
+		ParticipationID: r.Participation.ID, Event: r.eventRef(cfg), FormatTitle: r.formatTitle(w), Day: r.Day, DatePrecision: r.datePrecision(),
 		Status: r.Participation.Status, StatusLabel: w.Status(r.Participation.Status), Confirmed: r.Participation.Confirmed,
 	}
 }

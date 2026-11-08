@@ -4,6 +4,7 @@ import { DANGER_TEXT, PRIMARY, SECONDARY } from "../../components/buttons";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { RaceTypeRecord } from "../../lib/types";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useRestoreFocus } from "../../lib/useRestoreFocus";
 import { useRaceTypes } from "../events/api";
 import { useRaceTypeActions } from "./api";
@@ -29,6 +30,7 @@ type TypeDialog =
  */
 export function TypesPage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.raceTypes);
   const toast = useToast();
   const raceTypes = useRaceTypes();
   const actions = useRaceTypeActions();

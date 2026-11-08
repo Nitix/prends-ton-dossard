@@ -13,7 +13,8 @@ import { useToday } from "../lib/useToday";
 /**
  * The day of an event as a chip of sunrise: the weekday, the day in big, the
  * month (and the year when it is not this one). An event of several days shows
- * its first and last day. The date is said by `label`, in words, for screen
+ * its first and last day. A race known by its month only (`monthOnly`) shows its
+ * month and a « ? » where the day goes. The date is said by `label`, in words, for screen
  * readers: the chip is hidden from them.
  */
 export function DateChip({
@@ -21,6 +22,7 @@ export function DateChip({
   end,
   label,
   size = "md",
+  monthOnly = false,
 }: {
   start: Temporal.PlainDate;
   /** The last day, for an event of several days. */
@@ -28,9 +30,11 @@ export function DateChip({
   /** The date in words, read instead of the chip. */
   label: string;
   size?: "md" | "lg";
+  /** The day is not known: the month, and « ? » in place of the day. */
+  monthOnly?: boolean;
 }) {
   const { f, formatLocale } = useI18n();
-  const several = end !== undefined && !start.equals(end);
+  const several = !monthOnly && end !== undefined && !start.equals(end);
   const month = (d: Temporal.PlainDate) =>
     d.toLocaleString(formatLocale, { month: "short" }).replace(".", "");
   // Over two months, the months are above and under the days: « NOV 29–2 DÉC ».
@@ -48,18 +52,20 @@ export function DateChip({
         }`}
       >
         <span className="date-chip-top relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
-          {twoMonths ? month(start) : f.weekday(start, "short").replace(".", "")}
+          {twoMonths || monthOnly ? month(start) : f.weekday(start, "short").replace(".", "")}
         </span>
         <span
           className={`date-chip-day relative font-display leading-[1.05] font-extrabold tracking-tight tabular-nums ${
             big ? "text-[2rem]" : several ? "text-[1.125rem]" : "text-[1.625rem]"
           }`}
         >
-          {several ? `${start.day}–${end.day}` : start.day}
+          {monthOnly ? "?" : several ? `${start.day}–${end.day}` : start.day}
         </span>
-        <span className="date-chip-bottom relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
-          {month(several ? end : start)}
-        </span>
+        {!monthOnly && (
+          <span className="date-chip-bottom relative font-display text-[0.625rem] leading-none font-bold tracking-[0.08em] uppercase">
+            {month(several ? end : start)}
+          </span>
+        )}
         {start.year !== thisYear && (
           <span className="date-chip-year relative font-display text-[0.5625rem] leading-none font-semibold tracking-[0.1em] opacity-90">
             {start.year}

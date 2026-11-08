@@ -9,13 +9,15 @@ import { Field, INPUT } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { errorCode, fieldErrors, fieldMessage, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
-import { parseDate } from "../../lib/dates";
+import { isMonthOnly, parseDate } from "../../lib/dates";
 import type { RaceTypeRecord } from "../../lib/types";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { allowedStatus } from "../participations/api";
 import { SelectField, StatusField } from "../participations/fields";
 import { canDeleteEvent, type Me } from "../participations/permissions";
+import { invalidateWeather } from "../weather/api";
 import { invalidateEvents, useEvent, useRaceTypes, type EventView } from "./api";
 import { DuplicateHint } from "./DuplicateHint";
 import { FormatFieldset } from "./FormatFieldset";
@@ -31,6 +33,7 @@ import {
   isSettled,
   joinRowOf,
   joinStarted,
+  monthStart,
   shortens,
   toEventDraft,
   type FormatRow,
@@ -61,6 +64,8 @@ const EVENT_FIELDS: readonly string[] = [
   "start_date",
   "registration_url",
   "registration_deadline",
+  "registration_opening",
+  "registration_opening_time",
   "notes",
 ];
 const FORMAT_FIELDS: readonly string[] = [
@@ -74,7 +79,21 @@ const FORMAT_FIELDS: readonly string[] = [
   "gpx",
   "route_url",
   "date",
+  "start_time",
 ];
+
+const MONTHS_BACK = 12;
+const MONTHS_AHEAD = 36;
+
+/** The months of the list, `YYYY-MM` sorted: 12 back from `current` to 36 ahead, and `stored`, the month saved, when it is outside. */
+function monthChoices(current: Temporal.PlainYearMonth, stored: string): string[] {
+  const months: string[] = [];
+  for (let n = -MONTHS_BACK; n <= MONTHS_AHEAD; n += 1) {
+    months.push(current.add({ months: n }).toString());
+  }
+  if (/^\d{4}-\d{2}$/.test(stored) && !months.includes(stored)) months.push(stored);
+  return months.toSorted();
+}
 
 function only(
   fields: Readonly<Record<string, string>>,
@@ -105,9 +124,16 @@ function refusal(err: unknown, rows: FormatRow[]): Errors {
   return { ...NO_ERRORS, form: code ?? "generic" };
 }
 
+/** The page that creates an event. The page that edits one sets its title itself (see `EditEventPage`). */
+export function NewEventPage() {
+  const { t } = useI18n();
+  usePageTitle(t.titles.newEvent);
+  return <EventForm />;
+}
+
 /**
  * The form that creates an event, or edits `existing`, with its formats. The
- * app shell around it owns the page's `<main>`.
+ * app shell around it owns the page's `<main>`; the page sets the title.
  */
 export function EventForm({ existing }: { existing?: EventView }) {
   const { t } = useI18n();
@@ -138,6 +164,14 @@ export function EventForm({ existing }: { existing?: EventView }) {
 export function EditEventPage({ id }: { id: string }) {
   const { t } = useI18n();
   const query = useEvent(id);
+  // The one hook that sets this page's title, while the event loads and after.
+  usePageTitle(
+    query.data
+      ? t.titles.edit(query.data.event.name)
+      : query.error instanceof ClientResponseError && query.error.status === 404
+        ? t.titles.raceNotFound
+        : t.titles.editLoading,
+  );
 
   // The key starts the form over for another event.
   if (query.data) return <EventForm key={id} existing={query.data} />;
@@ -189,6 +223,7 @@ function Period({
   end,
   former,
   dates,
+  month,
 }: {
   id: string;
   start: string;
@@ -196,10 +231,16 @@ function Period({
   former: FormerPeriod | undefined;
   /** Every date the text goes by: the start, and the day of each format. */
   dates: readonly string[];
+  /** The month (`YYYY-MM`) of a race known by its month only: its line says that the date is to be set. */
+  month?: string;
 }) {
   const { t, f } = useI18n();
   let text = "";
-  if (isDay(start)) {
+  if (month !== undefined) {
+    if (/^\d{4}-\d{2}$/.test(month)) {
+      text = t.form.periodMonth(f.monthTitle(Temporal.PlainYearMonth.from(month)));
+    }
+  } else if (isDay(start)) {
     const first = f.date(parseDate(start));
     text =
       end === "" ? t.form.periodOneDay(first) : t.form.periodRange(first, f.date(parseDate(end)));
@@ -245,6 +286,7 @@ function EventFields({
   const formatsTitle = useRef<HTMLHeadingElement>(null);
   const periodId = useId();
   const shortensId = useId();
+  const needsDayId = useId();
 
   // "I'm taking part" is for a new event, and needs the runner of the member.
   const joinOffered = initial === undefined && runner !== null;
@@ -255,16 +297,43 @@ function EventFields({
   const joinStatus = allowedStatus(draft.joinStatus, started);
 
   // The event ends on the last day of its formats: there is no field for it.
+  // A race known by its month starts on the 1st of it and ends on its last day.
+  const firstDay = draft.monthOnly ? monthStart(draft.startMonth) : draft.startDate;
   const endDate = eventEndDate(
-    draft.startDate,
+    firstDay,
     draft.rows.map((row) => row.date),
+    draft.monthOnly,
   );
+  const months = monthChoices(today.toPlainYearMonth(), draft.startMonth);
   // What the form says it would change in the days of the event being edited.
   const former = formerPeriod(initial?.event, endDate);
   const losesDays = former !== undefined && shortens(former, endDate);
 
   function change(patch: Partial<typeof draft>) {
     setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  /** The box: checked, the month of the day typed (else the one chosen before, else this month); the draft keeps both. */
+  function setMonthOnly(monthOnly: boolean) {
+    setDraft((current) => {
+      // The stored 1st of a month race is not a day the person chose: unchecking leaves the field
+      // empty (it is required), so that Save cannot date the race on the 1st. A typed day stays.
+      const storedFirst =
+        initial !== undefined &&
+        isMonthOnly(initial.event) &&
+        current.startDate === initial.event.start_date;
+      return {
+        ...current,
+        monthOnly,
+        startDate: !monthOnly && storedFirst ? "" : current.startDate,
+        // A day half typed (`0020-06-13`) is no month to offer.
+        startMonth: !monthOnly
+          ? current.startMonth
+          : isDay(current.startDate) && isSettled(current.startDate)
+            ? current.startDate.slice(0, 7)
+            : current.startMonth || today.toPlainYearMonth().toString(),
+      };
+    });
   }
 
   function changeRow(key: string, patch: Partial<FormatRow>) {
@@ -334,7 +403,8 @@ function EventFields({
       unsent = err.formats;
       causes = err.causes;
     }
-    await invalidateEvents(queryClient, id);
+    // The place, the days, the start times and the tracks are what the weather is of.
+    await Promise.all([invalidateEvents(queryClient, id), invalidateWeather(queryClient, id)]);
     toast.show(unsent.length > 0 ? untracked(unsent, causes) : t.form.saved);
     await navigate({ to: "/evenements/$id", params: { id } });
     return NO_ERRORS;
@@ -342,7 +412,13 @@ function EventFields({
 
   const eventError = (field: string): string | null => {
     const code = errors.event[field];
-    return code === undefined ? null : translateError(t, code);
+    if (code === undefined) return null;
+    // A race known by its month ends with it: « le jour du début » would mislead.
+    if (draft.monthOnly) {
+      if (code === "registration_deadline_after_start") return t.form.deadlineAfterMonthEnd;
+      if (code === "registration_opening_after_start") return t.form.openingAfterMonthEnd;
+    }
+    return translateError(t, code);
   };
 
   /**
@@ -435,34 +511,65 @@ function EventFields({
           )}
         </Field>
         <div className="flex flex-col gap-1">
-          <Field label={t.form.startDate} error={eventError("start_date")} describedBy={periodId}>
-            {(control) => (
-              <input
-                {...control}
-                name="start_date"
-                type="date"
-                required
-                value={draft.startDate}
-                onChange={(event) => {
-                  change({ startDate: event.target.value });
-                }}
-                className={INPUT}
-              />
-            )}
-          </Field>
+          {draft.monthOnly ? (
+            <Field label={t.form.month} error={eventError("start_date")} describedBy={periodId}>
+              {(control) => (
+                <select
+                  {...control}
+                  name="start_month"
+                  required
+                  value={draft.startMonth}
+                  onChange={(event) => {
+                    change({ startMonth: event.target.value });
+                  }}
+                  className={INPUT}
+                >
+                  {months.map((month) => (
+                    <option key={month} value={month}>
+                      {f.monthTitle(Temporal.PlainYearMonth.from(month))}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          ) : (
+            <Field label={t.form.startDate} error={eventError("start_date")} describedBy={periodId}>
+              {(control) => (
+                <input
+                  {...control}
+                  name="start_date"
+                  type="date"
+                  required
+                  value={draft.startDate}
+                  onChange={(event) => {
+                    change({ startDate: event.target.value });
+                  }}
+                  className={INPUT}
+                />
+              )}
+            </Field>
+          )}
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              checked={draft.monthOnly}
+              onChange={(event) => {
+                setMonthOnly(event.target.checked);
+              }}
+              className="size-6"
+            />
+            <span className="text-sm font-semibold">{t.form.dayUnknown}</span>
+          </label>
           <Period
             id={periodId}
-            start={draft.startDate}
+            start={firstDay}
             end={endDate}
             former={former}
-            dates={[draft.startDate, ...draft.rows.map((row) => row.date)]}
+            month={draft.monthOnly ? draft.startMonth : undefined}
+            dates={draft.monthOnly ? [firstDay] : [firstDay, ...draft.rows.map((row) => row.date)]}
           />
         </div>
-        <DuplicateHint
-          name={draft.name}
-          startDate={draft.startDate}
-          excludeId={initial?.event.id}
-        />
+        <DuplicateHint name={draft.name} startDate={firstDay} excludeId={initial?.event.id} />
         <Field
           label={t.form.registrationUrl}
           hint={t.form.registrationUrlHint}
@@ -497,6 +604,46 @@ function EventFields({
             />
           )}
         </Field>
+        <Field label={t.form.registrationOpening} error={eventError("registration_opening")}>
+          {(control) => (
+            <input
+              {...control}
+              name="registration_opening"
+              type="date"
+              value={draft.registrationOpening}
+              onChange={(event) => {
+                change({ registrationOpening: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+        <Field
+          label={t.form.registrationOpeningTime}
+          hint={t.form.registrationOpeningTimeHint}
+          error={eventError("registration_opening_time")}
+          describedBy={draft.registrationOpening === "" ? needsDayId : undefined}
+        >
+          {(control) => (
+            <input
+              {...control}
+              name="registration_opening_time"
+              type="time"
+              // A time needs a day: the draft keeps what was typed until it is sent, and the day gives the field back.
+              disabled={draft.registrationOpening === ""}
+              value={draft.registrationOpeningTime}
+              onChange={(event) => {
+                change({ registrationOpeningTime: event.target.value });
+              }}
+              className={INPUT}
+            />
+          )}
+        </Field>
+        {draft.registrationOpening === "" && (
+          <p id={needsDayId} className="-mt-2 text-sm text-neutral-600">
+            {t.form.registrationOpeningTimeNeedsDay}
+          </p>
+        )}
         <Field label={t.form.notes} error={eventError("notes")}>
           {(control) => (
             <textarea
@@ -522,7 +669,8 @@ function EventFields({
             key={row.key}
             number={index + 1}
             row={row}
-            startDate={draft.startDate}
+            startDate={firstDay}
+            monthOnly={draft.monthOnly}
             raceTypes={raceTypes}
             errors={errors.rows[row.key] ?? {}}
             onChange={(patch) => {

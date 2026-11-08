@@ -216,7 +216,8 @@ func TestPlan_Creation_NotFilledInIsEmptyOrZero(t *testing.T) {
 	ops, _, _ := mcp.PlanBatch(newDraft(func(d *mcp.EventDraft) { d.EndDate = "" }), nil, me)
 	wantExactBody(t, ops[0], map[string]any{
 		"id": idOf(ops[0]), "name": "Trail des Crêtes", "location": "Annecy", "start_date": "2026-06-13",
-		"end_date": "", "registration_url": "", "registration_deadline": "", "notes": "",
+		"end_date": "", "registration_url": "", "registration_deadline": "", "registration_opening": "",
+		"registration_opening_time": "", "date_precision": "", "notes": "",
 	})
 	// And the creator is never sent: the server sets it.
 	if _, ok := ops[0].Body["created_by"]; ok {
@@ -225,7 +226,7 @@ func TestPlan_Creation_NotFilledInIsEmptyOrZero(t *testing.T) {
 	wantExactBody(t, ops[2], map[string]any{
 		"id": idOf(ops[2]), "event": idOf(ops[0]), "name": "", "race_type": trailType,
 		"distance_km": 15, "duration_min": 0, "time_limit_min": 0, "elevation_gain_m": 700,
-		"price_eur": 0, "route_url": "", "date": "",
+		"price_eur": 0, "route_url": "", "date": "", "start_time": "",
 	})
 }
 
@@ -484,6 +485,7 @@ func TestPlan_UnchangedFormatsAreNotSent(t *testing.T) {
 // stored is the event as the server has it while a batch runs.
 type stored struct {
 	start, end string
+	month      bool
 	formats    map[string]string
 }
 
@@ -493,7 +495,7 @@ type stored struct {
 // each time a request runs. An update of the event that does not send a day
 // leaves it as it is stored.
 func runOnServer(ops []mcp.BatchOp, view *mcp.StoredEvent) (stored, error) {
-	s := stored{start: view.StartDate, end: view.EndDate, formats: map[string]string{}}
+	s := stored{start: view.StartDate, end: view.EndDate, month: view.DatePrecision == "month", formats: map[string]string{}}
 	for _, f := range view.Formats {
 		s.formats[f.ID] = f.Date
 	}
@@ -509,12 +511,19 @@ func runOnServer(ops []mcp.BatchOp, view *mcp.StoredEvent) (stored, error) {
 			if !ok {
 				end = s.end
 			}
+			month := s.month
+			if precision, ok := op.Body["date_precision"].(string); ok {
+				month = precision == "month"
+			}
 			for id, day := range s.formats {
+				if month && day != "" {
+					return s, fmt.Errorf("request %d: the event becomes a month while %s has a date", index, id)
+				}
 				if day != "" && !within(day, start, end) {
 					return s, fmt.Errorf("request %d: the date %s of %s is out of the event", index, day, id)
 				}
 			}
-			s.start, s.end = start, end
+			s.start, s.end, s.month = start, end, month
 		case "formats":
 			id := idOf(op)
 			if op.Method == "DELETE" {
@@ -525,8 +534,14 @@ func runOnServer(ops []mcp.BatchOp, view *mcp.StoredEvent) (stored, error) {
 			if !ok {
 				day = s.formats[id]
 			}
+			if day != "" && s.month {
+				return s, fmt.Errorf("request %d: %s has a date, and the event is a month", index, id)
+			}
 			if day != "" && !within(day, s.start, s.end) {
 				return s, fmt.Errorf("request %d: the date %s of %s is out of the event", index, day, id)
+			}
+			if at, _ := op.Body["start_time"].(string); at != "" && s.month {
+				return s, fmt.Errorf("request %d: %s has a start time, and the event is a month", index, id)
 			}
 			s.formats[id] = day
 		}
@@ -671,7 +686,7 @@ func TestEventEndDate(t *testing.T) {
 		{"no start", "", []string{"2026-06-15"}, ""},
 		{"a start that is no day", "2026-06-1", []string{"2026-06-15"}, ""},
 	} {
-		if got := mcp.EventEndDate(row.start, row.dates); got != row.want {
+		if got := mcp.EventEndDate(row.start, row.dates, false); got != row.want {
 			t.Errorf("%s: eventEndDate(%q, %q) = %q, want %q", row.name, row.start, row.dates, got, row.want)
 		}
 	}
@@ -748,4 +763,53 @@ func TestHasMeasure(t *testing.T) {
 			t.Errorf("%s: hasMeasure = %v, want %v", row.name, got, row.want)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// The opening of the registration (eventBody and changedEventBody)
+
+// eventBody — l'ouverture et son heure: they go with the event, as text, and
+// empty when not given (which is how an update clears them).
+func TestPlan_Creation_OpeningAndItsTimeSentWhenFilled(t *testing.T) {
+	ops, _, _ := mcp.PlanBatch(newDraft(func(d *mcp.EventDraft) {
+		d.RegistrationOpening = "2026-05-01"
+		d.RegistrationOpeningTime = "10:00"
+	}), nil, me)
+	wantBody(t, ops[0], map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
+}
+
+func TestPlan_Modification_OnlyAChangedOpeningIsSent(t *testing.T) {
+	t.Run("a new opening, and its time", func(t *testing.T) {
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening = "2026-05-01"
+			d.RegistrationOpeningTime = "10:00"
+		}), existing(), me)
+		wantSummary(t, ops, "update events")
+		wantExactBody(t, ops[0], map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
+	})
+	t.Run("only the time moves", func(t *testing.T) {
+		was := existing()
+		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening, d.RegistrationOpeningTime = "2026-05-01", "11:30"
+		}), was, me)
+		wantSummary(t, ops, "update events")
+		wantExactBody(t, ops[0], map[string]any{"registration_opening_time": "11:30"})
+	})
+	t.Run("the same opening sends nothing", func(t *testing.T) {
+		was := existing()
+		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
+		ops, _, _ := mcp.PlanBatch(editDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening, d.RegistrationOpeningTime = "2026-05-01", "10:00"
+		}), was, me)
+		if len(ops) != 0 {
+			t.Errorf("the plan is %v, want no operation", summaryOf(ops))
+		}
+	})
+	t.Run("emptied, they go as empty texts", func(t *testing.T) {
+		was := existing()
+		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
+		ops, _, _ := mcp.PlanBatch(editDraft(nil), was, me)
+		wantExactBody(t, ops[0], map[string]any{"registration_opening": "", "registration_opening_time": ""})
+	})
 }

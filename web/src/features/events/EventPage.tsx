@@ -16,10 +16,11 @@ import {
 import { SECTION, UNCONFIRMED_ROW } from "../../components/section";
 import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
-import { raceStarted } from "../../lib/dates";
+import { isMonthOnly, raceStarted } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventRecord, ParticipationRecord } from "../../lib/types";
 import { webAddress } from "../../lib/url";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { downloadEventIcs } from "../calendar/eventIcs";
@@ -36,8 +37,10 @@ import {
   canEditParticipation,
   type Me,
 } from "../participations/permissions";
+import { useReminders } from "../reminders/api";
 import { resultParts } from "../results/resultText";
 import { RouteSection } from "../route/RouteSection";
+import { WeatherSection } from "../weather/WeatherSection";
 import { useEvent, type EventView, type FormatView, type ParticipationView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import { EventHero } from "./EventHero";
@@ -45,7 +48,8 @@ import { formatDisplayName, formatMeasures } from "./formatName";
 import { FormatTitle } from "./FormatTitle";
 import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
 import { RegisterLink } from "./RegisterLink";
-import { registrationState } from "./registration";
+import { openingText, registrationState } from "./registration";
+import { ShareButton } from "./ShareButton";
 
 const SEPARATOR = " · ";
 
@@ -103,6 +107,14 @@ function titleOfParticipation(view: EventView, id: string): string | undefined {
 export function EventPage({ id }: { id: string }) {
   const { t } = useI18n();
   const query = useEvent(id);
+  // The name of the race once it is there; a race that is not there says so.
+  usePageTitle(
+    query.data
+      ? query.data.event.name
+      : query.error instanceof ClientResponseError && query.error.status === 404
+        ? t.titles.raceNotFound
+        : t.titles.race,
+  );
   // The comments and the offers are asked for with the event, not once it has arrived: the
   // sections at the bottom of the page read these same queries (same keys), which are there
   // by the time they appear, and the page makes one round trip instead of two.
@@ -193,6 +205,8 @@ function useFocusAfterDeparture(view: EventView) {
 function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const { t, f, lang } = useI18n();
   const today = useToday();
+  // The alarms of the calendar file are the person's reminders; none when they cannot be read, or on the demo.
+  const reminders = useReminders().data ?? [];
   // The title describes « Ajouter quelqu'un » of the page, which the offers have a button of the same name to put someone in a car.
   const titleId = useId();
   const { event, formats, start, end } = view;
@@ -205,11 +219,13 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   const departed: Depart = (participation, source, row) => {
     setDeparture({ participation, source, row });
   };
-  const severalDays = !start.equals(end);
+  // A race known by its month has no day to say of a format.
+  const severalDays = !isMonthOnly(event) && !start.equals(end);
   const registration = webAddress(event.registration_url);
   const deadline = registrationState(event, today);
   // A runner who is only interested is told to register before it is too late.
-  const reminded = deadline?.kind === "open" && !!me && isInterested(view, me.runnerId);
+  const reminded =
+    deadline !== null && deadline.kind !== "closed" && !!me && isInterested(view, me.runnerId);
   // "I'm in" is for what is left to choose: a format where the member has no
   // participation yet, or "not decided yet".
   const options = me && joinOptions(view, me.runnerId);
@@ -238,13 +254,14 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       type="button"
       data-action="calendar"
       onClick={() => {
-        downloadEventIcs(view, t.event.calendarFileName, lang);
+        downloadEventIcs(view, t.event.calendarFileName, lang, t, reminders);
       }}
       className={ACTION}
     >
       <CalendarPlusIcon className="size-[1.125rem] shrink-0 text-iris-600" />
       {t.event.addToCalendar}
     </button>,
+    <ShareButton key="share" view={view} className={ACTION} />,
     <Link
       key="edit"
       to="/evenements/$id/modifier"
@@ -310,7 +327,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
         >
           <p className="flex items-start gap-2.5 text-neutral-900">
             <ClockIcon className="mt-0.5 size-5 shrink-0 text-peach-700" />
-            {t.event.reminder(f.date(deadline.deadline))}
+            {deadline.kind === "open"
+              ? t.event.reminder(f.date(deadline.deadline))
+              : openingText(deadline, f, t, "aside")}
           </p>
           {registration && <RegisterLink href={registration} />}
         </aside>
@@ -318,6 +337,9 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
 
       {/* The actions: the main one across, the others two by two on a phone, each a visible button. */}
       <div className="event-actions grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions}</div>
+
+      {/* The weather, from seven days before the race to its last day (nothing outside, see WeatherSection). */}
+      <WeatherSection view={view} />
 
       <div className="event-sections flex flex-col gap-3">
         {view.interested.length > 0 && (
@@ -499,6 +521,8 @@ function FormatSection({
   const onTheStart = starters(participations);
   // Nobody has finished a race that has not started: the menus of the rows know it.
   const started = raceStarted(format, event, today);
+  // A race known by its month has no start time to say, whatever the data holds.
+  const startTime = isMonthOnly(event) ? "" : (format.start_time ?? "");
 
   return (
     <section
@@ -509,7 +533,16 @@ function FormatSection({
         {/* Its words: the name in ink, the measures in grey, one line. */}
         <FormatTitle parts={parts} />
       </BlockTitle>
-      {showDate && <p className="format-date eyebrow -mt-1">{f.date(date)}</p>}
+      {(showDate || startTime) && (
+        <p className="format-date eyebrow -mt-1">
+          {[
+            showDate ? f.date(date) : null,
+            startTime ? t.event.startAt(f.startTime(startTime)) : null,
+          ]
+            .filter((part) => part !== null)
+            .join(" · ")}
+        </p>
+      )}
       {onTheStart.length === 0 ? (
         <p className="format-empty text-sm text-neutral-600">{t.event.nobody}</p>
       ) : (

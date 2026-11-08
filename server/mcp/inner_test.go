@@ -477,6 +477,18 @@ func TestInner_SettingsRoutes(t *testing.T) {
 				{http.MethodPost, "/api/collections/mcp_tokens/records"},
 				{http.MethodPatch, "/api/collections/mcp_tokens/records/" + id},
 				{http.MethodDelete, "/api/collections/mcp_tokens/records/" + id},
+				{http.MethodPatch, "/api/app/me/reminders"},
+				{http.MethodPost, "/api/app/me/reminders"},
+				{http.MethodDelete, "/api/app/me/reminders"},
+				{http.MethodPost, "/api/app/push/test"},
+				{http.MethodPost, "/api/app/push/subscriptions"},
+				{http.MethodDelete, "/api/app/push/subscriptions"},
+				{http.MethodDelete, "/api/app/push/subscriptions/" + id},
+				{http.MethodPost, "/api/app/push/renew"},
+				{http.MethodPost, "/api/app/push"},
+				{http.MethodPost, "/api/app/events/" + id + "/weather"},
+				{http.MethodDelete, "/api/app/events/" + id + "/weather"},
+				{http.MethodGet, "/api/collections/push_subscriptions/records"},
 				{http.MethodPost, "/api/app/me/email"},
 				{http.MethodPost, "/api/app/me/password"},
 				{http.MethodPost, "/api/collections/runners/records/" + id + "/passkeys"},
@@ -507,6 +519,11 @@ func TestInner_SettingsRoutes(t *testing.T) {
 			{http.MethodDelete, "/api/app/calendar", nil},
 			{http.MethodGet, "/api/app/mcp-tokens", nil},
 			{http.MethodDelete, "/api/app/mcp-tokens/" + id, nil},
+			{http.MethodGet, "/api/app/me/reminders", nil},
+			{http.MethodPut, "/api/app/me/reminders", map[string]any{"reminders": []string{}}},
+			{http.MethodGet, "/api/app/push", nil},
+			// An id that is no race: the site answers 404 before any call to Open-Meteo.
+			{http.MethodGet, "/api/app/events/" + id + "/weather", nil},
 		} {
 			if _, _, err := inner.Do(as(fx.Alice), row.method, row.path, row.body); err != nil {
 				t.Errorf("%s %s was not sent: %v", row.method, row.path, err)

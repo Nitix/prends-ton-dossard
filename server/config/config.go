@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -24,6 +25,10 @@ type Config struct {
 	// with one click (see the demo package), from DEMO_LOGIN_EMAIL. Empty, the
 	// default, means no demo: the real site never sets it.
 	DemoLoginEmail string
+	// PushContact is the "sub" of the VAPID token that the push services see
+	// (RFC 8292): PUSH_CONTACT when set (a mailto: or https: URL), otherwise
+	// APP_URL when it is https, otherwise a placeholder (a local site).
+	PushContact string
 }
 
 // Load builds a Config from the environment. getenv is typically os.Getenv.
@@ -68,12 +73,29 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	origin := u.Scheme + "://" + hostPort
+
+	contact := strings.TrimSpace(getenv("PUSH_CONTACT"))
+	switch {
+	case contact != "":
+		cu, err := url.Parse(contact)
+		okMail := err == nil && cu.Scheme == "mailto" && cu.Opaque != ""
+		okHTTPS := err == nil && cu.Scheme == "https" && cu.Hostname() != ""
+		if !okMail && !okHTTPS {
+			return Config{}, errors.New("invalid PUSH_CONTACT: must be a mailto: or https: URL")
+		}
+	case u.Scheme == "https":
+		contact = origin
+	default:
+		contact = "mailto:push@example.invalid"
+	}
+
 	return Config{
 		AppURL: origin,
 		Origin: origin,
 		RPID:   host,
 
 		DemoLoginEmail: strings.TrimSpace(getenv("DEMO_LOGIN_EMAIL")),
+		PushContact:    contact,
 	}, nil
 }
 

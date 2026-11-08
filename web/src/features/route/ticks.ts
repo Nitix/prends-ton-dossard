@@ -39,25 +39,27 @@ const ALTITUDE_STEPS: number[] = Array.from({ length: 7 }, (_, exponent) => expo
 );
 
 /**
- * The graduations of the distance, in kilometers: from 0, evenly, at a round
- * step (0.1, 0.2, 0.5, 1, 2, 2.5, 5, 10…) that makes 4 to 6 of them up to
- * `km`. The label is written with one decimal at most, so a step is never
- * finer than 0.1: a track shorter than about 1.5 km has fewer graduations. A
- * length that is not a positive number, or is infinite, has the one graduation
- * at 0.
+ * The graduations of the distance, in kilometers, of a portion of the track:
+ * the multiples of a round step (0.1, 0.2, 0.5, 1, 2, 2.5, 5, 10…) inside it,
+ * at the first step that makes 6 of them at most (4 to 6 for a portion that
+ * starts at 0 and is longer than about 1.5 km). The label is written with one
+ * decimal at most, so a step is never finer than 0.1. A portion that is not
+ * made of finite numbers, or has no length, has the one graduation at its start
+ * (0 if that is not a number either).
  */
-export function distanceTicks(km: number): number[] {
-  if (!(km > 0) || !Number.isFinite(km)) return [0];
-  // The count with the first step that makes few enough of them; the largest
-  // step, which no finite length outgrows, if none does.
+export function distanceTicks(from: number, to: number): number[] {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || !(to > from)) {
+    return [Number.isFinite(from) ? from : 0];
+  }
+  const first = (step: number) => Math.ceil(from / step - 1e-9);
+  const count = (step: number) => Math.floor(to / step + 1e-9) - first(step) + 1;
+  // The first step that makes few enough of them; the largest step, which no finite length outgrows, if none does.
   const step =
-    DISTANCE_STEPS.find(
-      (candidate) => Math.floor(km / candidate + 1e-9) + 1 <= MAX_DISTANCE_TICKS,
-    ) ??
+    DISTANCE_STEPS.find((candidate) => count(candidate) <= MAX_DISTANCE_TICKS) ??
     DISTANCE_STEPS.at(-1) ??
     1;
-  const count = Math.floor(km / step + 1e-9) + 1;
-  return Array.from({ length: count }, (_, i) => clean(i * step));
+  const length = Math.max(1, count(step));
+  return Array.from({ length }, (_, i) => clean((first(step) + i) * step));
 }
 
 /** An altitude kept within the scale: a number that is not one is taken for sea level. */

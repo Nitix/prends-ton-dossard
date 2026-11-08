@@ -165,6 +165,23 @@ function refusal(name: string, code: string): ClientResponseError {
 // --- Offering ---
 
 describe("offering", () => {
+  test("OfferDialog — une offre pour une course au mois n'a pas de jour par défaut", async () => {
+    const dated = view;
+    view = toEventView({
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+    });
+    try {
+      const { screen } = await openDialog({ kind: "ride" });
+      await expect.element(dialogOf(screen, fr.offers.form.titleNew.ride)).toBeVisible();
+      await expect.element(field(screen, fr.offers.form.date.ride)).toHaveValue("");
+    } finally {
+      view = dated;
+    }
+  });
+
   test("OfferDialog — proposer une voiture envoie event, kind, lieu, places, date, heure et notes", async () => {
     const { screen, onClose } = await openDialog({ kind: "ride" });
     const dialog = dialogOf(screen, fr.offers.form.titleNew.ride);

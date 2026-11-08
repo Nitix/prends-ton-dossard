@@ -26,14 +26,18 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  f15,
   f42,
+  fLyon,
   ninaRunner,
   p1,
   p2,
   p3,
   pNinaSupporter,
   pNinaUndecided,
+  roadType,
   samRunner,
+  trailType,
   withParticipations,
 } from "./testFixture";
 
@@ -53,6 +57,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   remove: vi.fn<(id: string) => Promise<unknown>>(),
   getURL: vi.fn<(record: Rec, filename: string, options: Rec) => string>(),
+  // The weather of the event, a custom route: only asked for in the days before the race.
+  send: vi.fn<(path: string, options: Rec) => Promise<unknown>>(),
   // The comments at the bottom of the page: it only asks for the list of the event.
   comments: {
     getFullList: vi.fn<(options: Rec) => Promise<unknown>>(),
@@ -93,6 +99,7 @@ vi.mock("../../lib/pb", () => ({
       })[name],
     // Only called for a runner who has a photo: none has, unless a test says so.
     files: { getURL: mocks.getURL },
+    send: mocks.send,
   },
 }));
 
@@ -130,6 +137,7 @@ beforeEach(() => {
     mocks.update,
     mocks.remove,
     mocks.getURL,
+    mocks.send,
     ...Object.values(mocks.comments),
     ...Object.values(mocks.offers),
     ...Object.values(mocks.offerMembers),
@@ -257,6 +265,29 @@ function textOfRow(element: Element): string {
 
 // --- The information ---
 
+test("EventPage — une course au mois dit « juin 2027 · date à préciser », sans date sur ses épreuves", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, date: "", expand: { race_type: trailType } },
+          { ...f15, date: "", expand: { race_type: roadType } },
+        ],
+      },
+    },
+  });
+
+  await loaded(screen);
+  await expect.element(screen.getByText("juin 2027 · date à préciser")).toBeVisible();
+  expect(screen.container.querySelector(".format-date")).toBeNull();
+  expect(screen.container.querySelector(".countdown-ring")).toBeNull();
+});
+
 test("EventPage — montre le nom, les dates, le lieu et les notes de l'événement", async () => {
   const { screen } = await renderPage({
     event: { ...eventRecord, notes: "Parking à l'arrivée.\nNavette à 7h." },
@@ -277,7 +308,10 @@ test("EventPage — un événement d'un jour n'a qu'une date, et sans notes il n
 
   await loaded(screen, "10 km de Lyon");
   await expect.element(screen.getByText("lun. 22 juin 2026")).toBeVisible();
-  expect(screen.container.textContent).not.toContain("du ");
+  // (Not the weather's line, which says « à partir du » before the window.)
+  const copy = screen.container.cloneNode(true);
+  if (copy instanceof HTMLElement) copy.querySelector('[data-section="weather"]')?.remove();
+  expect(copy.textContent).not.toContain("du ");
 });
 
 test("EventPage — en anglais, les dates et les textes suivent la langue", async () => {
@@ -527,7 +561,9 @@ test("EventPage — chaque épreuve a son titre (type, mesures), dans l'ordre de
     .elements()
     .map((element) => plain(element.textContent));
   // The carpooling, the lodging and the comments come after the formats.
+  // The weather comes first, after the actions (before the window it says when it will be there).
   expect(titles).toEqual([
+    fr.weather.title,
     "Trail 15 km · 700 m D+",
     "Trail 42 km · 2 400 m D+ · max 10h",
     fr.offers.title.ride,
@@ -1180,6 +1216,39 @@ test("EventPage — en anglais, le fichier .ics a le PRODID //EN", async () => {
   expect((await response.text()).split("\r\n")).toContain("PRODID:-//Prends ton dossard//EN");
 });
 
+test("EventPage — « Partager » est après « Ajouter à mon agenda » et envoie le texte de la course", async () => {
+  const share = vi.fn<(data: ShareData) => Promise<void>>().mockResolvedValue();
+  Object.defineProperty(navigator, "share", { value: share, configurable: true, writable: true });
+  Object.defineProperty(navigator, "canShare", {
+    value: () => true,
+    configurable: true,
+    writable: true,
+  });
+  try {
+    const { screen } = await renderPage();
+    await loaded(screen);
+
+    const calendar = screen.getByRole("button", { name: fr.event.addToCalendar }).element();
+    const button = screen.getByRole("button", { name: fr.share.button }).element();
+    expect(
+      calendar.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(calendar.nextElementSibling).toBe(button);
+
+    await screen.getByRole("button", { name: fr.share.button }).click();
+
+    await vi.waitFor(() => {
+      expect(share).toHaveBeenCalledOnce();
+    });
+    const [data] = share.mock.calls[0] ?? [];
+    expect(data?.title).toBe("Trail des Crêtes");
+    expect(data?.text).toContain(location.origin + "/evenements/event");
+    expect(data?.text).not.toContain("Bob");
+  } finally {
+    for (const name of ["share", "canShare"]) Reflect.deleteProperty(navigator, name);
+  }
+});
+
 test("EventPage — les boutons d'action font au moins 44 px", async () => {
   const { screen } = await renderPage();
   await loaded(screen);
@@ -1188,6 +1257,7 @@ test("EventPage — les boutons d'action font au moins 44 px", async () => {
     screen.getByRole("button", { name: fr.participation.join }),
     screen.getByRole("button", { name: fr.participation.addSomeone }),
     screen.getByRole("button", { name: fr.event.addToCalendar }),
+    screen.getByRole("button", { name: fr.share.button }),
     screen.getByRole("link", { name: fr.common.edit }),
     screen.getByRole("button", { name: fr.common.delete }),
   ]) {
@@ -1209,13 +1279,16 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
         screen.getByRole("button", { name: fr.participation.join }),
         screen.getByRole("button", { name: fr.participation.addSomeone }),
         screen.getByRole("button", { name: fr.event.addToCalendar }),
+        screen.getByRole("button", { name: fr.share.button }),
         screen.getByRole("link", { name: fr.common.edit }),
         screen.getByRole("button", { name: fr.common.delete }),
       ].map((action) => action.element());
-      const [join, add, calendar, edit, remove] = actions.map((action) =>
+      const [join, add, calendar, share, edit, remove] = actions.map((action) =>
         action.getBoundingClientRect(),
       );
-      if (!join || !add || !calendar || !edit || !remove) throw new Error("an action is missing");
+      if (!join || !add || !calendar || !share || !edit || !remove) {
+        throw new Error("an action is missing");
+      }
 
       // The main one across, then the others two by two, side by side.
       expect(join.left).toBe(add.left);
@@ -1223,9 +1296,13 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       expect(join.bottom).toBeLessThanOrEqual(add.top);
       expect(add.top).toBe(calendar.top);
       expect(add.right).toBeLessThan(calendar.left);
-      expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
-      expect(edit.top).toBe(remove.top);
-      expect(edit.right).toBeLessThan(remove.left);
+      expect(calendar.bottom).toBeLessThanOrEqual(share.top);
+      expect(share.top).toBe(edit.top);
+      expect(share.right).toBeLessThan(edit.left);
+      // The last one is alone, across both columns.
+      expect(edit.bottom).toBeLessThanOrEqual(remove.top);
+      expect(remove.left).toBe(share.left);
+      expect(remove.right).toBe(edit.right);
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();
@@ -1244,8 +1321,8 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
 });
 
 test("EventPage — sur un téléphone, une action seule au bout prend toute la ligne", async () => {
-  // Bob did not create the event: no "Delete", three actions after "I'm in".
-  signIn("bob");
+  // Its runner is not known yet: no "I'm in", no "Add someone", no "Delete", three actions.
+  mocks.myRunner.mockReturnValue(new Promise(() => {}));
   try {
     // The room the page has between the gutters of the app shell (2 × 16 px) on a phone of 320 and of 390 px.
     for (const width of [288, 358]) {
@@ -1260,19 +1337,19 @@ test("EventPage — sur un téléphone, une action seule au bout prend toute la 
         .not.toBeInTheDocument();
 
       const actions = [
-        screen.getByRole("button", { name: fr.participation.addSomeone }),
         screen.getByRole("button", { name: fr.event.addToCalendar }),
+        screen.getByRole("button", { name: fr.share.button }),
         screen.getByRole("link", { name: fr.common.edit }),
       ].map((action) => action.element());
-      const [add, calendar, edit] = actions.map((action) => action.getBoundingClientRect());
-      if (!add || !calendar || !edit) throw new Error("an action is missing");
+      const [calendar, share, edit] = actions.map((action) => action.getBoundingClientRect());
+      if (!calendar || !share || !edit) throw new Error("an action is missing");
 
       // Two side by side, then the last one alone, across both columns.
-      expect(add.top).toBe(calendar.top);
-      expect(add.right).toBeLessThan(calendar.left);
-      expect(calendar.bottom).toBeLessThanOrEqual(edit.top);
-      expect(edit.left).toBe(add.left);
-      expect(edit.right).toBe(calendar.right);
+      expect(calendar.top).toBe(share.top);
+      expect(calendar.right).toBeLessThan(share.left);
+      expect(share.bottom).toBeLessThanOrEqual(edit.top);
+      expect(edit.left).toBe(calendar.left);
+      expect(edit.right).toBe(share.right);
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();
@@ -2630,4 +2707,172 @@ test("EventPage — sans trace ni lien, aucune partie Parcours", async () => {
     .element(screen.getByRole("heading", { name: fr.route.title }))
     .not.toBeInTheDocument();
   expect(fetching).not.toHaveBeenCalled();
+});
+
+// --- The opening of the registration ---
+
+const withOpening = {
+  ...withDeadline,
+  registration_opening: "2026-05-12",
+  registration_opening_time: "10:00",
+};
+
+test("EventHero — l'ouverture et la date limite sur une ligne", async () => {
+  const { screen } = await renderPage({ event: withOpening, today: "2026-05-01" });
+
+  await loaded(screen);
+  const line = screen.getByText(/^Ouverture des inscriptions/);
+  await expect.element(line).toBeVisible();
+  expect(plain(line.element().textContent)).toBe(
+    "Ouverture des inscriptions le mar. 12 mai à 10:00 · jusqu'au mer. 10 juin",
+  );
+  expect(line.element().closest("[data-kind]")?.getAttribute("data-kind")).toBe("soon");
+  await screen.unmount();
+
+  // The day itself: « aujourd'hui », and still one line.
+  const same = await renderPage({ event: withOpening, today: "2026-05-12" });
+  await loaded(same.screen);
+  expect(plain(same.screen.getByText(/^Ouverture des inscriptions/).element().textContent)).toBe(
+    "Ouverture des inscriptions aujourd'hui à 10:00 · jusqu'au mer. 10 juin",
+  );
+  await same.screen.unmount();
+
+  // Once it is open, the line is the deadline's.
+  const open = await renderPage({ event: withOpening, today: "2026-05-13" });
+  await loaded(open.screen);
+  expect(plain(registrationLine(open.screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin",
+  );
+});
+
+test("EventPage — un intéressé voit « Les inscriptions ouvrent le … »", async () => {
+  signIn("bob");
+  const { screen } = await renderPage({
+    event: { ...withOpening, registration_url: "https://inscriptions.example.test/trail" },
+    today: "2026-05-01",
+  });
+
+  await loaded(screen);
+  const box = reminder(screen);
+  await expect.element(box).toBeVisible();
+  expect(plain(box.element().textContent)).toContain(
+    "Les inscriptions ouvrent le mar. 12 mai à 10:00.",
+  );
+  expect(box.element().textContent).not.toContain("Pense à t'inscrire");
+  await expect.element(box.getByRole("link", { name: fr.event.register })).toBeVisible();
+});
+
+/** The requests for the weather of an event (the page asks for the reminders by the same way). */
+const weatherRequests = () =>
+  mocks.send.mock.calls.map(([path]) => path).filter((path) => path.endsWith("/weather"));
+
+// The weather (see features/weather): asked for from seven days before the race to its last day, never beyond.
+test("EventPage — hors de la fenêtre, pas de requête : une ligne avant, rien après", async () => {
+  // The event is on 13 and 14 June: on the 5th it is 8 days away, on the 15th it is over.
+  const early = await renderPage({ today: "2026-06-05" });
+  await loaded(early.screen);
+  await expect.element(early.screen.getByText(fr.weather.notYet("sam. 6 juin"))).toBeVisible();
+  await early.screen.unmount();
+
+  const late = await renderPage({ today: "2026-06-15" });
+  await loaded(late.screen);
+  expect(late.screen.getByRole("heading", { name: fr.weather.title }).elements()).toHaveLength(0);
+  await late.screen.unmount();
+  expect(weatherRequests()).toEqual([]);
+});
+
+test("EventPage — la météo, après les actions", async () => {
+  mocks.send.mockResolvedValue({
+    status: "ok",
+    place: { source: "place", name: "Annecy", detail: "Auvergne-Rhône-Alpes, France" },
+    days: [
+      {
+        date: "2026-06-13",
+        code: 80,
+        tMin: 9.1,
+        tMax: 17.3,
+        rainChance: 60,
+        rainMm: 2.1,
+        windKmh: 20,
+        gustKmh: 35,
+      },
+    ],
+    fetchedAt: "2026-06-08T12:05:00Z",
+    stale: false,
+  });
+  const { screen } = await renderPage({ today: "2026-06-08" });
+  await loaded(screen);
+  const title = screen.getByRole("heading", { level: 2, name: fr.weather.title });
+  await expect.element(title).toBeVisible();
+  expect(weatherRequests()).toEqual(["/api/app/events/event/weather"]);
+  // After the actions, before the formats.
+  const actions = document.querySelector(".event-actions");
+  const section = title.element().closest("section");
+  const firstFormat = document.querySelector(".format-section");
+  expect(actions?.compareDocumentPosition(section ?? document) ?? 0).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  expect(section?.compareDocumentPosition(firstFormat ?? document) ?? 0).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+});
+
+test("EventPage — une épreuve qui a une heure de départ la dit près de son jour", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, start_time: "07:30", expand: { race_type: trailType } },
+          { ...f15, expand: { race_type: roadType } },
+        ],
+      },
+    },
+  });
+
+  await loaded(screen);
+  const days = [...screen.container.querySelectorAll(".format-date")].map((element) =>
+    (element.textContent ?? "").replaceAll(/\s+/g, " "),
+  );
+  expect(days).toHaveLength(2);
+  expect(days.filter((text) => text.includes("départ à 7 h 30"))).toHaveLength(1);
+  expect(days.find((text) => text.includes("départ"))).toMatch(/dim\. 14 juin · départ à 7 h 30/);
+});
+
+test("EventPage — le jour d'une course d'un jour n'est pas répété, mais l'heure de départ est dite", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...event2Record,
+      expand: {
+        ...event2Record.expand,
+        formats_via_event: [{ ...fLyon, start_time: "09:00", expand: { race_type: roadType } }],
+      },
+    },
+  });
+
+  await loaded(screen, "10 km de Lyon");
+  const line = screen.container.querySelector(".format-date");
+  expect((line?.textContent ?? "").replaceAll(/\s+/g, " ")).toBe("départ à 9 h 00");
+});
+
+test("EventPage — une course au mois ne dit aucune heure de départ", async () => {
+  const { screen } = await renderPage({
+    event: {
+      ...eventRecord,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month",
+      expand: {
+        ...eventRecord.expand,
+        formats_via_event: [
+          { ...f42, date: "", start_time: "07:30", expand: { race_type: trailType } },
+          { ...f15, date: "", expand: { race_type: roadType } },
+        ],
+      },
+    },
+  });
+
+  await loaded(screen);
+  expect(screen.container.textContent).not.toContain("départ à");
 });

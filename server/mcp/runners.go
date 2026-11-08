@@ -35,6 +35,7 @@ type historyOut struct {
 	Event           eventRef `json:"event"`
 	FormatTitle     string   `json:"format_title" jsonschema:"l'épreuve, comme le site l'écrit"`
 	Day             string   `json:"day" jsonschema:"le jour de l'épreuve"`
+	DatePrecision   string   `json:"date_precision,omitempty" jsonschema:"month : seul le mois de la course est connu, day en est le 1er et n'est pas le jour de la course ; absent : day est le jour"`
 	Status          string   `json:"status" jsonschema:"finished ou dnf"`
 	StatusLabel     string   `json:"status_label" jsonschema:"le libellé du statut, comme le site"`
 	Result          string   `json:"result" jsonschema:"comment le site l'écrit : le libellé du statut, puis le temps, le classement avec le nombre de classés quand il est connu, et la note, séparés par « · » (Terminé · 4h 12min 30s · 12e sur 340)"`
@@ -127,7 +128,7 @@ func (t *tools) getRunner(ctx context.Context, _ *mcpsdk.CallToolRequest, in get
 	out.HistoryTotal = len(results)
 	for _, row := range results[:min(len(results), maxHistory)] {
 		out.History = append(out.History, historyOut{
-			ParticipationID: row.Participation.ID, Event: row.eventRef(t.cfg), FormatTitle: row.formatTitle(w), Day: row.Day,
+			ParticipationID: row.Participation.ID, Event: row.eventRef(t.cfg), FormatTitle: row.formatTitle(w), Day: row.Day, DatePrecision: row.datePrecision(),
 			Status: row.Participation.Status, StatusLabel: w.Status(row.Participation.Status),
 			Result: resultText(w, row.Participation),
 		})

@@ -43,7 +43,7 @@ func TestMigrations_CollectionsExist(t *testing.T) {
 	for _, name := range []string{
 		"users", "runners", "race_types", "events", "formats",
 		"participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
-		"mcp_tokens",
+		"mcp_tokens", "push_subscriptions", "reminder_deliveries",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err != nil {
 			t.Errorf("collection %q is missing: %v", name, err)
@@ -828,7 +828,7 @@ func TestMigrations_DownThenUp(t *testing.T) {
 
 	for _, name := range []string{
 		"runners", "race_types", "events", "formats", "participations", "invitations", "passkeys", "comments", "offers", "offer_members", "calendar_feeds",
-		"mcp_tokens",
+		"mcp_tokens", "push_subscriptions", "reminder_deliveries",
 	} {
 		if _, err := app.FindCollectionByNameOrId(name); err == nil {
 			t.Errorf("collection %q must be gone after the rollback", name)
@@ -1501,7 +1501,7 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 		return c
 	}
 	// checkTable checks the fields, the index and the rules of the collection.
-	checkTable := func(when string) {
+	checkTable := func(when, index string) {
 		t.Helper()
 		c := collection()
 
@@ -1544,7 +1544,6 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 		}
 
 		// An account has one link: a new one replaces the old.
-		const index = "CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"
 		if len(c.Indexes) != 1 || c.Indexes[0] != index {
 			t.Errorf("%s: calendar_feeds.indexes = %q, want [%q]", when, c.Indexes, index)
 		}
@@ -1559,15 +1558,24 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 	}
 	saveFeed := func(user *core.Record) *core.Record {
 		t.Helper()
-		return mustSave(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": "a1b2", "lang": "fr"})
+		values := map[string]any{"user": user.Id, "token_hash": "a1b2", "lang": "fr"}
+		// The scope is there, but in the table that this migration makes again,
+		// which is the one from before 9q.
+		if collection().Fields.GetByName("scope") != nil {
+			values["scope"] = "mine"
+		}
+		return mustSave(t, app, "calendar_feeds", values)
 	}
 
-	checkTable("as created")
+	const indexOf9g = "CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"
+	const indexOf9q = "CREATE UNIQUE INDEX idx_calendar_feeds_user_scope ON calendar_feeds (user, scope)"
+
+	checkTable("as created", indexOf9q)
 	saveFeed(fx.Alice)
 
 	// The index: a second link for the same account is refused, and one for
 	// another account is not.
-	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "c3d4", "lang": "en"}); err == nil {
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "c3d4", "lang": "en", "scope": "mine"}); err == nil {
 		t.Error("a second calendar link for the same account must be refused")
 	} else {
 		var invalid validation.Errors
@@ -1607,7 +1615,7 @@ func TestMigrations_CalendarFeedsDownThenUp(t *testing.T) {
 	if err := migration.Up(app); err != nil {
 		t.Fatal(err)
 	}
-	checkTable("after applying again")
+	checkTable("after applying again", indexOf9g)
 	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 0 {
 		t.Errorf("after applying again, %d links (error %v), want an empty table", got, err)
 	}
@@ -1648,7 +1656,7 @@ func TestMigrations_CalendarTokenDownThenUp(t *testing.T) {
 	hashes := map[string]string{}
 	saveLink := func(user *core.Record, hash, token string) {
 		t.Helper()
-		values := map[string]any{"user": user.Id, "token_hash": hash, "lang": "fr"}
+		values := map[string]any{"user": user.Id, "token_hash": hash, "lang": "fr", "scope": "mine"}
 		if token != "" {
 			values["token"] = token
 		}
@@ -2145,4 +2153,632 @@ func mustFind(t testing.TB, app core.App, collection, id string) *core.Record {
 		t.Fatal(err)
 	}
 	return record
+}
+
+// The migration 9l adds the opening of the registration to the events: a day
+// and an optional time. Its rollback removes both fields, and what they hold.
+func TestMigrations_RegistrationOpeningDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9l_registration_opening.go")
+
+	// An event that was there before: it stays valid through the rollback and
+	// through applying again, and the values go with the fields.
+	event := func() *core.Record {
+		t.Helper()
+		return mustFind(t, app, "events", fx.Event.Id)
+	}
+	// stillSaves saves the event again, as an edit of its name does, and checks
+	// what it holds of the opening.
+	stillSaves := func(when, day, hhmm string) {
+		t.Helper()
+		e := event()
+		e.Set("notes", when)
+		if err := app.Save(e); err != nil {
+			t.Fatalf("%s: the event does not save: %v", when, err)
+		}
+		if got, got2 := event().GetString("registration_opening"), event().GetString("registration_opening_time"); got != day || got2 != hhmm {
+			t.Errorf("%s: the event opens on %q at %q, want %q at %q", when, got, got2, day, hhmm)
+		}
+	}
+
+	field := func(name string) core.Field {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Fields.GetByName(name)
+	}
+	check := func(when string) {
+		t.Helper()
+		for _, name := range []string{"registration_opening", "registration_opening_time"} {
+			f, ok := field(name).(*core.TextField)
+			if !ok {
+				t.Fatalf("%s: events.%s must be a text field, got %T", when, name, field(name))
+			}
+			if f.Required || f.Hidden {
+				t.Errorf("%s: events.%s must be optional and visible", when, name)
+			}
+		}
+	}
+
+	check("as created")
+	stillSaves("as created", "", "")
+	opened := event()
+	opened.Set("registration_opening", "2026-05-01")
+	opened.Set("registration_opening_time", "10:00")
+	if err := app.Save(opened); err != nil {
+		t.Fatalf("an opening is refused: %v", err)
+	}
+	stillSaves("with an opening", "2026-05-01", "10:00")
+
+	if err := migration.Down(app); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"registration_opening", "registration_opening_time"} {
+		if field(name) != nil {
+			t.Errorf("events.%s must be gone after the rollback", name)
+		}
+	}
+	// The event is still there, and valid, without the values.
+	if event().GetString("name") != fx.Event.GetString("name") {
+		t.Error("the event changed beyond its opening")
+	}
+	stillSaves("after the rollback", "", "")
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	check("after applying again")
+	// The values went with the fields: the event starts over with none, and saves.
+	stillSaves("after applying again", "", "")
+}
+
+// The migration 9m adds the reminders to the accounts: a choice of at most two
+// of "day" and "hour", empty by default, and one more condition on the update
+// rule, which keeps an admin from setting those of another account.
+func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9m_user_reminders.go")
+
+	users := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("users")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	checkField := func(when string) {
+		t.Helper()
+		reminders, ok := users().Fields.GetByName("reminders").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: users.reminders must be a select field, got %T", when, users().Fields.GetByName("reminders"))
+		}
+		if reminders.Required || reminders.Hidden || reminders.MaxSelect != 2 || !slices.Equal(reminders.Values, []string{"day", "hour"}) {
+			t.Errorf("%s: users.reminders = required %v, hidden %v, max %d, values %v; want optional, visible, 2, [day hour]",
+				when, reminders.Required, reminders.Hidden, reminders.MaxSelect, reminders.Values)
+		}
+	}
+	// The two rules, written out: the one of 9j before this migration, and the
+	// same with one more condition inside the admin's parentheses. Compared by
+	// equality, so that a change to any other clause on the way is seen.
+	const ruleOf9j = `(id = @request.auth.id && @request.body.role:isset = false && @request.body.disabled:isset = false && @request.body.email:isset = false)` +
+		` || (@request.auth.role = "admin" && @request.body.email:isset = false && @request.body.password:isset = false && @request.body.skin:isset = false)`
+	ruleOf9m := ruleOf9j[:len(ruleOf9j)-1] + ` && @request.body.reminders:isset = false)`
+	updateRule := func() string {
+		t.Helper()
+		rule := users().UpdateRule
+		if rule == nil {
+			return "<nil>"
+		}
+		return *rule
+	}
+	setReminders := func(value any) error {
+		t.Helper()
+		alice := mustFind(t, app, "users", fx.Alice.Id)
+		alice.Set("reminders", value)
+		return app.Save(alice)
+	}
+
+	checkField("as created")
+	if got := updateRule(); got != ruleOf9m {
+		t.Errorf("as created: the update rule of the accounts is\n%s\nwant\n%s", got, ruleOf9m)
+	}
+	if got := fx.Alice.GetStringSlice("reminders"); len(got) != 0 {
+		t.Errorf("an account made without reminders has %v, want none", got)
+	}
+	for _, ok := range [][]string{{}, {"day"}, {"hour"}, {"day", "hour"}} {
+		if err := setReminders(ok); err != nil {
+			t.Errorf("the reminders %v are refused: %v", ok, err)
+		}
+	}
+	for _, bad := range [][]string{{"week"}, {"day", "week"}} {
+		if err := setReminders(bad); err == nil {
+			t.Errorf("the reminders %v were accepted", bad)
+		}
+	}
+
+	if err := setReminders([]string{"day", "hour"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with reminders set: %v", err)
+	}
+	if users().Fields.GetByName("reminders") != nil {
+		t.Error("users.reminders must be gone after the rollback")
+	}
+	if got := updateRule(); got != ruleOf9j {
+		t.Errorf("after the rollback, the update rule is\n%s\nwant the one of 9j\n%s", got, ruleOf9j)
+	}
+	if alice := mustFind(t, app, "users", fx.Alice.Id); alice.GetString("email") != "alice@example.test" {
+		t.Errorf("after the rollback, Alice changed beyond her reminders: %v", alice.FieldsData())
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	if got := updateRule(); got != ruleOf9m {
+		t.Errorf("after applying again, the update rule is\n%s\nwant\n%s", got, ruleOf9m)
+	}
+	if got := mustFind(t, app, "users", fx.Alice.Id).GetStringSlice("reminders"); len(got) != 0 {
+		t.Errorf("after applying again, Alice has reminders %v, want none", got)
+	}
+	if err := setReminders([]string{"hour"}); err != nil {
+		t.Errorf("reminders are refused after applying again: %v", err)
+	}
+}
+
+// The migration 9n creates the subscriptions to the notifications, one per
+// device. Its rollback drops the table, and what is in it; the accounts stay.
+func TestMigrations_PushSubscriptionsDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9n_push_subscriptions.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("push_subscriptions")
+		if err != nil {
+			t.Fatalf("the collection push_subscriptions is missing: %v", err)
+		}
+		return c
+	}
+	checkTable := func(when string) {
+		t.Helper()
+		c := collection()
+		users, _ := app.FindCollectionByNameOrId("users")
+		user, ok := c.Fields.GetByName("user").(*core.RelationField)
+		if !ok || user.CollectionId != users.Id || user.MaxSelect != 1 || !user.Required || !user.CascadeDelete {
+			t.Errorf("%s: push_subscriptions.user = %+v, want a required relation to users, one, cascade", when, c.Fields.GetByName("user"))
+		}
+		for name, want := range map[string]struct {
+			required, hidden bool
+			max              int
+		}{
+			"endpoint": {true, false, 1000}, "p256dh": {true, true, 0}, "auth": {true, true, 0}, "label": {false, false, 60},
+		} {
+			f, ok := c.Fields.GetByName(name).(*core.TextField)
+			if !ok {
+				t.Fatalf("%s: push_subscriptions.%s must be a text field, got %T", when, name, c.Fields.GetByName(name))
+			}
+			if f.Required != want.required || f.Hidden != want.hidden || f.Max != want.max {
+				t.Errorf("%s: push_subscriptions.%s = required %v, hidden %v, max %d; want %v, %v, %d",
+					when, name, f.Required, f.Hidden, f.Max, want.required, want.hidden, want.max)
+			}
+		}
+		lang, ok := c.Fields.GetByName("lang").(*core.SelectField)
+		if !ok || !lang.Required || lang.MaxSelect != 1 || !slices.Equal(lang.Values, []string{"fr", "en"}) {
+			t.Errorf("%s: push_subscriptions.lang = %+v, want a required select of fr, en", when, c.Fields.GetByName("lang"))
+		}
+		if f, ok := c.Fields.GetByName("last_success_at").(*core.DateField); !ok || f.Required {
+			t.Errorf("%s: push_subscriptions.last_success_at must be an optional date field", when)
+		}
+		failures, ok := c.Fields.GetByName("failures").(*core.NumberField)
+		if !ok || !failures.OnlyInt || failures.Min == nil || *failures.Min != 0 || failures.Required {
+			t.Errorf("%s: push_subscriptions.failures = %+v, want an integer of at least 0", when, c.Fields.GetByName("failures"))
+		}
+		for _, field := range []string{"created", "updated"} {
+			if _, ok := c.Fields.GetByName(field).(*core.AutodateField); !ok {
+				t.Errorf("%s: push_subscriptions.%s must be a date field that PocketBase fills", when, field)
+			}
+		}
+		wantIndexes := []string{
+			"CREATE UNIQUE INDEX idx_push_subscriptions_endpoint ON push_subscriptions (endpoint)",
+			"CREATE INDEX idx_push_subscriptions_user ON push_subscriptions (user)",
+		}
+		if !slices.Equal([]string(c.Indexes), wantIndexes) {
+			t.Errorf("%s: push_subscriptions.indexes = %q, want %q", when, c.Indexes, wantIndexes)
+		}
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got != nil {
+				t.Errorf("%s: push_subscriptions rule %d = %q, want null (superusers only)", when, i, *got)
+			}
+		}
+	}
+	device := func(endpoint string) map[string]any {
+		return map[string]any{"user": fx.Alice.Id, "endpoint": endpoint, "p256dh": "k", "auth": "a", "lang": "fr"}
+	}
+	with := func(endpoint, key string, value any) map[string]any {
+		values := device(endpoint)
+		values[key] = value
+		return values
+	}
+
+	checkTable("as created")
+
+	mustSave(t, app, "push_subscriptions", device("https://fcm.googleapis.com/one"))
+	noKeys := device("https://fcm.googleapis.com/two")
+	delete(noKeys, "p256dh")
+	delete(noKeys, "auth")
+	noAccount := device("https://fcm.googleapis.com/two")
+	delete(noAccount, "user")
+	for name, values := range map[string]map[string]any{
+		"the same endpoint again":         device("https://fcm.googleapis.com/one"),
+		"no endpoint":                     device(""),
+		"an endpoint over 1000":           device("https://fcm.googleapis.com/" + strings.Repeat("x", 1000)),
+		"a language that is not fr or en": with("https://fcm.googleapis.com/two", "lang", "de"),
+		"no keys":                         noKeys,
+		"no account":                      noAccount,
+		"a negative count":                with("https://fcm.googleapis.com/two", "failures", -1),
+		"a label over 60":                 with("https://fcm.googleapis.com/two", "label", strings.Repeat("é", 61)),
+	} {
+		if _, err := trySave(app, "push_subscriptions", values); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+
+	// The device goes with its account.
+	account := mustSave(t, app, "users", map[string]any{"email": "zoe@example.test", "password": testutil.Password, "role": "member"})
+	mustSave(t, app, "push_subscriptions", with("https://fcm.googleapis.com/zoe", "user", account.Id))
+	if err := app.Delete(account); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.CountRecords("push_subscriptions"); err != nil || got != 1 {
+		t.Errorf("after deleting an account, %d subscriptions (error %v), want the 1 of Alice", got, err)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with subscriptions: %v", err)
+	}
+	if _, err := app.FindCollectionByNameOrId("push_subscriptions"); err == nil {
+		t.Error("the collection push_subscriptions must be gone after the rollback")
+	}
+	if _, err := app.FindRecordById("users", fx.Alice.Id); err != nil {
+		t.Errorf("after the rollback, Alice is gone: %v", err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	if got, err := app.CountRecords("push_subscriptions"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d subscriptions (error %v), want an empty table", got, err)
+	}
+}
+
+func TestMigrations_ReminderDeliveriesDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9o_reminder_deliveries.go")
+
+	checkTable := func(when string) {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("reminder_deliveries")
+		if err != nil {
+			t.Fatalf("%s: the collection reminder_deliveries is missing: %v", when, err)
+		}
+		for name, target := range map[string]string{"user": "users", "event": "events"} {
+			to, _ := app.FindCollectionByNameOrId(target)
+			rel, ok := c.Fields.GetByName(name).(*core.RelationField)
+			if !ok || rel.CollectionId != to.Id || rel.MaxSelect != 1 || !rel.Required || !rel.CascadeDelete {
+				t.Errorf("%s: reminder_deliveries.%s = %+v, want a required relation to %s, one, cascade", when, name, c.Fields.GetByName(name), target)
+			}
+		}
+		kind, ok := c.Fields.GetByName("kind").(*core.SelectField)
+		if !ok || !kind.Required || kind.MaxSelect != 1 || !slices.Equal(kind.Values, []string{"day", "hour"}) {
+			t.Errorf("%s: reminder_deliveries.kind = %+v, want a required select of day, hour", when, c.Fields.GetByName("kind"))
+		}
+		if f, ok := c.Fields.GetByName("opening_at").(*core.TextField); !ok || !f.Required {
+			t.Errorf("%s: reminder_deliveries.opening_at must be a required text field", when)
+		}
+		delivered, ok := c.Fields.GetByName("delivered").(*core.NumberField)
+		if !ok || !delivered.OnlyInt || delivered.Min == nil || *delivered.Min != 0 {
+			t.Errorf("%s: reminder_deliveries.delivered = %+v, want an integer of at least 0", when, c.Fields.GetByName("delivered"))
+		}
+		if _, ok := c.Fields.GetByName("created").(*core.AutodateField); !ok {
+			t.Errorf("%s: reminder_deliveries.created must be a date field that PocketBase fills", when)
+		}
+		wantIndexes := []string{
+			"CREATE UNIQUE INDEX idx_reminder_deliveries_once ON reminder_deliveries (user, event, kind, opening_at)",
+			"CREATE INDEX idx_reminder_deliveries_created ON reminder_deliveries (created)",
+		}
+		if !slices.Equal([]string(c.Indexes), wantIndexes) {
+			t.Errorf("%s: reminder_deliveries.indexes = %q, want %q", when, c.Indexes, wantIndexes)
+		}
+		for i, got := range []*string{c.ListRule, c.ViewRule, c.CreateRule, c.UpdateRule, c.DeleteRule} {
+			if got != nil {
+				t.Errorf("%s: reminder_deliveries rule %d = %q, want null (superusers only)", when, i, *got)
+			}
+		}
+	}
+	row := func(user, event *core.Record, kind, at string) map[string]any {
+		return map[string]any{"user": user.Id, "event": event.Id, "kind": kind, "opening_at": at, "delivered": 1}
+	}
+	const at = "2026-12-01T09:00:00Z"
+	checkTable("as created")
+
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event, "day", at))
+	// Another kind, another opening, another person, another event: other rows.
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event, "hour", at))
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event, "day", "2026-12-02T09:00:00Z"))
+	mustSave(t, app, "reminder_deliveries", row(fx.Bob, fx.Event, "day", at))
+	mustSave(t, app, "reminder_deliveries", row(fx.Alice, fx.Event2, "day", at))
+	noAccount := row(fx.Alice, fx.Event, "day", "2026-12-03T09:00:00Z")
+	delete(noAccount, "user")
+	noEvent := row(fx.Alice, fx.Event, "day", "2026-12-03T09:00:00Z")
+	delete(noEvent, "event")
+	noOpening := row(fx.Alice, fx.Event, "day", "")
+	for name, values := range map[string]map[string]any{
+		"the same row again":             row(fx.Alice, fx.Event, "day", at),
+		"a kind that is not day or hour": row(fx.Alice, fx.Event, "week", "2026-12-03T09:00:00Z"),
+		"no account":                     noAccount,
+		"no event":                       noEvent,
+		"no opening":                     noOpening,
+		"a negative count":               func() map[string]any { v := row(fx.Bob, fx.Event2, "day", at); v["delivered"] = -1; return v }(),
+	} {
+		if _, err := trySave(app, "reminder_deliveries", values); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+
+	// A row goes with its account, and with its event.
+	account := mustSave(t, app, "users", map[string]any{"email": "zoe@example.test", "password": testutil.Password, "role": "member"})
+	mustSave(t, app, "reminder_deliveries", row(account, fx.Event, "day", at))
+	if err := app.Delete(account); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.CountRecords("reminder_deliveries"); err != nil || got != 5 {
+		t.Errorf("after deleting an account, %d rows (error %v), want the 5 of the others", got, err)
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with rows: %v", err)
+	}
+	if _, err := app.FindCollectionByNameOrId("reminder_deliveries"); err == nil {
+		t.Error("the collection reminder_deliveries must be gone after the rollback")
+	}
+	if _, err := app.FindRecordById("events", fx.Event.Id); err != nil {
+		t.Errorf("after the rollback, the event is gone: %v", err)
+	}
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkTable("after applying again")
+	if got, err := app.CountRecords("reminder_deliveries"); err != nil || got != 0 {
+		t.Errorf("after applying again, %d rows (error %v), want an empty table", got, err)
+	}
+}
+
+// The migration 9q gives the calendar link a scope, "mine" or "group", and an
+// account one link of each. The links that exist become "mine" and go on working;
+// the rollback deletes the group links, drops the field and puts the index of 9g
+// back.
+func TestMigrations_CalendarFeedScopeDownThenUp(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	migration := migrationFile(t, "9q_calendar_feed_scope.go")
+
+	collection := func() *core.Collection {
+		t.Helper()
+		c, err := app.FindCollectionByNameOrId("calendar_feeds")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	checkField := func(when string) {
+		t.Helper()
+		c := collection()
+		scope, ok := c.Fields.GetByName("scope").(*core.SelectField)
+		if !ok {
+			t.Fatalf("%s: calendar_feeds.scope must be a select field, got %T", when, c.Fields.GetByName("scope"))
+		}
+		if !slices.Equal(scope.Values, []string{"mine", "group"}) || scope.MaxSelect != 1 || !scope.Required || scope.Hidden {
+			t.Errorf("%s: calendar_feeds.scope = values %q, max %d, required %v, hidden %v; want [mine group], 1, required, visible",
+				when, scope.Values, scope.MaxSelect, scope.Required, scope.Hidden)
+		}
+		want := []string{"CREATE UNIQUE INDEX idx_calendar_feeds_user_scope ON calendar_feeds (user, scope)"}
+		if !slices.Equal([]string(c.Indexes), want) {
+			t.Errorf("%s: calendar_feeds.indexes = %q, want %q", when, c.Indexes, want)
+		}
+	}
+	save := func(user *core.Record, scope string) {
+		t.Helper()
+		mustSave(t, app, "calendar_feeds", map[string]any{"user": user.Id, "token_hash": scope + "-of-" + user.Id, "lang": "fr", "scope": scope})
+	}
+
+	checkField("as created")
+
+	// Two links for an account, one of each scope; a second of a scope is refused.
+	save(fx.Alice, "mine")
+	save(fx.Alice, "group")
+	save(fx.Bob, "group")
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "again", "lang": "fr", "scope": "group"}); err == nil {
+		t.Error("a second group link for an account must be refused")
+	}
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "other", "lang": "fr", "scope": "team"}); err == nil {
+		t.Error("a scope that is not one must be refused")
+	}
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Admin.Id, "token_hash": "none", "lang": "fr"}); err == nil {
+		t.Error("a link without a scope must be refused")
+	}
+
+	if err := migration.Down(app); err != nil {
+		t.Fatalf("the rollback with links of both scopes: %v", err)
+	}
+	if collection().Fields.GetByName("scope") != nil {
+		t.Error("calendar_feeds.scope must be gone after the rollback")
+	}
+	if got := []string(collection().Indexes); !slices.Equal(got, []string{"CREATE UNIQUE INDEX idx_calendar_feeds_user ON calendar_feeds (user)"}) {
+		t.Errorf("after the rollback the indexes are %q, want the one of 9g", got)
+	}
+	if _, err := app.FindFirstRecordByData("calendar_feeds", "token_hash", "mine-of-"+fx.Alice.Id); err != nil {
+		t.Errorf("after the rollback, the personal link of Alice is gone: %v", err)
+	}
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 1 {
+		t.Errorf("after the rollback, %d links (error %v), want the personal one only", got, err)
+	}
+	// Back to one link per account.
+	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Bob.Id, "token_hash": "bobs", "lang": "fr"})
+	if _, err := trySave(app, "calendar_feeds", map[string]any{"user": fx.Bob.Id, "token_hash": "bobs-again", "lang": "fr"}); err == nil {
+		t.Error("after the rollback, a second link for an account must be refused")
+	}
+	// Rolling back again is not an error.
+	if err := migration.Down(app); err != nil {
+		t.Errorf("the rollback of a migration that is already rolled back: %v", err)
+	}
+
+	// Applying it again: the links made without a scope become personal ones, and
+	// still work.
+	if err := migration.Up(app); err != nil {
+		t.Fatal(err)
+	}
+	checkField("after applying again")
+	for _, hash := range []string{"bobs", "mine-of-" + fx.Alice.Id} {
+		link, err := app.FindFirstRecordByData("calendar_feeds", "token_hash", hash)
+		if err != nil {
+			t.Fatalf("the link %q is gone: %v", hash, err)
+		}
+		if got := link.GetString("scope"); got != "mine" {
+			t.Errorf("the existing link %q has scope %q, want mine", hash, got)
+		}
+		if err := app.Save(link); err != nil {
+			t.Errorf("the existing link %q no longer saves: %v", hash, err)
+		}
+	}
+	save(fx.Bob, "group")
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 3 {
+		t.Errorf("after applying again and a group link, %d links (error %v), want 3", got, err)
+	}
+}
+
+// The seven migrations of v7 (9l to 9r) roll back in order on a database that
+// holds v7 data, and apply again: what is not v7's stays whole and valid.
+func TestMigrations_V7DownThenUpWithData(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	runner := core.NewMigrationsRunner(app, core.AppMigrations)
+
+	// v7 data: an opening with a time (9l), a reminders choice (9m), a device
+	// (9n), a delivery (9o), a race known by its month (9p), and the personal and
+	// the group links (9q), and a start time (9r).
+	opened := mustFind(t, app, "events", fx.Event.Id)
+	opened.Set("registration_opening", "2026-05-10")
+	opened.Set("registration_opening_time", "10:00")
+	if err := app.Save(opened); err != nil {
+		t.Fatal(err)
+	}
+	alice := mustFind(t, app, "users", fx.Alice.Id)
+	alice.Set("reminders", []string{"day", "hour"})
+	if err := app.Save(alice); err != nil {
+		t.Fatal(err)
+	}
+	mustSave(t, app, "push_subscriptions", map[string]any{"user": fx.Alice.Id, "endpoint": "https://fcm.googleapis.com/one", "p256dh": "k", "auth": "a", "lang": "fr"})
+	mustSave(t, app, "reminder_deliveries", map[string]any{"user": fx.Alice.Id, "event": fx.Event.Id, "kind": "day", "opening_at": "2026-05-10T08:00:00Z", "delivered": 1})
+	month := mustFind(t, app, "events", fx.Event2.Id)
+	month.Set("date_precision", "month")
+	month.Set("start_date", "2026-06-01")
+	if err := app.Save(month); err != nil {
+		t.Fatal(err)
+	}
+	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "mine", "lang": "fr", "scope": "mine"})
+	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "group", "lang": "fr", "scope": "group"})
+	timed := mustFind(t, app, "formats", fx.F42.Id)
+	timed.Set("start_time", "07:30")
+	if err := app.Save(timed); err != nil {
+		t.Fatal(err)
+	}
+	before := map[string]int64{}
+	for _, name := range []string{"events", "formats", "participations", "runners", "users"} {
+		n, err := app.CountRecords(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = n
+	}
+
+	reverted, err := runner.Down(7)
+	if err != nil {
+		t.Fatalf("rolling the seven migrations of v7 back: %v", err)
+	}
+	want := []string{
+		"9r_format_start_time.go", "9q_calendar_feed_scope.go", "9p_event_date_precision.go", "9o_reminder_deliveries.go",
+		"9n_push_subscriptions.go", "9m_user_reminders.go", "9l_registration_opening.go",
+	}
+	if !slices.Equal(reverted, want) {
+		t.Fatalf("reverted %v, want %v in this order", reverted, want)
+	}
+
+	// Back to v6: no table of v7, no field of v7, and the group link is gone.
+	for _, name := range []string{"push_subscriptions", "reminder_deliveries"} {
+		if _, err := app.FindCollectionByNameOrId(name); err == nil {
+			t.Errorf("collection %q must be gone after the rollback", name)
+		}
+	}
+	for collection, fields := range map[string][]string{
+		"events": {"registration_opening", "registration_opening_time", "date_precision"}, "users": {"reminders"}, "calendar_feeds": {"scope"}, "formats": {"start_time"},
+	} {
+		c, err := app.FindCollectionByNameOrId(collection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range fields {
+			if c.Fields.GetByName(field) != nil {
+				t.Errorf("%s.%s must be gone after the rollback", collection, field)
+			}
+		}
+	}
+	if got, err := app.CountRecords("calendar_feeds"); err != nil || got != 1 {
+		t.Errorf("after the rollback, %d links (error %v), want the personal one only", got, err)
+	}
+	// A race that was known by its month is a race from the 1st to the last day.
+	back := mustFind(t, app, "events", fx.Event2.Id)
+	if back.GetString("start_date") != "2026-06-01" || back.GetString("end_date") != "2026-06-30" {
+		t.Errorf("the month race is %s to %s after the rollback, want 2026-06-01 to 2026-06-30", back.GetString("start_date"), back.GetString("end_date"))
+	}
+
+	if _, err := runner.Up(); err != nil {
+		t.Fatalf("applying the migrations again: %v", err)
+	}
+	for name, want := range before {
+		if got, err := app.CountRecords(name); err != nil || got != want {
+			t.Errorf("%s: %d records after the round trip (error %v), want %d", name, got, err, want)
+		}
+	}
+	// Every record of the base still saves: the data is valid under the schema of v7.
+	for _, name := range []string{"users", "events", "formats", "participations", "calendar_feeds"} {
+		records, err := app.FindAllRecords(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, record := range records {
+			if err := app.Save(record); err != nil {
+				t.Errorf("a record of %s is not valid after the round trip: %v", name, err)
+			}
+		}
+	}
+	// The month race keeps its dates; its precision is to be set again, as are the other v7 fields.
+	if again := mustFind(t, app, "events", fx.Event2.Id); again.GetString("start_date") != "2026-06-01" || again.GetString("end_date") != "2026-06-30" {
+		t.Errorf("the race of the month is %s to %s after the round trip", again.GetString("start_date"), again.GetString("end_date"))
+	}
 }

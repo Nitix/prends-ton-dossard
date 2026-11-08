@@ -33,3 +33,17 @@ describe("eventLabel", () => {
     );
   });
 });
+
+describe("eventLabel — une course au mois", () => {
+  test("it says its month and that the date is to be set", () => {
+    const event = {
+      ...trail,
+      start_date: "2027-06-01",
+      end_date: "2027-06-30",
+      date_precision: "month" as const,
+    };
+    expect(plain(eventLabel(event, createFormatters("fr-FR"), fr))).toBe(
+      "Trail des Crêtes · juin 2027 · date à préciser · Annecy",
+    );
+  });
+});

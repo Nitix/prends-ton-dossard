@@ -2365,3 +2365,132 @@ test("HomePage — zones tactiles d'au moins 44 px", async () => {
   }
   await page.viewport(414, 896);
 });
+
+// ---- Inscriptions à faire, avant et le jour de l'ouverture
+
+/** The trail, whose registration opens on this day at 10:00 (the deadline is 10 June), and its site. */
+const openingOn = (day: string) => ({
+  ...withDeadline(eventRecord, "2026-06-10", "https://example.org/inscription"),
+  registration_opening: day,
+  registration_opening_time: "10:00",
+});
+
+test("RegistrationTodoBlock — avant l'ouverture, pas de « Je suis inscrit »", async () => {
+  // Today is 30 April: the opening is on 12 May, which one cannot register before.
+  mocks.events.mockResolvedValue([openingOn("2026-05-12")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const row = todoRows(screen);
+  expect(plain(row.element().textContent)).toContain("ouvre le mar. 12 mai à 10:00");
+  expect(plain(row.element().textContent)).not.toContain("avant le");
+  await expect.element(doneButton(row)).not.toBeInTheDocument();
+  // The official site, when the event has one, is still a tap away.
+  await expect.element(row.getByRole("link", { name: fr.home.todoRegister })).toBeVisible();
+});
+
+test("RegistrationTodoBlock — la veille, « ouvre demain à 10:00 »", async () => {
+  mocks.events.mockResolvedValue([openingOn("2026-05-01")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  expect(plain(todoRows(screen).element().textContent)).toContain("ouvre demain à 10:00");
+});
+
+test("RegistrationTodoBlock — le jour même, les deux", async () => {
+  mocks.events.mockResolvedValue([openingOn("2026-04-30")]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(todoBlock(screen)).toBeVisible();
+  const row = todoRows(screen);
+  expect(plain(row.element().textContent)).toContain("ouvre aujourd'hui à 10:00");
+  await expect.element(doneButton(row)).toBeVisible();
+  await expect.element(row.getByRole("link", { name: fr.home.todoRegister })).toBeVisible();
+});
+
+// ---- Les courses dont on ne connaît que le mois
+
+/** A race of May 2026 known by its month only: its format has no day. */
+const mayEvent = {
+  ...eventRecord,
+  id: "may",
+  name: "Trail de mai",
+  start_date: "2026-05-01",
+  end_date: "2026-05-31",
+  date_precision: "month",
+};
+const mayFormat = { ...f42, id: "fMay", event: "may", date: "", expand: { race_type: trailType } };
+
+test("À confirmer — une course au mois dit « mai 2026 · date à préciser », pas un jour", async () => {
+  mocks.pending.mockResolvedValue([
+    {
+      ...p2,
+      id: "p-may",
+      event: "may",
+      format: "fMay",
+      expand: { runner: bobRunner, added_by: aliceRunner, event: mayEvent, format: mayFormat },
+    },
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(pendingBlock(screen)).toBeVisible();
+  await expect.element(pendingBlock(screen).getByText("mai 2026 · date à préciser")).toBeVisible();
+  expect(plain(pendingBlock(screen).element().textContent)).not.toContain("1 mai");
+});
+
+test("Résultats à saisir — une course au mois dit « mai 2026 · date à préciser », pas un jour", async () => {
+  mocks.toEnter.mockResolvedValue([registeredFor("p-may", mayEvent, mayFormat)]);
+
+  const { screen } = await renderHome({ today: "2026-06-05" });
+
+  await expect.element(resultsBlock(screen)).toBeVisible();
+  await expect.element(resultsBlock(screen).getByText("mai 2026 · date à préciser")).toBeVisible();
+  expect(plain(resultsBlock(screen).element().textContent)).not.toContain("1 mai");
+});
+
+test("MyUpcoming — une course au mois dit son mois, sans anneau ni « dans n jours »", async () => {
+  signIn("alice");
+  mocks.events.mockResolvedValue([
+    {
+      ...mayEvent,
+      expand: {
+        formats_via_event: [mayFormat],
+        participations_via_event: [
+          { ...p1, id: "p-may", event: "may", format: "fMay", expand: { runner: aliceRunner } },
+        ],
+      },
+    },
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect.element(upcomingBlock(screen)).toBeVisible();
+  const row = upcomingBlock(screen).getByRole("listitem");
+  await expect.element(row.getByText("mai 2026 · date à préciser")).toBeVisible();
+  expect(row.element().querySelector(".countdown-ring")).toBeNull();
+  expect(row.element().querySelector(".days-left")).toBeNull();
+});
+
+test("GroupSoon — la carte d'une course au mois a sa pastille « ? »", async () => {
+  mocks.events.mockResolvedValue([
+    {
+      ...mayEvent,
+      expand: {
+        formats_via_event: [mayFormat],
+        participations_via_event: [
+          { ...p1, id: "p-may", event: "may", format: "fMay", expand: { runner: aliceRunner } },
+        ],
+      },
+    },
+  ]);
+
+  const { screen } = await renderHome();
+
+  await expect
+    .element(groupBlock(screen).getByText("mai 2026, date à préciser"))
+    .toBeInTheDocument();
+});

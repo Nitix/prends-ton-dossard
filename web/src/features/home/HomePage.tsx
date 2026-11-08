@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { SECONDARY } from "../../components/buttons";
 import { Divider } from "../../components/Slots";
 import { useI18n } from "../../i18n/I18nProvider";
+import { usePageTitle } from "../../lib/usePageTitle";
 import { useToday } from "../../lib/useToday";
 import { useSession } from "../auth/session";
 import { LatestComments } from "../comments/LatestComments";
@@ -28,6 +29,7 @@ import { RegistrationTodoBlock } from "./RegistrationTodoBlock";
  */
 export function HomePage() {
   const { t } = useI18n();
+  usePageTitle(t.titles.home);
   const today = useToday();
   const { runner } = useSession();
   const events = useEvents({ period: "a-venir", today });

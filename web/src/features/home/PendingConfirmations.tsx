@@ -8,6 +8,7 @@ import { useToast } from "../../components/Toast";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useToday } from "../../lib/useToday";
 import { invalidateEvents } from "../events/api";
+import { dayOrMonth } from "../events/eventWhen";
 import { formatDisplayName } from "../events/formatName";
 import { useDeleteParticipation, useUpdateParticipation } from "../participations/api";
 import { isNotFound, participationError } from "../participations/errors";
@@ -194,7 +195,7 @@ function PendingRow({ view, onDealtWith }: { view: PendingView; onDealtWith: () 
             {event.name}
           </Link>
         </h3>
-        <p className="text-sm text-neutral-600">{f.date(date)}</p>
+        <p className="text-sm text-neutral-600">{dayOrMonth(event, date, f, t)}</p>
         <p className="text-sm">
           {addedBy
             ? t.home.addedYou(addedBy.name, subject)

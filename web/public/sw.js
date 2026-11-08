@@ -159,3 +159,98 @@ self.addEventListener("fetch", (event) => {
       break;
   }
 });
+
+// ---------------------------------------------------------------------------
+// Notifications (Web Push): the message is a JSON that the server encrypted for
+// this browser, { title, body, url, tag }.
+
+const DEFAULT_TITLE = "Prends ton dossard";
+
+/** The message of a push event, or an empty one when it cannot be read. */
+function readMessage(event) {
+  try {
+    const data = event.data === null || event.data === undefined ? null : event.data.json();
+    if (data !== null && typeof data === "object") return data;
+  } catch {
+    // An unreadable message still shows a notification.
+  }
+  return {};
+}
+
+/** A page of the site, as a path: anything else opens the home page. */
+function sitePath(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
+/** A text of the message, or undefined when it is not one or is empty. */
+function text(value) {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** Every push shows a notification (`userVisibleOnly`): the browser punishes a worker that does not. */
+async function showMessage(event) {
+  const message = readMessage(event);
+  const options = { icon: "/icons/icon-192.png", data: { url: sitePath(message.url) } };
+  const body = text(message.body);
+  if (body !== undefined) options.body = body;
+  const tag = text(message.tag);
+  if (tag !== undefined) options.tag = tag;
+  const lang = text(message.lang);
+  if (lang !== undefined) options.lang = lang;
+  await self.registration.showNotification(text(message.title) ?? DEFAULT_TITLE, options);
+}
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(showMessage(event));
+});
+
+/** A tap on the notification: the tab already at that address, else a new one. Only the site's own addresses. */
+async function openTarget(notification) {
+  const data = notification.data;
+  const wanted = new URL(
+    sitePath(data === null || data === undefined ? undefined : data.url),
+    self.location.origin,
+  );
+  if (wanted.origin !== self.location.origin) return;
+  const tabs = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const open = tabs.find((tab) => tab.url === wanted.href);
+  if (open !== undefined) {
+    await open.focus();
+    return;
+  }
+  await self.clients.openWindow(wanted.href);
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(openTarget(event.notification));
+});
+
+/**
+ * The browser changed the subscription: subscribe again with the same key, and
+ * tell the server, with the old address and its secret as the proof. Without the
+ * old subscription (Chrome does not always give it) there is nothing to prove
+ * and nothing is done: the page synchronises when it is opened next.
+ */
+async function renewSubscription(event) {
+  const old = event.oldSubscription;
+  if (old === null || old === undefined) return;
+  const oldAuth = old.toJSON().keys?.auth;
+  const key = old.options?.applicationServerKey;
+  if (typeof oldAuth !== "string" || key === null || key === undefined) return;
+  const fresh = await self.registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: key,
+  });
+  const { endpoint, keys } = fresh.toJSON();
+  await fetch("/api/app/push/renew", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ oldEndpoint: old.endpoint, oldAuth, endpoint, keys }),
+  });
+}
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(renewSubscription(event));
+});

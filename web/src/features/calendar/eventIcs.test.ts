@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
 
+import { en } from "../../i18n/en";
+import { fr } from "../../i18n/fr";
+import type { Reminder } from "../../lib/types";
 import { toEventView } from "../events/api";
 import { event2Record, eventRecord } from "../events/testFixture";
 import { eventIcs, icsFileName } from "./eventIcs";
@@ -29,7 +32,7 @@ function unfold(ics: string): string[] {
 
 /** The DTSTAMP of the file of an event, made at that instant. */
 function stamp(instant: string): string | undefined {
-  return properties(eventIcs(viewOf(), APP_URL, Temporal.Instant.from(instant), "fr")).DTSTAMP;
+  return properties(eventIcs(viewOf(), APP_URL, Temporal.Instant.from(instant), "fr", fr)).DTSTAMP;
 }
 
 /** The value of each property of the event, by name, after unfolding. */
@@ -44,7 +47,7 @@ function properties(ics: string): Record<string, string> {
 
 describe("eventIcs", () => {
   test("eventIcs — un VEVENT sur les jours de l'événement, avec son adresse", () => {
-    const ics = eventIcs(viewOf(), APP_URL, now(), "fr");
+    const ics = eventIcs(viewOf(), APP_URL, now(), "fr", fr);
 
     // The event runs on the 13th and the 14th: the end is the day after, since
     // the end of an event of whole days is exclusive.
@@ -68,18 +71,18 @@ describe("eventIcs", () => {
   });
 
   test("eventIcs — la langue est celle du PRODID : FR ou EN, comme dans le flux du serveur", () => {
-    expect(properties(eventIcs(viewOf(), APP_URL, now(), "fr")).PRODID).toBe(
+    expect(properties(eventIcs(viewOf(), APP_URL, now(), "fr", fr)).PRODID).toBe(
       "-//Prends ton dossard//FR",
     );
-    const english = eventIcs(viewOf(), APP_URL, now(), "en");
+    const english = eventIcs(viewOf(), APP_URL, now(), "en", en);
     expect(properties(english).PRODID).toBe("-//Prends ton dossard//EN");
     // Nothing else depends on the language: the texts are the event's own.
-    expect(english.replace("//EN", "//FR")).toBe(eventIcs(viewOf(), APP_URL, now(), "fr"));
+    expect(english.replace("//EN", "//FR")).toBe(eventIcs(viewOf(), APP_URL, now(), "fr", fr));
   });
 
   test("eventIcs — un événement d'un jour s'arrête le lendemain, même au passage d'une année", () => {
     // No end date: one day, which ends on the next.
-    const oneDay = properties(eventIcs(viewOf({}, event2Record), APP_URL, now(), "fr"));
+    const oneDay = properties(eventIcs(viewOf({}, event2Record), APP_URL, now(), "fr", fr));
     expect(oneDay["DTSTART;VALUE=DATE"]).toBe("20260622");
     expect(oneDay["DTEND;VALUE=DATE"]).toBe("20260623");
     expect(oneDay.SUMMARY).toBe("10 km de Lyon");
@@ -87,7 +90,13 @@ describe("eventIcs", () => {
     expect(oneDay.URL).toBe("https://courses.example.test/evenements/event2");
 
     const overTheYear = properties(
-      eventIcs(viewOf({ start_date: "2026-12-30", end_date: "2026-12-31" }), APP_URL, now(), "fr"),
+      eventIcs(
+        viewOf({ start_date: "2026-12-30", end_date: "2026-12-31" }),
+        APP_URL,
+        now(),
+        "fr",
+        fr,
+      ),
     );
     expect(overTheYear["DTSTART;VALUE=DATE"]).toBe("20261230");
     expect(overTheYear["DTEND;VALUE=DATE"]).toBe("20270101");
@@ -99,7 +108,7 @@ describe("eventIcs", () => {
   });
 
   test("eventIcs — sans lieu, pas de LOCATION", () => {
-    const ics = eventIcs(viewOf({ location: "" }), APP_URL, now(), "fr");
+    const ics = eventIcs(viewOf({ location: "" }), APP_URL, now(), "fr", fr);
 
     expect(ics).not.toContain("LOCATION");
     // The rest is still there.
@@ -115,6 +124,7 @@ describe("eventIcs", () => {
       APP_URL,
       now(),
       "fr",
+      fr,
     );
 
     // A comma, a semicolon, a backslash and a line break would split the value
@@ -131,7 +141,7 @@ describe("eventIcs", () => {
     // 'é' is 2 octets, '·' 2, '🏃' 4 (a pair of UTF-16 units) and the space 1: the
     // cut falls at several places of the title, inside a character if it is not careful.
     const name = `Trail des Crêtes ${"é·🏃 ".repeat(40)}fin`;
-    const ics = eventIcs(viewOf({ name }), APP_URL, now(), "fr");
+    const ics = eventIcs(viewOf({ name }), APP_URL, now(), "fr", fr);
 
     const encoder = new TextEncoder();
     const physical = lines(ics);
@@ -147,13 +157,13 @@ describe("eventIcs", () => {
   test("eventIcs — une ligne de 75 octets pile n'est pas repliée, une de 76 l'est", () => {
     // "SUMMARY:" is 8 octets: 67 more make 75.
     const name = "x".repeat(67);
-    const ics = eventIcs(viewOf({ name }), APP_URL, now(), "fr");
+    const ics = eventIcs(viewOf({ name }), APP_URL, now(), "fr", fr);
 
     expect(lines(ics)).toContain(`SUMMARY:${name}`);
     expect(properties(ics).SUMMARY).toBe(name);
 
     // One octet too many: the last character goes to a line of its own.
-    const longer = eventIcs(viewOf({ name: `${name}y` }), APP_URL, now(), "fr");
+    const longer = eventIcs(viewOf({ name: `${name}y` }), APP_URL, now(), "fr", fr);
     expect(lines(longer)).toContain(`SUMMARY:${name}`);
     expect(lines(longer)).toContain(" y");
     expect(properties(longer).SUMMARY).toBe(`${name}y`);
@@ -167,6 +177,7 @@ describe("eventIcs", () => {
       APP_URL,
       now(),
       "fr",
+      fr,
     );
 
     const found = properties(ics);
@@ -183,14 +194,20 @@ describe("eventIcs", () => {
   test("eventIcs — l'adresse ne peut pas ouvrir une propriété de plus, ni garder une tabulation", () => {
     // The URL of the page is a value that is not escaped: a line break in the
     // address of the site would start a line of its own.
-    const ics = eventIcs(viewOf(), "https://courses.example.test\t\r\nATTENDEE:evil", now(), "fr");
+    const ics = eventIcs(
+      viewOf(),
+      "https://courses.example.test\t\r\nATTENDEE:evil",
+      now(),
+      "fr",
+      fr,
+    );
 
     expect(unfold(ics).some((line) => line.startsWith("ATTENDEE"))).toBe(false);
     expect(properties(ics).URL).toBe("https://courses.example.testATTENDEE:evil/evenements/event");
   });
 
   test("eventIcs — la moitié d'une paire de substitution devient U+FFFD, comme un octet de travers côté serveur", () => {
-    const ics = eventIcs(viewOf({ name: "Trail \uD83C" }), APP_URL, now(), "fr");
+    const ics = eventIcs(viewOf({ name: "Trail \uD83C" }), APP_URL, now(), "fr", fr);
 
     expect(properties(ics).SUMMARY).toBe("Trail �");
   });
@@ -212,5 +229,192 @@ describe("icsFileName", () => {
   test("icsFileName — un nom dont il ne reste rien prend le nom de repli", () => {
     expect(icsFileName("", "evenement")).toBe("evenement.ics");
     expect(icsFileName(' / : * ? " < > | \\ ', "event")).toBe("event.ics");
+  });
+});
+
+/** The properties of each VEVENT of the file, by name. */
+function events(ics: string): Record<string, string>[] {
+  return ics
+    .split("BEGIN:VEVENT\r\n")
+    .slice(1)
+    .map((part) => properties(part.split("END:VEVENT")[0] ?? ""));
+}
+
+/** The alarms of the event that has the UID: [TRIGGER, DESCRIPTION] of each, in order. */
+function alarms(ics: string, uid: string): string[][] {
+  const found: string[][] = [];
+  let inEvent = false;
+  let alarm: string[] | null = null;
+  for (const line of unfold(ics)) {
+    if (line.startsWith("UID:")) inEvent = line === `UID:${uid}`;
+    else if (line === "BEGIN:VALARM") alarm = [];
+    else if (line === "END:VALARM") {
+      if (inEvent && alarm !== null) found.push(alarm);
+      alarm = null;
+    } else if (alarm !== null) {
+      // ACTION, TRIGGER and DESCRIPTION, in that order, and nothing else.
+      if (line !== "ACTION:DISPLAY") alarm.push(line);
+    }
+  }
+  for (const one of found) expect(one).toHaveLength(2);
+  return found;
+}
+const OPENING = "opening-event@prends-ton-dossard";
+
+describe("eventIcs — l'ouverture des inscriptions", () => {
+  test("eventIcs — l'ouverture est un second événement, en UTC", () => {
+    // In winter, Paris is one hour ahead of UTC: 10:00 is 09:00Z.
+    const winter = eventIcs(
+      viewOf({ registration_opening: "2026-01-12", registration_opening_time: "10:00" }),
+      APP_URL,
+      now(),
+      "fr",
+      fr,
+    );
+    const [race, opening] = events(winter);
+    expect(race?.UID).toBe("event-event@prends-ton-dossard");
+    expect(opening).toEqual({
+      UID: "opening-event@prends-ton-dossard",
+      DTSTAMP: "20261101T093015Z",
+      DTSTART: "20260112T090000Z",
+      DTEND: "20260112T093000Z",
+      SUMMARY: "Ouverture des inscriptions : Trail des Crêtes",
+      DESCRIPTION: "https://courses.example.test/evenements/event",
+      URL: "https://courses.example.test/evenements/event",
+    });
+    // Still one calendar, every line ended by CRLF.
+    lines(winter);
+    expect(unfold(winter).filter((line) => line === "BEGIN:VEVENT")).toHaveLength(2);
+
+    // In summer, two hours ahead: 10:00 is 08:00Z.
+    const summer = events(
+      eventIcs(
+        viewOf({ registration_opening: "2026-05-12", registration_opening_time: "10:00" }),
+        APP_URL,
+        now(),
+        "en",
+        en,
+      ),
+    )[1];
+    expect(summer?.DTSTART).toBe("20260512T080000Z");
+    expect(summer?.DTEND).toBe("20260512T083000Z");
+    expect(summer?.SUMMARY).toBe("Registration opens: Trail des Crêtes");
+  });
+
+  test("eventIcs — dans l'heure répétée d'octobre, l'instant est celui du serveur (la lecture d'hiver)", () => {
+    // 2027-10-31, 02:30 happens twice in Paris (02:30 CEST then 02:30 CET). The server
+    // (server/events/opening.go) takes the second, 01:30Z; the file says the same instant.
+    const [, opening] = events(
+      eventIcs(
+        viewOf({ registration_opening: "2027-10-31", registration_opening_time: "02:30" }),
+        APP_URL,
+        now(),
+        "fr",
+        fr,
+      ),
+    );
+    expect(opening?.DTSTART).toBe("20271031T013000Z");
+    expect(opening?.DTEND).toBe("20271031T020000Z");
+  });
+
+  test("eventIcs — sans heure, un jour entier", () => {
+    const [, opening] = events(
+      eventIcs(viewOf({ registration_opening: "2026-05-12" }), APP_URL, now(), "fr", fr),
+    );
+
+    expect(opening?.UID).toBe("opening-event@prends-ton-dossard");
+    expect(opening?.["DTSTART;VALUE=DATE"]).toBe("20260512");
+    expect(opening?.["DTEND;VALUE=DATE"]).toBe("20260513");
+    expect(opening).not.toHaveProperty("DTSTART");
+  });
+
+  test("eventIcs — les alarmes de la personne", () => {
+    const timed = viewOf({
+      registration_opening: "2026-01-12",
+      registration_opening_time: "10:00",
+    });
+    const wholeDay = viewOf({ registration_opening: "2026-01-12" });
+    const title = "DESCRIPTION:Ouverture des inscriptions : Trail des Crêtes";
+    const alarmsOf = (view: ReturnType<typeof viewOf>, lang: "fr" | "en", reminders?: Reminder[]) =>
+      alarms(eventIcs(view, APP_URL, now(), lang, lang === "fr" ? fr : en, reminders), OPENING);
+
+    // With a time: a day before and an hour before it, day first.
+    expect(alarmsOf(timed, "fr", ["hour", "day"])).toEqual([
+      ["TRIGGER:-P1D", title],
+      ["TRIGGER:-PT1H", title],
+    ]);
+    lines(eventIcs(timed, APP_URL, now(), "fr", fr, ["hour", "day"]));
+    expect(alarmsOf(timed, "fr", ["day"])).toEqual([["TRIGGER:-P1D", title]]);
+    expect(alarmsOf(timed, "fr", ["hour"])).toEqual([["TRIGGER:-PT1H", title]]);
+
+    // Without a time, from the start of the day: the day before at 9 h, the day itself at 8 h.
+    expect(alarmsOf(wholeDay, "fr", ["day", "hour"])).toEqual([
+      ["TRIGGER:-PT15H", title],
+      ["TRIGGER:PT8H", title],
+    ]);
+
+    // In English, an alarm says what the title says.
+    expect(alarmsOf(timed, "en", ["day"])).toEqual([
+      ["TRIGGER:-P1D", "DESCRIPTION:Registration opens: Trail des Crêtes"],
+    ]);
+
+    // None chosen, or not given: no alarm; the race itself never has one.
+    expect(eventIcs(timed, APP_URL, now(), "fr", fr, [])).not.toContain("VALARM");
+    expect(eventIcs(timed, APP_URL, now(), "fr", fr)).not.toContain("VALARM");
+    expect(eventIcs(viewOf(), APP_URL, now(), "fr", fr, ["day", "hour"])).not.toContain("VALARM");
+    expect(
+      alarms(eventIcs(timed, APP_URL, now(), "fr", fr, ["day"]), "event-event@prends-ton-dossard"),
+    ).toEqual([]);
+  });
+
+  test("eventIcs — sans ouverture, un seul événement", () => {
+    expect(events(eventIcs(viewOf(), APP_URL, now(), "fr", fr))).toHaveLength(1);
+  });
+});
+
+const june = () =>
+  viewOf({
+    start_date: "2027-06-01",
+    end_date: "2027-06-30",
+    date_precision: "month",
+    registration_opening: "2027-05-10",
+    registration_deadline: "2027-06-20",
+  });
+
+describe("eventIcs — une course au mois", () => {
+  test("eventIcs — une course au mois : le 1er du mois, un seul jour entier, « (date à préciser) »", () => {
+    const [race] = events(eventIcs(june(), APP_URL, now(), "fr", fr));
+
+    expect(race?.["DTSTART;VALUE=DATE"]).toBe("20270601");
+    // One whole day: the end, exclusive, is the 2nd.
+    expect(race?.["DTEND;VALUE=DATE"]).toBe("20270602");
+    expect(race?.SUMMARY).toBe("Trail des Crêtes (date à préciser)");
+    // Its UID does not change when the day is known.
+    expect(race?.UID).toBe("event-event@prends-ton-dossard");
+  });
+
+  test("eventIcs — en anglais, le titre dit « (date to be set) »", () => {
+    const [race] = events(eventIcs(june(), APP_URL, now(), "en", en));
+
+    expect(race?.SUMMARY).toBe("Trail des Crêtes (date to be set)");
+  });
+
+  test("eventIcs — l'ouverture d'une course au mois reste un événement ordinaire, sans « date à préciser »", () => {
+    const [, opening] = events(eventIcs(june(), APP_URL, now(), "fr", fr));
+
+    expect(opening?.["DTSTART;VALUE=DATE"]).toBe("20270510");
+    expect(opening?.SUMMARY).toBe("Ouverture des inscriptions : Trail des Crêtes");
+  });
+
+  test("eventIcs — le titre de l'ouverture vient de l'appelant, pas d'un bundle choisi par la langue", () => {
+    const view = viewOf({ registration_opening: "2026-05-12" });
+    const custom = {
+      ...fr,
+      event: { ...fr.event, openingCalendarTitle: (name: string) => `Ouvre : ${name}` },
+    };
+
+    const [, opening] = events(eventIcs(view, APP_URL, now(), "en", custom));
+
+    expect(opening?.SUMMARY).toBe("Ouvre : Trail des Crêtes");
   });
 });

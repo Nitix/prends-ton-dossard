@@ -1,0 +1,246 @@
+package weather_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"courses/server/testutil"
+	"courses/server/weather"
+)
+
+func TestWeather_Window(t *testing.T) {
+	// The seeded race is on 2026-06-13 and 2026-06-14.
+	for _, row := range []struct {
+		today  string
+		status string
+		from   string
+		days   []string
+	}{
+		{"2026-06-05", "not_yet", "2026-06-06", nil},
+		{"2026-06-06", "ok", "", []string{"2026-06-13", "2026-06-14"}},
+		{"2026-06-13", "ok", "", []string{"2026-06-13", "2026-06-14"}},
+		{"2026-06-14", "ok", "", []string{"2026-06-14"}},
+		{"2026-06-15", "over", "", nil},
+	} {
+		t.Run(row.today, func(t *testing.T) {
+			w := newWorld(t, row.today)
+			a := w.answer(t, w.fx.Event.Id)
+			if a.Status != row.status || a.From != row.from {
+				t.Fatalf("answer %+v, want %s from %q", a, row.status, row.from)
+			}
+			var days []string
+			for _, d := range a.Days {
+				days = append(days, d.Date)
+			}
+			if strings.Join(days, " ") != strings.Join(row.days, " ") {
+				t.Errorf("days %v, want %v", days, row.days)
+			}
+			if row.status != "ok" {
+				if n := w.meteo.count(""); n != 0 {
+					t.Errorf("%d requests for %s, want none", n, row.status)
+				}
+			}
+		})
+	}
+
+	t.Run("the window is read on the wall clock of Paris", func(t *testing.T) {
+		// 22:30 UTC on 06-05 is 00:30 on 06-06 in Paris.
+		w := newWorld(t, "2026-06-05")
+		weather.SetNow(t, at("2026-06-05").Add(12*60*60*1e9+30*60*1e9))
+		if a := w.answer(t, w.fx.Event.Id); a.Status != "ok" {
+			t.Errorf("status %q, want ok from midnight in Paris", a.Status)
+		}
+	})
+
+	t.Run("a race known by its month has no weather", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		month := w.save(t, "events", map[string]any{"name": "Marathon", "location": "Annecy", "start_date": "2026-06-01", "date_precision": "month", "created_by": w.fx.AliceRunner.Id})
+		if a := w.answer(t, month.Id); a.Status != "no_day" {
+			t.Errorf("status %q", a.Status)
+		}
+		if n := w.meteo.count(""); n != 0 {
+			t.Errorf("%d requests, want none", n)
+		}
+	})
+}
+
+func TestWeather_Route(t *testing.T) {
+	w := newWorld(t, "2026-06-10")
+
+	t.Run("a session is needed", func(t *testing.T) {
+		if status, _ := w.getAs(t, "", w.fx.Event.Id); status != http.StatusUnauthorized {
+			t.Errorf("status %d, want 401", status)
+		}
+		if n := w.meteo.count(""); n != 0 {
+			t.Errorf("%d requests without a session", n)
+		}
+	})
+
+	t.Run("an unknown race", func(t *testing.T) {
+		status, body := w.get(t, "aaaaaaaaaaaaaaa")
+		if status != http.StatusNotFound || !strings.Contains(body, `"not_found"`) {
+			t.Errorf("%d %s", status, body)
+		}
+	})
+
+	t.Run("the shape", func(t *testing.T) {
+		status, body := w.get(t, w.fx.Event.Id)
+		if status != http.StatusOK {
+			t.Fatalf("%d %s", status, body)
+		}
+		var got map[string]any
+		if err := json.Unmarshal([]byte(body), &got); err != nil {
+			t.Fatal(err)
+		}
+		want := `{"status":"ok","place":{"source":"place","name":"Annecy","detail":"Auvergne-Rhône-Alpes, France"},` +
+			`"days":[{"date":"2026-06-13","code":61,"tMin":9.1,"tMax":17.3,"rainChance":60,"rainMm":2.1,"windKmh":20,"gustKmh":35},` +
+			`{"date":"2026-06-14","code":61,"tMin":9.1,"tMax":17.3,"rainChance":60,"rainMm":2.1,"windKmh":20,"gustKmh":35}],` +
+			`"fetchedAt":"2026-06-10T10:00:00Z","stale":false}`
+		if body := strings.TrimSpace(body); body != want {
+			t.Errorf("body\n got %s\nwant %s", body, want)
+		}
+	})
+
+	t.Run("a place that was not found", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		w.meteo.places = map[string][2]float64{}
+		status, body := w.get(t, w.fx.Event.Id)
+		if want := `{"status":"no_place","query":"Annecy","stale":false}`; status != http.StatusOK || strings.TrimSpace(body) != want {
+			t.Errorf("%d %s, want %s", status, body, want)
+		}
+	})
+
+	t.Run("only the days of the race within 16 days", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		long := w.event(t, "Annecy", "2026-06-08", "2026-07-20")
+		a := w.answer(t, long.Id)
+		if len(a.Days) != 16 || a.Days[0].Date != "2026-06-10" || a.Days[15].Date != "2026-06-25" {
+			t.Errorf("%d days, from %s to %s, want 16 from 2026-06-10 to 2026-06-25", len(a.Days), a.Days[0].Date, a.Days[len(a.Days)-1].Date)
+		}
+		if got := w.meteo.last("/v1/forecast").Query.Get("end_date"); got != "2026-06-25" {
+			t.Errorf("end_date %q", got)
+		}
+	})
+}
+
+// On the demo the route is there too.
+func TestWeather_OnTheDemo(t *testing.T) {
+	weather.SetNow(t, at("2026-06-10"))
+	newMeteo(t)
+	app := testutil.NewAppWith(t, map[string]string{"DEMO_LOGIN_EMAIL": "alice@example.test"})
+	fx := testutil.Seed(t, app)
+	w := &world{app: app, fx: fx, h: weather.Serve(t, app), token: testutil.Token(t, fx.Alice)}
+	if status, body := w.get(t, fx.Event.Id); status != http.StatusOK {
+		t.Errorf("%d %s", status, body)
+	}
+}
+
+func TestWeather_Labels(t *testing.T) {
+	for code, want := range map[int]string{
+		0: "Ciel dégagé", 1: "Peu nuageux", 2: "Peu nuageux", 3: "Couvert", 45: "Brouillard", 48: "Brouillard",
+		51: "Bruine", 53: "Bruine", 55: "Bruine", 56: "Bruine", 57: "Bruine", 61: "Pluie", 63: "Pluie", 65: "Forte pluie",
+		66: "Pluie verglaçante", 67: "Pluie verglaçante", 71: "Neige", 73: "Neige", 75: "Neige", 77: "Neige",
+		80: "Averses", 81: "Averses", 82: "Fortes averses", 85: "Averses de neige", 86: "Averses de neige",
+		95: "Orage", 96: "Orage et grêle", 99: "Orage et grêle",
+		4: "Temps inconnu", 62: "Temps inconnu", -1: "Temps inconnu", 1000: "Temps inconnu",
+	} {
+		if got := weather.Label(code); got != want {
+			t.Errorf("Label(%d) = %q, want %q", code, got, want)
+		}
+	}
+}
+
+func TestWeather_ValidatesTheDays(t *testing.T) {
+	day := func(d string) string {
+		return `{"daily":{"time":["` + d + `"],"weather_code":[61],"temperature_2m_max":[17],"temperature_2m_min":[9],"precipitation_probability_max":[60],"precipitation_sum":[2],"wind_speed_10m_max":[20],"wind_gusts_10m_max":[35]}}`
+	}
+	t.Run("a date outside the range, or that is no day, is dropped", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		w.meteo.body = `{"daily":{"time":["2026-06-13","2026-06-14","2026-06-15","bonjour","2026-6-13"],"weather_code":[61,61,61,61,61],` +
+			`"temperature_2m_max":[17,17,17,17,17],"temperature_2m_min":[9,9,9,9,9],"precipitation_probability_max":[1,1,1,1,1],` +
+			`"precipitation_sum":[1,1,1,1,1],"wind_speed_10m_max":[1,1,1,1,1],"wind_gusts_10m_max":[1,1,1,1,1]}}`
+		a := w.answer(t, w.fx.Event.Id)
+		if len(a.Days) != 2 || a.Days[0].Date != "2026-06-13" || a.Days[1].Date != "2026-06-14" {
+			t.Errorf("days %+v", a.Days)
+		}
+	})
+	t.Run("no usable day is a failure, not ok", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		w.meteo.body = day("2027-01-01")
+		if status, body := w.get(t, w.fx.Event.Id); status != http.StatusBadGateway || !strings.Contains(body, "weather_unavailable") {
+			t.Errorf("%d %s", status, body)
+		}
+		w2 := newWorld(t, "2026-06-10")
+		w2.meteo.body = `{"daily":{"time":[],"weather_code":[],"temperature_2m_max":[],"temperature_2m_min":[],"precipitation_probability_max":[],"precipitation_sum":[],"wind_speed_10m_max":[],"wind_gusts_10m_max":[]}}`
+		if status, _ := w2.get(t, w2.fx.Event.Id); status != http.StatusBadGateway {
+			t.Errorf("an empty list: status %d", status)
+		}
+	})
+}
+
+// windowOpenings are races (their first day) and the day the window of their
+// weather opens, across both changes of the clocks of Paris (29 March and
+// 25 October 2026). The same table is in web/src/features/weather/window.test.ts:
+// the page says the date of the opening without asking, and it must be the
+// server's `from`.
+var windowOpenings = [][2]string{
+	{"2026-06-13", "2026-06-06"},
+	{"2026-03-29", "2026-03-22"}, // the clocks go forward on the day of the race
+	{"2026-04-03", "2026-03-27"}, // the window opens across it
+	{"2026-10-25", "2026-10-18"}, // the clocks go back on the day of the race
+	{"2026-10-28", "2026-10-21"}, // the window opens across it
+	{"2026-11-22", "2026-11-15"},
+	{"2027-01-03", "2026-12-27"}, // across the new year
+}
+
+func TestWeather_FromIsSevenDaysBefore(t *testing.T) {
+	for _, row := range windowOpenings {
+		t.Run(row[0], func(t *testing.T) {
+			first, err := time.Parse(time.DateOnly, row[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The day before the opening, in Paris.
+			w := newWorld(t, first.AddDate(0, 0, -1).Format(time.DateOnly))
+			a := w.answer(t, w.event(t, "Annecy", row[0], "").Id)
+			if a.Status != "not_yet" || a.From != row[1] {
+				t.Fatalf("answer %+v, want not_yet from %s", a, row[1])
+			}
+		})
+	}
+}
+
+// Open-Meteo refuses a day after its UTC date plus 15 (a 400, which the route
+// would answer as a 502): the horizon is counted from the UTC date, though the
+// window of the weather is in Paris, a day ahead for an hour or two each night.
+func TestWeather_HorizonIsCountedInUTC(t *testing.T) {
+	for _, row := range []struct {
+		name, now, start, end, wantFrom, wantTo string
+	}{
+		{"winter, 00:57 in Paris", "2026-11-07T23:57:00Z", "2026-11-09", "2026-12-02", "2026-11-09", "2026-11-22"},
+		{"winter, noon", "2026-11-07T12:00:00Z", "2026-11-09", "2026-12-02", "2026-11-09", "2026-11-22"},
+		{"summer, 00:30 in Paris", "2026-06-10T22:30:00Z", "2026-06-12", "2026-07-20", "2026-06-12", "2026-06-25"},
+		{"summer, noon", "2026-06-10T12:00:00Z", "2026-06-12", "2026-07-20", "2026-06-12", "2026-06-25"},
+		{"a race that ends before the horizon", "2026-11-07T23:57:00Z", "2026-11-09", "2026-11-12", "2026-11-09", "2026-11-12"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			w := newWorld(t, "2026-06-10")
+			instant, err := time.Parse(time.RFC3339, row.now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			weather.SetNow(t, instant)
+			a := w.answer(t, w.event(t, "Annecy", row.start, row.end).Id)
+			if a.Status != "ok" {
+				t.Fatalf("status %q", a.Status)
+			}
+			q := w.meteo.last("/v1/forecast").Query
+			if q.Get("start_date") != row.wantFrom || q.Get("end_date") != row.wantTo {
+				t.Errorf("asked %s to %s, want %s to %s", q.Get("start_date"), q.Get("end_date"), row.wantFrom, row.wantTo)
+			}
+		})
+	}
+}

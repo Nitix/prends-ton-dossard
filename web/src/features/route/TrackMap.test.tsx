@@ -1,4 +1,9 @@
-import { Map as LeafletMap } from "leaflet";
+import {
+  LatLngBounds,
+  latLngBounds,
+  Map as LeafletMap,
+  type LatLngBoundsExpression,
+} from "leaflet";
 import { StrictMode, type ComponentProps } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
@@ -6,7 +11,9 @@ import { page } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { emulateMedia, resetMedia } from "../../test/media";
 import { BLANK_TILE } from "../../test/tiles";
+import { gateWheel } from "./gestures";
 import { toTrack } from "./gpx";
 import TrackMap, { TILE_ATTRIBUTION, TILE_URL } from "./TrackMap";
 
@@ -30,6 +37,10 @@ const OTHER_TRACK = toTrack([
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/** The box that a call of `fitBounds` was given. */
+const boundsOf = (box: LatLngBoundsExpression | undefined): LatLngBounds =>
+  box instanceof LatLngBounds ? box : latLngBounds(box ?? []);
 
 type Props = Partial<ComponentProps<typeof TrackMap>>;
 
@@ -198,7 +209,7 @@ test("TrackMap — a race that ends where it starts shows both marks", async () 
   expect(a && b && (a.bottom <= b.top + 1 || b.bottom <= a.top + 1)).toBe(true);
 });
 
-test("TrackMap — zoom buttons are 44 px, wheel zoom is off", async () => {
+test("TrackMap — zoom buttons are 44 px, the plain wheel is left to the page", async () => {
   const screen = await renderMap();
 
   // The buttons have names, in the language of the page, and are tap targets.
@@ -480,4 +491,322 @@ test("TrackMap — a map removed in the middle of a zoom leaves nothing that fai
   }
 
   expect(failures).toEqual([]);
+});
+
+/** The Leaflet map of the one that was just made (Leaflet gives no way to it from its element). */
+function leafletOf(fitBounds: { mock: { contexts: unknown[] } }): LeafletMap {
+  const map = fitBounds.mock.contexts.at(-1);
+  if (!(map instanceof LeafletMap)) throw new Error("no map was made");
+  return map;
+}
+
+/** A wheel over the middle of the map. */
+function wheelOver(screen: Screen, init: WheelEventInit): WheelEvent {
+  const event = new WheelEvent("wheel", {
+    bubbles: true,
+    cancelable: true,
+    deltaY: -400,
+    ...init,
+  });
+  part(screen, ".leaflet-pane.leaflet-map-pane").dispatchEvent(event);
+  return event;
+}
+
+const hintText = (screen: Screen) => screen.container.querySelector(".track-hint")?.textContent;
+
+test("TrackMap — la molette seule fait défiler la page et montre l'aide", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  const zoom = map.getZoom();
+
+  const event = wheelOver(screen, {});
+
+  expect(event.defaultPrevented).toBe(false);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.wheelHint("Ctrl"));
+  // The hint is for the eye only, and takes no pointer.
+  const hint = part(screen, ".track-hint");
+  expect(hint.getAttribute("aria-hidden")).toBe("true");
+  expect(getComputedStyle(hint).pointerEvents).toBe("none");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  expect(map.getZoom()).toBe(zoom);
+  // ... and it goes away by itself.
+  await expect.poll(() => hintText(screen), { timeout: 4000 }).toBeUndefined();
+});
+
+test("TrackMap — Ctrl + molette zoome", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  const zoom = map.getZoom();
+
+  const event = wheelOver(screen, { ctrlKey: true });
+
+  expect(event.defaultPrevented).toBe(true);
+  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBeGreaterThan(zoom);
+  expect(hintText(screen)).toBeUndefined();
+});
+
+test("TrackMap — zoomSnap 0,5 : un cran de molette reste d'un niveau, un pincement garde son demi-niveau", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  expect(map.options.zoomSnap).toBe(0.5);
+  expect(map.options.zoomDelta).toBe(1);
+
+  // A notch of a mouse (100 px, a little more than half a level in Leaflet's curve) is one level.
+  const zoom = map.getZoom();
+  wheelOver(screen, { ctrlKey: true, deltaY: -100 });
+  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBe(zoom + 1);
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  // A zoom of 1.3 (a small pinch) lands on 1.5 levels, not back where it started.
+  const before = map.getZoom();
+  map.setZoom(before + Math.log2(1.3), { animate: false });
+  expect(map.getZoom() - before).toBe(0.5);
+});
+
+test("TrackMap — ⌘ sur Mac", async () => {
+  vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  const zoom = map.getZoom();
+
+  wheelOver(screen, {});
+  await expect.poll(() => hintText(screen)).toBe(fr.route.wheelHint("⌘"));
+
+  expect(wheelOver(screen, { metaKey: true }).defaultPrevented).toBe(true);
+  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBeGreaterThan(zoom);
+});
+
+/** How long a test waits to be sure that no hint comes: well over what a render takes. */
+const NO_HINT_MS = 500;
+
+/** The device says that its main pointer is coarse (a finger). */
+function touchScreen() {
+  const matchMedia = window.matchMedia.bind(window);
+  vi.spyOn(window, "matchMedia").mockImplementation((query) =>
+    matchMedia(query.includes("pointer: coarse") ? "all" : query),
+  );
+}
+
+test("TrackMap — un appareil tactile n'a pas le glisser à un doigt", async () => {
+  touchScreen();
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  const map = leafletOf(fit);
+  expect(map.dragging.enabled()).toBe(false);
+  expect(map.touchZoom.enabled()).toBe(true);
+
+  const region = part(screen, ".leaflet-container");
+  // One finger really scrolls the page: the browser is left to pan vertically (Leaflet sets
+  // the touch-action from the handlers it has; with dragging off, it is not "none").
+  const touchAction = getComputedStyle(region).touchAction;
+  expect(touchAction).not.toBe("none");
+  expect(touchAction).toMatch(/pan-y|manipulation|auto/);
+  const touch = (type: string, id: number, x: number, y: number) =>
+    region.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "touch",
+        pointerId: id,
+        clientX: x,
+        clientY: y,
+        buttons: 1,
+      }),
+    );
+  // Two fingers moving are the map's: no hint.
+  touch("pointerdown", 1, 100, 100);
+  touch("pointerdown", 2, 140, 100);
+  touch("pointermove", 1, 100, 140);
+  expect(hintText(screen)).toBeUndefined();
+  touch("pointerup", 1, 100, 140);
+  touch("pointerup", 2, 140, 100);
+
+  // One finger that moves scrolls the page, and says so.
+  touch("pointerdown", 3, 100, 100);
+  touch("pointermove", 3, 100, 130);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+});
+
+test("TrackMap — sur un téléphone, un doigt que le navigateur reprend (pointercancel) montre l'aide", async () => {
+  touchScreen();
+  const screen = await renderMap();
+  const region = part(screen, ".leaflet-container");
+  const touch = (type: string, id: number, x: number, y: number) =>
+    region.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "touch",
+        pointerId: id,
+        clientX: x,
+        clientY: y,
+        buttons: type === "pointercancel" ? 0 : 1,
+      }),
+    );
+  // iOS can cancel the pointer before it has moved 4 px: the page scrolls, the map says why.
+  touch("pointerdown", 1, 100, 100);
+  touch("pointermove", 1, 100, 101);
+  expect(hintText(screen)).toBeUndefined();
+  touch("pointercancel", 1, 100, 101);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+
+  // Two fingers that are cancelled (a pinch the browser took) are no one-finger scroll: nothing to say.
+  await expect.poll(() => hintText(screen), { timeout: 4000 }).toBeUndefined();
+  touch("pointerdown", 2, 100, 100);
+  touch("pointerdown", 3, 140, 100);
+  touch("pointercancel", 2, 100, 100);
+  touch("pointercancel", 3, 140, 100);
+  // The hint renders a moment after the event: wait for it as long as the positive checks do.
+  await new Promise((resolve) => setTimeout(resolve, NO_HINT_MS));
+  expect(hintText(screen)).toBeUndefined();
+  // ... and a lone finger after that still says it.
+  touch("pointerdown", 4, 100, 100);
+  touch("pointercancel", 4, 100, 100);
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+});
+
+test("TrackMap — un doigt qui commence sur un bouton de zoom ne montre pas l'aide", async () => {
+  touchScreen();
+  const screen = await renderMap();
+  const button = part(screen, ".leaflet-control-zoom-in");
+  expect(button.closest(".leaflet-control")).not.toBeNull();
+  const touch = (type: string, x: number, y: number) =>
+    button.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerType: "touch",
+        pointerId: 7,
+        clientX: x,
+        clientY: y,
+        buttons: 1,
+      }),
+    );
+  touch("pointerdown", 20, 20);
+  touch("pointermove", 20, 50);
+  touch("pointercancel", 20, 50);
+  await new Promise((resolve) => setTimeout(resolve, NO_HINT_MS));
+  expect(hintText(screen)).toBeUndefined();
+  // The same finger on the body of the map does say it.
+  const region = part(screen, ".leaflet-container");
+  region.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      pointerType: "touch",
+      pointerId: 8,
+      clientX: 200,
+      clientY: 100,
+      buttons: 1,
+    }),
+  );
+  region.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      pointerType: "touch",
+      pointerId: 8,
+      clientX: 200,
+      clientY: 140,
+      buttons: 1,
+    }),
+  );
+  await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
+});
+
+test("TrackMap — avec une souris, la carte se déplace au glisser", async () => {
+  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  await renderMap();
+  expect(leafletOf(fit).dragging.enabled()).toBe(true);
+});
+
+test("TrackMap — la carte est décrite", async () => {
+  const screen = await renderMap();
+  const region = screen.getByRole("region", { name: fr.route.map });
+  await expect.element(region).toHaveAccessibleDescription(fr.route.mapHelp("Ctrl"));
+  expect(fr.route.mapHelp("Ctrl")).toBe(
+    "Boutons + et −, Ctrl + molette ou deux doigts pour zoomer.",
+  );
+});
+
+// gateWheel needs a DOM: the tests of the other gestures are in gestures.test.ts.
+test("gateWheel — stops a plain wheel, lets Ctrl or ⌘ through, and cleans up", () => {
+  const gate = document.createElement("div");
+  const inner = document.createElement("div");
+  gate.append(inner);
+  const reached = vi.fn<() => void>();
+  inner.addEventListener("wheel", reached);
+  const onPlain = vi.fn<() => void>();
+  const stop = gateWheel(gate, onPlain);
+
+  const wheel = (init: WheelEventInit) => {
+    const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+    inner.dispatchEvent(event);
+    return event;
+  };
+
+  const plain = wheel({ deltaY: 100 });
+  expect(reached).not.toHaveBeenCalled();
+  expect(onPlain).toHaveBeenCalledOnce();
+  expect(plain.defaultPrevented).toBe(false);
+
+  wheel({ deltaY: 100, ctrlKey: true });
+  wheel({ deltaY: 100, metaKey: true });
+  expect(reached).toHaveBeenCalledTimes(2);
+  expect(onPlain).toHaveBeenCalledOnce();
+
+  stop();
+  wheel({ deltaY: 100 });
+  expect(reached).toHaveBeenCalledTimes(3);
+  expect(onPlain).toHaveBeenCalledOnce();
+});
+
+test("TrackMap — la portion est mise en avant, et la carte s'y cadre", async () => {
+  const framed = vi.spyOn(LeafletMap.prototype, "fitBounds");
+  const screen = await renderMap();
+  expect(screen.container.querySelector("path.track-portion")).toBeNull();
+  const whole = part(screen, "path.track-line");
+  expect(getComputedStyle(whole).strokeOpacity).toBe("1");
+  const calls = framed.mock.calls.length;
+
+  // The first half of the track: 1.1 km of the 2.2.
+  await screen.rerender(mapOf({ range: { from: 0, to: 1.1 } }));
+  await expect.poll(() => framed.mock.calls.length).toBe(calls + 1);
+  const bounds = boundsOf(framed.mock.calls.at(-1)?.[0]);
+  // Its points are the start, then the bend: the finish is out of the frame.
+  expect(bounds.getSouth()).toBeCloseTo(45, 6);
+  expect(bounds.getNorth()).toBeLessThan(45.0105);
+  expect(bounds.getNorth()).toBeGreaterThan(45.007);
+  // A line of its own, thicker, over the track, which goes to half.
+  const portion = part(screen, "path.track-portion");
+  expect(Number.parseFloat(getComputedStyle(portion).strokeWidth)).toBeGreaterThan(
+    Number.parseFloat(getComputedStyle(whole).strokeWidth),
+  );
+  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("0.5");
+  // The ends of the track stay over the portion's line.
+  const paths = [...screen.container.querySelectorAll(".leaflet-overlay-pane path")];
+  expect(paths.indexOf(part(screen, "path.track-start"))).toBeGreaterThan(paths.indexOf(portion));
+  expect(paths.indexOf(part(screen, "path.track-finish"))).toBeGreaterThan(paths.indexOf(portion));
+
+  // Back to the whole track: framed again, the line is alone and plain.
+  await screen.rerender(mapOf({ range: null }));
+  await expect.poll(() => framed.mock.calls.length).toBe(calls + 2);
+  expect(boundsOf(framed.mock.calls.at(-1)?.[0]).getNorth()).toBeCloseTo(45.02, 6);
+  expect(screen.container.querySelector("path.track-portion")).toBeNull();
+  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("1");
+});
+
+test("TrackMap — une portion visible en couleurs forcées : son trait est celui du texte", async () => {
+  await emulateMedia({ forcedColors: "active" });
+  try {
+    const screen = await renderMap({ range: { from: 0, to: 1.1 } });
+    const portion = part(screen, "path.track-portion");
+    const probe = document.createElement("span");
+    probe.style.color = "CanvasText";
+    document.body.append(probe);
+    const text = getComputedStyle(probe).color;
+    probe.remove();
+    expect(getComputedStyle(portion).stroke).toBe(text);
+  } finally {
+    await resetMedia();
+  }
 });

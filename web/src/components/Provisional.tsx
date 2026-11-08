@@ -1,9 +1,11 @@
 import { useI18n } from "../i18n/I18nProvider";
+import { usePageTitle } from "../lib/usePageTitle";
 
 // The placeholder page, until the real screens exist. The app shell around it
 // owns the page's <main>.
 export function Provisional() {
   const { t } = useI18n();
+  usePageTitle(t.titles.notFound);
 
   return (
     <div className="provisional flex flex-col items-center justify-center p-4">
