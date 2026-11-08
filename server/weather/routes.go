@@ -1,12 +1,15 @@
 package weather
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +27,8 @@ import (
 const path = "/api/app/events/{id}/weather"
 
 // The window of the weather: from this many days before the first day to the
-// last day, and these many days from today, which is the horizon of Open-Meteo.
+// last day, and these many days from the UTC date (not the Paris one: Open-Meteo
+// counts its horizon from UTC), which is the horizon of Open-Meteo.
 const (
 	daysBefore = 7
 	horizon    = 16
@@ -44,15 +48,31 @@ type Place struct {
 	Format string `json:"format,omitempty"`
 }
 
+// / Start is the weather at the start of a format that has a start time, read at
+// the hour of that time (a start at 07:30 reads the 07:00 hour).
+type Start struct {
+	Format     string  `json:"format"` // what the format is called, as the site names it
+	Date       string  `json:"date"`
+	Time       string  `json:"time"` // HH:MM, Paris time, as the format has it
+	Code       int     `json:"code"`
+	Temp       float64 `json:"temp"`
+	RainChance int     `json:"rainChance"`
+	RainMm     float64 `json:"rainMm"`
+	WindKmh    float64 `json:"windKmh"`
+	GustKmh    float64 `json:"gustKmh"`
+}
+
 // Answer is what the route answers. (The JSON of PocketBase omits an empty value only for a field with no value at all, so stale is written as false.)
 type Answer struct {
-	Status    string `json:"status"` // ok | not_yet | over | no_day | no_place
-	From      string `json:"from,omitempty"`
-	Query     string `json:"query,omitempty"`
-	Place     *Place `json:"place,omitempty"`
-	Days      []Day  `json:"days,omitempty"`
-	FetchedAt string `json:"fetchedAt,omitempty"`
-	Stale     bool   `json:"stale,omitempty"`
+	Status string `json:"status"` // ok | not_yet | over | no_day | no_place
+	From   string `json:"from,omitempty"`
+	Query  string `json:"query,omitempty"`
+	Place  *Place `json:"place,omitempty"`
+	Days   []Day  `json:"days,omitempty"`
+	// Starts are the starts of the formats that have a start time on one of the days.
+	Starts    []Start `json:"starts,omitempty"`
+	FetchedAt string  `json:"fetchedAt,omitempty"`
+	Stale     bool    `json:"stale,omitempty"`
 }
 
 // trackStart is the first point of a track, if it has one.
@@ -63,7 +83,17 @@ type trackStart struct {
 }
 
 // forecastValue is a forecast that is kept.
-type forecastValue struct{ days []Day }
+type forecastValue struct {
+	days  []Day
+	hours map[string]Hour // by hourKey; none when no start time was asked
+}
+
+// startAsk is a format that has a start time on a day that is asked.
+type startAsk struct {
+	format *core.Record
+	date   string // YYYY-MM-DD
+	at     string // HH:MM
+}
 
 // service holds the caches and the budget, made once by Register.
 type service struct {
@@ -174,7 +204,15 @@ func (s *service) answer(ctx context.Context, event *core.Record) (Answer, error
 	if place == nil {
 		return Answer{Status: "no_place", Query: strings.TrimSpace(event.GetString("location"))}, nil
 	}
-	value, at, stale, err := s.forecast(ctx, lat, lon, ele, dayFrom, dayTo)
+	asks, err := s.startsAsked(event, dayFrom, dayTo)
+	if err != nil {
+		return Answer{}, err
+	}
+	value, at, stale, err := s.forecast(ctx, lat, lon, ele, dayFrom, dayTo, asks)
+	if err != nil {
+		return Answer{}, err
+	}
+	starts, err := s.startsOf(asks, value.hours)
 	if err != nil {
 		return Answer{}, err
 	}
@@ -182,15 +220,75 @@ func (s *service) answer(ctx context.Context, event *core.Record) (Answer, error
 		Status:    "ok",
 		Place:     place,
 		Days:      value.days,
+		Starts:    starts,
 		FetchedAt: at.UTC().Format(time.RFC3339),
 		Stale:     stale,
 	}, nil
 }
 
+// startsAsked are the formats of the event that have a start time on a day that
+// is asked (from to to), in the order of the page. A format has the day of its
+// date, or the first day of the event.
+func (s *service) startsAsked(event *core.Record, from, to string) ([]startAsk, error) {
+	formats, err := s.formatsOf(event)
+	if err != nil {
+		return nil, err
+	}
+	var asks []startAsk
+	for _, f := range formats {
+		at := f.GetString("start_time")
+		if at == "" || !events.ValidTime(at) {
+			continue
+		}
+		day := cmp.Or(f.GetString("date"), event.GetString("start_date"))
+		if day < from || day > to {
+			continue
+		}
+		asks = append(asks, startAsk{format: f, date: day, at: at})
+	}
+	return asks, nil
+}
+
+// startsOf reads each start at its hour. A start whose hour is not in hours has
+// no entry.
+func (s *service) startsOf(asks []startAsk, hours map[string]Hour) ([]Start, error) {
+	var starts []Start
+	for _, a := range asks {
+		hour, err := strconv.Atoi(a.at[:2])
+		if err != nil {
+			continue
+		}
+		h, ok := hours[hourKey(a.date, hour)]
+		if !ok {
+			continue
+		}
+		title, err := s.titleOf(a.format)
+		if err != nil {
+			return nil, err
+		}
+		starts = append(starts, Start{
+			Format: title, Date: a.date, Time: a.at,
+			Code: h.Code, Temp: h.Temp, RainChance: h.RainChance, RainMm: h.RainMm, WindKmh: h.WindKmh, GustKmh: h.GustKmh,
+		})
+	}
+	return starts, nil
+}
+
 // forecast is the forecast for a place and days: kept an hour, and, when
-// Open-Meteo fails, the last one under six hours old.
-func (s *service) forecast(ctx context.Context, lat, lon float64, ele *float64, from, to string) (forecastValue, time.Time, bool, error) {
+// Open-Meteo fails, the last one under six hours old. The hours are asked in the
+// same request when starts is not empty, and the key holds the starts (the day
+// and the time of each), so that a start time that changes is a forecast of its
+// own.
+func (s *service) forecast(ctx context.Context, lat, lon float64, ele *float64, from, to string, starts []startAsk) (forecastValue, time.Time, bool, error) {
 	key := fmt.Sprintf("%.2f|%.2f|%s|%s|%s", lat, lon, elevationKey(ele), from, to)
+	if len(starts) > 0 {
+		var parts []string
+		for _, a := range starts {
+			parts = append(parts, a.date+"@"+a.at)
+		}
+		slices.Sort(parts)
+		key += "|" + strings.Join(slices.Compact(parts), ",")
+	}
 	unlock, err := s.forecasts.locks.lock(ctx, key)
 	if err != nil {
 		return forecastValue{}, time.Time{}, false, err
@@ -202,9 +300,10 @@ func (s *service) forecast(ctx context.Context, lat, lon float64, ele *float64, 
 		return old.value, old.at, false, nil
 	}
 	var days []Day
+	var hours map[string]Hour
 	if s.failed("f|" + key) {
 		err = errRecentFailure
-	} else if days, err = s.src.forecast(ctx, lat, lon, ele, from, to); err != nil {
+	} else if days, hours, err = s.src.forecast(ctx, lat, lon, ele, from, to, len(starts) > 0); err != nil {
 		s.fail(ctx, "f|"+key, err)
 	}
 	if err != nil {
@@ -213,7 +312,7 @@ func (s *service) forecast(ctx context.Context, lat, lon float64, ele *float64, 
 		}
 		return forecastValue{}, time.Time{}, false, err
 	}
-	made := s.forecasts.put(key, forecastValue{days: days}, forecastTTL)
+	made := s.forecasts.put(key, forecastValue{days: days, hours: hours}, forecastTTL)
 	return made.value, made.at, false, nil
 }
 

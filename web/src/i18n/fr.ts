@@ -193,6 +193,17 @@ export const fr = {
       gust: string,
     ) =>
       `${date} · ${label} · ${tMin} à ${tMax} °C · pluie ${chance} %, ${mm} mm · rafales ${gust} km/h`,
+    // The special line of a start, all already formatted: the name of the format, its time, the weather in words (in lower case, it follows a colon), the temperature, the rain, the gusts.
+    start: (
+      format: string,
+      time: string,
+      label: string,
+      temp: string,
+      chance: string,
+      mm: string,
+      gust: string,
+    ) =>
+      `Départ de « ${format} » à ${time} : ${label}, ${temp} °C, pluie ${chance} % (${mm} mm), rafales ${gust} km/h`,
     // Under a millimetre: a few drops are not none.
     lessThanOneMm: "< 1",
     // The WMO codes in words (see labels.ts).

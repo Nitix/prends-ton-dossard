@@ -25,6 +25,17 @@
 // days (the horizon of Open-Meteo); each date is checked and kept only inside
 // the range asked, and an answer with no usable day is a failure.
 //
+// # The starts
+//
+// A format may have a start time (HH:MM, Paris time). When one has it on a day
+// that is asked, the same forecast request also asks for the hours (`hourly`;
+// `timezone=auto` makes them the hours of the place), so there is no extra call
+// and no extra budget, and the answer has a `starts` entry for it: the weather
+// at the hour that holds the time (07:30 reads 07:00). The hours are checked as
+// the days are: lists of the same length, an hour written YYYY-MM-DDTHH:00 on a
+// day that is asked. A start whose hour is missing has no entry. The start times
+// are part of the key of the forecast.
+//
 // # Cache and budget
 //
 // Everything is in memory and bounded (see cache.go): a forecast is kept an

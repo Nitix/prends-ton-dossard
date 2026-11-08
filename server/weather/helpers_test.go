@@ -102,11 +102,33 @@ func (m *meteo) serve(w http.ResponseWriter, r *http.Request) {
 		for i, d := range days {
 			dates[i] = d
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"daily": map[string]any{
+		answer := map[string]any{"daily": map[string]any{
 			"time": dates, "weather_code": each(61), "temperature_2m_max": each(17.3), "temperature_2m_min": each(9.1),
 			"precipitation_probability_max": each(60), "precipitation_sum": each(2.1),
 			"wind_speed_10m_max": each(20), "wind_gusts_10m_max": each(35),
-		}})
+		}}
+		// The hours, when they are asked for: each reads as its own hour, so that a test sees which one
+		// was read (the code is the hour, the temperature the hour and a half, the chance twice the
+		// hour, the rain a tenth of it, the wind and the gusts the hour plus 1 and plus 10).
+		if q.Get("hourly") != "" {
+			var times, codes, temps, chances, rains, winds, gusts []any
+			for _, d := range days {
+				for h := range 24 {
+					times = append(times, fmt.Sprintf("%sT%02d:00", d, h))
+					codes = append(codes, h)
+					temps = append(temps, float64(h)+0.5)
+					chances = append(chances, h*2)
+					rains = append(rains, float64(h)/10)
+					winds = append(winds, h+1)
+					gusts = append(gusts, h+10)
+				}
+			}
+			answer["hourly"] = map[string]any{
+				"time": times, "weather_code": codes, "temperature_2m": temps, "precipitation_probability": chances,
+				"precipitation": rains, "wind_speed_10m": winds, "wind_gusts_10m": gusts,
+			}
+		}
+		_ = json.NewEncoder(w).Encode(answer)
 	default:
 		http.NotFound(w, r)
 	}

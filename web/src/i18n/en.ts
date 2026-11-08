@@ -166,6 +166,16 @@ export const en = {
       gust: string,
     ) =>
       `${date} · ${label} · ${tMin} to ${tMax} °C · rain ${chance}%, ${mm} mm · gusts ${gust} km/h`,
+    start: (
+      format: string,
+      time: string,
+      label: string,
+      temp: string,
+      chance: string,
+      mm: string,
+      gust: string,
+    ) =>
+      `Start of “${format}” at ${time}: ${label}, ${temp} °C, rain ${chance}% (${mm} mm), gusts ${gust} km/h`,
     lessThanOneMm: "< 1",
     kinds: {
       clear: "Clear sky",

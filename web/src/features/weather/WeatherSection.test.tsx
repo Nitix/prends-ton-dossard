@@ -141,6 +141,87 @@ describe("WeatherSection", () => {
     );
   });
 
+  describe("l'heure de départ", () => {
+    // 20 % de pluie, 0 mm, 4 °C, des rafales à 30 km/h, un ciel peu nuageux.
+    const START = {
+      format: "Trail 42 km",
+      date: "2026-06-14",
+      time: "07:30",
+      code: 2,
+      temp: 4.2,
+      rainChance: 20,
+      rainMm: 0,
+      windKmh: 18,
+      gustKmh: 30,
+    };
+    const WITH_START: Weather = { ...FOUND_PLACE, starts: [START] };
+
+    test("WeatherSection — une ligne spéciale sous le jour du départ, et les lignes des jours restent", async () => {
+      const screen = await renderSection(WITH_START);
+      await expect.poll(() => screen.container.querySelectorAll(".weather-start").length).toBe(1);
+      const days = screen.container.querySelectorAll(".weather-days > li");
+      expect(days).toHaveLength(2);
+      // The day line is what it was, with the minimum and the maximum of the day.
+      expect(plain(days[0]?.textContent)).toBe(
+        "sam. 13 juin · Averses · 9 à 17 °C · pluie 60 %, 2 mm · rafales 35 km/h",
+      );
+      expect(days[0]?.querySelector(".weather-start")).toBeNull();
+      expect(plain(days[1]?.querySelector(".weather-day-line")?.textContent)).toBe(
+        "dim. 14 juin · Ciel dégagé · 9 à 17 °C · pluie 5 %, 0 mm · rafales 12 km/h",
+      );
+      // Under the day of the start.
+      const start = days[1]?.querySelector(".weather-start");
+      expect(plain(start?.textContent)).toBe(
+        "Départ de « Trail 42 km » à 7 h 30 : peu nuageux, 4 °C, pluie 20 % (0 mm), rafales 30 km/h",
+      );
+    });
+
+    test("WeatherSection — la ligne du départ a son icône, décorative, et les mêmes espaces insécables", async () => {
+      const screen = await renderSection(WITH_START);
+      await expect.poll(() => screen.container.querySelector(".weather-start")).not.toBeNull();
+      const start = screen.container.querySelector(".weather-start");
+      expect(start?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+      const text = start?.textContent ?? "";
+      for (const unit of ["°C", "%", "mm)", "km/h"]) expect(text).toContain("\u00A0" + unit);
+      // The time of the start does not break either.
+      expect(text).toContain("7\u00A0h\u00A030");
+    });
+
+    test("WeatherSection — le nom de l'épreuve est lu comme un texte, pas comme du balisage", async () => {
+      const screen = await renderSection({
+        ...FOUND_PLACE,
+        starts: [{ ...START, format: "<b>Trail</b> « 42 »" }],
+      });
+      await expect.poll(() => screen.container.querySelector(".weather-start")).not.toBeNull();
+      const start = screen.container.querySelector(".weather-start");
+      expect(start?.querySelector("b")).toBeNull();
+      expect(start?.textContent).toContain("<b>Trail</b> « 42 »");
+    });
+
+    test("WeatherSection — en anglais", async () => {
+      const screen = await renderSection(WITH_START, { languages: ["en-GB"] });
+      await expect.poll(() => screen.container.querySelector(".weather-start")).not.toBeNull();
+      expect(plain(screen.container.querySelector(".weather-start")?.textContent)).toBe(
+        "Start of “Trail 42 km” at 7:30: partly cloudy, 4 °C, rain 20% (0 mm), gusts 30 km/h",
+      );
+    });
+
+    test("WeatherSection — un départ dont le jour n'est pas dans la liste n'est pas montré, sans départ pas de liste", async () => {
+      const lost = await renderSection({
+        ...FOUND_PLACE,
+        starts: [{ ...START, date: "2026-06-20" }],
+      });
+      await expect.element(title()).toBeVisible();
+      await expect.poll(() => lost.container.querySelectorAll(".weather-days > li").length).toBe(2);
+      expect(lost.container.querySelector(".weather-start")).toBeNull();
+      await lost.unmount();
+
+      const none = await renderSection(FOUND_PLACE);
+      await expect.poll(() => none.container.querySelectorAll(".weather-days > li").length).toBe(2);
+      expect(none.container.querySelector(".weather-starts")).toBeNull();
+    });
+  });
+
   test("WeatherSection — le lieu : la trace, ou le lieu trouvé", async () => {
     const onTrack = await renderSection(FOUND_TRACK);
     await expect

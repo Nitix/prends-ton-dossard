@@ -29,6 +29,9 @@ const maxAnswer = 1 << 20
 
 const dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max"
 
+// hourlyFields are asked, in the same request, only when a format has a start time on a day that is asked.
+const hourlyFields = "temperature_2m,weather_code,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m"
+
 var (
 	errBudget  = errors.New("weather: the budget of calls is spent")
 	errService = errors.New("weather: Open-Meteo did not answer well")
@@ -100,9 +103,24 @@ type Day struct {
 	GustKmh    float64 `json:"gustKmh"`
 }
 
-// forecast asks for the days from start to end (YYYY-MM-DD) at a place. ele is
-// the altitude of a track, rounded to 50 m, or nil.
-func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, start, end string) ([]Day, error) {
+// Hour is the weather of an hour, as it is read for a start.
+type Hour struct {
+	Code       int
+	Temp       float64
+	RainChance int
+	RainMm     float64
+	WindKmh    float64
+	GustKmh    float64
+}
+
+// hourKey is the key of an hour in the hours of a forecast: "2026-06-14T07".
+func hourKey(date string, hour int) string { return fmt.Sprintf("%sT%02d", date, hour) }
+
+// forecast asks for the days from start to end (YYYY-MM-DD) at a place, and, when
+// hourly is set, the hours of those days in the same request (timezone=auto makes
+// them the hours of the place). ele is the altitude of a track, rounded to 50 m,
+// or nil. The hours are by hourKey.
+func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, start, end string, hourly bool) ([]Day, map[string]Hour, error) {
 	q := url.Values{}
 	q.Set("latitude", fmt.Sprintf("%.2f", lat))
 	q.Set("longitude", fmt.Sprintf("%.2f", lon))
@@ -110,6 +128,9 @@ func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, s
 		q.Set("elevation", fmt.Sprintf("%d", elevation50(*ele)))
 	}
 	q.Set("daily", dailyFields)
+	if hourly {
+		q.Set("hourly", hourlyFields)
+	}
 	q.Set("timezone", "auto")
 	q.Set("start_date", start)
 	q.Set("end_date", end)
@@ -125,15 +146,24 @@ func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, s
 			Wind   []*float64 `json:"wind_speed_10m_max"`
 			Gusts  []*float64 `json:"wind_gusts_10m_max"`
 		} `json:"daily"`
+		Hourly struct {
+			Time   []string   `json:"time"`
+			Temp   []*float64 `json:"temperature_2m"`
+			Code   []*float64 `json:"weather_code"`
+			Chance []*float64 `json:"precipitation_probability"`
+			Rain   []*float64 `json:"precipitation"`
+			Wind   []*float64 `json:"wind_speed_10m"`
+			Gusts  []*float64 `json:"wind_gusts_10m"`
+		} `json:"hourly"`
 	}
 	if err := s.get(ctx, forecastURL, q, &answer); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	d := answer.Daily
 	n := len(d.Time)
 	for _, l := range []int{len(d.Code), len(d.TMax), len(d.TMin), len(d.Chance), len(d.Rain), len(d.Wind), len(d.Gusts)} {
 		if l != n {
-			return nil, fmt.Errorf("%w: the lists of days differ", errService)
+			return nil, nil, fmt.Errorf("%w: the lists of days differ", errService)
 		}
 	}
 	or0 := func(p *float64) float64 {
@@ -165,9 +195,54 @@ func (s *source) forecast(ctx context.Context, lat, lon float64, ele *float64, s
 		})
 	}
 	if len(days) == 0 {
-		return nil, fmt.Errorf("%w: no usable day", errService)
+		return nil, nil, fmt.Errorf("%w: no usable day", errService)
 	}
-	return days, nil
+	if !hourly {
+		return days, nil, nil
+	}
+	hours, err := readHours(answer.Hourly.Time, answer.Hourly.Temp, answer.Hourly.Code, answer.Hourly.Chance, answer.Hourly.Rain, answer.Hourly.Wind, answer.Hourly.Gusts, start, end)
+	if err != nil {
+		return nil, nil, err
+	}
+	return days, hours, nil
+}
+
+// readHours checks the hours of an answer as strictly as its days: the lists
+// have the length of the times, and an hour that is not written
+// YYYY-MM-DDTHH:00, or is not on a day asked, or has no code or temperature, is
+// not kept.
+func readHours(times []string, temp, code, chance, rain, wind, gusts []*float64, start, end string) (map[string]Hour, error) {
+	for _, l := range []int{len(temp), len(code), len(chance), len(rain), len(wind), len(gusts)} {
+		if l != len(times) {
+			return nil, fmt.Errorf("%w: the lists of hours differ", errService)
+		}
+	}
+	or0 := func(p *float64) float64 {
+		if p == nil {
+			return 0
+		}
+		return *p
+	}
+	hours := map[string]Hour{}
+	for i, text := range times {
+		parsed, err := time.Parse("2006-01-02T15:04", text)
+		if err != nil || parsed.Format("2006-01-02T15:04") != text || parsed.Minute() != 0 {
+			continue
+		}
+		date := parsed.Format(time.DateOnly)
+		if date < start || date > end || code[i] == nil || temp[i] == nil {
+			continue
+		}
+		hours[hourKey(date, parsed.Hour())] = Hour{
+			Code:       int(*code[i]),
+			Temp:       *temp[i],
+			RainChance: int(math.Round(or0(chance[i]))),
+			RainMm:     or0(rain[i]),
+			WindKmh:    or0(wind[i]),
+			GustKmh:    or0(gusts[i]),
+		}
+	}
+	return hours, nil
 }
 
 // found is a place that the geocoding gave.

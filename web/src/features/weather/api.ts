@@ -20,6 +20,25 @@ export type WeatherDay = {
   gustKmh: number;
 };
 
+/**
+ * The weather at the start of a format that has a start time, read at the hour of that time
+ * (07:30 reads the 07:00 hour): the same units as a day. `format` is what the format is called.
+ */
+export type WeatherStart = {
+  format: string;
+  /** `YYYY-MM-DD`: the day of the start, which is one of the days of the list. */
+  date: string;
+  /** `HH:MM`, Paris time. */
+  time: string;
+  code: number;
+  /** In °C. */
+  temp: number;
+  rainChance: number;
+  rainMm: number;
+  windKmh: number;
+  gustKmh: number;
+};
+
 /** Where the forecast is for: the start of a track (`format` is the race), or a place that was found (`name` and its `detail`). */
 export type WeatherPlace = {
   source: "track" | "place";
@@ -35,7 +54,15 @@ export type WeatherPlace = {
  * three cases itself and asks only inside the window.
  */
 export type Weather =
-  | { status: "ok"; place: WeatherPlace; days: WeatherDay[]; fetchedAt: string; stale?: boolean }
+  | {
+      status: "ok";
+      place: WeatherPlace;
+      days: WeatherDay[];
+      /** The starts of the formats that have a start time, on one of the days; none when no format has. */
+      starts?: WeatherStart[];
+      fetchedAt: string;
+      stale?: boolean;
+    }
   | { status: "no_place"; query: string }
   | { status: "not_yet"; from: string }
   | { status: "over" }

@@ -20,7 +20,7 @@ import { instantOf, parseDate } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import { useToday } from "../../lib/useToday";
 import type { EventView } from "../events/api";
-import { useWeather, type WeatherDay, type WeatherPlace } from "./api";
+import { useWeather, type WeatherDay, type WeatherPlace, type WeatherStart } from "./api";
 import { weatherKind, weatherLabel, type WeatherKind } from "./labels";
 import { weatherPhase } from "./window";
 
@@ -49,6 +49,26 @@ function dayLine(day: WeatherDay, f: Formatters, t: Messages): string {
     f.integer(day.rainChance),
     mm,
     f.integer(day.gustKmh),
+  );
+}
+
+/**
+ * The special line of a start, readable on its own: « Départ de « Trail 42 km » à 7 h 30 : peu
+ * nuageux, 4 °C, pluie 20 % (0 mm), rafales 30 km/h ». The weather in words follows a colon, so it
+ * is in lower case; the numbers are those of a day line.
+ */
+function startLine(start: WeatherStart, f: Formatters, t: Messages): string {
+  const mm =
+    start.rainMm > 0 && start.rainMm < 0.5 ? t.weather.lessThanOneMm : f.integer(start.rainMm);
+  const label = weatherLabel(start.code, t);
+  return t.weather.start(
+    start.format,
+    f.startTime(start.time),
+    label.charAt(0).toLocaleLowerCase() + label.slice(1),
+    f.integer(start.temp),
+    f.integer(start.rainChance),
+    mm,
+    f.integer(start.gustKmh),
   );
 }
 
@@ -102,12 +122,30 @@ export function WeatherSection({ view }: { view: EventView }) {
     body = (
       <>
         <ul className="weather-days flex flex-col gap-2">
-          {weather.days.map((day) => (
-            <li key={day.date} className="weather-day flex items-start gap-2.5">
-              <span className="mt-0.5">{icon(day.code)}</span>
-              <span>{dayLine(day, f, t)}</span>
-            </li>
-          ))}
+          {weather.days.map((day) => {
+            const starts = (weather.starts ?? []).filter((start) => start.date === day.date);
+            return (
+              <li key={day.date} className="weather-day flex flex-col gap-2">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5">{icon(day.code)}</span>
+                  <span className="weather-day-line">{dayLine(day, f, t)}</span>
+                </div>
+                {starts.length > 0 && (
+                  <ul className="weather-starts flex flex-col gap-2 pl-7.5">
+                    {starts.map((start) => (
+                      <li
+                        key={`${start.format}|${start.time}`}
+                        className="weather-start flex items-start gap-2.5"
+                      >
+                        <span className="mt-0.5">{icon(start.code)}</span>
+                        <span>{startLine(start, f, t)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
         <p className="weather-place text-sm text-neutral-700">{placeLine(weather.place, t)}</p>
         <p className="weather-time text-sm text-neutral-600">
