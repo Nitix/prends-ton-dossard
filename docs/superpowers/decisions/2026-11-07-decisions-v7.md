@@ -110,6 +110,15 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 
 - **Décision :** la route de la météo existe sur la démo (aucune donnée personnelle, bornée par le budget).
 
+### 21. Une heure de départ par épreuve, et sa ligne de météo
+
+- **Demandé par l'utilisateur, le 2026-11-08, pour la v7** : « avec température min et max de la journée comme là, tout pareil, mais avec une ligne spéciale heure de départ si indiquée ».
+- **Décision :** chaque épreuve a une **heure de départ facultative** (`formats.start_time`, HH:MM, heure de Paris comme les ouvertures, migration `9r`). La section « Météo prévue » garde ses lignes de jour (minimum et maximum de la journée) et ajoute, sous le jour d'un départ, une ligne « Départ de « 42 km » à 7 h 30 : … » avec le temps de l'heure pleine qui contient l'heure (7 h 30 lit 7 h).
+- **Une course au mois n'a pas d'heure de départ** (refus `format_time_month`), comme ses épreuves n'ont pas de date : passer une course au mois efface les heures avec les dates (lot du formulaire, plan du MCP, fusion).
+- **Pas d'appel de plus :** les heures sont demandées dans la requête de la prévision, seulement quand une épreuve a une heure un jour demandé ; la clé du cache porte les heures de départ.
+- **Le reste ne bouge pas :** l'heure ne déplace pas le jour de la course et ne change aucun rappel ; les flux d'agenda et le .ics restent des journées entières.
+- **Le matériel (n° 19)** devait prendre la migration `9r` : c'est maintenant l'heure de départ, il prendrait la suivante.
+
 ## Le MCP et le dev
 
 ### 17. Deux outils nouveaux, un champ
@@ -134,7 +143,7 @@ Conception : `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (son § 16
 
 ### 20. Ce qui reste hors de la v7
 
-- Un aperçu (vignette) dans WhatsApp ; les rappels d'autre chose que l'ouverture (date limite, résultat à saisir) ; un email de rappel (le site n'en envoie pas) ; la météo heure par heure ; les notifications par l'assistant ; une page « historique des rappels ».
+- Un aperçu (vignette) dans WhatsApp ; les rappels d'autre chose que l'ouverture (date limite, résultat à saisir) ; un email de rappel (le site n'en envoie pas) ; la météo heure par heure (sauf à l'heure de départ d'une épreuve, n° 21) ; les notifications par l'assistant ; une page « historique des rappels ».
 - Les tests sur GitHub et les sauvegardes hors du serveur (`docs/TODO.md`).
 
 ## À faire de ton côté

@@ -651,7 +651,20 @@ Les codes WMO deviennent des mots (fr / en) :
 
 **Accessibilité** : une liste (`<ul>`), chaque jour en une phrase lisible seule ; aucune information par l'icône seule ; le bouton « Réessayer » de `LoadFailure`.
 
-### 10.7 Tests
+### 10.7 Heure de départ
+
+Demandée par l'utilisateur le 2026-11-08 (décision n° 21).
+
+- **Donnée :** `formats.start_time`, un texte `HH:MM` (motif `^([01]\d|2[0-3]):[0-5]\d$`), heure de Paris, vide quand elle est inconnue (migration `9r_format_start_time.go`, qui prend la lettre que le matériel du § 11.1 se réservait : il prendrait la suivante). Facultative.
+- **Règle :** une course au mois n'a pas d'heure de départ : `format_time_month` (« Une épreuve d'une course au mois n'a pas d'heure de départ. »), sur `start_time` pour une épreuve, sur `date_precision` pour une course qui passe au mois avec une épreuve qui en a une. Passer au mois efface les heures avec les dates (lot du formulaire, plan du MCP, fusion dans une course au mois).
+- **Formulaire :** « Heure de départ » (`type="time"`, pas d'une minute) après la date de l'épreuve, avec « Facultative. Elle donne la météo de l'heure du départ. » ; masquée pour une course au mois, le brouillon garde ce qui est saisi ; l'erreur du serveur est sous le champ.
+- **Fiche et partage :** « départ à 7 h 30 » près du jour de l'épreuve (seul pour une course d'un jour), par `Intl` en heure de Paris ; le texte partagé l'ajoute à la ligne de l'épreuve. Les flux d'agenda et le .ics ne changent pas (journées entières).
+- **Météo :** la requête de prévision ajoute `hourly=temperature_2m,weather_code,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m` seulement quand une épreuve a une heure un jour demandé (aucun appel de plus, aucun budget de plus ; `timezone=auto` met les heures à l'heure du lieu). La réponse gagne `starts` : `{format, date, time, code, temp, rainChance, rainMm, windKmh, gustKmh}`, un par épreuve qui a une heure un jour de `days`, lu à l'heure pleine qui la contient ; aucune entrée pour un jour hors de `days` ni pour une heure absente. Les heures sont validées comme les jours (même longueur, heure écrite `AAAA-MM-JJTHH:00` sur un jour demandé) et le plafond d'un mégaoctet reste. Les heures de départ font partie de la clé du cache.
+- **Section :** les lignes de jour sont celles du § 10.6. Sous le jour d'un départ, une ligne par départ : « Départ de « 42 km » à 7 h 30 : nuageux, 4 °C, pluie 20 % (0 mm), rafales 30 km/h » (en : « Start of “42 km” at 7:30: cloudy, 4 °C, rain 20% (0 mm), gusts 30 km/h »), mêmes icônes, mêmes nombres, mêmes espaces insécables ; une phrase lisible seule.
+- **MCP :** `create_event`, `update_event` (et les outils d'épreuve) prennent `start_time` ; `get_event` et `search_events` le donnent ; `get_weather` donne `starts` (le nom de l'épreuve cité). Les nombres d'outils ne changent pas. Vider une heure demande une confirmation, comme vider un champ.
+- **Démo :** l'épreuve de 42 km du « Trail des Crêtes » part à 07:30 ; l'autre n'a pas d'heure.
+
+### 10.8 Tests
 
 - Go (faux Open-Meteo) : `TestWeather_SendsOnlyPlaceAndDays` (les paramètres exacts des deux requêtes, rien d'autre) ; `TestWeather_Window` (J-8, J-7, le jour, le lendemain de la fin, course au mois) ; `TestWeather_TrackStart` (premier point, `rtept`, fichier sans point, gros fichier lu jusqu'à 1 Mo seulement) ; `TestWeather_Geocoding` (texte entier, parties, introuvable) ; `TestWeather_Cache` (un appel pour deux demandes, une heure plus tard un autre, demandes simultanées) ; `TestWeather_StaleOnError` ; `TestWeather_Budget` ; `TestWeather_Route` (session requise, 404, codes).
 - Web : `weatherWindow` ; `WeatherSection — chaque état` ; `weatherLabel — chaque code`.
@@ -891,7 +904,7 @@ Ce que ni tes réponses ni les arbitrages ne tranchaient ; dis lesquelles revoir
 
 **Le MCP et le dev**
 
-30. **Deux outils de membre** : `reminders` et `get_weather` (34 de membre, 45 d'admin ; `gear_checklist` n'est pas construit) ; pas d'outil pour activer un appareil ; confirmations pour vider une ouverture ou une liste de matériel, et pour passer au mois une course aux épreuves datées.
+30. **Deux outils de membre** : `reminders` et `get_weather` (34 de membre, 45 d'admin ; `gear_checklist` n'est pas construit) ; pas d'outil pour activer un appareil ; confirmations pour vider une ouverture, et pour passer au mois une course aux épreuves datées.
 31. **Environnement de dev `dev-prends-ton-dossard.ketra.fr`** (`/opt/ptd-dev`, port 8130), mot de passe du `seed` dans `/opt/ptd-dev-secrets/SEED_PASSWORD`.
 
 **Vérifié** (le 2026-11-07) : les conditions, la licence et la documentation d'Open-Meteo (`open-meteo.com/en/terms`, `/en/licence`, `/en/docs`) ; Web Push sur iOS (`webkit.org/blog/13878`, et l'exigence d'un geste dans des sources secondaires) ; la prise en charge de Web Share (`caniuse.com/web-share` : Firefox sur ordinateur jamais, Firefox Android oui ; MDN `Navigator.share`) ; le sort des `VALARM` d'un abonnement (Google Agenda et Outlook les ignorent d'après des rapports d'utilisateurs, sans source officielle ; Apple Calendrier sur Mac les retire par défaut, case « supprimer les alertes »). La RFC 8291 et la RFC 8292 sont celles de l'IETF ; leur exemple sert de test.
