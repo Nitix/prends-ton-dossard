@@ -233,6 +233,7 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			"elevation_gain_m": format.elevationGainM,
 			"price_eur":        format.price,
 			"date":             format.date,
+			"start_time":       format.startTime,
 		}
 		if format.track {
 			file, err := filesystem.NewFileFromBytes(seedTrack, "boucle-des-cretes.gpx")
@@ -426,6 +427,7 @@ type formatSpec struct {
 	date           string  // YYYY-MM-DD, within its event; may be empty
 	price          float64 // in euros, to the cent at most; zero when the format has none
 	track          bool    // the format has the track of the demo (seedTrack)
+	startTime      string  // HH:MM, Paris time; empty when the format has none
 	entries        []entrySpec
 	// results are the results of some of the entries: a finisher's time, rank
 	// and note, or the note of a runner who gave up. Each is for a runner of
@@ -482,7 +484,7 @@ func demoEvents(today time.Time) []eventSpec {
 			createdBy: runnerAlice,
 			formats: []formatSpec{
 				{
-					name: "Trail long", raceType: "Trail", distanceKm: 42, elevationGainM: 2400, price: 65, track: true,
+					name: "Trail long", raceType: "Trail", distanceKm: 42, elevationGainM: 2400, price: 65, track: true, startTime: "07:30",
 					entries: []entrySpec{
 						{runnerAlice, "registered", runnerAlice},
 						{runnerBob, "interested", runnerAlice},

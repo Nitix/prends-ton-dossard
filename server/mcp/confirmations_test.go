@@ -131,6 +131,8 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 	alice := newToken(t, app, fx.Alice)
 
 	update(t, app, fx.Event, map[string]any{"notes": "Navette depuis la gare à 6 h."})
+	// A format that starts at 9:00.
+	update(t, app, fx.F15, map[string]any{"start_time": "09:00"})
 	// A race that opens its registration on the 1st of May at 10:00.
 	update(t, app, fx.Event2, map[string]any{"registration_opening": "2026-05-01", "registration_opening_time": "10:00"})
 	// An old race of three days, whose last day is the one of a format nobody
@@ -225,6 +227,11 @@ func TestTools_Confirmation_NothingWrittenFirst(t *testing.T) {
 			"update_format: a field cleared", "update_format",
 			map[string]any{"format_id": fx.F42.Id, "elevation_gain_m": 0},
 			[]string{"« Trail 42 km »", "le D+ serait effacé", "2400"},
+		},
+		{
+			"update_format: the start time cleared", "update_format",
+			map[string]any{"format_id": fx.F15.Id, "start_time": ""},
+			[]string{"« Trail 15 km »", "l'heure de départ serait effacée", "09:00"},
 		},
 		{
 			"update_format: the day moved, with participants", "update_format",

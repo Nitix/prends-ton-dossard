@@ -915,6 +915,27 @@ func TestSeed_V7Data(t *testing.T) {
 	if short.GetString("gpx") != "" {
 		t.Errorf("the Trail court has the file %q, want none", short.GetString("gpx"))
 	}
+	// The 42 km starts at 07:30, so that the weather shows the line of the start in dev; the other format has no time.
+	if got := long.GetString("start_time"); got != "07:30" {
+		t.Errorf("the Trail long starts at %q, want 07:30", got)
+	}
+	if got := short.GetString("start_time"); got != "" {
+		t.Errorf("the Trail court starts at %q, want no time", got)
+	}
+	// No other format of the demo has a time: the races known by their month cannot, and the rest has none to show.
+	every, err := app.FindAllRecords("formats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTime := 0
+	for _, format := range every {
+		if format.GetString("start_time") != "" {
+			withTime++
+		}
+	}
+	if withTime != 1 {
+		t.Errorf("%d formats of the demo have a start time, want the Trail long only", withTime)
+	}
 
 	// The Grand Trail du Vercors: a month, seven months ahead.
 	vercors := event("Grand Trail du Vercors")

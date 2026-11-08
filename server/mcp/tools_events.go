@@ -391,11 +391,11 @@ func (t *tools) updateEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in u
 		if args.DatePrecision != nil {
 			draft.DatePrecision = *args.DatePrecision
 		}
-		// A race that becomes a month loses the days of its formats (the form empties them first);
+		// A race that becomes a month loses the days and the start times of its formats (the form empties them first);
 		// a day that this call gives to one is refused (monthRefusal).
 		if monthOnly && !view.record.monthOnly() {
 			for i := range draft.Formats {
-				draft.Formats[i].Date = ""
+				draft.Formats[i].Date, draft.Formats[i].StartTime = "", ""
 			}
 		}
 		set(&draft.RegistrationURL, args.RegistrationURL)

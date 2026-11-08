@@ -46,8 +46,26 @@ func newFakeMeteo(t *testing.T, today string) *fakeMeteo {
 				http.Error(w, "down", http.StatusInternalServerError)
 				return
 			}
+			hourly := ""
+			if q.Get("hourly") != "" {
+				// The 24 hours of the first day: the code 3, and the hour for the rest (the temperature is
+				// the hour and a half, the chance twice the hour, the wind and the gusts the hour plus 1 and 10).
+				var times, temps, chances, rains, winds, gusts, codes []string
+				for h := range 24 {
+					times = append(times, fmt.Sprintf("\"%sT%02d:00\"", q.Get("start_date"), h))
+					codes = append(codes, "3")
+					temps = append(temps, fmt.Sprint(float64(h)+0.5))
+					chances = append(chances, fmt.Sprint(h*2))
+					rains = append(rains, "0")
+					winds = append(winds, fmt.Sprint(h+1))
+					gusts = append(gusts, fmt.Sprint(h+10))
+				}
+				join := strings.Join
+				hourly = fmt.Sprintf(`,"hourly":{"time":[%s],"weather_code":[%s],"temperature_2m":[%s],"precipitation_probability":[%s],"precipitation":[%s],"wind_speed_10m":[%s],"wind_gusts_10m":[%s]}`,
+					join(times, ","), join(codes, ","), join(temps, ","), join(chances, ","), join(rains, ","), join(winds, ","), join(gusts, ","))
+			}
 			fmt.Fprintf(w, `{"daily":{"time":[%q],"weather_code":[61],"temperature_2m_max":[17.3],"temperature_2m_min":[9.1],`+
-				`"precipitation_probability_max":[60],"precipitation_sum":[2.1],"wind_speed_10m_max":[20],"wind_gusts_10m_max":[35]}}`, q.Get("start_date"))
+				`"precipitation_probability_max":[60],"precipitation_sum":[2.1],"wind_speed_10m_max":[20],"wind_gusts_10m_max":[35]}%s}`, q.Get("start_date"), hourly)
 		}
 	}))
 	restore := weather.Override(m.URL+"/v1/forecast", m.URL+"/v1/search", func() time.Time { return time.Unix(m.today.Load(), 0) })
@@ -90,6 +108,30 @@ func TestTools_GetWeather(t *testing.T) {
 			"rainChance": 60.0, "rainMm": 2.1, "windKmh": 20.0, "gustKmh": 35.0})
 		if sum := s["summary"].(string); !strings.Contains(sum, "1 jour(s)") || !strings.Contains(sum, "« Annecy »") {
 			t.Errorf("summary %q", sum)
+		}
+	})
+
+	t.Run("a start time: the weather at that hour, the format quoted", func(t *testing.T) {
+		app, fx, alice, m := weatherCase(t, "2026-06-10")
+		if _, there := succeeded(t, callTool(t, app, alice, "get_weather", map[string]any{"event_id": fx.Event.Id})).Structured["starts"]; there {
+			t.Error("starts for a race with no start time")
+		}
+		update(t, app, fx.F15, map[string]any{"name": "Les « Crêtes »", "start_time": "07:30"})
+		m.requests.Store(0)
+
+		result := succeeded(t, callTool(t, app, alice, "get_weather", map[string]any{"event_id": fx.Event.Id}))
+		textIs(t, result)
+
+		starts, _ := result.Structured["starts"].([]any)
+		if len(starts) != 1 {
+			t.Fatalf("starts %v", result.Structured["starts"])
+		}
+		assertJSON(t, starts[0], map[string]any{
+			"format": "« Les ‹ Crêtes › »", "date": "2026-06-13", "time": "07:30", "code": 3.0, "label": "Couvert",
+			"temp": 7.5, "rainChance": 14.0, "rainMm": 0.0, "windKmh": 8.0, "gustKmh": 17.0,
+		})
+		if sum := result.Structured["summary"].(string); !strings.Contains(sum, "1 départ") {
+			t.Errorf("summary %q does not say the start", sum)
 		}
 	})
 

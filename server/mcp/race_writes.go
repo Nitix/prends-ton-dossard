@@ -52,6 +52,7 @@ type formatIn struct {
 	PriceEur       float64 `json:"price_eur,omitempty" jsonschema:"le prix en euros, au centime"`
 	RouteURL       string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	Date           string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve quand ce n'est pas le premier jour de la course, jamais avant ; la fin de la course en découle"`
+	StartTime      string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve, facultative ; elle donne la météo de l'heure du départ. Pas pour une course dont seul le mois est connu"`
 }
 
 // formatPatchIn is a change of a format (update_event.formats, update_format): a
@@ -67,6 +68,7 @@ type formatPatchIn struct {
 	PriceEur       *float64 `json:"price_eur,omitempty" jsonschema:"le prix en euros, au centime ; 0 l'efface"`
 	RouteURL       *string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours ; vide l'efface"`
 	Date           *string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve ; vide : le premier jour de la course. La fin de la course en découle"`
+	StartTime      *string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve ; vide l'efface. Pas pour une course dont seul le mois est connu"`
 }
 
 // The numbers of a format, which are never below 0 (the minimum of the form,
@@ -130,7 +132,7 @@ func storedOf(view eventView) *storedEvent {
 // draftOfRecord is a stored format as the form holds it.
 func draftOfRecord(f formatRecord) formatDraft {
 	return formatDraft{
-		ID: f.ID, Name: f.Name, RaceType: f.RaceType, RouteURL: f.RouteURL, Date: f.Date,
+		ID: f.ID, Name: f.Name, RaceType: f.RaceType, RouteURL: f.RouteURL, Date: f.Date, StartTime: f.StartTime,
 		DistanceKm: f.DistanceKm, PriceEur: f.PriceEur,
 		DurationMin: f.DurationMin, TimeLimitMin: f.TimeLimitMin, ElevationGainM: f.ElevationGainM,
 	}
@@ -228,11 +230,17 @@ func monthRefusal(w wording.Words, draft eventDraft, labels map[string]string) e
 		if f.Date != "" {
 			return errors.New(formatSubject(i, titleOf(w, f, labels)) + ", " + fieldText("date", "format_date_month") + monthHint)
 		}
+		if f.StartTime != "" {
+			return errors.New(formatSubject(i, titleOf(w, f, labels)) + ", " + fieldText("start_time", "format_time_month") + monthTimeHint)
+		}
 	}
 	return nil
 }
 
 // monthHint says what to do with the day of a format of a race known by its month.
+// monthTimeHint says what to do with the start time of a format of a race known by its month.
+const monthTimeHint = " Donne la date de la course (date_precision: day) pour donner l'heure de départ de ses épreuves."
+
 const monthHint = " Donne la date de la course (date_precision: day) pour dater ses épreuves."
 
 // openingRefusal is the refusal of the site for the registration deadline and the
@@ -298,8 +306,12 @@ func normalizeFormat(in formatIn, raceTypes []raceTypeRecord) (formatDraft, erro
 	if err != nil {
 		return formatDraft{}, err
 	}
+	startTime, err := checkStartTime("start_time", in.StartTime)
+	if err != nil {
+		return formatDraft{}, err
+	}
 	return formatDraft{
-		Name: strings.TrimSpace(in.Name), RaceType: raceType.ID, RouteURL: strings.TrimSpace(in.RouteURL), Date: date,
+		Name: strings.TrimSpace(in.Name), RaceType: raceType.ID, RouteURL: strings.TrimSpace(in.RouteURL), Date: date, StartTime: startTime,
 		DistanceKm: in.DistanceKm, PriceEur: in.PriceEur,
 		DurationMin: in.DurationMin, TimeLimitMin: in.TimeLimitMin, ElevationGainM: in.ElevationGainM,
 	}, nil
@@ -331,6 +343,13 @@ func normalizePatch(in formatPatchIn, raceTypes []raceTypeRecord) (formatPatchIn
 		}
 		out.Date = ptr(date)
 	}
+	if in.StartTime != nil {
+		at, err := checkStartTime("start_time", *in.StartTime)
+		if err != nil {
+			return formatPatchIn{}, err
+		}
+		out.StartTime = ptr(at)
+	}
 	return out, nil
 }
 
@@ -345,6 +364,7 @@ func (p formatPatchIn) apply(f *formatDraft) {
 	set(&f.Name, p.Name)
 	set(&f.RouteURL, p.RouteURL)
 	set(&f.Date, p.Date)
+	set(&f.StartTime, p.StartTime)
 	if p.DistanceKm != nil {
 		f.DistanceKm = *p.DistanceKm
 	}
@@ -554,6 +574,7 @@ var clearedPhrases = map[string]string{
 	"price_eur":                 "le prix serait effacé",
 	"route_url":                 "le lien du parcours serait effacé",
 	"date":                      "la date de l'épreuve serait effacée",
+	"start_time":                "l'heure de départ serait effacée",
 }
 
 // days are the days of a race, as the messages write them: "2026-06-13", or
@@ -651,6 +672,7 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			{"route_url", was.RouteURL != "", now.RouteURL != "", quote(was.RouteURL)},
 			// The day that moves says it already.
 			{"date", was.Date != "" && !dayMoves && !lostToMonth, now.Date != "", was.Date},
+			{"start_time", was.StartTime != "", now.StartTime != "", was.StartTime},
 		} {
 			if field.was && !field.now {
 				lines = append(lines, "Épreuve "+quote(title)+" : "+clearedPhrases[field.name]+" (actuellement : "+field.value+").")
@@ -670,4 +692,15 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 	}
 	r.Message = "Cette modification de " + quote(event.Name) + " efface ou change ce que des personnes ont saisi : " + strings.Join(r.Details, " ")
 	return &r
+}
+
+// checkStartTime is the start time of a format that a tool was given (HH:MM, Paris
+// time, from 00:00 to 23:59; "" for none), or the refusal that says which argument
+// is not one.
+func checkStartTime(argument, at string) (string, error) {
+	at = strings.TrimSpace(at)
+	if at != "" && !events.ValidTime(at) {
+		return "", fmt.Errorf("%s : « %s » n'est pas une heure valide (HH:MM, de 00:00 à 23:59).", argument, at)
+	}
+	return at, nil
 }

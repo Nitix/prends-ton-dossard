@@ -82,6 +82,7 @@ type formatRecord struct {
 	GPX            string  `json:"gpx"`
 	RouteURL       string  `json:"route_url"`
 	Date           string  `json:"date"`
+	StartTime      string  `json:"start_time"`
 	Event          string  `json:"event"`
 	Updated        string  `json:"updated"`
 	Expand         struct {
@@ -261,10 +262,11 @@ type eventSummary struct {
 }
 
 type formatSummary struct {
-	ID       string `json:"id"`
-	Title    string `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
-	RaceType string `json:"race_type" jsonschema:"le nom du type de course"`
-	Date     string `json:"date" jsonschema:"le jour de l'épreuve (le premier jour de la course quand elle n'a pas de date)"`
+	ID        string `json:"id"`
+	Title     string `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
+	RaceType  string `json:"race_type" jsonschema:"le nom du type de course"`
+	Date      string `json:"date" jsonschema:"le jour de l'épreuve (le premier jour de la course quand elle n'a pas de date)"`
+	StartTime string `json:"start_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
 }
 
 type mineOut struct {
@@ -309,6 +311,7 @@ type formatDetail struct {
 	TimeLimitMin   int                `json:"time_limit_min,omitempty" jsonschema:"le temps maximum, en minutes"`
 	PriceEur       float64            `json:"price_eur,omitempty"`
 	Date           string             `json:"date,omitempty" jsonschema:"le jour de l'épreuve quand il n'est pas celui du début de la course"`
+	StartTime      string             `json:"start_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
 	Day            string             `json:"day" jsonschema:"le jour de l'épreuve : sa date, sinon le premier jour de la course"`
 	RouteURL       string             `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	TrackURL       string             `json:"track_url,omitempty" jsonschema:"l'adresse du fichier de la trace GPX, s'il y en a un"`
@@ -641,7 +644,7 @@ func (v eventView) summary(cfg config.Config, w wording.Words, me string) eventS
 		Mine:          []mineOut{},
 	}
 	for _, f := range v.formats {
-		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day})
+		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day, StartTime: f.record.StartTime})
 	}
 	for _, p := range v.participations() {
 		if p.Status != statusDNS {
@@ -680,7 +683,7 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 			DistanceKm: f.record.DistanceKm, DurationMin: f.record.DurationMin,
 			ElevationGainM: f.record.ElevationGainM, TimeLimitMin: f.record.TimeLimitMin,
 			PriceEur: f.record.PriceEur,
-			Date:     f.record.Date, Day: f.day,
+			Date:     f.record.Date, Day: f.day, StartTime: f.record.StartTime,
 			RouteURL:     f.record.RouteURL,
 			Participants: participationsOut(f.participations, w),
 		}
