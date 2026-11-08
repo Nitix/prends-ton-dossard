@@ -14,18 +14,53 @@ import (
 )
 
 func TestWeather_Cache(t *testing.T) {
-	t.Run("two calls, one forecast; an hour later, another", func(t *testing.T) {
+	t.Run("two calls, one forecast; 15 minutes later, another", func(t *testing.T) {
 		w := newWorld(t, "2026-06-10")
 		w.answer(t, w.fx.Event.Id)
 		w.answer(t, w.fx.Event.Id)
 		if f, g := w.meteo.count("/v1/forecast"), w.meteo.count("/v1/search"); f != 1 || g != 1 {
 			t.Fatalf("%d forecasts and %d geocodings for two calls, want 1 and 1", f, g)
 		}
-		weather.SetNow(t, at("2026-06-10").Add(61*time.Minute))
+		weather.SetNow(t, at("2026-06-10").Add(14*time.Minute))
+		w.answer(t, w.fx.Event.Id)
+		if f := w.meteo.count("/v1/forecast"); f != 1 {
+			t.Errorf("%d forecasts 14 minutes later, want 1 (still fresh)", f)
+		}
+		weather.SetNow(t, at("2026-06-10").Add(16*time.Minute))
 		w.answer(t, w.fx.Event.Id)
 		if f, g := w.meteo.count("/v1/forecast"), w.meteo.count("/v1/search"); f != 2 || g != 1 {
-			t.Errorf("%d forecasts and %d geocodings 61 minutes later, want 2 and 1", f, g)
+			t.Errorf("%d forecasts and %d geocodings 16 minutes later, want 2 and 1", f, g)
 		}
+	})
+
+	t.Run("what the race is edited to is a forecast of its own, before the 15 minutes are over", func(t *testing.T) {
+		w := newWorld(t, "2026-06-10")
+		w.meteo.places["chamonix"] = [2]float64{45.9237, 6.8694}
+		w.answer(t, w.fx.Event.Id)
+		want := 1
+		step := func(what string) {
+			t.Helper()
+			w.answer(t, w.fx.Event.Id)
+			want++
+			if f := w.meteo.count("/v1/forecast"); f != want {
+				t.Fatalf("%d forecasts after %s, want %d", f, what, want)
+			}
+		}
+		w.setLocation(t, "Chamonix")
+		step("another place")
+		w.track(t, w.fx.F42, gpxAt(46.5, 7.1, ""))
+		step("a track")
+		w.track(t, w.fx.F42, gpxAt(46.6, 7.2, ""))
+		step("another track")
+		e, err := w.app.FindRecordById("events", w.fx.Event.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.Set("end_date", "2026-06-16")
+		if err := w.app.Save(e); err != nil {
+			t.Fatal(err)
+		}
+		step("another last day")
 	})
 
 	t.Run("a place is kept 30 days", func(t *testing.T) {

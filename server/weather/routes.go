@@ -274,7 +274,7 @@ func (s *service) startsOf(asks []startAsk, hours map[string]Hour) ([]Start, err
 	return starts, nil
 }
 
-// forecast is the forecast for a place and days: kept an hour, and, when
+// forecast is the forecast for a place and days: kept 15 minutes, and, when
 // Open-Meteo fails, the last one under six hours old. The hours are asked in the
 // same request when starts is not empty, and the key holds the starts (the day
 // and the time of each), so that a start time that changes is a forecast of its

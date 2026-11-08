@@ -595,7 +595,7 @@ Le lieu trouvé est dit (« À Annecy (Auvergne-Rhône-Alpes, France) » ou « A
 ### 10.4 Cache et limites (paquet `server/weather`)
 
 - **En mémoire**, bornés (500 entrées chacun, les plus anciennes partent) :
-  - prévision : par coordonnées arrondies, altitude arrondie et jours, **1 heure** ;
+  - prévision : par coordonnées arrondies, altitude arrondie et jours (et heures de départ), **15 minutes** (**changé à la demande de l'utilisateur**, c'était 1 heure : une modification de la course ou le simple passage du temps doivent se voir vite ; les budgets du dessous, 500 par heure et 2 500 par jour, plafonnent toujours les appels) ;
   - géocodage : par texte du lieu (minuscules, sans accents, espaces réduits), **30 jours** (« introuvable » aussi, 1 jour) ;
   - premier point d'une trace : par nom du fichier (il change à chaque envoi), sans limite de temps.
 - **Une seule requête à la fois par clé** : deux membres qui ouvrent la fiche ensemble font un appel.
@@ -622,7 +622,7 @@ Le lieu trouvé est dit (« À Annecy (Auvergne-Rhône-Alpes, France) » ou « A
 
 ### 10.6 Sur la fiche
 
-- Une section **« Météo prévue »**, après les actions. Elle demande la route (`["weather", id]`, gardée 30 minutes) seulement quand la page sait qu'on est dans la fenêtre (§ 10.3). Avant la fenêtre, et pour une course au mois, elle ne se tait pas : elle garde son titre et une ligne, sans requête (**changé après le test de l'utilisateur** : le silence se lisait comme une panne). Avant J-7 : « La météo sera là à partir du sam. 22 nov., une semaine avant la course. » (la date est celle du `from` du serveur, que la page calcule elle-même : J-7, à Paris). Course au mois (`no_day`) : « La météo viendra quand le jour de la course sera connu. » Après la course (`over`) : rien.
+- Une section **« Météo prévue »**, après les actions. Elle demande la route (`["weather", id]`, gardée 15 minutes et redemandée toutes les 15 minutes tant que la page est ouverte dans la fenêtre, **changé à la demande de l'utilisateur** ; une modification enregistrée de la course (lieu, jours, heures de départ, traces) ou une fusion la redemande aussitôt) seulement quand la page sait qu'on est dans la fenêtre (§ 10.3). Avant la fenêtre, et pour une course au mois, elle ne se tait pas : elle garde son titre et une ligne, sans requête (**changé après le test de l'utilisateur** : le silence se lisait comme une panne). Avant J-7 : « La météo sera là à partir du sam. 22 nov., une semaine avant la course. » (la date est celle du `from` du serveur, que la page calcule elle-même : J-7, à Paris). Course au mois (`no_day`) : « La météo viendra quand le jour de la course sera connu. » Après la course (`over`) : rien.
 - Une ligne par jour de course :
   « sam. 13 juin · Averses · 9 à 17 °C · pluie 60 %, 2 mm · rafales 35 km/h », avec une icône du temps (décorative).
 - Le lieu (§ 10.2), et « Prévision de 14:05 » (« Prévision de 14:05, pas à jour » quand `stale`).
@@ -666,7 +666,7 @@ Demandée par l'utilisateur le 2026-11-08 (décision n° 21).
 
 ### 10.8 Tests
 
-- Go (faux Open-Meteo) : `TestWeather_SendsOnlyPlaceAndDays` (les paramètres exacts des deux requêtes, rien d'autre) ; `TestWeather_Window` (J-8, J-7, le jour, le lendemain de la fin, course au mois) ; `TestWeather_TrackStart` (premier point, `rtept`, fichier sans point, gros fichier lu jusqu'à 1 Mo seulement) ; `TestWeather_Geocoding` (texte entier, parties, introuvable) ; `TestWeather_Cache` (un appel pour deux demandes, une heure plus tard un autre, demandes simultanées) ; `TestWeather_StaleOnError` ; `TestWeather_Budget` ; `TestWeather_Route` (session requise, 404, codes).
+- Go (faux Open-Meteo) : `TestWeather_SendsOnlyPlaceAndDays` (les paramètres exacts des deux requêtes, rien d'autre) ; `TestWeather_Window` (J-8, J-7, le jour, le lendemain de la fin, course au mois) ; `TestWeather_TrackStart` (premier point, `rtept`, fichier sans point, gros fichier lu jusqu'à 1 Mo seulement) ; `TestWeather_Geocoding` (texte entier, parties, introuvable) ; `TestWeather_Cache` (un appel pour deux demandes, 15 minutes plus tard un autre, un lieu, des jours ou une trace modifiés sont une autre prévision, demandes simultanées) ; `TestWeather_StaleOnError` ; `TestWeather_Budget` ; `TestWeather_Route` (session requise, 404, codes).
 - Web : `weatherWindow` ; `WeatherSection — chaque état` ; `weatherLabel — chaque code`.
 
 ## 11. Le matériel obligatoire
@@ -894,7 +894,7 @@ Ce que ni tes réponses ni les arbitrages ne tranchaient ; dis lesquelles revoir
 **La météo**
 
 25. **Les jours de la course seulement, de J-7 à la fin**, au départ de la première trace, sinon au lieu géocodé (premier résultat, avec le lieu trouvé affiché).
-26. **Cache en mémoire** (1 heure pour une prévision, 30 jours pour un lieu), une prévision de moins de 6 heures si Open-Meteo ne répond pas, **500 appels par heure au plus**.
+26. **Cache en mémoire** (15 minutes pour une prévision, 30 jours pour un lieu ; changé à la demande de l'utilisateur), une prévision de moins de 6 heures si Open-Meteo ne répond pas, **500 appels par heure au plus**.
 27. **Météo aussi sur la démo** (sans données personnelles, bornée par le budget).
 
 **Le matériel**

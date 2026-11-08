@@ -8,7 +8,7 @@ import (
 
 // The lives of what is kept.
 const (
-	forecastTTL   = time.Hour
+	forecastTTL   = 15 * time.Minute
 	forecastStale = 6 * time.Hour
 	placeTTL      = 30 * 24 * time.Hour
 	notFoundTTL   = 24 * time.Hour
