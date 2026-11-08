@@ -517,7 +517,8 @@ func (t *tools) written(ctx context.Context, eventID, summary string, draft even
 	}
 	detail := view.detail(t.cfg, wording.Of("fr"))
 	out := eventWriteOut{writeStatus: writeStatus{Done: true, Summary: summary}, eventDetail: &detail}
-	if isLongEvent(draft.StartDate, draft.EndDate) {
+	// A race known by its month is the whole month: the form says its month, not a long period.
+	if !draft.monthOnly() && isLongEvent(draft.StartDate, draft.EndDate) {
 		out.Warnings = []string{longEventWarning}
 	}
 	return out, nil

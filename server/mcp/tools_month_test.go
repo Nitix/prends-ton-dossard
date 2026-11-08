@@ -49,6 +49,10 @@ func TestTools_CreateEvent_MonthPrecision(t *testing.T) {
 		if record.GetString("date_precision") != "month" || record.GetString("start_date") != "2027-06-01" || record.GetString("end_date") != "2027-06-30" {
 			t.Errorf("the stored race is %q from %q to %q", record.GetString("date_precision"), record.GetString("start_date"), record.GetString("end_date"))
 		}
+		// A whole month is what the race says, not a format dated too far: no « Plus de deux semaines », as on the form.
+		if warnings := result.Structured["warnings"]; warnings != nil {
+			t.Errorf("the race of a month warns %v, want no warning", warnings)
+		}
 	})
 
 	t.Run("the 1st is fine too, and the month of the days of a leap year", func(t *testing.T) {
