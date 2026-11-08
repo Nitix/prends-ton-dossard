@@ -146,6 +146,16 @@ export function ParticipationMenu({
       <div
         id={menuId}
         popover="auto"
+        // The browser gives the focus back to the button when the popover closes, if the button
+        // had it: Safari does not focus a button that is clicked, and the focus falls to the page.
+        onToggle={(event) => {
+          if (
+            !event.currentTarget.matches(":popover-open") &&
+            document.activeElement === document.body
+          ) {
+            trigger.current?.focus();
+          }
+        }}
         className="menu-popover rounded-2xl border border-neutral-200 bg-raised p-1.5 text-ink shadow-lift"
       >
         {/* With no format, only two statuses are possible: the participation is on the event alone. */}
