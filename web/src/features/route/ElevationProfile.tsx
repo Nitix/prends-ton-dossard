@@ -523,10 +523,19 @@ function Profile({
     }
     follow(event);
   };
+  // The focus is being given by a click, which has put the cursor where it was.
+  const focusedByPointer = useRef(false);
   const pressUp = (event: PointerEvent<HTMLInputElement>) => {
     if (event.pointerType === "touch") {
       fingers.current.delete(event.pointerId);
       if (fingers.current.size < 2) spread.current = null;
+    }
+    // Safari does not give the focus to a range that is clicked, and takes it from the page on
+    // the press: the arrows, Home and End would go nowhere. It is given once the press is over.
+    if (event.type === "pointerup" && event.pointerType !== "touch") {
+      focusedByPointer.current = true;
+      event.currentTarget.focus({ preventScroll: true });
+      focusedByPointer.current = false;
     }
     const started = drag.current;
     if (started?.id !== event.pointerId) return;
@@ -736,7 +745,7 @@ function Profile({
           onKeyDown={press}
           onFocus={() => {
             // From the keyboard, the cursor shows at the start; a finger, a pointer or the map has already put it.
-            if (cursor === null) setCursor(view.from);
+            if (cursor === null && !focusedByPointer.current) setCursor(view.from);
           }}
           onBlur={() => {
             setCursor(null);
