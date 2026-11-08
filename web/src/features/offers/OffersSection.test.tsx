@@ -9,6 +9,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import type { OfferKind } from "../../lib/types";
+import { pressFocused } from "../../test/pressFocused";
 import { toEventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
 import type { Me } from "../participations/permissions";
@@ -868,7 +869,7 @@ describe("removing someone", () => {
     const one = offerOf(screen, "Alice");
     await expect.element(one).toBeVisible();
 
-    await button(one, fr.offers.removeFor("Sam")).click();
+    await pressFocused(button(one, fr.offers.removeFor("Sam")));
 
     await expect.element(one.getByRole("alert")).toHaveTextContent(fr.errors.generic);
     expect(people(one)).toEqual(["Bob", "Sam"]);

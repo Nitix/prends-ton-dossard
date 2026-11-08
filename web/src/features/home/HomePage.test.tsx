@@ -19,6 +19,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { pressFocused } from "../../test/pressFocused";
 import {
   aliceRunner,
   bobRunner,
@@ -1372,7 +1373,7 @@ test("Résultats à saisir — Abandon refusé : message, liste redemandée, la 
   const asked = mocks.toEnter.mock.calls.length;
   const abandon = dnfButton(resultRows(screen));
 
-  await abandon.click();
+  await pressFocused(abandon);
 
   // Never disabled: it keeps the focus while it waits, and after the refusal.
   const button = buttonOf(abandon);

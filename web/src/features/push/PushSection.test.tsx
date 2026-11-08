@@ -7,6 +7,7 @@ import { render } from "vitest-browser-react";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { pressFocused } from "../../test/pressFocused";
 import { KEY_A, fakeSubscription, installFakes, restoreFakes, type Fakes } from "./fakeBrowser";
 import { PushSection } from "./PushSection";
 
@@ -157,7 +158,7 @@ test("PushSection — activer", async () => {
 
   await expect.element(screen.getByRole("heading", { name: fr.push.title })).toBeVisible();
   await expect.element(screen.getByText(fr.push.noDevices)).toBeVisible();
-  await button(screen, fr.push.enable).click();
+  await pressFocused(button(screen, fr.push.enable));
 
   await expect.element(screen.getByRole("status")).toHaveTextContent(fr.push.enabled);
   await expect.element(button(screen, fr.push.disable)).toBeVisible();
@@ -255,7 +256,7 @@ test("PushSection — désactiver, puis le focus sur le titre", async () => {
   const screen = await mount();
   await expect.element(button(screen, fr.push.disable)).toBeVisible();
 
-  await button(screen, fr.push.disable).click();
+  await pressFocused(button(screen, fr.push.disable));
 
   await expect.element(screen.getByRole("status")).toHaveTextContent(fr.push.disabled);
   await expect.element(button(screen, fr.push.enable)).toBeVisible();
@@ -272,7 +273,7 @@ test("PushSection — retirer un autre appareil, puis le focus", async () => {
   const screen = await mount();
   await expect.element(screen.getByText("iPhone", { exact: true })).toBeVisible();
 
-  await button(screen, fr.push.removeLabel("iPhone")).click();
+  await pressFocused(button(screen, fr.push.removeLabel("iPhone")));
 
   await expect.element(screen.getByText("iPhone", { exact: true })).not.toBeInTheDocument();
   expect(mocks.send).toHaveBeenCalledWith("/api/app/push/subscriptions/dev-other", {

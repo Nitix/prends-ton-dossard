@@ -10,7 +10,7 @@ import {
 import { ClientResponseError } from "pocketbase";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
-import { userEvent } from "vitest/browser";
+import { server, userEvent } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
@@ -392,12 +392,29 @@ test("SettingsPage — Apparence : au clavier, les flèches passent d'un choix �
   const screen = await renderSettings();
 
   const group = section(screen, fr.settings.appearance).getByRole("group");
-  group.getByRole("radio", { name: fr.settings.themeAuto }).element().focus();
+  // The keyboard reaches the group: the ring of the focus is drawn around the choice.
+  for (
+    let step = 0;
+    document.activeElement !==
+      group.getByRole("radio", { name: fr.settings.themeAuto }).element() && step < 20;
+    step++
+  ) {
+    await userEvent.tab();
+  }
+  expect(document.activeElement).toBe(
+    group.getByRole("radio", { name: fr.settings.themeAuto }).element(),
+  );
+  expect(
+    getComputedStyle(group.getByRole("radio", { name: fr.settings.themeAuto }).element())
+      .outlineStyle,
+  ).not.toBe("none");
   await userEvent.keyboard("{ArrowDown}");
   await expect.element(group.getByRole("radio", { name: fr.settings.themeLight })).toBeChecked();
   expect(pageTheme().theme).toBe("light");
-  // The ring of the focus is drawn around the choice.
-  expect(getComputedStyle(document.activeElement ?? document.body).outlineStyle).not.toBe("none");
+  // The ring follows the arrows, in the engines that tell the keyboard moved the focus: WebKit
+  // does not for the arrows of a group of radios (`:focus-visible` is false after them).
+  const ring = getComputedStyle(document.activeElement ?? document.body).outlineStyle;
+  expect(server.browser === "webkit" || ring !== "none", `outline: ${ring}`).toBe(true);
 });
 
 test("SettingsPage — Apparence : en couleurs forcées, le choix coché se voit encore", async () => {

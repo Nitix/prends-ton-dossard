@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
-import { userEvent } from "vitest/browser";
+import { server, userEvent } from "vitest/browser";
 
 import { ToastProvider } from "../../components/Toast";
 import { en } from "../../i18n/en";
@@ -357,15 +357,20 @@ test("Thème — le skin gardé sur l'appareil est coché en arrivant, et les no
 test("Thème — au clavier, les flèches passent d'un skin à l'autre", async () => {
   const screen = await renderAppearance();
   const first = skins(screen).getByRole("radio", { name: crete.label.fr, exact: true });
-  first.element().focus();
+  // The keyboard reaches the group: the ring of the focus is drawn around the card.
+  await userEvent.tab();
+  expect(document.activeElement).toBe(first.element());
+  expect(getComputedStyle(first.element()).outlineStyle).not.toBe("none");
   await userEvent.keyboard("{ArrowDown}");
   const second = SKINS[1];
   await expect
     .element(skins(screen).getByRole("radio", { name: second?.label.fr, exact: true }))
     .toBeChecked();
   expect(document.documentElement.dataset.skin).toBe(second?.id);
-  // The ring of the focus is drawn around the card.
-  expect(getComputedStyle(document.activeElement ?? document.body).outlineStyle).not.toBe("none");
+  // The ring follows the arrows, in the engines that tell the keyboard moved the focus: WebKit
+  // does not for the arrows of a group of radios (`:focus-visible` is false after them).
+  const ring = getComputedStyle(document.activeElement ?? document.body).outlineStyle;
+  expect(server.browser === "webkit" || ring !== "none", `outline: ${ring}`).toBe(true);
 });
 
 test("Thème — en couleurs forcées, la carte cochée se voit encore", async () => {

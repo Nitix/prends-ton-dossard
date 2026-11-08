@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
+import { pressFocused } from "../test/pressFocused";
 import { useFocusOnNavigation } from "./useFocusOnNavigation";
 
 /**
@@ -207,7 +208,7 @@ test("navigation — changer un filtre (même page, autre recherche) ne déplace
 
   // From the page: the filter keeps the focus.
   const inPage = screen.getByRole("button", { name: "Filtrer dans la page" });
-  await inPage.click();
+  await pressFocused(inPage);
   await vi.waitFor(() => expect(router.state.location.search).toEqual({ type: "trail" }));
   await pause(SETTLE_MS);
   await expect.element(inPage).toHaveFocus();
@@ -215,7 +216,7 @@ test("navigation — changer un filtre (même page, autre recherche) ne déplace
   // From outside the page, so that the focus is not in `<main>` to begin with: it stays too.
   await router.navigate({ to: "/liste", search: { type: undefined } });
   const outside = screen.getByRole("button", { name: "Filtrer depuis l'en-tête" });
-  await outside.click();
+  await pressFocused(outside);
   await vi.waitFor(() => expect(router.state.location.search).toEqual({ type: "trail" }));
   await pause(SETTLE_MS);
   await expect.element(outside).toHaveFocus();
@@ -226,7 +227,7 @@ test("navigation — aller à une ancre de la même page ne déplace pas le focu
   await expect.element(screen.getByRole("heading", { level: 1, name: "Liste" })).toBeVisible();
 
   const anchor = screen.getByRole("link", { name: "Aller en bas de la liste" });
-  await anchor.click();
+  await pressFocused(anchor);
   await vi.waitFor(() => expect(router.state.location.hash).toBe("fin"));
   await pause(SETTLE_MS);
 

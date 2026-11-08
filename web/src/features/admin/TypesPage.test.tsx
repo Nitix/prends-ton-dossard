@@ -9,6 +9,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { fontsReady } from "../../test/fontsReady";
+import { pressFocused } from "../../test/pressFocused";
 import { TypesPage } from "./TypesPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -343,7 +344,7 @@ test("TypesPage — sans aucune mesure cochée, rien n'est envoyé et la fenêtr
   await measureBox(dialog, fr.form.distance).click();
   await measureBox(dialog, fr.form.elevation).click();
   await measureBox(dialog, fr.form.timeLimit).click();
-  await dialog.getByRole("button", { name: fr.common.save }).click();
+  await pressFocused(dialog.getByRole("button", { name: fr.common.save }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(t.measuresNone);
   expect(mocks.update).not.toHaveBeenCalled();
@@ -373,7 +374,7 @@ test("TypesPage — un envoi qui dure ne part qu'une fois, et le bouton garde le
   const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Route") });
   await measureBox(dialog, fr.form.duration).click();
   const submit = dialog.getByRole("button", { name: fr.common.save });
-  await submit.click();
+  await pressFocused(submit);
 
   // A disabled button would drop the focus: this one stays focusable, and ignores the tap.
   await expect.element(submit).toHaveAttribute("aria-disabled", "true");

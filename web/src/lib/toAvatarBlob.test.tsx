@@ -55,36 +55,45 @@ function encoderWithoutWebP() {
   });
 }
 
-test("toAvatarBlob — si l'encodeur ne sait pas faire de WebP, réencode en JPEG", async () => {
-  const file = await imageFile(2000, 1000);
-  const convert = encoderWithoutWebP();
+// Playwright's WebKit on Windows has no OffscreenCanvas: there is no encoder to fake.
+const hasOffscreenCanvas = typeof OffscreenCanvas !== "undefined";
 
-  const blob = await toAvatarBlob(file);
+test.skipIf(!hasOffscreenCanvas)(
+  "toAvatarBlob — si l'encodeur ne sait pas faire de WebP, réencode en JPEG",
+  async () => {
+    const file = await imageFile(2000, 1000);
+    const convert = encoderWithoutWebP();
 
-  expect(convert.mock.calls.map(([options]) => options)).toEqual([
-    { type: "image/webp", quality: 0.85 },
-    { type: "image/png" },
-    { type: "image/jpeg", quality: 0.85 },
-  ]);
-  expect(blob.type).toBe("image/jpeg");
-  expect(await sizeOf(blob)).toEqual({ width: 512, height: 256 });
-});
+    const blob = await toAvatarBlob(file);
 
-test("toAvatarBlob — le repli JPEG, qui n'a pas de transparence, met du blanc dessous", async () => {
-  const file = await imageFile(64, 64, { transparent: true });
-  encoderWithoutWebP();
+    expect(convert.mock.calls.map(([options]) => options)).toEqual([
+      { type: "image/webp", quality: 0.85 },
+      { type: "image/png" },
+      { type: "image/jpeg", quality: 0.85 },
+    ]);
+    expect(blob.type).toBe("image/jpeg");
+    expect(await sizeOf(blob)).toEqual({ width: 512, height: 256 });
+  },
+);
 
-  const blob = await toAvatarBlob(file);
+test.skipIf(!hasOffscreenCanvas)(
+  "toAvatarBlob — le repli JPEG, qui n'a pas de transparence, met du blanc dessous",
+  async () => {
+    const file = await imageFile(64, 64, { transparent: true });
+    encoderWithoutWebP();
 
-  expect(blob.type).toBe("image/jpeg");
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(1, 1);
-  const context = canvas.getContext("2d");
-  context?.drawImage(bitmap, 32, 32, 1, 1, 0, 0, 1, 1);
-  bitmap.close();
-  const [red = 0, green = 0, blue = 0, alpha = 0] = context?.getImageData(0, 0, 1, 1).data ?? [];
-  expect([red, green, blue, alpha].every((channel) => channel >= 250)).toBe(true);
-});
+    const blob = await toAvatarBlob(file);
+
+    expect(blob.type).toBe("image/jpeg");
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(1, 1);
+    const context = canvas.getContext("2d");
+    context?.drawImage(bitmap, 32, 32, 1, 1, 0, 0, 1, 1);
+    bitmap.close();
+    const [red = 0, green = 0, blue = 0, alpha = 0] = context?.getImageData(0, 0, 1, 1).data ?? [];
+    expect([red, green, blue, alpha].every((channel) => channel >= 250)).toBe(true);
+  },
+);
 
 /** The bytes of a JPEG with an EXIF segment right after its start: the orientation, 1 to 8. */
 async function withOrientation(jpeg: Blob, orientation: number): Promise<Blob> {

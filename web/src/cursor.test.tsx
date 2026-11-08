@@ -63,7 +63,8 @@ test("cursor — un bouton, un menu dépliant, une case et la carte qui la porte
     radio: "pointer",
     radioCard: "pointer",
     disabledCard: "not-allowed",
-    textField: "text",
+    // The browser's own: Chromium says "text", WebKit "auto", which draws the same I-beam.
+    textField: expect.stringMatching(/^(text|auto)$/),
   });
   await screen.unmount();
 });

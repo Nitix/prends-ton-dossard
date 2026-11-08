@@ -26,8 +26,14 @@ function blocked(method: Method) {
     );
 }
 
+// Playwright's WebKit has no `navigator.credentials` at all, though the site
+// reaches it only after checking that `PublicKeyCredential` exists, which this
+// WebKit has. An empty object stands in for it, so that the tests can spy on its
+// methods as they do in the other engines.
 function installGuard() {
-  if (typeof navigator.credentials === "undefined") return;
+  if (typeof navigator.credentials === "undefined") {
+    Object.defineProperty(navigator, "credentials", { value: {}, configurable: true });
+  }
   for (const method of ["create", "get"] as const) {
     Object.defineProperty(navigator.credentials, method, {
       value: blocked(method),

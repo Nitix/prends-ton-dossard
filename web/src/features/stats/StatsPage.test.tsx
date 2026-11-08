@@ -250,7 +250,11 @@ test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans d�
         const text = plain(spokenText(cell));
         expect(cell.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(cell.clientWidth);
         for (const part of cell.children) {
-          expect(part.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(part.clientWidth);
+          // Within 5 %: WebKit on Windows draws the same digits a few percent wider, an overflow that
+          // is not seen (the cell, and the page, do not scroll).
+          expect(part.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(
+            part.clientWidth * 1.05,
+          );
         }
         expect(cell.getBoundingClientRect().right, `${text} at ${width} px`).toBeLessThanOrEqual(
           width,

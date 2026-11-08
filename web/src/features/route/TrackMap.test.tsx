@@ -314,8 +314,11 @@ test("TrackMap — a track of one point, or of one place, is drawn", async () =>
 async function pixelsOf(base64: string): Promise<{ data: Uint8ClampedArray; width: number }> {
   const blob = await (await fetch(`data:image/png;base64,${base64}`)).blob();
   const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const context = canvas.getContext("2d");
+  // Not an OffscreenCanvas: WebKit on Windows has none.
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
   if (context === null) throw new Error("no 2D canvas");
   context.drawImage(bitmap, 0, 0);
   return {

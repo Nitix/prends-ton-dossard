@@ -4,6 +4,7 @@ import { page, userEvent } from "vitest/browser";
 import { fr } from "../../i18n/fr";
 import { fontsReady } from "../../test/fontsReady";
 import { emulateMedia, resetMedia } from "../../test/media";
+import { pressFocused } from "../../test/pressFocused";
 import {
   base,
   distance,
@@ -358,7 +359,7 @@ test("FormatFieldset — « Reprendre ces valeurs » montre la distance et le D+
 
   await gpxField(row).upload(gpxFile());
   await expect.element(trackRead(row)).toBeVisible();
-  await reuse(row).click();
+  await pressFocused(reuse(row));
 
   await expect.element(distance(row)).toHaveValue(22.2);
   await expect.element(elevation(row)).toHaveValue(200);

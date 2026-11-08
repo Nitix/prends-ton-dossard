@@ -11,6 +11,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { pressFocused } from "../../test/pressFocused";
 import type { Me } from "../participations/permissions";
 import { CommentsSection } from "./CommentsSection";
 
@@ -301,7 +302,7 @@ describe("writing", () => {
 
     // With the button: the text is sent as it is written, the field empties, the button keeps the focus.
     await field(screen).fill("On covoiture ?");
-    await send(screen).click();
+    await pressFocused(send(screen));
 
     await expect.element(heading(screen, 3)).toBeVisible();
     expect(mocks.create).toHaveBeenCalledTimes(1);
@@ -371,7 +372,7 @@ describe("writing", () => {
     await expect.element(heading(screen, 2)).toBeVisible();
     await field(screen).fill("Patience");
 
-    await send(screen).click();
+    await pressFocused(send(screen));
 
     await expect.element(send(screen)).toHaveAttribute("aria-disabled", "true");
     await expect.element(send(screen)).toHaveFocus();

@@ -9,6 +9,7 @@ import { MonthGrid } from "../features/agenda/MonthGrid";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { monthGrid } from "../lib/dates";
 import { ensureTemporal } from "../lib/temporal";
+import { fontsReady } from "../test/fontsReady";
 import type { Skin } from "./types";
 
 import "../styles.css";
@@ -109,6 +110,23 @@ function sheetsOf(skin: Skin) {
   return { entry, look };
 }
 
+/**
+ * The scenes are measured twice, in two orders of the sheets, and must be the
+ * same at both: the fonts are loaded (WebKit loads them when it first draws a
+ * text, and again when a sheet moves), and the animations that never end, the
+ * decorations of a skin, are at their start, not wherever the wait left them.
+ */
+async function settled(scenes: () => Element[]) {
+  scenes().map(layout);
+  // WebKit starts the load of a font at the next frame, and fonts.ready would answer before.
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await fontsReady();
+  for (const animation of document.getAnimations()) {
+    animation.pause();
+    animation.currentTime = 0;
+  }
+}
+
 test("cascade — à 1280 px, un skin gardé (ses feuilles avant styles.css) et un skin choisi (après) sont dessinés pareil : ses motifs et l'agenda", async () => {
   const differences: string[] = [];
   for (const skin of OTHERS) {
@@ -118,10 +136,15 @@ test("cascade — à 1280 px, un skin gardé (ses feuilles avant styles.css) et 
     expect(look.length, `the sheets of the look of ${skin.id}`).toBeGreaterThan(1);
     const screen = await render(<Scene skin={skin} />);
     const scenes = () => [...screen.container.querySelectorAll("[data-scene]")];
+    // The fonts of the skin load when the page first draws text in them: WebKit has
+    // not by the time it is measured, and the two measures would be of two fonts.
+    await settled(scenes);
     // Chosen: the dev server added the sheets of the look after styles.css.
     const chosen = scenes().map(layout);
     // Kept: index.html links them before it.
     for (const style of look) entry?.before(style);
+    // A sheet that moves is read again with its fonts, which load again.
+    await settled(scenes);
     const kept = scenes().map(layout);
     for (const style of look) document.head.append(style);
     for (const [at, lines] of chosen.entries()) {

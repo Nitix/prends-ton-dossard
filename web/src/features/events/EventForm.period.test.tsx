@@ -2,6 +2,7 @@ import { expect, test, vi } from "vitest";
 
 import { fr } from "../../i18n/fr";
 import { emulateMedia, resetMedia } from "../../test/media";
+import { hasDateInput } from "../../test/support";
 import {
   addFormat,
   distance,
@@ -382,54 +383,60 @@ test("EventForm — M5 : pendant qu'une année se tape, la période garde son te
   expect(written).toEqual(["Du sam. 13 juin au lun. 15 juin, d'après les dates des épreuves"]);
 });
 
-test("EventForm — M1 : la date d'une épreuve a pour minimum le début, et le navigateur refuse celle d'avant", async () => {
-  const { screen } = await renderForm();
-  const date = formatDate(format(screen, 1));
-  // No start day yet: no day is before it.
-  expect(inputOf(date).min).toBe("");
+test.skipIf(!hasDateInput)(
+  "EventForm — M1 : la date d'une épreuve a pour minimum le début, et le navigateur refuse celle d'avant",
+  async () => {
+    const { screen } = await renderForm();
+    const date = formatDate(format(screen, 1));
+    // No start day yet: no day is before it.
+    expect(inputOf(date).min).toBe("");
 
-  await fillEvent(screen);
-  expect(inputOf(date).min).toBe("2026-06-13");
-  // The picker and the check follow a start that moves.
-  await startDate(screen).fill("2026-06-10");
-  expect(inputOf(date).min).toBe("2026-06-10");
-  await startDate(screen).fill("2026-06-13");
+    await fillEvent(screen);
+    expect(inputOf(date).min).toBe("2026-06-13");
+    // The picker and the check follow a start that moves.
+    await startDate(screen).fill("2026-06-10");
+    expect(inputOf(date).min).toBe("2026-06-10");
+    await startDate(screen).fill("2026-06-13");
 
-  await date.fill("2026-06-12");
-  expect(inputOf(date).validity.rangeUnderflow).toBe(true);
-  await save(screen).click();
-  // Not sent: the browser reports the field, and takes the focus there.
-  expect(mocks.send).not.toHaveBeenCalled();
-  await expect.element(date).toHaveFocus();
-  // That day does not make the event longer.
-  expect(periodNow(screen)()).toBe("Un jour : sam. 13 juin");
+    await date.fill("2026-06-12");
+    expect(inputOf(date).validity.rangeUnderflow).toBe(true);
+    await save(screen).click();
+    // Not sent: the browser reports the field, and takes the focus there.
+    expect(mocks.send).not.toHaveBeenCalled();
+    await expect.element(date).toHaveFocus();
+    // That day does not make the event longer.
+    expect(periodNow(screen)()).toBe("Un jour : sam. 13 juin");
 
-  // The first day itself, and the days after, are fine.
-  await date.fill("2026-06-13");
-  expect(inputOf(date).validity.valid).toBe(true);
-  await date.fill("2026-06-14");
-  expect(inputOf(date).validity.valid).toBe(true);
-});
+    // The first day itself, and the days after, are fine.
+    await date.fill("2026-06-13");
+    expect(inputOf(date).validity.valid).toBe(true);
+    await date.fill("2026-06-14");
+    expect(inputOf(date).validity.valid).toBe(true);
+  },
+);
 
-test("EventForm — M1 : à la modification, un début reporté après le jour d'une épreuve est refusé par le navigateur, sur la date de cette épreuve", async () => {
-  const { screen } = await renderEdit();
-  // F42 (the second format) is on the 14th: the event, now from the 15th, would not have its day.
-  await startDate(screen).fill("2026-06-15");
-  const date = formatDate(format(screen, 2));
-  await expect.element(date).toHaveValue("2026-06-14");
-  expect(inputOf(date).min).toBe("2026-06-15");
-  expect(inputOf(date).validity.rangeUnderflow).toBe(true);
+test.skipIf(!hasDateInput)(
+  "EventForm — M1 : à la modification, un début reporté après le jour d'une épreuve est refusé par le navigateur, sur la date de cette épreuve",
+  async () => {
+    const { screen } = await renderEdit();
+    // F42 (the second format) is on the 14th: the event, now from the 15th, would not have its day.
+    await startDate(screen).fill("2026-06-15");
+    const date = formatDate(format(screen, 2));
+    await expect.element(date).toHaveValue("2026-06-14");
+    expect(inputOf(date).min).toBe("2026-06-15");
+    expect(inputOf(date).validity.rangeUnderflow).toBe(true);
 
-  await save(screen).click();
+    await save(screen).click();
 
-  // The server is not asked, and the field to correct has the focus.
-  expect(mocks.send).not.toHaveBeenCalled();
-  await expect.element(date).toHaveFocus();
+    // The server is not asked, and the field to correct has the focus.
+    expect(mocks.send).not.toHaveBeenCalled();
+    await expect.element(date).toHaveFocus();
 
-  // The day moves along with the event, and is fine.
-  await date.fill("2026-06-15");
-  expect(inputOf(date).validity.valid).toBe(true);
-});
+    // The day moves along with the event, and is fine.
+    await date.fill("2026-06-15");
+    expect(inputOf(date).validity.valid).toBe(true);
+  },
+);
 
 test("EventForm — I1 : un événement qui perdrait des jours le dit juste au-dessus d'« Enregistrer », que le bouton décrit", async () => {
   mocks.getOne.mockResolvedValue(UNDATED);

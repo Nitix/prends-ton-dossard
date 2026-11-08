@@ -6,6 +6,7 @@ import { render } from "vitest-browser-react";
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { pressFocused } from "../../test/pressFocused";
 import { EditEventPage } from "./EventForm";
 import {
   GPX,
@@ -1264,7 +1265,10 @@ test("EventForm — les champs et les boutons font au moins 44 px de haut", asyn
   ];
 
   for (const target of targets) {
-    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    // The layout height, not the rectangle on the screen: the button that was just pressed
+    // is still shrinking back from its press (scale 0.97), as WebKit shows it.
+    const element = target.element();
+    expect(element instanceof HTMLElement ? element.offsetHeight : 0).toBeGreaterThanOrEqual(44);
   }
   // The checkbox is small, its label is the tap target.
   const label = joinBox(screen).element().closest("label");
@@ -1869,7 +1873,7 @@ test("EventForm — choisir un fichier puis « Retirer la trace » garde la trac
   await gpxField(row).upload(gpxFile());
   await expect.element(trackRead(row)).toBeVisible();
 
-  await removeTrack(row).click();
+  await pressFocused(removeTrack(row));
 
   await expect.element(trackRead(row)).not.toBeInTheDocument();
   await expect.element(row.getByText(fr.format.gpxRemoved)).not.toBeInTheDocument();

@@ -1736,7 +1736,12 @@ async function openRemovalDialog(screen: Screen, runner: string) {
   await menuOf(screen, runner).click();
   await screen.getByRole("button", { name: fr.common.remove }).click();
   const dialog = screen.getByRole("dialog", { name: fr.participation.removeTitle });
-  await expect.element(dialog).toBeVisible();
+  // Not toBeVisible(): for WebKit it asks of an element inside a <details> (the
+  // list of the non starters) that its offsetParent is not null, and the
+  // offsetParent of a modal dialog, which is fixed, is null there.
+  await vi.waitFor(() => {
+    expect(dialog.element().checkVisibility()).toBe(true);
+  });
   return dialog;
 }
 
@@ -1854,7 +1859,10 @@ test("EventPage — après le retrait du seul non partant, la section disparaît
   await dialog.getByRole("button", { name: fr.common.remove }).click();
 
   await expect.element(dialog).not.toBeInTheDocument();
-  expect(screen.container.querySelector("details")).toBeNull();
+  // The page asks for the event again: the section goes when the answer is there.
+  await vi.waitFor(() => {
+    expect(screen.container.querySelector("details")).toBeNull();
+  });
   const title = screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" });
   await vi.waitFor(() => {
     expect(focused()).toBe(title.element());

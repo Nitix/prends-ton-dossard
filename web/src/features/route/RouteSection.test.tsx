@@ -87,8 +87,11 @@ function serve(body: string, status = 200) {
     .mockImplementation(() => Promise.resolve(new Response(body, { status })));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mocks.getURL.mockReset().mockReturnValue(TRACK_URL);
+  // The pointer is where the last test left it, and WebKit hovers what is drawn under it: the
+  // profile would start with a cursor. It goes to a corner, where nothing is, and clicks there.
+  await userEvent.click(document.body, { position: { x: 1, y: 1 } });
 });
 
 afterEach(() => {
@@ -229,8 +232,10 @@ test("RouteSection — sur un téléphone de 320 px, les grands chiffres gardent
       expect(lines.size, `lines of ${what}`).toBe(1);
       const box = value.getBoundingClientRect();
       const tile = tiles[i]?.getBoundingClientRect();
-      expect(box.left, `left of ${what}`).toBeGreaterThanOrEqual(tile?.left ?? Infinity);
-      expect(box.right, `right of ${what}`).toBeLessThanOrEqual(tile?.right ?? -Infinity);
+      // Within a pixel: WebKit draws the same text about 1 % wider than Chromium, which is less than
+      // a pixel here, on the padding of the tile.
+      expect(box.left, `left of ${what}`).toBeGreaterThanOrEqual((tile?.left ?? Infinity) - 1);
+      expect(box.right, `right of ${what}`).toBeLessThanOrEqual((tile?.right ?? -Infinity) + 1);
     }
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
   } finally {
@@ -615,7 +620,7 @@ test("RouteSection — au clavier, le repère suit", async () => {
   for (let i = 0; i < 12 && document.activeElement !== cursor.element(); i++) {
     await userEvent.tab();
   }
-  expect(document.activeElement).toBe(cursor.element());
+  await expect.element(cursor).toHaveFocus();
   expect(valueText(cursor)).toBe("0 km, altitude 500 m, pente 8 %");
   await expectMarkAtCursor(screen, placed, STEADY.points, 0.02);
 
@@ -817,62 +822,75 @@ async function settled(read: () => DOMRect): Promise<DOMRect> {
   throw new Error("it does not stop moving");
 }
 
-test("RouteSection — sur un téléphone, toucher le tracé place le curseur du profil, sans déplacer la carte", async () => {
-  serve(STEADY.file);
-  await page.viewport(375, 812);
+// Safari has no `new Touch()` (it has `document.createTouch`, which is gone from the others): a
+// finger cannot be made there, and this test cannot be run by hand-made touch events.
+const canMakeTouches = (() => {
   try {
-    const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }), ["fr"], {
-      inCard: true,
-    });
-    await expect.element(trackMap(screen)).toBeVisible();
-    const region = trackMap(screen).element();
-    const cursor = slider(screen);
-    const line = () => part(screen, "path.track-line").getBoundingClientRect();
-    const before = line();
-
-    // A finger beside the track (a finger is wide: 14 px off), at 1.1 km: the
-    // profile reads there, and the mark is on the track.
-    const at = onScreen(screen, 1.1 / STEADY_KM);
-    tap(region, { x: at.x + 14, y: at.y });
-    await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
-    expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
-    await expect.poll(() => markOffset(screen, at)).toBeLessThan(1.5);
-    // The map has not moved, not even a little later: the track is where it was.
-    await frames(10);
-    expectStill(line(), before, "after a tap on the track");
-
-    // A finger that slides along the track, from 0.5 km toward the finish,
-    // ending on the line: it moves the map, as before, and leaves the cursor at
-    // 1.1 km. Nor does the end of the touch, which the browser tells as the
-    // pointer leaving the map, take the cursor away.
-    const from = onScreen(screen, 0.5 / STEADY_KM);
-    const toward = onScreen(screen, 1);
-    const length = Math.hypot(toward.x - from.x, toward.y - from.y);
-    const to = {
-      x: from.x + ((toward.x - from.x) * 40) / length,
-      y: from.y + ((toward.y - from.y) * 40) / length,
-    };
-    await slide(region, from, to);
-    await frames(4);
-    expect(pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
-    expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
-    expect(mark(screen)).not.toBeNull();
-    const afterSlide = await settled(line);
-    expect(Math.hypot(afterSlide.left - before.left, afterSlide.top - before.top)).toBeGreaterThan(
-      25,
-    );
-
-    // A touch far from the track (where it is now) puts the cursor away; the map stays.
-    const now = onScreen(screen, 1.1 / STEADY_KM);
-    tap(region, { x: now.x + 80, y: now.y });
-    await expect.poll(() => pill(screen)).toBe("678 m");
-    await expect.poll(() => mark(screen)).toBeNull();
-    await frames(10);
-    expectStill(line(), afterSlide, "after a tap away from the track");
-  } finally {
-    await page.viewport(414, 896);
+    return new Touch({ identifier: 1, target: document.body }) instanceof Touch;
+  } catch {
+    return false;
   }
-});
+})();
+
+test.skipIf(!canMakeTouches)(
+  "RouteSection — sur un téléphone, toucher le tracé place le curseur du profil, sans déplacer la carte",
+  async () => {
+    serve(STEADY.file);
+    await page.viewport(375, 812);
+    try {
+      const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }), ["fr"], {
+        inCard: true,
+      });
+      await expect.element(trackMap(screen)).toBeVisible();
+      const region = trackMap(screen).element();
+      const cursor = slider(screen);
+      const line = () => part(screen, "path.track-line").getBoundingClientRect();
+      const before = line();
+
+      // A finger beside the track (a finger is wide: 14 px off), at 1.1 km: the
+      // profile reads there, and the mark is on the track.
+      const at = onScreen(screen, 1.1 / STEADY_KM);
+      tap(region, { x: at.x + 14, y: at.y });
+      await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
+      expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+      await expect.poll(() => markOffset(screen, at)).toBeLessThan(1.5);
+      // The map has not moved, not even a little later: the track is where it was.
+      await frames(10);
+      expectStill(line(), before, "after a tap on the track");
+
+      // A finger that slides along the track, from 0.5 km toward the finish,
+      // ending on the line: it moves the map, as before, and leaves the cursor at
+      // 1.1 km. Nor does the end of the touch, which the browser tells as the
+      // pointer leaving the map, take the cursor away.
+      const from = onScreen(screen, 0.5 / STEADY_KM);
+      const toward = onScreen(screen, 1);
+      const length = Math.hypot(toward.x - from.x, toward.y - from.y);
+      const to = {
+        x: from.x + ((toward.x - from.x) * 40) / length,
+        y: from.y + ((toward.y - from.y) * 40) / length,
+      };
+      await slide(region, from, to);
+      await frames(4);
+      expect(pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
+      expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+      expect(mark(screen)).not.toBeNull();
+      const afterSlide = await settled(line);
+      expect(
+        Math.hypot(afterSlide.left - before.left, afterSlide.top - before.top),
+      ).toBeGreaterThan(25);
+
+      // A touch far from the track (where it is now) puts the cursor away; the map stays.
+      const now = onScreen(screen, 1.1 / STEADY_KM);
+      tap(region, { x: now.x + 80, y: now.y });
+      await expect.poll(() => pill(screen)).toBe("678 m");
+      await expect.poll(() => mark(screen)).toBeNull();
+      await frames(10);
+      expectStill(line(), afterSlide, "after a tap away from the track");
+    } finally {
+      await page.viewport(414, 896);
+    }
+  },
+);
 
 /** The box that a call of `fitBounds` was given. */
 const boundsOf = (box: LatLngBoundsExpression | undefined): LatLngBounds =>
