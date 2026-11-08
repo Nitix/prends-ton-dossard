@@ -157,8 +157,15 @@ func (s *service) answer(ctx context.Context, event *core.Record) (Answer, error
 	// The race days that Open-Meteo can tell, from today on. Inside the window
 	// (7 days of lead, 16 of horizon) the range is never empty.
 	dayFrom := max(start, today)
-	todayDate, _ := time.Parse(time.DateOnly, today)
-	dayTo := min(end, todayDate.AddDate(0, 0, horizon-1).Format(time.DateOnly))
+	// Open-Meteo counts its horizon from its own date, in UTC, which is a day
+	// behind Paris for an hour or two each night: past it, it answers 400.
+	utcToday, _ := time.Parse(time.DateOnly, now().UTC().Format(time.DateOnly))
+	dayTo := min(end, utcToday.AddDate(0, 0, horizon-1).Format(time.DateOnly))
+	if dayFrom > dayTo {
+		// Not possible in the window (7 days of lead, 16 of horizon), but a call
+		// for no day would be refused: say when it opens.
+		return Answer{Status: "not_yet", From: from}, nil
+	}
 
 	lat, lon, ele, place, err := s.whereIs(ctx, event)
 	if err != nil {

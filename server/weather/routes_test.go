@@ -212,3 +212,35 @@ func TestWeather_FromIsSevenDaysBefore(t *testing.T) {
 		})
 	}
 }
+
+// Open-Meteo refuses a day after its UTC date plus 15 (a 400, which the route
+// would answer as a 502): the horizon is counted from the UTC date, though the
+// window of the weather is in Paris, a day ahead for an hour or two each night.
+func TestWeather_HorizonIsCountedInUTC(t *testing.T) {
+	for _, row := range []struct {
+		name, now, start, end, wantFrom, wantTo string
+	}{
+		{"winter, 00:57 in Paris", "2026-11-07T23:57:00Z", "2026-11-09", "2026-12-02", "2026-11-09", "2026-11-22"},
+		{"winter, noon", "2026-11-07T12:00:00Z", "2026-11-09", "2026-12-02", "2026-11-09", "2026-11-22"},
+		{"summer, 00:30 in Paris", "2026-06-10T22:30:00Z", "2026-06-12", "2026-07-20", "2026-06-12", "2026-06-25"},
+		{"summer, noon", "2026-06-10T12:00:00Z", "2026-06-12", "2026-07-20", "2026-06-12", "2026-06-25"},
+		{"a race that ends before the horizon", "2026-11-07T23:57:00Z", "2026-11-09", "2026-11-12", "2026-11-09", "2026-11-12"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			w := newWorld(t, "2026-06-10")
+			instant, err := time.Parse(time.RFC3339, row.now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			weather.SetNow(t, instant)
+			a := w.answer(t, w.event(t, "Annecy", row.start, row.end).Id)
+			if a.Status != "ok" {
+				t.Fatalf("status %q", a.Status)
+			}
+			q := w.meteo.last("/v1/forecast").Query
+			if q.Get("start_date") != row.wantFrom || q.Get("end_date") != row.wantTo {
+				t.Errorf("asked %s to %s, want %s to %s", q.Get("start_date"), q.Get("end_date"), row.wantFrom, row.wantTo)
+			}
+		})
+	}
+}
