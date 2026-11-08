@@ -345,9 +345,13 @@ export function FormatFieldset({
           // one, which it reads as empty: nothing is filled, so nothing came out) cannot be
           // reported, and the form would not be sent without a word. The section opens, so that
           // the browser can put the focus on the field and say what is wrong. `invalid` does not
-          // bubble: the capture phase is where a parent hears it.
+          // bubble: the capture phase is where a parent hears it. WebKit decides before this
+          // that the field cannot have the focus, so it is given here, once the section is open.
           onInvalidCapture={(event) => {
-            event.currentTarget.open = true;
+            const section = event.currentTarget;
+            const wasClosed = !section.open;
+            section.open = true;
+            if (wasClosed && event.target instanceof HTMLElement) event.target.focus();
           }}
         >
           <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-neutral-800 marker:text-iris-600">
