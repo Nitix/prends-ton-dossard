@@ -158,6 +158,11 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 				format.Set("date", "")
 				result.ClearedFormatDates++
 			}
+			// A race known by its month has no start time for a format either. A
+			// time on a race with days stays: it is a time of the day, not a day.
+			if events.MonthOnly(keep) {
+				format.Set("start_time", "")
+			}
 			if dryRun {
 				continue
 			}

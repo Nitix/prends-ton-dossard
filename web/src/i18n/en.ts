@@ -333,6 +333,7 @@ export const en = {
     registrationClosed: "Registration closed",
     daysLeft: (n: number) => (n === 0 ? "last day" : n === 1 ? "1 day left" : `${n} days left`),
     reminderTitle: "Reminder",
+    startAt: (time: string) => `start at ${time}`,
     reminder: (date: string) => `Remember to register by ${date}.`,
     openingHero: "Registration opens",
     openingCard: "Opens",
@@ -577,6 +578,8 @@ export const en = {
     elevation: "Elevation gain (m)",
     formatDate: "Race date",
     formatDateHint: "Only if it is not the first day.",
+    formatStartTime: "Start time",
+    formatStartTimeHint: "Optional. It gives the weather at the start.",
     addFormat: "Add a race",
     formatHasParticipants: (n: number) =>
       n === 1
@@ -823,6 +826,7 @@ export const en = {
     registration_opening_after_start: "Registration must open on or before the first day.",
     registration_opening_after_deadline: "Registration must open on or before the deadline.",
     format_date_month: "A race known only by its month has no race dates.",
+    format_time_month: "A race known only by its month has no start times.",
     month_start_invalid: "For a race known only by its month, the date is the 1st.",
     format_date_out_of_range: "The race date must fall within the dates of the event.",
     format_other_event: "This race belongs to another event.",

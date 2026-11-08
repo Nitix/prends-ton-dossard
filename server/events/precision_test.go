@@ -167,6 +167,48 @@ func TestEvents_MonthPrecision(t *testing.T) {
 			Status: http.StatusBadRequest, Contains: []string{fieldError("date", "format_date_month")},
 		},
 
+		// Nor a start time: a time needs a day.
+		{
+			Name: "a race of a month with a start time", As: "alice", Before: june, Method: http.MethodPost, URL: records("formats"),
+			Body:   body(`{"event":%q,"race_type":%q,"distance_km":10,"start_time":"07:30"}`, idOf(event), idOf(road)),
+			Status: http.StatusBadRequest, Contains: []string{fieldError("start_time", "format_time_month")},
+		},
+		{
+			Name: "a race of a month with no start time", As: "alice", Before: june, Method: http.MethodPost, URL: records("formats"),
+			Body:   body(`{"event":%q,"race_type":%q,"distance_km":10,"start_time":""}`, idOf(event), idOf(road)),
+			Status: http.StatusOK,
+		},
+		{
+			Name: "a race of a month with a start time is refused on an update too", As: "alice", Before: june, Method: http.MethodPatch, URL: records("formats", f42),
+			Body:   body(`{"start_time":"07:30"}`),
+			Status: http.StatusBadRequest, Contains: []string{fieldError("start_time", "format_time_month")},
+		},
+		{
+			Name: "a start time that is not a time", As: "alice", Method: http.MethodPatch, URL: records("formats", f42),
+			Body:   body(`{"start_time":"7h30"}`),
+			Status: http.StatusBadRequest, Contains: []string{`"start_time"`},
+		},
+		{
+			Name: "a start time on a race with a day", As: "alice", Method: http.MethodPatch, URL: records("formats", f42),
+			Body:   body(`{"start_time":"07:30"}`),
+			Status: http.StatusOK,
+		},
+		patch("a month for an event with a timed race is refused on the precision", func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+			t.Helper()
+			for _, id := range []string{fx.F42.Id, fx.F15.Id} {
+				f, err := app.FindRecordById("formats", id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Set("date", "")
+				f.Set("start_time", "07:30")
+				if err := app.Save(f); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}, `{"date_precision":"month","start_date":"2026-06-01"}`,
+			http.StatusBadRequest, fieldError("date_precision", "format_time_month"), precisionIs("", "2026-06-13", "2026-06-14")),
+
 		// Back to a day: the end is the request's again, and the races have days.
 		patch("back to a day, with the end of the request", june, `{"date_precision":"day","start_date":"2027-06-12","end_date":"2027-06-13"}`,
 			http.StatusOK, "", precisionIs("day", "2027-06-12", "2027-06-13")),

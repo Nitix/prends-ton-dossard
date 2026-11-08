@@ -604,6 +604,40 @@ func TestMergeEvents(t *testing.T) {
 		unchanged(testRowMonth("a dry run into a race known by its month counts the dates of the formats it would clear", true), nil),
 		testRowMonth("a format dated in the month of a kept race known by its month loses its date", false),
 		{
+			Name: "a format with a start time merged into a race known by its month loses the time too",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "events", fx.Event2.Id, map[string]any{"date_precision": "month", "start_date": "2026-06-01"})
+				setFields(t, app, "formats", fx.F42.Id, map[string]any{"start_time": "07:30"})
+			},
+			As:       "admin",
+			Method:   http.MethodPost,
+			URL:      path(mergeEvents),
+			Body:     merge(id(event2), id(event), false),
+			Status:   http.StatusOK,
+			Contains: []string{result(admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1})},
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "formats", fx.F42.Id).GetString("start_time"); got != "" {
+					t.Errorf("the start time of F42 is %q, want it empty", got)
+				}
+			},
+		},
+		{
+			Name: "a format with a start time keeps it in a race that has days",
+			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				setFields(t, app, "formats", fx.FLyon.Id, map[string]any{"start_time": "09:00"})
+			},
+			As:     "admin",
+			Method: http.MethodPost,
+			URL:    path(mergeEvents),
+			Body:   merge(id(event), id(event2), false),
+			Status: http.StatusOK,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustStore(t, app, "formats", fx.FLyon.Id).GetString("start_time"); got != "09:00" {
+					t.Errorf("the start time of FLyon is %q, want 09:00", got)
+				}
+			},
+		},
+		{
 			Name: "a format dated outside the range of the kept event loses its date",
 			Before: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
 				setFields(t, app, "formats", fx.FLyon.Id, map[string]any{"date": "2026-06-22"})

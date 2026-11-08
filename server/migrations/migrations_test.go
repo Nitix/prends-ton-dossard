@@ -2672,7 +2672,7 @@ func TestMigrations_CalendarFeedScopeDownThenUp(t *testing.T) {
 	}
 }
 
-// The six migrations of v7 (9l to 9q) roll back in order on a database that
+// The seven migrations of v7 (9l to 9r) roll back in order on a database that
 // holds v7 data, and apply again: what is not v7's stays whole and valid.
 func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 	app := testutil.NewApp(t)
@@ -2681,7 +2681,7 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 
 	// v7 data: an opening with a time (9l), a reminders choice (9m), a device
 	// (9n), a delivery (9o), a race known by its month (9p), and the personal and
-	// the group links (9q).
+	// the group links (9q), and a start time (9r).
 	opened := mustFind(t, app, "events", fx.Event.Id)
 	opened.Set("registration_opening", "2026-05-10")
 	opened.Set("registration_opening_time", "10:00")
@@ -2703,6 +2703,11 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 	}
 	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "mine", "lang": "fr", "scope": "mine"})
 	mustSave(t, app, "calendar_feeds", map[string]any{"user": fx.Alice.Id, "token_hash": "group", "lang": "fr", "scope": "group"})
+	timed := mustFind(t, app, "formats", fx.F42.Id)
+	timed.Set("start_time", "07:30")
+	if err := app.Save(timed); err != nil {
+		t.Fatal(err)
+	}
 	before := map[string]int64{}
 	for _, name := range []string{"events", "formats", "participations", "runners", "users"} {
 		n, err := app.CountRecords(name)
@@ -2712,12 +2717,12 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 		before[name] = n
 	}
 
-	reverted, err := runner.Down(6)
+	reverted, err := runner.Down(7)
 	if err != nil {
-		t.Fatalf("rolling the six migrations of v7 back: %v", err)
+		t.Fatalf("rolling the seven migrations of v7 back: %v", err)
 	}
 	want := []string{
-		"9q_calendar_feed_scope.go", "9p_event_date_precision.go", "9o_reminder_deliveries.go",
+		"9r_format_start_time.go", "9q_calendar_feed_scope.go", "9p_event_date_precision.go", "9o_reminder_deliveries.go",
 		"9n_push_subscriptions.go", "9m_user_reminders.go", "9l_registration_opening.go",
 	}
 	if !slices.Equal(reverted, want) {
@@ -2731,7 +2736,7 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 		}
 	}
 	for collection, fields := range map[string][]string{
-		"events": {"registration_opening", "registration_opening_time", "date_precision"}, "users": {"reminders"}, "calendar_feeds": {"scope"},
+		"events": {"registration_opening", "registration_opening_time", "date_precision"}, "users": {"reminders"}, "calendar_feeds": {"scope"}, "formats": {"start_time"},
 	} {
 		c, err := app.FindCollectionByNameOrId(collection)
 		if err != nil {

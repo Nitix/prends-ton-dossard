@@ -26,6 +26,7 @@ export const ERROR_CODES: readonly string[] = [
   "registration_opening_after_start",
   "registration_opening_after_deadline",
   "format_date_month",
+  "format_time_month",
   "month_start_invalid",
   "format_date_out_of_range",
   "format_other_event",

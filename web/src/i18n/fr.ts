@@ -406,6 +406,7 @@ export const fr = {
       n === 0 ? "dernier jour" : n === 1 ? "plus qu'un jour" : `plus que ${n} jours`,
     // The box that reminds a runner who is only interested to register, and its text: the date is already formatted.
     reminderTitle: "Rappel",
+    startAt: (time: string) => `départ à ${time}`,
     reminder: (date: string) => `Pense à t'inscrire avant le ${date}.`,
     // The opening of the registration, before it: a start (said in the page's line, the chip of a card, the box of a runner who is
     // interested, and the home page), then the day (« le lun. 12 janv. » or « aujourd'hui »), then the time when there is one («  à 10:00 »).
@@ -736,6 +737,8 @@ export const fr = {
     elevation: "Dénivelé positif (m)",
     formatDate: "Date de l'épreuve",
     formatDateHint: "Seulement si ce n'est pas le premier jour.",
+    formatStartTime: "Heure de départ",
+    formatStartTimeHint: "Facultative. Elle donne la météo de l'heure du départ.",
     addFormat: "Ajouter une épreuve",
     // Next to « Retirer » on a format that already has runners: the server deletes their participations with it.
     formatHasParticipants: (n: number) =>
@@ -1032,6 +1035,7 @@ export const fr = {
     registration_opening_after_deadline:
       "L'ouverture des inscriptions doit être au plus tard la date limite.",
     format_date_month: "Une course dont seul le mois est connu n'a pas de date d'épreuve.",
+    format_time_month: "Une épreuve d'une course au mois n'a pas d'heure de départ.",
     month_start_invalid: "Pour une course dont seul le mois est connu, la date est le 1er du mois.",
     format_date_out_of_range:
       "La date de l'épreuve doit être comprise dans les dates de l'événement.",

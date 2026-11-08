@@ -140,12 +140,15 @@ func validateEvent(app core.App, event *core.Record) error {
 		if !isFirstOfMonth(start) {
 			return apperr.Field("start_date", apperr.CodeMonthStartInvalid)
 		}
-		datedFormat, err := hasDatedFormat(app, event)
+		datedFormat, timedFormat, err := hasDatedFormat(app, event)
 		if err != nil {
 			return err
 		}
 		if datedFormat {
 			return apperr.Field("date_precision", apperr.CodeFormatDateMonth)
+		}
+		if timedFormat {
+			return apperr.Field("date_precision", apperr.CodeFormatTimeMonth)
 		}
 	}
 	// The first day of the event, for what is not after it: the registration
@@ -214,16 +217,19 @@ func validateEvent(app core.App, event *core.Record) error {
 	return nil
 }
 
-// hasDatedFormat reports whether a format of the event has a day of its own.
-func hasDatedFormat(app core.App, event *core.Record) (bool, error) {
+// hasDatedFormat reports whether a format of the event has a day of its own, and
+// whether one has a start time.
+func hasDatedFormat(app core.App, event *core.Record) (dated, timed bool, err error) {
 	if event.IsNew() {
-		return false, nil
+		return false, false, nil
 	}
 	formats, err := app.FindAllRecords("formats", dbx.HashExp{"event": event.Id})
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
-	return slices.ContainsFunc(formats, func(f *core.Record) bool { return f.GetString("date") != "" }), nil
+	dated = slices.ContainsFunc(formats, func(f *core.Record) bool { return f.GetString("date") != "" })
+	timed = slices.ContainsFunc(formats, func(f *core.Record) bool { return f.GetString("start_time") != "" })
+	return dated, timed, nil
 }
 
 // measures are the fields of a format that say what the race is: a distance,
@@ -231,18 +237,25 @@ func hasDatedFormat(app core.App, event *core.Record) (bool, error) {
 var measures = []string{"distance_km", "duration_min", "time_limit_min"}
 
 func validateFormat(app core.App, format *core.Record) error {
-	if day := format.GetString("date"); day != "" {
+	day, startTime := format.GetString("date"), format.GetString("start_time")
+	if day != "" {
 		if _, ok := ParseDay(day); !ok {
 			return apperr.Field("date", apperr.CodeDateInvalid)
 		}
+	}
+	if day != "" || startTime != "" {
 		event, err := app.FindRecordById("events", format.GetString("event"))
 		if err != nil {
 			return err
 		}
+		// A race known by its month has no day for a format, nor a time of the day.
 		if MonthOnly(event) {
-			return apperr.Field("date", apperr.CodeFormatDateMonth)
+			if day != "" {
+				return apperr.Field("date", apperr.CodeFormatDateMonth)
+			}
+			return apperr.Field("start_time", apperr.CodeFormatTimeMonth)
 		}
-		if !InRange(day, event.GetString("start_date"), event.GetString("end_date")) {
+		if day != "" && !InRange(day, event.GetString("start_date"), event.GetString("end_date")) {
 			return apperr.Field("date", apperr.CodeFormatDateOutOfRange)
 		}
 	}

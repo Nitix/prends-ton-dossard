@@ -69,7 +69,7 @@ func TestCodes_FrontEndContract(t *testing.T) {
 	want := []string{
 		"account_disabled", "date_invalid", "email_invalid", "email_taken", "end_before_start",
 		"forbidden", "format_date_month", "format_date_out_of_range", "format_measure_required", "format_other_event",
-		"format_required", "invitation_invalid", "invitation_kind_mismatch", "last_admin",
+		"format_required", "format_time_month", "invitation_invalid", "invitation_kind_mismatch", "last_admin",
 		"merge_formats_different_events", "merge_same_record", "month_start_invalid", "not_found",
 		"offer_already_member", "offer_full", "offer_owner_member", "offer_seats_below_members",
 		"offer_seats_required",
