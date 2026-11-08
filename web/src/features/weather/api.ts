@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useQuery, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import { pb } from "../../lib/pb";
 
@@ -68,9 +68,23 @@ export type Weather =
   | { status: "over" }
   | { status: "no_day" };
 
-const STALE_MS = 30 * 60_000;
+/** The server keeps a forecast 15 minutes: the page asks again as often, no more (changed at the request of the user, it was 30). */
+const REFRESH_MS = 15 * 60_000;
 
-/** The weather of an event, kept 30 minutes. Not asked for unless `enabled`: outside the window, the page makes no request. */
+/**
+ * Makes the weather of an event be asked for again, after a change of what it depends on: the
+ * place, the days, the start times, the tracks. The server's key holds all of these, so the answer
+ * is a new one at once, not the old forecast kept.
+ */
+export function invalidateWeather(queryClient: QueryClient, eventId: string): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ["weather", eventId] });
+}
+
+/**
+ * The weather of an event, kept 15 minutes, and asked for again every 15 minutes while the page is
+ * open (and visible). Not asked for unless `enabled`: outside the window the page makes no request,
+ * and the interval does not run either.
+ */
 export function useWeather(eventId: string, enabled: boolean): UseQueryResult<Weather> {
   return useQuery({
     queryKey: ["weather", eventId],
@@ -79,6 +93,7 @@ export function useWeather(eventId: string, enabled: boolean): UseQueryResult<We
     enabled,
     // An outage of Open-Meteo answers 502 after up to 8 s: one more try, not three (the page says it failed, and has a button).
     retry: 1,
-    staleTime: STALE_MS,
+    staleTime: REFRESH_MS,
+    refetchInterval: REFRESH_MS,
   });
 }

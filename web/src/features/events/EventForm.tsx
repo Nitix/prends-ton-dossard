@@ -17,6 +17,7 @@ import { useSession } from "../auth/session";
 import { allowedStatus } from "../participations/api";
 import { SelectField, StatusField } from "../participations/fields";
 import { canDeleteEvent, type Me } from "../participations/permissions";
+import { invalidateWeather } from "../weather/api";
 import { invalidateEvents, useEvent, useRaceTypes, type EventView } from "./api";
 import { DuplicateHint } from "./DuplicateHint";
 import { FormatFieldset } from "./FormatFieldset";
@@ -402,7 +403,8 @@ function EventFields({
       unsent = err.formats;
       causes = err.causes;
     }
-    await invalidateEvents(queryClient, id);
+    // The place, the days, the start times and the tracks are what the weather is of.
+    await Promise.all([invalidateEvents(queryClient, id), invalidateWeather(queryClient, id)]);
     toast.show(unsent.length > 0 ? untracked(unsent, causes) : t.form.saved);
     await navigate({ to: "/evenements/$id", params: { id } });
     return NO_ERRORS;

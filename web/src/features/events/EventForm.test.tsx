@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { ClientResponseError } from "pocketbase";
 import { expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
@@ -899,6 +899,66 @@ test("EventForm — enregistre la modification par id, sans l'événement dans l
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
   expect(keys).toContainEqual(["events"]);
   expect(keys).toContainEqual(["event", "event"]);
+});
+
+/**
+ * Watches the weather of the event as the page does: a query that is on screen, which asks
+ * again only when something marks it out of date. `asked` counts the requests.
+ */
+function watchWeather(queryClient: QueryClient) {
+  const asked = vi.fn<() => Promise<{ status: string }>>(() =>
+    Promise.resolve({ status: "no_day" }),
+  );
+  const observer = new QueryObserver(queryClient, {
+    queryKey: ["weather", "event"],
+    queryFn: asked,
+    staleTime: 15 * 60_000,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  return { asked, unsubscribe };
+}
+
+test("EventForm — un autre lieu enregistré : la météo de la page est redemandée", async () => {
+  const { screen, router, queryClient } = await renderEdit();
+  const weather = watchWeather(queryClient);
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(1);
+  });
+  await location(screen).fill("Chamonix");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.calls.at(-1)?.body).toMatchObject({ location: "Chamonix" });
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(2);
+  });
+  weather.unsubscribe();
+});
+
+test("EventForm — une autre date enregistrée : la météo de la page est redemandée", async () => {
+  const { screen, router, queryClient } = await renderEdit();
+  const weather = watchWeather(queryClient);
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(1);
+  });
+  await startDate(screen).fill("2026-06-20");
+  await formatDate(format(screen, 2)).fill("2026-06-21");
+
+  await save(screen).click();
+
+  await vi.waitFor(() => {
+    expect(router.state.location.pathname).toBe("/evenements/event");
+  });
+  expect(mocks.calls.find(({ collection }) => collection === "events")?.body).toMatchObject({
+    start_date: "2026-06-20",
+  });
+  await vi.waitFor(() => {
+    expect(weather.asked).toHaveBeenCalledTimes(2);
+  });
+  weather.unsubscribe();
 });
 
 test("EventForm — l'épreuve qu'on retire est supprimée dans le même lot, et celle qu'on ajoute est créée pour l'événement", async () => {

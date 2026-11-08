@@ -11,7 +11,7 @@ import { TodayProvider } from "../../lib/useToday";
 import { plain } from "../../test/said";
 import { toEventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
-import type { Weather } from "./api";
+import { useWeather, type Weather } from "./api";
 import { WeatherSection } from "./WeatherSection";
 
 import "../../styles.css";
@@ -79,6 +79,39 @@ async function renderSection(
 const title = () => page.getByRole("heading", { level: 2, name: fr.weather.title });
 const failure = () =>
   new ClientResponseError({ status: 502, response: { code: "weather_unavailable" } });
+
+function Probe({ enabled }: { enabled: boolean }) {
+  useWeather("event", enabled);
+  return null;
+}
+
+async function mount(enabled: boolean) {
+  mocks.send.mockResolvedValue({ status: "no_day" });
+  const queryClient = new QueryClient();
+  await render(
+    <QueryClientProvider client={queryClient}>
+      <Probe enabled={enabled} />
+    </QueryClientProvider>,
+  );
+  return queryClient.getQueryCache().find({ queryKey: ["weather", "event"] });
+}
+
+describe("useWeather", () => {
+  const QUARTER = 15 * 60_000;
+
+  test("useWeather — gardée 15 minutes, redemandée toutes les 15 minutes", async () => {
+    const query = await mount(true);
+    const options = query?.observers[0]?.options;
+    expect(options?.staleTime).toBe(QUARTER);
+    expect(options?.refetchInterval).toBe(QUARTER);
+  });
+
+  test("useWeather — hors de la fenêtre, ni requête ni minuterie", async () => {
+    const query = await mount(false);
+    expect(query?.observers[0]?.options.enabled).toBe(false);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+});
 
 describe("WeatherSection", () => {
   test("WeatherSection — une ligne par jour", async () => {
