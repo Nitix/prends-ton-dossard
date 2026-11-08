@@ -4,7 +4,7 @@
    selector of styles.css: the two sheets never meet, in whichever order the page
    has them. They read the app's theme (../../theme.css), and the colours,
    radii and fonts of the page (../theme-vars.css). */
-@layer theme, base, components, utilities;
+@layer properties, theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme) prefix(sentier);
 @import "../../theme.css" prefix(sentier);
 @import "../theme-vars.css" prefix(sentier);
