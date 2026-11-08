@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { playwright } from "@vitest/browser-playwright";
+import { devices } from "playwright";
 import { defineConfig } from "vitest/config";
 import type { BrowserCommand } from "vitest/node";
 
@@ -16,6 +17,47 @@ import type { Media } from "./src/test/mediaFeatures.ts";
 const emulateMedia: BrowserCommand<[options: Media]> = async ({ page }, options) => {
   await page.emulateMedia(options);
 };
+
+/**
+ * The browser and the device of the browser tests, chosen by the environment
+ * (the CI matrix sets them): VITEST_BROWSER is chromium, firefox or webkit;
+ * VITEST_DEVICE is the name of a Playwright device ("iPhone 15", "Pixel 7"),
+ * which is a phone emulated in that browser, not a real one. An unknown value
+ * is an error: a typo must not quietly run the default.
+ */
+const browsers = ["chromium", "firefox", "webkit"] as const;
+type BrowserName = (typeof browsers)[number];
+
+function browserFromEnv(): BrowserName {
+  const name = process.env.VITEST_BROWSER || "chromium";
+  const browser = browsers.find((known) => known === name);
+  if (!browser) {
+    throw new Error(`VITEST_BROWSER="${name}" is unknown: use ${browsers.join(", ")}.`);
+  }
+  return browser;
+}
+
+function deviceFromEnv(browser: BrowserName) {
+  const name = process.env.VITEST_DEVICE;
+  if (!name) return undefined;
+  const device = (devices as Record<string, (typeof devices)[string] | undefined>)[name];
+  if (!device) {
+    throw new Error(
+      `VITEST_DEVICE="${name}" is not a Playwright device (see "devices" in playwright).`,
+    );
+  }
+  // Firefox cannot emulate a phone: Playwright has no isMobile there.
+  if (device.isMobile && browser === "firefox") {
+    throw new Error(
+      `VITEST_DEVICE="${name}" is a phone: Firefox cannot emulate one (no isMobile).`,
+    );
+  }
+  const { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent } = device;
+  return { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent };
+}
+
+const browserName = browserFromEnv();
+const contextOptions = deviceFromEnv(browserName);
 
 export default defineConfig({
   plugins: [
@@ -77,9 +119,12 @@ export default defineConfig({
             headless: true,
             // A click or a fill on a missing element fails after 2 s, not at
             // the 15 s test timeout. Below 2 s, passing tests failed at times.
-            provider: playwright({ actionTimeout: 2000 }),
+            provider: playwright({
+              actionTimeout: 2000,
+              ...(contextOptions && { contextOptions }),
+            }),
             commands: { emulateMedia },
-            instances: [{ browser: "chromium" }],
+            instances: [{ browser: browserName }],
           },
         },
       },
