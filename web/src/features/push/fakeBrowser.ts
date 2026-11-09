@@ -99,6 +99,8 @@ export function installFakes({
       release();
     },
   };
+  // Safari on an iPhone has no PushManager in a tab: the page that has Web Push has one.
+  vi.stubGlobal("PushManager", globalThis.PushManager ?? {});
   vi.stubGlobal("Notification", { permission, requestPermission: fakes.requestPermission });
   const ready = holdReady
     ? new Promise<void>((resolve) => {

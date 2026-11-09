@@ -208,9 +208,7 @@ test("CalendarSection — créer affiche le lien, avec Copier", async () => {
   expect(writeText).toHaveBeenCalledExactlyOnceWith(link(1));
   await expect.element(screen.getByText(fr.calendar.copied)).toBeVisible();
   // The tap target of the button is at least 44 px.
-  expect(
-    button(screen, fr.calendar.copy).element().getBoundingClientRect().height,
-  ).toBeGreaterThanOrEqual(44);
+  expect(buttonOf(button(screen, fr.calendar.copy)).offsetHeight).toBeGreaterThanOrEqual(44);
 
   // Once the page is left, the link is not on screen any more: the page says there
   // is one, and shows it again when asked to.
@@ -250,9 +248,7 @@ test("CalendarSection — « Afficher le lien » montre le lien avec Copier", as
   await button(screen, fr.calendar.copy).click();
   expect(writeText).toHaveBeenCalledExactlyOnceWith(link(0));
   await expect.element(screen.getByText(fr.calendar.copied)).toBeVisible();
-  expect(
-    button(screen, fr.calendar.copy).element().getBoundingClientRect().height,
-  ).toBeGreaterThanOrEqual(44);
+  expect(buttonOf(button(screen, fr.calendar.copy)).offsetHeight).toBeGreaterThanOrEqual(44);
 });
 
 test("CalendarSection — Nouveau lien et Supprimer restent proposés, même après la création", async () => {

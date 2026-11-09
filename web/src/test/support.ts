@@ -9,3 +9,6 @@ export const hasDateInput = (() => {
   input.type = "date";
   return input.type === "date";
 })();
+
+/** The run is on a touch screen (an emulated phone): a mouse is not what the page expects there. */
+export const isTouchDevice = matchMedia("(pointer: coarse)").matches;

@@ -19,6 +19,7 @@ import type { FormatRecord } from "../../lib/types";
 import { fontsReady } from "../../test/fontsReady";
 import { spaceGaps } from "../../test/gaps";
 import { emulateMedia, resetMedia } from "../../test/media";
+import { isTouchDevice } from "../../test/support";
 import { toTrack, type TrackPoint } from "./gpx";
 import { RouteSection } from "./RouteSection";
 import { SLOPE_COLORS, SLOPE_COLORS_DARK, type SlopeZone } from "./slope";
@@ -832,7 +833,8 @@ const canMakeTouches = (() => {
   }
 })();
 
-test.skipIf(!canMakeTouches)(
+// On a real touch screen (an emulated phone), Leaflet reads the touches of the browser, not these.
+test.skipIf(!canMakeTouches || isTouchDevice)(
   "RouteSection — sur un téléphone, toucher le tracé place le curseur du profil, sans déplacer la carte",
   async () => {
     serve(STEADY.file);

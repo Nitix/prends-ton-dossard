@@ -12,6 +12,7 @@ import { page } from "vitest/browser";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { emulateMedia, resetMedia } from "../../test/media";
+import { isTouchDevice } from "../../test/support";
 import { BLANK_TILE } from "../../test/tiles";
 import { gateWheel } from "./gestures";
 import { toTrack } from "./gpx";
@@ -327,46 +328,51 @@ async function pixelsOf(base64: string): Promise<{ data: Uint8ClampedArray; widt
   };
 }
 
-test("TrackMap — une trace toute droite, plein est ou plein nord, est dessinée", async () => {
-  // Its box has no height (or no width): a gradient laid on that box cannot be
-  // drawn, and the line must still show, in the colour of the dawn.
-  for (const [what, points] of [
-    [
-      "due east",
-      toTrack([
-        { lat: 45, lon: 6 },
-        { lat: 45, lon: 6.03 },
-      ]),
-    ],
-    [
-      "due north",
-      toTrack([
-        { lat: 45, lon: 6 },
-        { lat: 45.03, lon: 6 },
-      ]),
-    ],
-  ] as const) {
-    const screen = await renderMap({ points });
-    const map = screen.getByRole("region", { name: fr.route.map });
-    const line = part(screen, "path.track-line").getBoundingClientRect();
-    const box = map.element().getBoundingClientRect();
+// The pixels are read from a screenshot of the map, whose scale on a phone screen (a device pixel
+// ratio of 2.6 or 3) is not the one the reading works out.
+test.skipIf(isTouchDevice)(
+  "TrackMap — une trace toute droite, plein est ou plein nord, est dessinée",
+  async () => {
+    // Its box has no height (or no width): a gradient laid on that box cannot be
+    // drawn, and the line must still show, in the colour of the dawn.
+    for (const [what, points] of [
+      [
+        "due east",
+        toTrack([
+          { lat: 45, lon: 6 },
+          { lat: 45, lon: 6.03 },
+        ]),
+      ],
+      [
+        "due north",
+        toTrack([
+          { lat: 45, lon: 6 },
+          { lat: 45.03, lon: 6 },
+        ]),
+      ],
+    ] as const) {
+      const screen = await renderMap({ points });
+      const map = screen.getByRole("region", { name: fr.route.map });
+      const line = part(screen, "path.track-line").getBoundingClientRect();
+      const box = map.element().getBoundingClientRect();
 
-    const { data, width } = await pixelsOf(await page.screenshot({ element: map, save: false }));
-    const scale = width / box.width;
-    // Along the middle third of the line, away from the dots of the start and the finish.
-    const vivid = Array.from({ length: 21 }, (_, i) => {
-      const x = line.left + (line.width * (i + 10)) / 40;
-      const y = line.top + (line.height * (i + 10)) / 40;
-      const at =
-        (Math.round((y - box.top) * scale) * width + Math.round((x - box.left) * scale)) * 4;
-      const [r = 0, g = 0, b = 0] = data.slice(at, at + 3);
-      // The dawn is vivid; the map, the halo and the tiles are white or grey.
-      return Math.max(r, g, b) - Math.min(r, g, b) > 80;
-    }).filter(Boolean).length;
-    expect(vivid, `the line of a track ${what}, in colour`).toBeGreaterThanOrEqual(18);
-    await screen.unmount();
-  }
-});
+      const { data, width } = await pixelsOf(await page.screenshot({ element: map, save: false }));
+      const scale = width / box.width;
+      // Along the middle third of the line, away from the dots of the start and the finish.
+      const vivid = Array.from({ length: 21 }, (_, i) => {
+        const x = line.left + (line.width * (i + 10)) / 40;
+        const y = line.top + (line.height * (i + 10)) / 40;
+        const at =
+          (Math.round((y - box.top) * scale) * width + Math.round((x - box.left) * scale)) * 4;
+        const [r = 0, g = 0, b = 0] = data.slice(at, at + 3);
+        // The dawn is vivid; the map, the halo and the tiles are white or grey.
+        return Math.max(r, g, b) - Math.min(r, g, b) > 80;
+      }).filter(Boolean).length;
+      expect(vivid, `the line of a track ${what}, in colour`).toBeGreaterThanOrEqual(18);
+      await screen.unmount();
+    }
+  },
+);
 
 test("TrackMap — deux cartes sur la page ont chacune leur dégradé, sans id en double", async () => {
   const screen = await render(
@@ -550,24 +556,28 @@ test("TrackMap — Ctrl + molette zoome", async () => {
   expect(hintText(screen)).toBeUndefined();
 });
 
-test("TrackMap — zoomSnap 0,5 : un cran de molette reste d'un niveau, un pincement garde son demi-niveau", async () => {
-  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
-  const screen = await renderMap();
-  const map = leafletOf(fit);
-  expect(map.options.zoomSnap).toBe(0.5);
-  expect(map.options.zoomDelta).toBe(1);
+// Leaflet takes a touch screen for a phone: the mouse and the wheel it reads are a computer's.
+test.skipIf(isTouchDevice)(
+  "TrackMap — zoomSnap 0,5 : un cran de molette reste d'un niveau, un pincement garde son demi-niveau",
+  async () => {
+    const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+    const screen = await renderMap();
+    const map = leafletOf(fit);
+    expect(map.options.zoomSnap).toBe(0.5);
+    expect(map.options.zoomDelta).toBe(1);
 
-  // A notch of a mouse (100 px, a little more than half a level in Leaflet's curve) is one level.
-  const zoom = map.getZoom();
-  wheelOver(screen, { ctrlKey: true, deltaY: -100 });
-  await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBe(zoom + 1);
+    // A notch of a mouse (100 px, a little more than half a level in Leaflet's curve) is one level.
+    const zoom = map.getZoom();
+    wheelOver(screen, { ctrlKey: true, deltaY: -100 });
+    await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBe(zoom + 1);
 
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  // A zoom of 1.3 (a small pinch) lands on 1.5 levels, not back where it started.
-  const before = map.getZoom();
-  map.setZoom(before + Math.log2(1.3), { animate: false });
-  expect(map.getZoom() - before).toBe(0.5);
-});
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    // A zoom of 1.3 (a small pinch) lands on 1.5 levels, not back where it started.
+    const before = map.getZoom();
+    map.setZoom(before + Math.log2(1.3), { animate: false });
+    expect(map.getZoom() - before).toBe(0.5);
+  },
+);
 
 test("TrackMap — ⌘ sur Mac", async () => {
   vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
@@ -716,11 +726,14 @@ test("TrackMap — un doigt qui commence sur un bouton de zoom ne montre pas l'a
   await expect.poll(() => hintText(screen)).toBe(fr.route.fingersHint);
 });
 
-test("TrackMap — avec une souris, la carte se déplace au glisser", async () => {
-  const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
-  await renderMap();
-  expect(leafletOf(fit).dragging.enabled()).toBe(true);
-});
+test.skipIf(isTouchDevice)(
+  "TrackMap — avec une souris, la carte se déplace au glisser",
+  async () => {
+    const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
+    await renderMap();
+    expect(leafletOf(fit).dragging.enabled()).toBe(true);
+  },
+);
 
 test("TrackMap — la carte est décrite", async () => {
   const screen = await renderMap();

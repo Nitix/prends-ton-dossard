@@ -414,10 +414,13 @@ for (const { skin, mode } of CASES) {
     );
 
     // A dialog: within the phone, its actions 44 px tall.
-    await screen
+    const add = screen
       .getByRole("button", { name: fr.participation.addSomeone, exact: true })
-      .first()
-      .click();
+      .first();
+    // On a phone, the tab bar floats over the bottom of the page: the button is brought to the
+    // middle, where Playwright's own scroll (to the edge) would leave it under the bar.
+    add.element().scrollIntoView({ block: "center" });
+    await add.click();
     const dialog = screen.getByRole("dialog", { name: fr.participation.addSomeoneTitle });
     await expect.element(dialog).toBeVisible();
     // Measured once it has risen and its fonts are in: not in the middle of its
