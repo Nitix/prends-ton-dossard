@@ -73,11 +73,10 @@ function deviceFromEnv(browser: BrowserName) {
 const browserName = browserFromEnv();
 const contextOptions = deviceFromEnv(browserName);
 
-// On CI every target gets two more tries for a failing test (the report shows the flaky ones).
-// Any target but desktop Chromium also starts slower, and an emulated phone is slower still: its
-// actions get more time there. Local runs stay strict.
-const tolerant =
-  process.env.CI !== undefined && (browserName !== "chromium" || contextOptions !== undefined);
+// On CI every target gets two more tries for a failing test (the report shows the flaky ones), and
+// its actions get more time: GitHub's machines are slower than a desktop, desktop Chromium too (a
+// heavy file given to an input took more than 2 s there). Local runs stay strict.
+const tolerant = process.env.CI !== undefined;
 
 export default defineConfig({
   plugins: [
