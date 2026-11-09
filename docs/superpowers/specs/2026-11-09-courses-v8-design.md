@@ -196,7 +196,7 @@ avec Anne Mangeolle, Maxime Richard, Violaine Sourisse +1
 
 - `POST /api/app/invitations` accepte un champ facultatif `lang` : `en` pour l'anglais, toute autre valeur (ou rien) pour le français. Le site envoie la langue de l'interface. Le MCP envoie `fr`.
 - Pour une **invitation**, la réponse devient `{ "url", "expiresAt", "message" }`. Pour une **réinitialisation**, elle reste `{ "url", "expiresAt" }`.
-- Le message s'écrit **à la création**, avec l'aperçu du coureur à ce moment-là (§ 4.2 : `upcoming.total` et la première ligne). Il ne change plus ensuite : c'est un texte que l'admin envoie.
+- Le message s'écrit **à la création**, avec l'aperçu du coureur à ce moment-là (§ 4.2 : `invitedBy`, `upcoming.total` et la première ligne). Il ne change plus ensuite : c'est un texte que l'admin envoie.
 - Il est écrit par le paquet `server/wording`, comme les autres textes lus hors du site.
 
 ### 6.2 Le texte, mot pour mot
@@ -204,25 +204,26 @@ avec Anne Mangeolle, Maxime Richard, Violaine Sourisse +1
 Plusieurs courses (`total` ≥ 2) :
 
 ```
-Salut Arnaud ! Voici ton invitation pour Prends ton dossard, le site où on prépare nos courses. Tu as déjà 8 courses prévues avec nous, la prochaine : Trail des Crêtes, sam. 14 nov.
+Salut Arnaud ! Guillaume t'invite sur Prends ton dossard, le site où on prépare nos courses. Tu as déjà 8 courses prévues avec nous, la prochaine : Trail des Crêtes, sam. 14 nov.
 
-Crée ton compte ici. Le lien marche jusqu'au mer. 9 déc. et n'est que pour toi :
+Crée ton compte ici, ce lien n'est que pour toi :
 https://prends-ton-dossard.ketra.fr/invitation#…
 ```
 
 ```
-Hi Arnaud! Here's your invitation to Prends ton dossard, the site where we plan our races. You already have 8 races planned with us, the next one: Trail des Crêtes, Sat 14 Nov.
+Hi Arnaud! Guillaume invited you to Prends ton dossard, the site where we plan our races. You already have 8 races planned with us, the next one: Trail des Crêtes, Sat 14 Nov.
 
-Create your account here. The link works until Wed 9 Dec and is for you only:
+Create your account here, this link is just for you:
 https://prends-ton-dossard.ketra.fr/invitation#…
 ```
 
 - **Une seule course** : « Tu as déjà une course prévue avec nous : Trail des Crêtes, sam. 14 nov. » / « You already have one race planned with us: Trail des Crêtes, Sat 14 Nov. »
 - **Aucune course** : la phrase disparaît ; le premier paragraphe s'arrête après « nos courses. » / « our races. »
 - **La prochaine course au mois** : le mois et l'année à la place du jour, « Grand Trail du Vercors, juin 2027 » / « Grand Trail du Vercors, June 2027 ».
-- **La salutation** prend le premier mot du nom du coureur (« Arnaud » pour « Arnaud Hildenbrand ») ; un nom d'un seul mot est pris entier.
-- **La formule est neutre en genre** (« Voici ton invitation ») : « je t'ai ajouté » obligerait à deviner le genre de la personne.
-- **Le jour d'expiration** est le jour de Paris de `expiresAt`.
+- **Les prénoms** : la salutation prend le premier mot du nom du coureur invité (« Arnaud » pour « Arnaud Hildenbrand »), et « Guillaume » le premier mot du nom du coureur de l'admin qui crée le lien (`invitedBy`, § 4.2). Un nom d'un seul mot est pris entier.
+- **Sans coureur pour l'admin** (un compte qui n'en a plus) : « Salut Arnaud ! Voici ton invitation pour Prends ton dossard, le site où on prépare nos courses. » / « Hi Arnaud! Here's your invitation to Prends ton dossard, the site where we plan our races. »
+- **La formule est neutre en genre** : « Guillaume t'invite », au présent, à la demande de l'utilisateur (« Guillaume t'a invité sur Prends ton dossard, le site… »), sans le participe : « t'a invité » s'accorderait avec le genre de la personne invitée, qu'on ne devine pas (CLAUDE.md § 2).
+- **Pas de date d'expiration** dans le message, à la demande de l'utilisateur : la personne qui ouvre le lien crée son compte tout de suite. La date reste dans la fenêtre de partage de l'admin (§ 7).
 - **Les formats de date** du serveur, écrits dans `wording` (le serveur n'a pas `Intl`) :
   - français : « sam. 14 nov. » ; jours `lun. mar. mer. jeu. ven. sam. dim.` ; mois `janv. févr. mars avr. mai juin juil. août sept. oct. nov. déc.` ; un mois avec son année : « juin 2027 » (mois en entier : `janvier` … `décembre`) ;
   - anglais : « Sat 14 Nov » ; jours `Mon Tue Wed Thu Fri Sat Sun` ; mois `Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec` ; un mois avec son année : « June 2027 » ;
@@ -294,8 +295,9 @@ Les tests suivent le CLAUDE.md (§ 4.6) : Go en tests externes avec une horloge 
 - **Le message** :
   - présent pour une invitation, absent pour une réinitialisation ;
   - le texte exact du § 6.2, en français et en anglais, pour : plusieurs courses, une seule, aucune, une prochaine course au mois ;
-  - la salutation sur le premier mot, et un nom d'un seul mot ;
-  - le jour d'expiration à Paris (une création à 23 h 30 à Paris) ;
+  - les deux prénoms sur le premier mot de chaque nom, et un nom d'un seul mot ;
+  - un admin sans coureur : « Voici ton invitation… » ;
+  - aucune date d'expiration dans le texte ;
   - `lang` absent ou inconnu donne le français ;
   - le message finit par l'`url` de la réponse.
 - **`server/wording`** : les formats de date (chaque jour, chaque mois, en français et en anglais).
@@ -361,7 +363,7 @@ Ce que ni tes réponses ni la conversation ne tranchaient ; dis lesquelles revoi
 
 **Le message et le partage**
 
-11. **La salutation prend le premier mot du nom** ; l'admin relit le message avant de l'envoyer.
+11. **Les prénoms du message sont le premier mot de chaque nom** (« Salut Arnaud ! Guillaume t'invite… ») ; l'admin relit le message avant de l'envoyer.
 12. **L'anglais au format britannique** (« Sat 14 Nov ») ; une langue autre que `en` donne le français.
 13. **« Le message » est choisi par défaut** dans la fenêtre de partage.
 14. **Pas de message pour une réinitialisation**, dont la fenêtre ne change pas.
