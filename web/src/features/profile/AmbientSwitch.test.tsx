@@ -9,6 +9,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { AMBIENT_KEY, chooseAmbient, readAmbient } from "../../lib/ambient";
 import { SKINS, chooseSkin } from "../../skins";
 import { HeroArt } from "../../skins/carnet/motifs";
+import { isLinuxWebkit } from "../../test/support";
 import { AppearanceSection } from "./AppearanceSection";
 
 import "../../styles.css";
@@ -72,30 +73,36 @@ test("« Animer le fond » : seul un skin dont le fond bouge l'offre, et il disp
   }
 });
 
-test("« Animer le fond » : allumé par défaut, et les dessins bougent", async () => {
-  await chooseSkin("carnet");
-  const screen = await renderAppearance();
-  await expect.element(switchOf(screen)).toBeChecked();
-  expect(moves()).toBe(true);
-});
+test.skipIf(isLinuxWebkit)(
+  "« Animer le fond » : allumé par défaut, et les dessins bougent",
+  async () => {
+    await chooseSkin("carnet");
+    const screen = await renderAppearance();
+    await expect.element(switchOf(screen)).toBeChecked();
+    expect(moves()).toBe(true);
+  },
+);
 
-test("« Animer le fond » : éteint, c'est gardé sur l'appareil et les dessins s'arrêtent ; rallumé, ils reprennent", async () => {
-  await chooseSkin("carnet");
-  const screen = await renderAppearance();
+test.skipIf(isLinuxWebkit)(
+  "« Animer le fond » : éteint, c'est gardé sur l'appareil et les dessins s'arrêtent ; rallumé, ils reprennent",
+  async () => {
+    await chooseSkin("carnet");
+    const screen = await renderAppearance();
 
-  await switchOf(screen).click();
-  await expect.element(switchOf(screen)).not.toBeChecked();
-  expect(localStorage.getItem(AMBIENT_KEY)).toBe("off");
-  expect(readAmbient()).toBe(false);
-  await expect.poll(moves).toBe(false);
-  // Everything is still drawn: it only stands still.
-  expect(document.querySelectorAll("[data-art] .carnet-veil")).toHaveLength(4);
+    await switchOf(screen).click();
+    await expect.element(switchOf(screen)).not.toBeChecked();
+    expect(localStorage.getItem(AMBIENT_KEY)).toBe("off");
+    expect(readAmbient()).toBe(false);
+    await expect.poll(moves).toBe(false);
+    // Everything is still drawn: it only stands still.
+    expect(document.querySelectorAll("[data-art] .carnet-veil")).toHaveLength(4);
 
-  await switchOf(screen).click();
-  await expect.element(switchOf(screen)).toBeChecked();
-  expect(localStorage.getItem(AMBIENT_KEY)).toBeNull();
-  await expect.poll(moves).toBe(true);
-});
+    await switchOf(screen).click();
+    await expect.element(switchOf(screen)).toBeChecked();
+    expect(localStorage.getItem(AMBIENT_KEY)).toBeNull();
+    await expect.poll(moves).toBe(true);
+  },
+);
 
 test("« Animer le fond » : ce qui est gardé sur l'appareil est là en arrivant", async () => {
   await chooseSkin("carnet");

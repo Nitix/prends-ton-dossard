@@ -389,15 +389,26 @@ describe("ElevationProfile", () => {
     const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
     await userEvent.tab();
 
-    // An arrow moves the cursor by a hundredth of the range: positions that are
-    // not round, all on the flat (it ends at 2 km; the slope is read over 75 m
-    // on each side). What a screen reader hears, then what the pill shows.
+    // Positions that are not round, all on the flat (it ends at 2 km; the slope is read over 75 m
+    // on each side), put on the range the same way in every engine (an arrow moves it by a step
+    // that is not the same everywhere: Firefox's runs along the wall). What a screen reader
+    // hears, then what the pill shows.
+    const input = cursor.element();
+    if (!(input instanceof HTMLInputElement)) throw new Error("not an input");
+    const valueProperty = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
     const readings: string[] = [];
     for (let step = 0; step < 60; step++) {
-      await userEvent.keyboard("{ArrowRight}");
-      readings.push(
-        `${seen(cursor.element().getAttribute("aria-valuetext"))} | ${pill(screen.container)}`,
-      );
+      const km = ((step + 0.37) / 60) * 1.9;
+      valueProperty?.set?.call(input, String(km));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      // The reading is the one of this position (it shows one decimal).
+      await vi.waitFor(() => {
+        const said = Number.parseFloat(
+          seen(input.getAttribute("aria-valuetext")).replace(",", "."),
+        );
+        expect(Math.abs(said - km)).toBeLessThanOrEqual(0.06);
+      });
+      readings.push(`${seen(input.getAttribute("aria-valuetext"))} | ${pill(screen.container)}`);
     }
     // The first offending readings are in the message: what an engine writes is what is wanted.
     const negative = readings.filter((reading) => /[-−]\s*0/.test(reading));

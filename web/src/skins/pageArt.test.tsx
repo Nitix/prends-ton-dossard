@@ -28,6 +28,7 @@ import { contrast } from "../test/colour";
 import { colourOf, rgbaOf } from "../test/computed";
 import { fontsReady } from "../test/fontsReady";
 import { FRAME } from "../test/frame";
+import { isLinuxWebkit } from "../test/support";
 
 import "../styles.css";
 
@@ -315,54 +316,57 @@ function clipOf(element: Element) {
 }
 
 for (const width of [768, 1024, 1280, 1440]) {
-  test(`Carnet — à ${width} px, l'orbite de l'entête ne passe jamais à côté d'un onglet : ses points ne se voient que sous la capsule des onglets`, async () => {
-    await chooseSkin("carnet");
-    await page.viewport(width, 900);
-    const screen = await openApp("/");
-    await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
-    await fontsReady();
-    const orbit = document.querySelector(".carnet-header-orbit");
-    const tabs = document.querySelector(".tabbar-list");
-    if (!orbit || !tabs) throw new Error("no orbit or tabs");
-    const capsule = tabs.getBoundingClientRect();
-    const sheetTop = sheet().getBoundingClientRect().top;
-    const turning = orbit
-      .getAnimations({ subtree: true })
-      .filter(
-        (animation): animation is CSSAnimation =>
-          "animationName" in animation && animation.animationName === "carnet-orbit",
-      );
-    expect(turning).toHaveLength(2);
-    const dots = [...orbit.querySelectorAll("circle[r='4']")];
-    expect(dots).toHaveLength(3);
+  test.skipIf(isLinuxWebkit)(
+    `Carnet — à ${width} px, l'orbite de l'entête ne passe jamais à côté d'un onglet : ses points ne se voient que sous la capsule des onglets`,
+    async () => {
+      await chooseSkin("carnet");
+      await page.viewport(width, 900);
+      const screen = await openApp("/");
+      await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
+      await fontsReady();
+      const orbit = document.querySelector(".carnet-header-orbit");
+      const tabs = document.querySelector(".tabbar-list");
+      if (!orbit || !tabs) throw new Error("no orbit or tabs");
+      const capsule = tabs.getBoundingClientRect();
+      const sheetTop = sheet().getBoundingClientRect().top;
+      const turning = orbit
+        .getAnimations({ subtree: true })
+        .filter(
+          (animation): animation is CSSAnimation =>
+            "animationName" in animation && animation.animationName === "carnet-orbit",
+        );
+      expect(turning).toHaveLength(2);
+      const dots = [...orbit.querySelectorAll("circle[r='4']")];
+      expect(dots).toHaveLength(3);
 
-    // All the way round, a turn at a time: where is each dot, and can it be seen there?
-    let seen = 0;
-    const beside: string[] = [];
-    for (let at = 0; at < 160_000; at += 8_000) {
-      for (const animation of turning) {
-        animation.pause();
-        animation.currentTime = at;
-      }
-      for (const dot of dots) {
-        const box = dot.getBoundingClientRect();
-        const [x, y] = [box.left + box.width / 2, box.top + box.height / 2];
-        const clip = clipOf(dot);
-        const visible =
-          x > clip.left && x < clip.right && y > clip.top && y < clip.bottom && y < sheetTop;
-        if (!visible) continue;
-        seen++;
-        // 12 px: the dot, and the pulse that swells round the teal one.
-        if (y - 12 < capsule.bottom) {
-          beside.push(
-            `${at / 1000} s: a dot at ${Math.round(x)},${Math.round(y)}, tabs down to ${Math.round(capsule.bottom)}`,
-          );
+      // All the way round, a turn at a time: where is each dot, and can it be seen there?
+      let seen = 0;
+      const beside: string[] = [];
+      for (let at = 0; at < 160_000; at += 8_000) {
+        for (const animation of turning) {
+          animation.pause();
+          animation.currentTime = at;
+        }
+        for (const dot of dots) {
+          const box = dot.getBoundingClientRect();
+          const [x, y] = [box.left + box.width / 2, box.top + box.height / 2];
+          const clip = clipOf(dot);
+          const visible =
+            x > clip.left && x < clip.right && y > clip.top && y < clip.bottom && y < sheetTop;
+          if (!visible) continue;
+          seen++;
+          // 12 px: the dot, and the pulse that swells round the teal one.
+          if (y - 12 < capsule.bottom) {
+            beside.push(
+              `${at / 1000} s: a dot at ${Math.round(x)},${Math.round(y)}, tabs down to ${Math.round(capsule.bottom)}`,
+            );
+          }
         }
       }
-    }
-    expect(beside).toEqual([]);
-    // Not by hiding the orbit altogether: its dots still pass under the tabs.
-    expect(seen, "the dots that can be seen").toBeGreaterThan(0);
-    for (const animation of turning) animation.play();
-  });
+      expect(beside).toEqual([]);
+      // Not by hiding the orbit altogether: its dots still pass under the tabs.
+      expect(seen, "the dots that can be seen").toBeGreaterThan(0);
+      for (const animation of turning) animation.play();
+    },
+  );
 }

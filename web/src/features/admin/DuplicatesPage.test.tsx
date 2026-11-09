@@ -632,6 +632,8 @@ test("DuplicatesPage — les épreuves d'une course au mois n'ont pas de jour", 
   await openFormatsOf(screen, monthEvent);
 
   const first = formatSelect(screen, t.firstFormat);
+  // The options come with the formats of the event: WebKit has not drawn them yet at this point.
+  await expect.element(first.getByRole("option").first()).toBeInTheDocument();
   const options = first.getByRole("option").elements();
   expect(options.length).toBeGreaterThan(0);
   for (const option of options) expect(option.textContent).not.toMatch(/juin/);

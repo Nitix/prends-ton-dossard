@@ -37,14 +37,3 @@ beforeEach(pin);
 export function useRealIdentity(): void {
   for (const name of Object.keys(DESKTOP)) Reflect.deleteProperty(navigator, name);
 }
-
-// On a touch screen Playwright scrolls to a button while the dialog that holds it is still
-// rising (the box moves, so the button is « outside of the viewport » at the time it looks, and
-// the click waits out its timeout). The windows of a phone run do not animate; the test of the
-// motion of a window is on the other targets.
-if (matchMedia("(pointer: coarse)").matches) {
-  const style = document.createElement("style");
-  style.textContent =
-    "dialog, dialog * { animation: none !important; transition: none !important; }";
-  document.head.append(style);
-}
