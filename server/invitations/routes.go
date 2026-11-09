@@ -14,6 +14,7 @@ import (
 	"courses/server/accounts"
 	"courses/server/apperr"
 	"courses/server/config"
+	"courses/server/wording"
 )
 
 // Register adds the routes of the invitations to app: creating and revoking
@@ -51,6 +52,7 @@ func createRoute(cfg config.Config) func(*core.RequestEvent) error {
 			RunnerID string `json:"runnerId"`
 			Kind     Kind   `json:"kind"`
 			Role     string `json:"role"`
+			Lang     string `json:"lang"`
 		}
 		// A body that cannot be read leaves what is missing empty, and no runner
 		// has an empty id.
@@ -66,11 +68,47 @@ func createRoute(cfg config.Config) func(*core.RequestEvent) error {
 			return fail(e, err)
 		}
 
-		return e.JSON(http.StatusOK, map[string]any{
+		out := map[string]any{
 			"url":       URL(cfg.AppURL, token),
 			"expiresAt": inv.GetDateTime("expires_at").Time().UTC().Format(time.RFC3339),
-		})
+		}
+		if body.Kind == KindInvite {
+			// Written now, from the preview of the moment: the admin sends this text.
+			// The invitation is committed and the link is the part that matters: a
+			// failed preview only costs the message, which the callers handle.
+			message, err := inviteMessage(e.App, inv, e.Auth.Id, body.Lang, out["url"].(string))
+			if err != nil {
+				// Never the token, the url or the message.
+				e.App.Logger().Error("invitations: the message could not be written", "error", err)
+			} else {
+				out["message"] = message
+			}
+		}
+		return e.JSON(http.StatusOK, out)
 	}
+}
+
+// inviteMessage is the ready-to-send text of an invitation, from the preview of
+// the moment.
+func inviteMessage(app core.App, inv *core.Record, createdBy, lang, link string) (string, error) {
+	w := wording.Of(lang)
+	preview, err := computePreview(app, inv.GetString("runner"), createdBy, ParisDay(now()), w)
+	if err != nil {
+		return "", err
+	}
+	runner, err := app.FindRecordById("runners", inv.GetString("runner"))
+	if err != nil {
+		return "", err
+	}
+	m := wording.InvitationMessage{Invitee: runner.GetString("name"), Total: preview.Upcoming.Total, URL: link}
+	if preview.InvitedBy != nil {
+		m.Inviter = *preview.InvitedBy
+	}
+	if m.Total > 0 {
+		first := preview.Upcoming.Races[0]
+		m.NextEvent, m.NextDay, m.NextMonthOnly = first.Event, first.Day, first.MonthOnly
+	}
+	return w.InvitationMessage(m), nil
 }
 
 func revokeRoute(e *core.RequestEvent) error {
@@ -95,6 +133,7 @@ func revokeRoute(e *core.RequestEvent) error {
 func lookupRoute(e *core.RequestEvent) error {
 	var body struct {
 		Token string `json:"token"`
+		Lang  string `json:"lang"`
 	}
 	// A body that cannot be read leaves the token empty, which no invitation has.
 	_ = e.BindBody(&body)
@@ -103,10 +142,27 @@ func lookupRoute(e *core.RequestEvent) error {
 	if err != nil {
 		return fail(e, err)
 	}
-	return e.JSON(http.StatusOK, map[string]any{
-		"runnerName": runner.GetString("name"),
-		"kind":       inv.GetString("kind"),
-	})
+	if Kind(inv.GetString("kind")) != KindInvite {
+		return e.JSON(http.StatusOK, map[string]any{
+			"runnerName": runner.GetString("name"),
+			"kind":       inv.GetString("kind"),
+		})
+	}
+
+	preview, err := computePreview(e.App, runner.Id, inv.GetString("created_by"), ParisDay(now()), wording.Of(body.Lang))
+	if err != nil {
+		// The page then shows the plain form. Never the token in the log.
+		e.App.Logger().Error("invitations: the preview could not be computed", "error", err)
+		return e.JSON(http.StatusOK, map[string]any{
+			"runnerName": runner.GetString("name"),
+			"kind":       inv.GetString("kind"),
+		})
+	}
+	return e.JSON(http.StatusOK, struct {
+		RunnerName string `json:"runnerName"`
+		Kind       string `json:"kind"`
+		Preview
+	}{runner.GetString("name"), inv.GetString("kind"), preview})
 }
 
 func acceptRoute(e *core.RequestEvent) error {

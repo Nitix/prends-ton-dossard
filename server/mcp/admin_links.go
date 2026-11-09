@@ -92,7 +92,8 @@ func (in createLinkIn) confirmationGiven() string { return in.Confirmation }
 type createLinkOut struct {
 	writeStatus
 	URL       string `json:"url,omitempty" jsonschema:"le lien à transmettre à la personne, et à elle seule : il donne l'accès au compte"`
-	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"jusqu'à quand il marche, en UTC (7 jours)"`
+	ExpiresAt string `json:"expires_at,omitempty" jsonschema:"jusqu'à quand il marche, en UTC (30 jours pour une invitation, 7 jours pour une réinitialisation)"`
+	Message   string `json:"message,omitempty" jsonschema:"invite seulement : un message prêt à envoyer à la personne, qui contient le lien ; à ne transmettre qu'à elle, comme le lien"`
 }
 
 var createLinkSchema = sync.OnceValue(writeSchema[createLinkOut])
@@ -104,7 +105,7 @@ func addAdminCreateLink(s *mcpsdk.Server, t *tools) {
 		Description: "Membres → « Inviter », « Régénérer l'invitation », « Lien de réinitialisation » : c'est ainsi qu'un compte se crée, comme sur le site. " +
 			"kind invite, pour un coureur sans compte : la personne choisit son email et son mot de passe en ouvrant le lien (role : member par défaut, ou admin). " +
 			"kind reset, pour un coureur qui a un compte : la personne choisit un nouveau mot de passe ; ses sessions ouvertes sont alors fermées, et ses jetons d'assistant (MCP) supprimés. " +
-			"Le lien vaut 7 jours, et remplace celui du même genre qui attendait pour ce coureur. " +
+			"Le lien vaut 30 jours pour une invitation, 7 jours pour une réinitialisation, et remplace celui du même genre qui attendait pour ce coureur. " +
 			"Il demande toujours une confirmation, une invitation comme une réinitialisation : le premier appel ne fait rien, dit à qui le lien donnerait accès (et le lien en attente qu'il remplacerait), et donne un jeton à redonner si la personne accepte. " +
 			"Le lien donne l'accès au compte : ne le transmets qu'à la personne concernée, et ne l'écris nulle part ailleurs.",
 		InputSchema:  inputSchema[createLinkIn](map[string][]string{"kind": {linkInvite, linkReset}, "role": {accountMember, accountAdmin}}),
@@ -201,13 +202,14 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	}
 
 	// The body of the page: a reset has no role.
-	body := map[string]any{"runnerId": runner.ID, "kind": kind}
+	body := map[string]any{"runnerId": runner.ID, "kind": kind, "lang": "fr"}
 	if kind == linkInvite {
 		body["role"] = role
 	}
 	var made struct {
 		URL       string `json:"url"`
 		ExpiresAt string `json:"expiresAt"`
+		Message   string `json:"message"`
 	}
 	if err := t.inner.send(ctx, http.MethodPost, "/api/app/invitations", body, &made); err != nil {
 		return fail(err)
@@ -222,7 +224,10 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 	if len(waiting) > 0 {
 		summary += " L'ancien lien ne fonctionne plus."
 	}
-	return nil, createLinkOut{writeStatus: writeStatus{Done: true, Summary: summary}, URL: made.URL, ExpiresAt: made.ExpiresAt}, nil
+	if made.Message != "" {
+		summary += " Le message prêt (message) contient le lien : montre-le avec le lien, la personne choisira lequel envoyer, et ne le transmets qu'à la personne concernée."
+	}
+	return nil, createLinkOut{writeStatus: writeStatus{Done: true, Summary: summary}, URL: made.URL, ExpiresAt: made.ExpiresAt, Message: made.Message}, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -150,7 +150,7 @@ Depuis la v7, la machine fait aussi des appels **sortants** : elle doit pouvoir 
    docker compose exec courses /app/courses bootstrap-admin "<Prénom>"
    ```
 
-   La commande affiche une seule ligne : `Invitation URL: https://courses.example.fr/invitation#…`. Ouvrir ce lien (valable 7 jours) pour choisir un mot de passe : le coureur créé devient l'admin. La commande refuse de s'exécuter si un admin existe déjà (`--force` pour en inviter un autre). Les autres membres sont ensuite invités depuis l'écran d'administration du site.
+   La commande affiche une seule ligne : `Invitation URL: https://courses.example.fr/invitation#…`. Ouvrir ce lien (valable 30 jours) pour choisir un mot de passe : le coureur créé devient l'admin. La commande refuse de s'exécuter si un admin existe déjà (`--force` pour en inviter un autre). Les autres membres sont ensuite invités depuis l'écran d'administration du site.
 
 6. **Configurer les sauvegardes hors de la machine** (voir plus bas), puis **tester la restauration une fois**, avant d'ouvrir le site au groupe.
 
@@ -233,6 +233,14 @@ Dans Réglages, « Agenda », deux liens secrets, chacun avec « Nouveau lien »
 - **« Les courses du groupe »** : toutes les courses où au moins une personne va (supporteurs et intéressés sans épreuve compris, pas les « Non partants »), jusqu'à un an en arrière, avec **le nom et le statut de chacun par épreuve** dans la description. **Ce lien donne les noms des membres** : il n'est à donner à personne. Il n'a ni ouverture, ni date limite, ni alarme. Il n'existe pas sur la démo (404).
 
 Un lien de chaque sorte par compte ; en renouveler un ne touche pas l'autre. Ils survivent à un changement de mot de passe ou d'email (comme le lien personnel) : seule la désactivation du compte les coupe (404). Dans Apple Calendrier : « Fichier, Nouvel abonnement à un calendrier » ; dans Google Agenda : « Autres agendas, À partir de l'URL ».
+
+## Inviter quelqu'un
+
+Admin, « Membres », puis « Inviter » sur un coureur sans compte : le lien vaut **30 jours** (un lien de réinitialisation, 7 jours) et un nouveau lien remplace celui qui attendait.
+
+- **La fenêtre de partage** montre **le message prêt et le lien**, chacun avec « Partager » et « Copier ». Le message est prêt à envoyer : « Salut Arnaud ! Guillaume t'invite sur Prends ton dossard… », avec le nombre de courses déjà prévues et la prochaine. Il contient le lien : comme le lien, il ne s'envoie qu'à la personne concernée. L'outil MCP `admin_create_link` renvoie les deux.
+- **La page que la personne ouvre** montre qui l'invite, une liste courte de ses prochaines courses avec les amis qui y vont, et en une phrase les prochaines courses du groupe, au-dessus du formulaire de création du compte. Elle est calculée à chaque ouverture : une course ajoutée après l'envoi y apparaît. Elle ne montre que des noms de courses, des lieux, des jours, des épreuves et des noms de coureurs ; un lien expiré ou déjà utilisé ne montre rien.
+- **Pour essayer :** sur dev, inviter un coureur sans compte qui a des courses à venir, ouvrir le lien sur un téléphone (sans être connecté), puis créer le compte.
 
 ## Environnement de dev
 

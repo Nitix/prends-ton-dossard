@@ -63,6 +63,16 @@ export const fr = {
     // The invitation page: a new account (welcome) or a new password (reset).
     welcome: (name: string) => `Bienvenue ${name}`,
     resetTitle: (name: string) => `Nouveau mot de passe pour ${name}`,
+    // The invitation page, when the link says who invites: the title, and the sentence under it.
+    invitedYou: (name: string) => `${name} t'invite`,
+    intro: "Le groupe prépare ses courses ici.",
+    // The races that wait for the person, and the group's in one sentence (the list is already joined and dated).
+    yourRaces: (n: number) => `Tes prochaines courses (${n})`,
+    more: (n: number) => (n === 1 ? "et 1 autre" : `et ${n} autres`),
+    groupAlso: (list: string) => `Le groupe va aussi à ${list}.`,
+    groupOnly: (list: string) => `Le groupe va à ${list}.`,
+    with: (names: string) => `avec ${names}`,
+    morePeople: (n: number) => `+${n}`,
     passwordHint: "10 caractères minimum.",
     passwordConfirm: "Confirme le mot de passe",
     createAccount: "Créer mon compte",
@@ -895,6 +905,15 @@ export const fr = {
     copied: "Lien copié.",
     copyFailed: "Copie impossible. Sélectionne le lien et copie-le à la main.",
     shareFailed: "Le partage a échoué. Copie le lien à la place.",
+    // An invitation shows its ready message and its link, each with its own buttons.
+    shareMessageButton: "Partager le message",
+    copyMessage: "Copier le message",
+    shareLinkButton: "Partager le lien",
+    copyLink: "Copier le lien",
+    messageLabel: "Message",
+    messageCopied: "Message copié.",
+    messageCopyFailed: "Copie impossible. Sélectionne le message et copie-le à la main.",
+    messageShareFailed: "Le partage a échoué. Copie le message à la place.",
     // The title of what the share sheet of the phone sends (the subject of an email, for instance).
     shareSubject: {
       invite: "Invitation sur Prends ton dossard",

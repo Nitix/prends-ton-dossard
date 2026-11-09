@@ -94,6 +94,7 @@ export function MemberDialogs({
         onClose={onClose}
         url={share?.link.url ?? ""}
         expiresAt={share?.link.expiresAt ?? ""}
+        message={share?.link.message}
         kind={share?.linkKind ?? "invite"}
         runnerName={share?.runner.name ?? ""}
       />

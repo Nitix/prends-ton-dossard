@@ -571,7 +571,7 @@ test("MembersPage — Inviter : on choisit le rôle (membre par défaut), le lie
   await expect.element(share.getByLabelText(t.link, { exact: true })).toHaveValue(NEW_LINK);
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-sam", kind: "invite", role: "member" },
+    body: { runnerId: "r-sam", kind: "invite", role: "member", lang: "fr" },
   });
   // Nothing of the link is kept by the cache: it is in the dialog, and only there.
   const cached = JSON.stringify([
@@ -594,6 +594,24 @@ test("MembersPage — Inviter : on choisit le rôle (membre par défaut), le lie
   expect(document.body.innerHTML).not.toContain("fresh-t0ken");
 });
 
+test("MembersPage — Inviter : une invitation qui arrive avec son message le montre dans le partage", async () => {
+  const MESSAGE = "Salut Sam, voici ton invitation. https://example.test/invitation#fresh-t0ken";
+  const answer = mocks.send.getMockImplementation();
+  mocks.send.mockImplementationOnce(async (...args) => {
+    const sent: unknown = await answer?.(...args);
+    return { ...(typeof sent === "object" ? sent : {}), message: MESSAGE };
+  });
+  const { screen } = await renderPage();
+
+  await action(screen, t.invite, "Sam").click();
+  const invite = screen.getByRole("dialog", { name: t.inviteTitle("Sam") });
+  await invite.getByRole("button", { name: t.createLink }).click();
+
+  const share = screen.getByRole("dialog", { name: t.shareTitle.invite("Sam") });
+  await expect.element(share.getByLabelText(t.link, { exact: true })).toHaveValue(NEW_LINK);
+  await expect.element(share.getByLabelText(t.messageLabel, { exact: true })).toHaveValue(MESSAGE);
+});
+
 test("MembersPage — Inviter en admin envoie le rôle admin", async () => {
   const { screen } = await renderPage();
 
@@ -607,7 +625,7 @@ test("MembersPage — Inviter en admin envoie le rôle admin", async () => {
     .toBeVisible();
   expect(mocks.send).toHaveBeenCalledWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-sam", kind: "invite", role: "admin" },
+    body: { runnerId: "r-sam", kind: "invite", role: "admin", lang: "fr" },
   });
 });
 
@@ -645,7 +663,7 @@ test("MembersPage — Régénérer propose le rôle de l'invitation en attente e
     .toBeVisible();
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-lea", kind: "invite", role: "admin" },
+    body: { runnerId: "r-lea", kind: "invite", role: "admin", lang: "fr" },
   });
 });
 
@@ -682,7 +700,7 @@ test("MembersPage — Lien de réinitialisation : un lien sans rôle, partagé",
   await expect.element(share.getByLabelText(t.link, { exact: true })).toHaveValue(NEW_LINK);
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-max", kind: "reset" },
+    body: { runnerId: "r-max", kind: "reset", lang: "fr" },
   });
 });
 
