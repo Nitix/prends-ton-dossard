@@ -903,3 +903,20 @@ test("ElevationProfile — dans Safari, un clic donne le focus au curseur, qui n
 
   expect(document.activeElement).toBe(cursor.element());
 });
+
+test("ElevationProfile — le curseur ne dépasse jamais son conteneur, même plus étroit que la première largeur supposée", async () => {
+  const screen = await render(
+    <I18nProvider languages={["fr"]}>
+      <div data-testid="narrow" style={{ width: 240 }}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </div>
+    </I18nProvider>,
+  );
+  const container = screen.getByTestId("narrow").element().getBoundingClientRect();
+  const input = screen.getByRole("slider", { name: fr.route.profileCursor }).element();
+  const box = input.getBoundingClientRect();
+  // The range has 4 px of room on each side of the plot (CURSOR_BLEED), inside the margins.
+  expect(box.left).toBeGreaterThanOrEqual(container.left);
+  expect(box.right).toBeLessThanOrEqual(container.right);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+});

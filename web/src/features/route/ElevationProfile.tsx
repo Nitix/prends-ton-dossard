@@ -730,7 +730,10 @@ function Profile({
           className="profile-cursor absolute top-0 m-0 cursor-crosshair touch-pan-y appearance-none rounded-xl bg-transparent focus-visible:outline-offset-0"
           style={{
             left: MARGIN.left - CURSOR_BLEED,
-            width: plotWidth + 2 * CURSOR_BLEED,
+            // Of the container, not of the width measured: before the first measure the width is a
+            // guess (FIRST_WIDTH), and a box of that many pixels sticks out of a phone of 320 px, which
+            // makes WebKit on a phone widen its layout viewport, and the container with it.
+            width: `calc(100% - ${MARGIN.left + MARGIN.right - 2 * CURSOR_BLEED}px)`,
             height: bottom + 4,
           }}
           onPointerMove={pressMove}
