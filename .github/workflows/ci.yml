@@ -98,7 +98,7 @@ jobs:
           - name: Safari
             browser: webkit
             device: ""
-            experimental: true
+            experimental: false
           - name: Safari (iPhone 15)
             browser: webkit
             device: iPhone 15
