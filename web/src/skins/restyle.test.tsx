@@ -6,7 +6,7 @@ import { HeaderArt } from "./carnet/motifs";
 
 import "../styles.css";
 
-// WebKit on Linux resolved the page one skin behind once a skin was chosen (see `restyle` in
+// WebKit on Linux resolved the page wrongly for the first skin chosen in a page (see `settleFirstChoice` in
 // index.ts): the colours that depend on the palette, and the animations of the motifs.
 
 afterEach(async () => {

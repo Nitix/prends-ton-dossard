@@ -161,20 +161,28 @@ export function applySkin(id: string): void {
 }
 
 /**
- * WebKit (seen in Playwright's build for Linux, with the stylesheets that Vite's dev server
- * adds as `<style>` elements) resolves the page one skin behind: right after the sheets and
- * `data-skin` are in, the custom properties are the skin's but what depends on them (the
- * background of `<body>`) is the previous skin's, and the animations of its motifs do not
- * start, until some later change restyles the page. Taking the attribute off, reading a style
- * and putting it back makes the page resolve again from the sheets that are there. A no-op
- * for the other engines, and for Crête (no attribute).
+ * WebKit (seen in Playwright's build for Linux, with the stylesheets that Vite's dev server adds
+ * as `<style>` elements) resolves the page wrongly for the first skin chosen in a page: right
+ * after its sheets and `data-skin` are in, the custom properties are the skin's but what depends
+ * on them (the background of `<body>`) is the previous look's, and the animations of its motifs
+ * do not start. Every later choice is right. Two frames and a read of a style after the first
+ * one let the page resolve. The wait is not made for the next ones, nor where there is no
+ * `requestAnimationFrame` (the tests of this module in Node), and it gives up after 100 ms (a
+ * page in a background tab draws no frame).
  */
-function restyle(root: HTMLElement, skin: Skin): void {
-  // (No styles to resolve in the tests of this module, which run on a stand-in for the page.)
-  if (skin === DEFAULT || typeof getComputedStyle !== "function") return;
-  delete root.dataset.skin;
-  void getComputedStyle(root).getPropertyValue("--color-neutral-50");
-  root.dataset.skin = skin.id;
+let settledOnce = false;
+async function settleFirstChoice(): Promise<void> {
+  if (settledOnce || typeof requestAnimationFrame !== "function") return;
+  settledOnce = true;
+  for (let frame = 0; frame < 2; frame++) {
+    await new Promise<void>((resolve) => {
+      const giveUp = setTimeout(resolve, 100);
+      requestAnimationFrame(() => {
+        clearTimeout(giveUp);
+        resolve();
+      });
+    });
+  }
   void getComputedStyle(document.body).backgroundColor;
 }
 
@@ -184,7 +192,6 @@ function put(skin: Skin): void {
   const root = document.documentElement;
   if (skin === DEFAULT) delete root.dataset.skin;
   else root.dataset.skin = skin.id;
-  restyle(root, skin);
   forceMode(skin.modes.length === 1 ? (skin.modes[0] ?? null) : null);
   const bar = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (bar !== null) bar.content = skin.themeColor;
@@ -249,6 +256,7 @@ async function showLoaded(id: string, before: (skin: Skin) => void = () => {}): 
   if (ask !== asked) return "replaced";
   before(skin);
   applySkin(skin.id);
+  await settleFirstChoice();
   return "chosen";
 }
 
