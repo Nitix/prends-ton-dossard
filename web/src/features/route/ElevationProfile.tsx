@@ -364,6 +364,9 @@ function Profile({
     // A slope that rounds to zero is « 0 % », whatever the sign it had (Firefox shows « -0 % »).
     signDisplay: "negative",
   });
+  // A slope that rounds to zero is « 0 % », never « -0 % » (Firefox writes it, whatever signDisplay):
+  // the number is rounded here, and `+ 0` makes a negative zero a zero.
+  const pct = (slope: number) => percent.format(Math.round(slope) + 0);
   const legend = SLOPE_ZONES.map((zone, i) => {
     const low = i === 0 ? undefined : SLOPE_STEPS[i - 1];
     const high = SLOPE_STEPS[i];
@@ -715,11 +718,7 @@ function Profile({
           type="range"
           aria-label={t.route.profileCursor}
           aria-describedby={helpId}
-          aria-valuetext={t.route.profileReading(
-            saidKm,
-            f.meters(said.ele),
-            percent.format(said.slope),
-          )}
+          aria-valuetext={t.route.profileReading(saidKm, f.meters(said.ele), pct(said.slope))}
           min={view.from - bleed}
           max={view.to + bleed}
           // No grid to snap to: an arrow moves the cursor by a hundredth of the range, Page Up and Down by a tenth.
@@ -766,7 +765,7 @@ function Profile({
           }}
         >
           {at
-            ? `${f.km(Math.round(at.km * 10) / 10)} · ${f.meters(at.ele)} · ${percent.format(at.slope)}`
+            ? `${f.km(Math.round(at.km * 10) / 10)} · ${f.meters(at.ele)} · ${pct(at.slope)}`
             : f.meters(summit.ele)}
         </p>
       </div>
