@@ -261,7 +261,7 @@ Pour une **invitation** (`ShareLinkDialog`), sous la phrase d'aujourd'hui (« En
 
 ## 9. Architecture
 
-- **La règle des prochaines courses, partagée.** Elle existe en TypeScript (`web/src/features/home/MyUpcoming.tsx`) et recopiée en Go pour le MCP (`upcomingOf` et `participationRow.lastDay` dans `server/mcp/home.go`, surveillés par `ports_test.go`). Plutôt qu'une troisième copie, la version Go passe dans un petit paquet partagé, sur un type neutre, appelé par le MCP et par l'invitation. `ports_test.go` pointe vers le nouveau fichier ; les sommes SHA-256 des fichiers TypeScript ne changent pas.
+- **La règle des prochaines courses, partagée.** Elle existe en TypeScript (`web/src/features/home/MyUpcoming.tsx`) et recopiée en Go pour le MCP (`upcomingOf` et `participationRow.lastDay` dans `server/mcp/home.go`, surveillés par `ports_test.go`). Plutôt qu'une troisième copie, les règles des jours (le jour qui range une course, le dernier jour où une participation est à venir) passent dans le paquet `server/events`, qui a déjà `MonthOnly` et `LastDayOfMonth`, sous forme de deux fonctions sur des textes ; le MCP et l'invitation les appellent, et le MCP garde son tri. Les sommes SHA-256 de `ports_test.go` ne changent pas. (Précisé pendant le plan : un nouveau paquet aurait demandé de déplacer les types du MCP pour peu de gain.)
 - **`server/invitations`** :
   - la durée devient fonction du genre (`invite` : 30 jours, `reset` : 7 jours) ;
   - une fonction calcule l'aperçu d'un coureur pour un jour de Paris donné ; `lookup` et la création du message l'appellent ;
