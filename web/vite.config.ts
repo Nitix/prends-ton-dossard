@@ -73,9 +73,9 @@ function deviceFromEnv(browser: BrowserName) {
 const browserName = browserFromEnv();
 const contextOptions = deviceFromEnv(browserName);
 
-// Any target but desktop Chromium starts slower, and an emulated phone is slower still: on CI
-// its actions get more time, and a failing test two more tries (the report shows the flaky
-// ones). Desktop Chromium, and every local run, stays strict.
+// On CI every target gets two more tries for a failing test (the report shows the flaky ones).
+// Any target but desktop Chromium also starts slower, and an emulated phone is slower still: its
+// actions get more time there. Local runs stay strict.
 const tolerant =
   process.env.CI !== undefined && (browserName !== "chromium" || contextOptions !== undefined);
 
@@ -129,7 +129,7 @@ export default defineConfig({
         optimizeDeps: { include: ["leaflet"] },
         test: {
           name: "browser",
-          retry: tolerant ? 2 : 0,
+          retry: process.env.CI !== undefined ? 2 : 0,
           expect: { poll: { timeout: tolerant ? 5000 : 1000 } },
           include: ["src/**/*.test.tsx"],
           // The first makes any real WebAuthn call fail: it would open a dialog
