@@ -63,7 +63,9 @@ function deviceFromEnv(browser: BrowserName) {
   // the screen, where nothing can be clicked. The screen is the frame; the rest is the phone's.
   return {
     viewport: { width: 414, height: 896 },
-    deviceScaleFactor,
+    // On CI (software rendering), a phone's 2.6 or 3 pixels per point made every frame, and so
+    // every animation a click waits to end, many times slower: the tests draw at 1.
+    deviceScaleFactor: process.env.CI !== undefined ? 1 : deviceScaleFactor,
     isMobile,
     hasTouch,
     userAgent,
@@ -125,7 +127,7 @@ export default defineConfig({
         // Leaflet is only reached through the lazy map: without this, a cache made
         // before it was installed finds it during a run, optimizes it, and reloads
         // a test ("Vite unexpectedly reloaded a test").
-        optimizeDeps: { include: ["leaflet"] },
+        optimizeDeps: { include: ["leaflet", "react/compiler-runtime"] },
         test: {
           name: "browser",
           retry: process.env.CI !== undefined ? 2 : 0,
@@ -146,7 +148,9 @@ export default defineConfig({
             // the 15 s test timeout. Below 2 s, passing tests failed at times.
             provider: playwright({
               actionTimeout: tolerant ? 5000 : 2000,
-              ...(contextOptions && { contextOptions }),
+              // Linux WebKit says « reduced motion » by itself when the desktop has animations
+              // off: the tests of the motion ask for it themselves.
+              contextOptions: { reducedMotion: "no-preference", ...contextOptions },
             }),
             commands: { emulateMedia },
             instances: [{ browser: browserName }],

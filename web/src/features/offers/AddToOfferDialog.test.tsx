@@ -362,7 +362,10 @@ describe("adding someone", () => {
 
     await screen.getByRole("button", { name: fr.common.cancel }).click();
 
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // The native dialog says it is closed a moment after the click, in Firefox.
+    await vi.waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
     expect(mocks.take).not.toHaveBeenCalled();
     await expect.element(opener).toHaveFocus();
   });

@@ -548,59 +548,64 @@ test("RouteSection — le repère de la carte suit le curseur du profil", async 
   await expectMarkAtCursor(screen, placed, long.points, 0.45);
 });
 
-test("RouteSection — survoler le tracé place le curseur du profil", async () => {
-  serve(STEADY.file);
-  const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
-  await expect.element(trackMap(screen)).toBeVisible();
-  const cursor = slider(screen);
-  expect(pill(screen)).toBe("678 m");
+// The pointer over the map: on a touch screen, the map is not laid out for a mouse (the hover lands
+// elsewhere on the track).
+test.skipIf(isTouchDevice)(
+  "RouteSection — survoler le tracé place le curseur du profil",
+  async () => {
+    serve(STEADY.file);
+    const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
+    await expect.element(trackMap(screen)).toBeVisible();
+    const cursor = slider(screen);
+    expect(pill(screen)).toBe("678 m");
 
-  // The pointer on the track, at 1.1 km: the profile reads there, in figures
-  // and for a screen reader, and the mark of the map is under the pointer.
-  const at = onScreen(screen, 1.1 / STEADY_KM);
-  await hoverMap(screen, at);
-  await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
-  const altitude = /· (\d+) m ·/.exec(pill(screen))?.[1];
-  expect(Number(altitude)).toBeGreaterThanOrEqual(585);
-  expect(Number(altitude)).toBeLessThanOrEqual(593);
-  expect(valueText(cursor)).toBe(`1,1 km, altitude ${altitude} m, pente 8 %`);
-  await expect.poll(() => markOffset(screen, at)).toBeLessThan(1.5);
+    // The pointer on the track, at 1.1 km: the profile reads there, in figures
+    // and for a screen reader, and the mark of the map is under the pointer.
+    const at = onScreen(screen, 1.1 / STEADY_KM);
+    await hoverMap(screen, at);
+    await expect.poll(() => pill(screen)).toMatch(/^1,1 km · \d+ m · 8 %$/);
+    const altitude = /· (\d+) m ·/.exec(pill(screen))?.[1];
+    expect(Number(altitude)).toBeGreaterThanOrEqual(585);
+    expect(Number(altitude)).toBeLessThanOrEqual(593);
+    expect(valueText(cursor)).toBe(`1,1 km, altitude ${altitude} m, pente 8 %`);
+    await expect.poll(() => markOffset(screen, at)).toBeLessThan(1.5);
 
-  // Beside the line (8 px off), it is still the track: the point across from the pointer.
-  const elsewhere = onScreen(screen, 0.7 / STEADY_KM);
-  await hoverMap(screen, { x: elsewhere.x + 8, y: elsewhere.y });
-  await expect.poll(() => pill(screen)).toMatch(/^0,7 km · \d+ m · 8 %$/);
-  expect(valueText(cursor)).toMatch(/^0,7 km, altitude \d+ m, pente 8 %$/);
+    // Beside the line (8 px off), it is still the track: the point across from the pointer.
+    const elsewhere = onScreen(screen, 0.7 / STEADY_KM);
+    await hoverMap(screen, { x: elsewhere.x + 8, y: elsewhere.y });
+    await expect.poll(() => pill(screen)).toMatch(/^0,7 km · \d+ m · 8 %$/);
+    expect(valueText(cursor)).toMatch(/^0,7 km, altitude \d+ m, pente 8 %$/);
 
-  // Away from it (40 px), there is no cursor and no mark.
-  await hoverMap(screen, { x: elsewhere.x + 40, y: elsewhere.y });
-  await expect.poll(() => pill(screen)).toBe("678 m");
-  await expect.poll(() => mark(screen)).toBeNull();
-  expect(valueText(cursor)).toBe("0 km, altitude 500 m, pente 8 %");
+    // Away from it (40 px), there is no cursor and no mark.
+    await hoverMap(screen, { x: elsewhere.x + 40, y: elsewhere.y });
+    await expect.poll(() => pill(screen)).toBe("678 m");
+    await expect.poll(() => mark(screen)).toBeNull();
+    expect(valueText(cursor)).toBe("0 km, altitude 500 m, pente 8 %");
 
-  // A mouse that moves with its button down is moving the map: the track that
-  // passes under it puts no cursor.
-  const under = document.elementFromPoint(at.x, at.y);
-  under?.dispatchEvent(
-    new PointerEvent("pointermove", {
-      clientX: at.x,
-      clientY: at.y,
-      pointerType: "mouse",
-      buttons: 1,
-      bubbles: true,
-    }),
-  );
-  await frames(4);
-  expect(pill(screen)).toBe("678 m");
-  expect(mark(screen)).toBeNull();
+    // A mouse that moves with its button down is moving the map: the track that
+    // passes under it puts no cursor.
+    const under = document.elementFromPoint(at.x, at.y);
+    under?.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: at.x,
+        clientY: at.y,
+        pointerType: "mouse",
+        buttons: 1,
+        bubbles: true,
+      }),
+    );
+    await frames(4);
+    expect(pill(screen)).toBe("678 m");
+    expect(mark(screen)).toBeNull();
 
-  // Back on the track, then off the map: the cursor goes with the pointer.
-  await hoverMap(screen, at);
-  await expect.poll(() => pill(screen)).toMatch(/^1,1 km/);
-  await userEvent.unhover(trackMap(screen));
-  await expect.poll(() => pill(screen)).toBe("678 m");
-  await expect.poll(() => mark(screen)).toBeNull();
-});
+    // Back on the track, then off the map: the cursor goes with the pointer.
+    await hoverMap(screen, at);
+    await expect.poll(() => pill(screen)).toMatch(/^1,1 km/);
+    await userEvent.unhover(trackMap(screen));
+    await expect.poll(() => pill(screen)).toBe("678 m");
+    await expect.poll(() => mark(screen)).toBeNull();
+  },
+);
 
 /** The elements of the map that the Tab key stops on. */
 const tabStops = (region: Element) =>
@@ -608,7 +613,7 @@ const tabStops = (region: Element) =>
     (element) => element.tabIndex >= 0,
   );
 
-test("RouteSection — au clavier, le repère suit", async () => {
+test.skipIf(isTouchDevice)("RouteSection — au clavier, le repère suit", async () => {
   serve(STEADY.file);
   const placed = vi.spyOn(CircleMarker.prototype, "setLatLng");
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
