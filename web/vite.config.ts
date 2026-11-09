@@ -155,7 +155,20 @@ export default defineConfig({
               actionTimeout: tolerant ? 5000 : 2000,
               // Linux WebKit says « reduced motion » by itself when the desktop has animations
               // off: the tests of the motion ask for it themselves.
-              contextOptions: { reducedMotion: "no-preference", ...contextOptions },
+              // The page is larger than the frame of the tests (the screen of the phone): the tester's
+              // iframe sits inside it with room round it, so that what is fixed at the bottom of
+              // the frame (the tab bar, a window) is inside the page for Playwright's scroll and
+              // clicks (« element is outside of the viewport » otherwise).
+              contextOptions: {
+                reducedMotion: "no-preference",
+                ...contextOptions,
+                ...(contextOptions?.viewport && {
+                  viewport: {
+                    width: contextOptions.viewport.width + 100,
+                    height: contextOptions.viewport.height + 200,
+                  },
+                }),
+              },
             }),
             commands: { emulateMedia },
             instances: [{ browser: browserName }],

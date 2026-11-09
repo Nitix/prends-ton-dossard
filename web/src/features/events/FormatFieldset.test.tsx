@@ -389,7 +389,7 @@ test("FormatFieldset — le résumé de « Options avancées » fait au moins 44
   }
 });
 
-test("FormatFieldset — le résumé de « Options avancées » se lit le jour, la nuit et en couleurs forcées", async () => {
+test("FormatFieldset — le résumé de « Options avancées » se lit le jour, la nuit et en couleurs forcées", async (context) => {
   withMeasuredTypes();
   const { screen } = await renderForm();
   const row = format(screen, 1);
@@ -409,6 +409,8 @@ test("FormatFieldset — le résumé de « Options avancées » se lit le jour, 
 
     // In forced colours the browser picks the colours: the text, and the marker that says open or closed, are not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });
+    // Playwright's WebKit on Linux does not emulate forced colours: nothing to check there.
+    if (!matchMedia("(forced-colors: active)").matches) context.skip();
     const ground = getComputedStyle(row.element()).backgroundColor;
     expect(getComputedStyle(opener).color).not.toBe(ground);
     expect(getComputedStyle(opener, "::marker").color).not.toBe(ground);

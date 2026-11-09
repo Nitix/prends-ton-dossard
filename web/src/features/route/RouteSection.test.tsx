@@ -929,7 +929,8 @@ test("RouteSection — la carte suit la portion : elle se cadre dessus, la met e
   expect(Number.parseFloat(getComputedStyle(portion).strokeWidth)).toBeGreaterThan(
     Number.parseFloat(getComputedStyle(line).strokeWidth),
   );
-  expect(getComputedStyle(line).strokeOpacity).toBe("0.5");
+  // The style is set on the path a moment after the framing (WebKit on Linux read the old one).
+  await expect.poll(() => getComputedStyle(line).strokeOpacity).toBe("0.5");
 
   // The whole view: the track is framed again, the highlight goes.
   await screen.getByRole("button", { name: fr.route.zoomProfileAllLabel }).click();

@@ -804,7 +804,9 @@ test("TrackMap — la portion est mise en avant, et la carte s'y cadre", async (
   expect(Number.parseFloat(getComputedStyle(portion).strokeWidth)).toBeGreaterThan(
     Number.parseFloat(getComputedStyle(whole).strokeWidth),
   );
-  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("0.5");
+  await expect
+    .poll(() => getComputedStyle(part(screen, "path.track-line")).strokeOpacity)
+    .toBe("0.5");
   // The ends of the track stay over the portion's line.
   const paths = [...screen.container.querySelectorAll(".leaflet-overlay-pane path")];
   expect(paths.indexOf(part(screen, "path.track-start"))).toBeGreaterThan(paths.indexOf(portion));

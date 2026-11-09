@@ -520,7 +520,7 @@ test("EventForm — I1 : en anglais, la phrase est anglaise", async () => {
     );
 });
 
-test("EventForm — I1 : la phrase au-dessus d'« Enregistrer » se lit le jour, la nuit et en couleurs forcées", async () => {
+test("EventForm — I1 : la phrase au-dessus d'« Enregistrer » se lit le jour, la nuit et en couleurs forcées", async (context) => {
   mocks.getOne.mockResolvedValue(UNDATED);
   const { screen } = await renderEdit();
   const note = shortens(screen).element();
@@ -538,6 +538,8 @@ test("EventForm — I1 : la phrase au-dessus d'« Enregistrer » se lit le jour,
 
     // In forced colours the browser picks the colours: the text is not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });
+    // Playwright's WebKit on Linux does not emulate forced colours: nothing to check there.
+    if (!matchMedia("(forced-colors: active)").matches) context.skip();
     expect(getComputedStyle(note).color).not.toBe(getComputedStyle(document.body).backgroundColor);
     expect(getComputedStyle(note).color).toBe(getComputedStyle(label).color);
   } finally {
