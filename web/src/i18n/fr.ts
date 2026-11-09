@@ -65,14 +65,12 @@ export const fr = {
     resetTitle: (name: string) => `Nouveau mot de passe pour ${name}`,
     // The invitation page, when the link says who invites: the title, and the sentence under it.
     invitedYou: (name: string) => `${name} t'invite`,
-    welcomeIntro: (name: string) =>
-      `Bienvenue ${name}. Le groupe prépare ses courses ici : qui court quoi, les inscriptions, le covoiturage.`,
-    intro: "Le groupe prépare ses courses ici : qui court quoi, les inscriptions, le covoiturage.",
-    // The races that wait for the person, and the group's.
-    yourRaces: (n: number) => `Tes prochaines courses · ${n}`,
+    intro: "Le groupe prépare ses courses ici.",
+    // The races that wait for the person, and the group's in one sentence (the list is already joined and dated).
+    yourRaces: (n: number) => `Tes prochaines courses (${n})`,
     more: (n: number) => (n === 1 ? "et 1 autre" : `et ${n} autres`),
-    groupToo: "Le groupe va aussi à",
-    groupNext: "Les prochaines courses du groupe",
+    groupAlso: (list: string) => `Le groupe va aussi à ${list}.`,
+    groupOnly: (list: string) => `Le groupe va à ${list}.`,
     with: (names: string) => `avec ${names}`,
     morePeople: (n: number) => `+${n}`,
     passwordHint: "10 caractères minimum.",
@@ -907,10 +905,11 @@ export const fr = {
     copied: "Lien copié.",
     copyFailed: "Copie impossible. Sélectionne le lien et copie-le à la main.",
     shareFailed: "Le partage a échoué. Copie le lien à la place.",
-    // What an invitation can send: the ready message, or the bare link.
-    shareWhat: "Que partager ?",
-    shareMessage: "Le message",
-    shareLinkOnly: "Le lien seul",
+    // An invitation shows its ready message and its link, each with its own buttons.
+    shareMessageButton: "Partager le message",
+    copyMessage: "Copier le message",
+    shareLinkButton: "Partager le lien",
+    copyLink: "Copier le lien",
     messageLabel: "Message",
     messageCopied: "Message copié.",
     messageCopyFailed: "Copie impossible. Sélectionne le message et copie-le à la main.",

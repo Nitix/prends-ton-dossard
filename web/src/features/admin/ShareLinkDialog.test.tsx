@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
+import { PRIMARY, SECONDARY } from "../../components/buttons";
 import { ToastProvider } from "../../components/Toast";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
@@ -311,28 +312,36 @@ test("ShareLinkDialog — les boutons font au moins 44 px", async () => {
 
 const MESSAGE = `Alice t'invite sur Prends ton dossard.\n\n${URL_OF_LINK}`;
 
-const messageChoice = (screen: Screen) =>
-  screen.getByRole("radio", { name: fr.admin.shareMessage });
-const linkChoice = (screen: Screen) => screen.getByRole("radio", { name: fr.admin.shareLinkOnly });
+const named = (screen: Screen, name: string) => screen.getByRole("button", { name, exact: true });
+const shareMessage = (screen: Screen) => named(screen, fr.admin.shareMessageButton);
+const copyMessage = (screen: Screen) => named(screen, fr.admin.copyMessage);
+const shareLink = (screen: Screen) => named(screen, fr.admin.shareLinkButton);
+const copyLink = (screen: Screen) => named(screen, fr.admin.copyLink);
 
-test("ShareLinkDialog — invitation : « Le message » est choisi et le texte est montré", async () => {
+test("ShareLinkDialog — invitation : le message et le lien sont montrés en même temps, sans choix", async () => {
   withClipboard();
+  withShare();
   const screen = await renderDialog({ message: MESSAGE });
 
-  await expect.element(screen.getByRole("group", { name: fr.admin.shareWhat })).toBeVisible();
-  await expect.element(messageChoice(screen)).toBeChecked();
-  await expect.element(linkChoice(screen)).not.toBeChecked();
   const box = screen.getByLabelText(fr.admin.messageLabel);
   await expect.element(box).toHaveValue(MESSAGE);
   expect(box.element()).toHaveProperty("readOnly", true);
+  const link = screen.getByLabelText(fr.admin.link, { exact: true });
+  await expect.element(link).toHaveValue(URL_OF_LINK);
+  expect(link.element()).toHaveProperty("readOnly", true);
+  expect(screen.getByRole("radio").elements()).toHaveLength(0);
+  // The message comes first.
+  expect(
+    box.element().compareDocumentPosition(link.element()) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });
 
-test("ShareLinkDialog — Partager envoie { title, text } pour le message", async () => {
+test("ShareLinkDialog — « Partager le message » envoie { title, text }", async () => {
   withClipboard();
   const { share, canShare } = withShare();
   const screen = await renderDialog({ message: MESSAGE });
 
-  await shareButton(screen).click();
+  await shareMessage(screen).click();
 
   expect(canShare).toHaveBeenCalledWith({ text: MESSAGE });
   expect(share).toHaveBeenCalledExactlyOnceWith({
@@ -341,42 +350,70 @@ test("ShareLinkDialog — Partager envoie { title, text } pour le message", asyn
   });
 });
 
-test("ShareLinkDialog — Partager envoie { url, title } pour le lien seul", async () => {
+test("ShareLinkDialog — « Partager le lien » envoie { url, title }", async () => {
   withClipboard();
-  const { share } = withShare();
+  const { share, canShare } = withShare();
   const screen = await renderDialog({ message: MESSAGE });
 
-  await linkChoice(screen).click();
-  await expect.element(screen.getByLabelText(fr.admin.link)).toHaveValue(URL_OF_LINK);
-  await shareButton(screen).click();
+  await shareLink(screen).click();
 
+  expect(canShare).toHaveBeenCalledWith({ url: URL_OF_LINK });
   expect(share).toHaveBeenCalledExactlyOnceWith({
     url: URL_OF_LINK,
     title: fr.admin.shareSubject.invite,
   });
 });
 
-test("ShareLinkDialog — Copier copie le message, puis le lien après le changement de choix", async () => {
+test("ShareLinkDialog — chaque bouton Copier copie son contenu et le dit", async () => {
   const writeText = withClipboard();
   const screen = await renderDialog({ message: MESSAGE });
 
-  await copyButton(screen).click();
+  await copyMessage(screen).click();
   expect(writeText).toHaveBeenLastCalledWith(MESSAGE);
   await expect.element(status(screen)).toHaveTextContent(fr.admin.messageCopied);
 
-  await linkChoice(screen).click();
-  await copyButton(screen).click();
+  await copyLink(screen).click();
   expect(writeText).toHaveBeenLastCalledWith(URL_OF_LINK);
   await expect.element(status(screen)).toHaveTextContent(fr.admin.copied);
+});
+
+test("ShareLinkDialog — sans partage possible, seuls les boutons Copier sont là, « Copier le message » en premier choix", async () => {
+  withClipboard();
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await expect.element(shareMessage(screen)).not.toBeInTheDocument();
+  await expect.element(shareLink(screen)).not.toBeInTheDocument();
+  expect(copyMessage(screen).element().className).toBe(PRIMARY);
+  expect(copyLink(screen).element().className).toBe(SECONDARY);
+});
+
+test("ShareLinkDialog — avec le partage, « Partager le message » est le seul bouton principal", async () => {
+  withClipboard();
+  withShare();
+  const screen = await renderDialog({ message: MESSAGE });
+
+  expect(shareMessage(screen).element().className).toBe(PRIMARY);
+  for (const other of [copyMessage(screen), shareLink(screen), copyLink(screen)]) {
+    expect(other.element().className).toBe(SECONDARY);
+  }
 });
 
 test("ShareLinkDialog — une copie du message refusée est dite", async () => {
   withClipboard(vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error("no")));
   const screen = await renderDialog({ message: MESSAGE });
 
-  await copyButton(screen).click();
+  await copyMessage(screen).click();
 
   await expect.element(status(screen)).toHaveTextContent(fr.admin.messageCopyFailed);
+});
+
+test("ShareLinkDialog — une copie du lien refusée est dite", async () => {
+  withClipboard(vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error("no")));
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await copyLink(screen).click();
+
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copyFailed);
 });
 
 test("ShareLinkDialog — un partage du message qui échoue le dit", async () => {
@@ -384,9 +421,19 @@ test("ShareLinkDialog — un partage du message qui échoue le dit", async () =>
   withShare(vi.fn<(data: ShareData) => Promise<void>>().mockRejectedValue(new Error("no")));
   const screen = await renderDialog({ message: MESSAGE });
 
-  await shareButton(screen).click();
+  await shareMessage(screen).click();
 
   await expect.element(status(screen)).toHaveTextContent(fr.admin.messageShareFailed);
+});
+
+test("ShareLinkDialog — un partage du lien qui échoue le dit", async () => {
+  withClipboard();
+  withShare(vi.fn<(data: ShareData) => Promise<void>>().mockRejectedValue(new Error("no")));
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await shareLink(screen).click();
+
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.shareFailed);
 });
 
 test("ShareLinkDialog — un partage annulé ne dit rien", async () => {
@@ -398,30 +445,35 @@ test("ShareLinkDialog — un partage annulé ne dit rien", async () => {
   );
   const screen = await renderDialog({ message: MESSAGE });
 
-  await shareButton(screen).click();
+  await shareMessage(screen).click();
+  await shareLink(screen).click();
 
   await vi.waitFor(() => {
-    expect(share).toHaveBeenCalledOnce();
+    expect(share).toHaveBeenCalledTimes(2);
   });
   expect(toastText(screen)).toBe("");
   expect(status(screen).element().textContent).toBe("");
 });
 
-test("ShareLinkDialog — réinitialisation : pas de choix, le lien comme avant", async () => {
+test("ShareLinkDialog — réinitialisation : le lien comme avant, sans message", async () => {
   const writeText = withClipboard();
   const screen = await renderDialog({ kind: "reset" });
 
-  await expect
-    .element(screen.getByRole("group", { name: fr.admin.shareWhat }))
-    .not.toBeInTheDocument();
+  await expect.element(screen.getByLabelText(fr.admin.messageLabel)).not.toBeInTheDocument();
   await expect.element(screen.getByLabelText(fr.admin.link)).toHaveValue(URL_OF_LINK);
+  await expect.element(named(screen, fr.admin.copyLink)).not.toBeInTheDocument();
   await copyButton(screen).click();
   expect(writeText).toHaveBeenCalledExactlyOnceWith(URL_OF_LINK);
 });
 
-test("ShareLinkDialog — en anglais, les mots du choix suivent la langue", async () => {
+test("ShareLinkDialog — en anglais, les boutons suivent la langue", async () => {
   withClipboard();
   const screen = await renderDialog({ message: MESSAGE, languages: ["en-GB"] });
 
-  await expect.element(screen.getByRole("radio", { name: en.admin.shareMessage })).toBeChecked();
+  await expect
+    .element(screen.getByRole("button", { name: en.admin.copyMessage, exact: true }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: en.admin.copyLink, exact: true }))
+    .toBeVisible();
 });

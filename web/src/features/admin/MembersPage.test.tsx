@@ -607,7 +607,7 @@ test("MembersPage — Inviter : une invitation qui arrive avec son message le mo
   await invite.getByRole("button", { name: t.createLink }).click();
 
   const share = screen.getByRole("dialog", { name: t.shareTitle.invite("Sam") });
-  await expect.element(share.getByRole("radio", { name: t.shareMessage })).toBeChecked();
+  await expect.element(share.getByLabelText(t.link, { exact: true })).toHaveValue(NEW_LINK);
   await expect.element(share.getByLabelText(t.messageLabel, { exact: true })).toHaveValue(MESSAGE);
 });
 
