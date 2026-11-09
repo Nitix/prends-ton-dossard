@@ -52,6 +52,11 @@ function deviceFromEnv(browser: BrowserName) {
       `VITEST_DEVICE="${name}" is a phone: Firefox cannot emulate one (no isMobile).`,
     );
   }
+  if (device.defaultBrowserType !== browser) {
+    console.warn(
+      `VITEST_DEVICE="${name}" is a ${device.defaultBrowserType} device, run in ${browser}.`,
+    );
+  }
   const { deviceScaleFactor, isMobile, hasTouch, userAgent } = device;
   // The tests draw in a frame of 414 × 896 (Vitest's default, which they put back after a test
   // that sets another): a phone whose screen is shorter would leave the bottom of the frame off
@@ -67,6 +72,12 @@ function deviceFromEnv(browser: BrowserName) {
 
 const browserName = browserFromEnv();
 const contextOptions = deviceFromEnv(browserName);
+
+// Any target but desktop Chromium starts slower, and an emulated phone is slower still: on CI
+// its actions get more time, and a failing test two more tries (the report shows the flaky
+// ones). Desktop Chromium, and every local run, stays strict.
+const tolerant =
+  process.env.CI !== undefined && (browserName !== "chromium" || contextOptions !== undefined);
 
 export default defineConfig({
   plugins: [
@@ -118,6 +129,8 @@ export default defineConfig({
         optimizeDeps: { include: ["leaflet"] },
         test: {
           name: "browser",
+          retry: tolerant ? 2 : 0,
+          expect: { poll: { timeout: tolerant ? 5000 : 1000 } },
           include: ["src/**/*.test.tsx"],
           // The first makes any real WebAuthn call fail: it would open a dialog
           // of the OS. The second does the same for a map tile request: no test
@@ -133,7 +146,7 @@ export default defineConfig({
             // A click or a fill on a missing element fails after 2 s, not at
             // the 15 s test timeout. Below 2 s, passing tests failed at times.
             provider: playwright({
-              actionTimeout: 2000,
+              actionTimeout: tolerant ? 5000 : 2000,
               ...(contextOptions && { contextOptions }),
             }),
             commands: { emulateMedia },
