@@ -11,8 +11,10 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
+import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { TodayProvider } from "../../lib/useToday";
 import { InvitationPage } from "./InvitationPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -76,7 +78,10 @@ function fieldRefusal(field: string, code: string) {
  * renders it like the app does, in React's StrictMode, which renders twice and
  * runs the effects twice.
  */
-function renderInvitation({ strict = false }: { strict?: boolean } = {}) {
+function renderInvitation({
+  strict = false,
+  languages = ["fr"],
+}: { strict?: boolean; languages?: readonly string[] } = {}) {
   const root = createRootRoute();
   const invitation = createRoute({
     getParentRoute: () => root,
@@ -94,8 +99,10 @@ function renderInvitation({ strict = false }: { strict?: boolean } = {}) {
   });
   const page = (
     <QueryClientProvider client={new QueryClient()}>
-      <I18nProvider languages={["fr"]}>
-        <RouterProvider router={router} />
+      <I18nProvider languages={languages}>
+        <TodayProvider value={Temporal.PlainDate.from("2026-11-09")}>
+          <RouterProvider router={router} />
+        </TodayProvider>
       </I18nProvider>
     </QueryClientProvider>
   );
@@ -132,7 +139,10 @@ test("InvitationPage — affiche t.errors.invitation_invalid quand le jeton est 
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.invitation_invalid);
   await expect.element(password(screen)).not.toBeInTheDocument();
-  expect(send).toHaveBeenCalledWith(LOOKUP, { method: "POST", body: { token: "the-token" } });
+  expect(send).toHaveBeenCalledWith(LOOKUP, {
+    method: "POST",
+    body: { token: "the-token", lang: "fr" },
+  });
 });
 
 test("InvitationPage — un fragment vide est un lien invalide, sans appeler l'API", async () => {
@@ -158,7 +168,7 @@ test("InvitationPage — retire le jeton de la barre d'adresse, sans ajouter d'e
   // What else is in the history state (the router's own) is left alone.
   expect(window.history.state).toEqual({ kept: true });
   // The token is still known to the page: it is the one that was looked up.
-  expect(send).toHaveBeenCalledWith(LOOKUP, { method: "POST", body: { token: "tok" } });
+  expect(send).toHaveBeenCalledWith(LOOKUP, { method: "POST", body: { token: "tok", lang: "fr" } });
 });
 
 test("InvitationPage — un nouveau lien ouvert dans le même onglet remplace le précédent", async () => {
@@ -173,7 +183,7 @@ test("InvitationPage — un nouveau lien ouvert dans le même onglet remplace le
   await expect.element(screen.getByRole("heading")).toHaveTextContent(fr.auth.resetTitle("Sam"));
   expect(send).toHaveBeenLastCalledWith(LOOKUP, {
     method: "POST",
-    body: { token: "the-new-token" },
+    body: { token: "the-new-token", lang: "fr" },
   });
   expect(location.hash).toBe("");
 });
@@ -186,7 +196,7 @@ test("InvitationPage — en StrictMode, le jeton survit au double rendu et au do
   expect(location.hash).toBe("");
   expect(send).toHaveBeenCalled();
   for (const call of send.mock.calls) {
-    expect(call).toEqual([LOOKUP, { method: "POST", body: { token: "the-token" } }]);
+    expect(call).toEqual([LOOKUP, { method: "POST", body: { token: "the-token", lang: "fr" } }]);
   }
 });
 
@@ -401,5 +411,209 @@ test("InvitationPage — une panne réseau à la vérification propose de réess
 
   await expect.element(screen.getByRole("heading")).toHaveTextContent(fr.auth.welcome("Sam"));
   expect(send).toHaveBeenCalledTimes(2);
-  expect(send).toHaveBeenNthCalledWith(2, LOOKUP, { method: "POST", body: { token: "the-token" } });
+  expect(send).toHaveBeenNthCalledWith(2, LOOKUP, {
+    method: "POST",
+    body: { token: "the-token", lang: "fr" },
+  });
+});
+
+type Line = {
+  event: string;
+  location: string;
+  day: string;
+  monthOnly: boolean;
+  formats?: string[];
+  people: string[];
+  morePeople: number;
+};
+
+function line(event: string, extra: Partial<Line> = {}): Line {
+  return {
+    event,
+    location: "Annecy",
+    day: "2026-11-14",
+    monthOnly: false,
+    formats: ["Trail long"],
+    people: [],
+    morePeople: 0,
+    ...extra,
+  };
+}
+
+function previewOf(extra: Record<string, unknown> = {}) {
+  return {
+    runnerName: "Sam",
+    kind: "invite",
+    invitedBy: "Alex",
+    upcoming: { total: 0, races: [] },
+    group: [],
+    ...extra,
+  };
+}
+
+test("InvitationPage — aperçu : le titre et la phrase avec un auteur", async () => {
+  serve({ lookup: previewOf() });
+  const screen = await renderInvitation();
+
+  await expect
+    .element(screen.getByRole("heading", { level: 1 }))
+    .toHaveTextContent(fr.auth.invitedYou("Alex"));
+  await expect.element(screen.getByText(fr.auth.welcomeIntro("Sam"))).toBeVisible();
+  // U+00A0 before the colon.
+  expect(fr.auth.intro).toContain("ici :");
+});
+
+test("InvitationPage — aperçu : le titre et la phrase sans auteur (invitedBy null)", async () => {
+  serve({ lookup: previewOf({ invitedBy: null }) });
+  const screen = await renderInvitation();
+
+  await expect
+    .element(screen.getByRole("heading", { level: 1 }))
+    .toHaveTextContent(fr.auth.welcome("Sam"));
+  await expect.element(screen.getByText(fr.auth.intro, { exact: true })).toBeVisible();
+});
+
+test("InvitationPage — aperçu : trois courses, puis « et 5 autres »", async () => {
+  const races = [line("Course A"), line("Course B"), line("Course C")];
+  serve({ lookup: previewOf({ upcoming: { total: 8, races } }) });
+  const screen = await renderInvitation();
+
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: fr.auth.yourRaces(8) }))
+    .toBeVisible();
+  expect(screen.getByRole("heading", { level: 3 }).elements()).toHaveLength(3);
+  await expect.element(screen.getByText("et 5 autres")).toBeVisible();
+});
+
+test("InvitationPage — aperçu : « et 1 autre » pour un total de 4", async () => {
+  const races = [line("Course A"), line("Course B"), line("Course C")];
+  serve({ lookup: previewOf({ upcoming: { total: 4, races } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("et 1 autre", { exact: true })).toBeVisible();
+});
+
+test("InvitationPage — aperçu : pas de « et … » quand tout est montré", async () => {
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [line("Course A")] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("Course A")).toBeVisible();
+  await expect.element(screen.getByText(/^et \d+ autre/)).not.toBeInTheDocument();
+});
+
+test("InvitationPage — aperçu : sans course de la personne, le groupe s'intitule « Les prochaines courses du groupe »", async () => {
+  serve({ lookup: previewOf({ group: [line("Course G", { formats: undefined })] }) });
+  const screen = await renderInvitation();
+
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: fr.auth.groupNext }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: fr.auth.groupToo }))
+    .not.toBeInTheDocument();
+  await expect.element(screen.getByText("Course G")).toBeVisible();
+});
+
+test("InvitationPage — aperçu : avec ses courses, le groupe s'intitule « Le groupe va aussi à »", async () => {
+  serve({
+    lookup: previewOf({
+      upcoming: { total: 1, races: [line("Course A")] },
+      group: [line("Course G", { formats: [] })],
+    }),
+  });
+  const screen = await renderInvitation();
+
+  await expect
+    .element(screen.getByRole("heading", { level: 2, name: fr.auth.groupToo }))
+    .toBeVisible();
+});
+
+test("InvitationPage — aperçu : sans course du groupe, pas de bloc du groupe", async () => {
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [line("Course A")] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("Course A")).toBeVisible();
+  expect(screen.getByRole("heading", { level: 2 }).elements()).toHaveLength(1);
+});
+
+test("InvitationPage — aperçu : rien du tout, le titre, la phrase et le formulaire", async () => {
+  serve({ lookup: previewOf() });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect.element(email(screen)).toBeVisible();
+  expect(screen.getByRole("heading", { level: 2 }).elements()).toHaveLength(0);
+  expect(screen.getByRole("list").elements()).toHaveLength(0);
+});
+
+test("InvitationPage — aperçu : une course au mois dit « juin 2027 · date à préciser », sans compte à rebours", async () => {
+  const race = line("Course du mois", { day: "2027-06-01", monthOnly: true });
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [race] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("juin 2027 · date à préciser")).toBeVisible();
+  await expect.element(screen.getByText(/dans \d+ jours?/)).not.toBeInTheDocument();
+});
+
+test("InvitationPage — aperçu : la date et le compte à rebours", async () => {
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [line("Course A")] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText(/ · dans 5 jours$/)).toBeVisible();
+});
+
+test("InvitationPage — aperçu : pas de compte à rebours pour un jour passé", async () => {
+  const race = line("Course en cours", { day: "2026-11-07" });
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [race] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("Course en cours")).toBeVisible();
+  await expect.element(screen.getByText(/ · (il y a|dans) /)).not.toBeInTheDocument();
+});
+
+test("InvitationPage — aperçu : le lieu, les épreuves et les personnes", async () => {
+  const race = line("Course A", {
+    formats: ["Trail long", "Rando"],
+    people: ["Anne", "Bob", "Cléo"],
+    morePeople: 2,
+  });
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [race] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("Annecy · Trail long, Rando")).toBeVisible();
+  await expect.element(screen.getByText("avec Anne, Bob, Cléo +2")).toBeVisible();
+});
+
+test("InvitationPage — aperçu : une ligne sans personne n'a pas de « avec »", async () => {
+  serve({ lookup: previewOf({ upcoming: { total: 1, races: [line("Course A")] } }) });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("Course A")).toBeVisible();
+  await expect.element(screen.getByText(/^avec /)).not.toBeInTheDocument();
+});
+
+test("InvitationPage — aperçu : aucune ligne n'est un lien", async () => {
+  serve({
+    lookup: previewOf({
+      upcoming: { total: 1, races: [line("Course A")] },
+      group: [line("Course G")],
+    }),
+  });
+  const screen = await renderInvitation();
+
+  await expect.element(screen.getByText("Course G")).toBeVisible();
+  expect(screen.getByRole("link").elements()).toHaveLength(0);
+});
+
+test("InvitationPage — la vérification part avec la langue de l'interface", async () => {
+  serve({ lookup: previewOf() });
+  const screen = await renderInvitation({ languages: ["en"] });
+
+  await expect
+    .element(screen.getByRole("heading", { level: 1 }))
+    .toHaveTextContent(en.auth.invitedYou("Alex"));
+  expect(send).toHaveBeenCalledWith(LOOKUP, {
+    method: "POST",
+    body: { token: "the-token", lang: "en" },
+  });
 });

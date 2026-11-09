@@ -63,6 +63,18 @@ export const fr = {
     // The invitation page: a new account (welcome) or a new password (reset).
     welcome: (name: string) => `Bienvenue ${name}`,
     resetTitle: (name: string) => `Nouveau mot de passe pour ${name}`,
+    // The invitation page, when the link says who invites: the title, and the sentence under it.
+    invitedYou: (name: string) => `${name} t'invite`,
+    welcomeIntro: (name: string) =>
+      `Bienvenue ${name}. Le groupe prépare ses courses ici : qui court quoi, les inscriptions, le covoiturage.`,
+    intro: "Le groupe prépare ses courses ici : qui court quoi, les inscriptions, le covoiturage.",
+    // The races that wait for the person, and the group's.
+    yourRaces: (n: number) => `Tes prochaines courses · ${n}`,
+    more: (n: number) => (n === 1 ? "et 1 autre" : `et ${n} autres`),
+    groupToo: "Le groupe va aussi à",
+    groupNext: "Les prochaines courses du groupe",
+    with: (names: string) => `avec ${names}`,
+    morePeople: (n: number) => `+${n}`,
     passwordHint: "10 caractères minimum.",
     passwordConfirm: "Confirme le mot de passe",
     createAccount: "Créer mon compte",
