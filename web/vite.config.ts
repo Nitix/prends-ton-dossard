@@ -52,8 +52,17 @@ function deviceFromEnv(browser: BrowserName) {
       `VITEST_DEVICE="${name}" is a phone: Firefox cannot emulate one (no isMobile).`,
     );
   }
-  const { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent } = device;
-  return { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent };
+  const { deviceScaleFactor, isMobile, hasTouch, userAgent } = device;
+  // The tests draw in a frame of 414 × 896 (Vitest's default, which they put back after a test
+  // that sets another): a phone whose screen is shorter would leave the bottom of the frame off
+  // the screen, where nothing can be clicked. The screen is the frame; the rest is the phone's.
+  return {
+    viewport: { width: 414, height: 896 },
+    deviceScaleFactor,
+    isMobile,
+    hasTouch,
+    userAgent,
+  };
 }
 
 const browserName = browserFromEnv();
@@ -113,7 +122,11 @@ export default defineConfig({
           // The first makes any real WebAuthn call fail: it would open a dialog
           // of the OS. The second does the same for a map tile request: no test
           // goes on the network.
-          setupFiles: ["./src/test/blockWebAuthn.ts", "./src/test/blockTiles.ts"],
+          setupFiles: [
+            "./src/test/blockWebAuthn.ts",
+            "./src/test/blockTiles.ts",
+            "./src/test/desktopIdentity.ts",
+          ],
           browser: {
             enabled: true,
             headless: true,
