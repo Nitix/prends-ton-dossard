@@ -39,9 +39,26 @@ function openLink(token: string) {
   window.history.replaceState(null, "", `${location.pathname}${location.search}#${token}`);
 }
 
-beforeEach(() => {
+// Safari refuses history.replaceState() after 100 calls in 10 seconds (a SecurityError): each test
+// makes a few (this file's, and the page's, which takes the token off the address), and WebKit runs
+// them fast. The calls are counted, and a test waits for room before it starts.
+const replaceTimes: number[] = [];
+const realReplaceState = window.history.replaceState.bind(window.history);
+window.history.replaceState = (...args: Parameters<History["replaceState"]>) => {
+  replaceTimes.push(performance.now());
+  realReplaceState(...args);
+};
+
+async function roomForReplaceState() {
+  while (replaceTimes.filter((time) => performance.now() - time < 10_000).length > 70) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+beforeEach(async () => {
   send.mockReset();
   save.mockReset();
+  await roomForReplaceState();
   openLink("the-token");
 });
 
