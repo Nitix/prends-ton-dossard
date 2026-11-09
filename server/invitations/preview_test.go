@@ -2,6 +2,7 @@ package invitations_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -640,4 +641,96 @@ func TestLookup_AuthorWithoutRunner(t *testing.T) {
 	if status != http.StatusOK || !strings.Contains(body, `"invitedBy":null`) {
 		t.Errorf("status %d, body %s: want 200 and invitedBy null", status, body)
 	}
+}
+
+// A preview that cannot be computed must not cost the admin the link, nor the
+// invitee the page: both routes fall back to what they answered before v8.
+func TestPreviewFailure_Fallbacks(t *testing.T) {
+	at(t, "2026-11-09T12:00:00Z")
+	restore := invitations.SetPreview(func(core.App, string, string, string, wording.Words) (invitations.Preview, error) {
+		return invitations.Preview{}, errors.New("boom")
+	})
+	t.Cleanup(restore)
+
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+
+	out := created(t, app, fx, fmt.Sprintf(`{"runnerId":%q,"kind":"invite"}`, fx.SamRunner.Id))
+	link, _ := out["url"].(string)
+	if _, has := out["message"]; has {
+		t.Error("the create answer has a message although the preview failed")
+	}
+	if out["expiresAt"] == nil {
+		t.Error("the create answer has no expiresAt")
+	}
+	_, token, ok := strings.Cut(link, "#")
+	if !ok {
+		t.Fatal("the url has no token")
+	}
+
+	status, body := lookup(t, app, lookupBody(token, "fr"))
+	if status != http.StatusOK {
+		t.Fatalf("lookup status = %d, want 200", status)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatal(err)
+	}
+	equal(t, "lookup keys", sortedKeys(got), []string{"kind", "runnerName"})
+}
+
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// The same midnight in summer time: Paris is UTC+2, so the day changes at 22:00Z.
+func TestPreview_ParisMidnightSummer(t *testing.T) {
+	for _, tc := range []struct {
+		name, now string
+		want      bool
+	}{
+		{"23:30 in Paris is still the 9th", "2026-06-09T21:30:00Z", true},
+		{"00:30 in Paris is the 10th", "2026-06-09T22:30:00Z", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			at(t, tc.now)
+			app := testutil.NewApp(t)
+			fx := testutil.Seed(t, app)
+			token := inviteSamBy(t, app, fx)
+			e := newEvent(t, app, "Course du 9", "2026-06-09", "")
+			join(t, app, fx.SamRunner, e, newFormat(t, app, e, fx.Road, "", "", 10, 0), "interested")
+
+			preview, _ := previewOf(t, app, token, "fr")
+			equal(t, "the race of the 9th is listed", slices.Contains(eventNames(preview), "Course du 9"), tc.want)
+		})
+	}
+}
+
+// A race known by its month only is the last of its month, after the dated
+// races of that month (spec 4.2), in both blocks.
+func TestPreview_MonthOnlySortsLast(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	carol := newRunner(t, app, "Carol")
+
+	monthMine := newMonthEvent(t, app, "Quelque part en décembre", "2026-12-01", "2026-12-31")
+	join(t, app, fx.SamRunner, monthMine, nil, "interested")
+	datedMine := newEvent(t, app, "Le 20 décembre", "2026-12-20", "")
+	join(t, app, fx.SamRunner, datedMine, nil, "interested")
+	earlier := newEvent(t, app, "Le 5 décembre", "2026-12-05", "")
+	join(t, app, fx.SamRunner, earlier, nil, "interested")
+
+	monthGroup := newMonthEvent(t, app, "G en janvier", "2027-01-01", "2027-01-31")
+	join(t, app, carol, monthGroup, nil, "interested")
+	datedGroup := newEvent(t, app, "G le 25 janvier", "2027-01-25", "")
+	join(t, app, carol, datedGroup, nil, "interested")
+
+	p := compute(t, app, fx.SamRunner, "2026-11-09")
+	equal(t, "upcoming", eventNames(p), []string{"Le 5 décembre", "Le 20 décembre", "Quelque part en décembre"})
+	equal(t, "group", groupNames(p), []string{"G le 25 janvier", "G en janvier"})
 }

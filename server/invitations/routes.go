@@ -74,27 +74,41 @@ func createRoute(cfg config.Config) func(*core.RequestEvent) error {
 		}
 		if body.Kind == KindInvite {
 			// Written now, from the preview of the moment: the admin sends this text.
-			w := wording.Of(body.Lang)
-			preview, err := ComputePreview(e.App, inv.GetString("runner"), e.Auth.Id, ParisDay(now()), w)
+			// The invitation is committed and the link is the part that matters: a
+			// failed preview only costs the message, which the callers handle.
+			message, err := inviteMessage(e.App, inv, e.Auth.Id, body.Lang, out["url"].(string))
 			if err != nil {
-				return e.InternalServerError("", err)
+				// Never the token, the url or the message.
+				e.App.Logger().Error("invitations: the message could not be written", "error", err)
+			} else {
+				out["message"] = message
 			}
-			runner, err := e.App.FindRecordById("runners", inv.GetString("runner"))
-			if err != nil {
-				return e.InternalServerError("", err)
-			}
-			m := wording.InvitationMessage{Invitee: runner.GetString("name"), Total: preview.Upcoming.Total, URL: out["url"].(string)}
-			if preview.InvitedBy != nil {
-				m.Inviter = *preview.InvitedBy
-			}
-			if m.Total > 0 {
-				first := preview.Upcoming.Races[0]
-				m.NextEvent, m.NextDay, m.NextMonthOnly = first.Event, first.Day, first.MonthOnly
-			}
-			out["message"] = w.InvitationMessage(m)
 		}
 		return e.JSON(http.StatusOK, out)
 	}
+}
+
+// inviteMessage is the ready-to-send text of an invitation, from the preview of
+// the moment.
+func inviteMessage(app core.App, inv *core.Record, createdBy, lang, link string) (string, error) {
+	w := wording.Of(lang)
+	preview, err := computePreview(app, inv.GetString("runner"), createdBy, ParisDay(now()), w)
+	if err != nil {
+		return "", err
+	}
+	runner, err := app.FindRecordById("runners", inv.GetString("runner"))
+	if err != nil {
+		return "", err
+	}
+	m := wording.InvitationMessage{Invitee: runner.GetString("name"), Total: preview.Upcoming.Total, URL: link}
+	if preview.InvitedBy != nil {
+		m.Inviter = *preview.InvitedBy
+	}
+	if m.Total > 0 {
+		first := preview.Upcoming.Races[0]
+		m.NextEvent, m.NextDay, m.NextMonthOnly = first.Event, first.Day, first.MonthOnly
+	}
+	return w.InvitationMessage(m), nil
 }
 
 func revokeRoute(e *core.RequestEvent) error {
@@ -135,9 +149,14 @@ func lookupRoute(e *core.RequestEvent) error {
 		})
 	}
 
-	preview, err := ComputePreview(e.App, runner.Id, inv.GetString("created_by"), ParisDay(now()), wording.Of(body.Lang))
+	preview, err := computePreview(e.App, runner.Id, inv.GetString("created_by"), ParisDay(now()), wording.Of(body.Lang))
 	if err != nil {
-		return e.InternalServerError("", err)
+		// The page then shows the plain form. Never the token in the log.
+		e.App.Logger().Error("invitations: the preview could not be computed", "error", err)
+		return e.JSON(http.StatusOK, map[string]any{
+			"runnerName": runner.GetString("name"),
+			"kind":       inv.GetString("kind"),
+		})
 	}
 	return e.JSON(http.StatusOK, struct {
 		RunnerName string `json:"runnerName"`

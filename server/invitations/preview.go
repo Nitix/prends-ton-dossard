@@ -15,6 +15,9 @@ import (
 // now is the clock of the package; the tests set it.
 var now = time.Now
 
+// computePreview is ComputePreview, replaceable by the tests to make it fail.
+var computePreview = ComputePreview
+
 // How many lines and names a preview shows.
 const (
 	previewRaces  = 3
