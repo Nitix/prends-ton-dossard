@@ -64,6 +64,14 @@ const rgb = (hex: string) =>
   `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(", ")})`;
 
 /** The figures over the drawing: the summit's altitude, or the cursor's reading in its place. */
+/** The UTF-16 codes of the first characters of a text, to see a space that is not the usual one. */
+const hex = (text: string) =>
+  text
+    .split("")
+    .slice(0, 40)
+    .map((c) => c.charCodeAt(0).toString(16))
+    .join(" ");
+
 const pill = (container: HTMLElement) => seen(container.querySelector("p")?.textContent);
 
 /**
@@ -393,9 +401,15 @@ describe("ElevationProfile", () => {
     }
     // The first offending readings are in the message: what an engine writes is what is wanted.
     const negative = readings.filter((reading) => /[-−]\s*0/.test(reading));
-    expect(negative.slice(0, 3), `${negative.length} readings with a minus zero`).toEqual([]);
+    expect(
+      negative.length,
+      `${negative.length} readings with a minus zero: ${JSON.stringify(negative.slice(0, 1))}`,
+    ).toBe(0);
     const other = readings.filter((reading) => !/pente 0 % \| .* · 0 %$/.test(reading));
-    expect(other.slice(0, 3), `${other.length} readings not « pente 0 % | … · 0 % »`).toEqual([]);
+    expect(
+      other.length,
+      `${other.length} readings not « pente 0 % | … · 0 % »: ${JSON.stringify(other.slice(0, 1))} codes ${hex(other[0] ?? "")}`,
+    ).toBe(0);
     // The cursor did go along the flat.
     expect(Number.parseFloat(readings.at(-1)?.replace(",", ".") ?? "")).toBeGreaterThan(1.5);
   });

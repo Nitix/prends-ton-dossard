@@ -18,7 +18,6 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { isTouchDevice } from "../../test/support";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import {
@@ -387,27 +386,3 @@ test("DeleteEventDialog — le bouton rouge et celui d'annulation font au moins 
     expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   }
 });
-
-// TEMPORARY diagnostic of the dialogs on the emulated Pixel (round 7), removed after one CI run.
-const rect = (element: Element) => {
-  const box = element.getBoundingClientRect();
-  return `${Math.round(box.left)},${Math.round(box.top)} ${Math.round(box.width)}x${Math.round(box.height)}`;
-};
-test.skipIf(!import.meta.env.VITE_CI || !isTouchDevice)(
-  "DIAG2 pixel — la fenêtre tient dans l'écran",
-  async () => {
-    expect(1).toBe(1);
-    const { screen } = await renderDialog();
-    await animationsDone();
-    const dialog = screen.getByRole("dialog").element();
-    const cancel = screen.getByRole("button", { name: fr.common.cancel, exact: true }).element();
-    const style = getComputedStyle(dialog);
-    const view = window.visualViewport;
-    throw new Error(
-      `DIAG2 pixel win=${window.innerWidth}x${window.innerHeight} vv=${view?.width}x${view?.height}@${view?.scale} doc=${document.documentElement.clientWidth}x${document.documentElement.clientHeight} dialog=${rect(dialog)} maxH=${style.maxHeight} overflowY=${style.overflowY} scroll=${dialog.scrollHeight}/${dialog.clientHeight} cancel=${rect(cancel)} scrollY=${window.scrollY} dpr=${window.devicePixelRatio} frame=${String(import.meta.env.VITE_TEST_FRAME)}`.slice(
-        0,
-        290,
-      ),
-    );
-  },
-);

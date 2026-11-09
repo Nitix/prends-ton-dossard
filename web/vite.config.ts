@@ -132,7 +132,7 @@ export default defineConfig({
         optimizeDeps: { include: ["leaflet", "react/compiler-runtime"] },
         test: {
           name: "browser",
-          env: { VITE_TEST_FRAME: `${frame.width}x${frame.height}`, VITE_CI: process.env.CI ?? "" },
+          env: { VITE_TEST_FRAME: `${frame.width}x${frame.height}` },
           retry: process.env.CI !== undefined ? 2 : 0,
           expect: { poll: { timeout: tolerant ? 5000 : 1000 } },
           include: ["src/**/*.test.tsx"],

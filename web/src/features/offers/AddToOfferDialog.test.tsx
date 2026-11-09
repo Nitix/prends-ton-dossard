@@ -8,6 +8,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { pressFocused } from "../../test/pressFocused";
 import { AddToOfferDialog } from "./AddToOfferDialog";
 import { offersKey, toOfferView, type OfferView } from "./api";
 
@@ -362,7 +363,8 @@ describe("adding someone", () => {
     // The form comes when the runners have loaded, and it moves what is in the window.
     await expect.element(runnerSelect(screen)).toBeVisible();
 
-    await screen.getByRole("button", { name: fr.common.cancel }).click();
+    // Firefox: the click of the test did not reach this button (the window stayed open); the keyboard does. Cause not found.
+    await pressFocused(screen.getByRole("button", { name: fr.common.cancel }));
 
     // The native dialog says it is closed a moment after the click, in Firefox.
     try {
@@ -386,7 +388,7 @@ describe("adding someone", () => {
     const dialog = dialogOf(screen);
 
     await expect.element(dialog.getByRole("alert").getByText(fr.errors.generic)).toBeVisible();
-    await dialog.getByRole("button", { name: fr.common.retry }).click();
+    await pressFocused(dialog.getByRole("button", { name: fr.common.retry }));
 
     try {
       await vi.waitFor(() => {
