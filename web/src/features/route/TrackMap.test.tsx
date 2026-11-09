@@ -569,10 +569,14 @@ test.skipIf(isTouchDevice)(
     expect(map.options.zoomSnap).toBe(0.5);
     expect(map.options.zoomDelta).toBe(1);
 
-    // A notch of a mouse (100 px, a little more than half a level in Leaflet's curve) is one level.
+    // A notch of a mouse (100 px) is at least one level, in half levels. Leaflet divides the wheel
+    // by 2 in Chrome on Windows only (getWheelDelta), so the same notch is one level there and one
+    // and a half on Linux: what matters is that it is never less than one.
     const zoom = map.getZoom();
     wheelOver(screen, { ctrlKey: true, deltaY: -100 });
-    await expect.poll(() => map.getZoom(), { timeout: 4000 }).toBe(zoom + 1);
+    await expect.poll(() => map.getZoom() - zoom, { timeout: 4000 }).toBeGreaterThanOrEqual(1);
+    expect(map.getZoom() - zoom).toBeLessThanOrEqual(1.5);
+    expect(((map.getZoom() - zoom) * 2) % 1).toBe(0);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
     // A zoom of 1.3 (a small pinch) lands on 1.5 levels, not back where it started.
