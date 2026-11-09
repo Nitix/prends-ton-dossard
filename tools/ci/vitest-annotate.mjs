@@ -9,11 +9,23 @@
 const MAX_BYTES = 60_000;
 const MAX_FILES = 9;
 
-/** The first non-empty line of an error, without the colour codes. */
-function firstLine(message) {
+/** A line of a stack: V8's « at … », Firefox's and WebKit's « fn@http://… » and « @[native code] ». */
+const STACK_FRAME = [/^\s*at\s/, /@\[native code\]/, /^[\w$.<>/]*@https?:\/\//, /^\s*$/];
+
+const MAX_LINE = 300;
+
+/**
+ * What an error says, from the text Vitest gives for it: the first line that is not a stack
+ * frame (Firefox and WebKit write a stack without the message, so the assertion may be later, or
+ * absent: then `name: message` of the error, when the report has them). About 300 characters.
+ */
+function firstLine(message, error) {
   // oxlint-disable-next-line no-control-regex
-  const plain = String(message ?? "").replace(/\u001b\[[0-9;]*m/g, "");
-  return plain.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+  const plain = String(message ?? "").replace(/[[0-9;]*m/g, "");
+  let line = plain.split("\n").find((one) => !STACK_FRAME.some((frame) => frame.test(one)))?.trim();
+  if (!line && error?.message) line = `${error.name ?? "Error"}: ${error.message}`.split("\n")[0];
+  if (!line) line = plain.split("\n").find((one) => one.trim() !== "")?.trim() ?? "";
+  return line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line;
 }
 
 /** The text of a workflow command's data: `%`, CR and LF are escaped. */
@@ -39,12 +51,12 @@ export function failures(report, root = process.cwd()) {
         file,
         name: test.fullName ?? test.title ?? "",
         line: test.location?.line ?? 1,
-        message: firstLine(test.failureMessages?.[0]),
+        message: firstLine(test.failureMessages?.[0], test.failureDetails?.[0]),
       });
     }
     // A file that did not run at all (an error at import) has no test, only a message.
     if (suite.status === "failed" && tests.length === 0) {
-      found.push({ file, name: "(le fichier)", line: 1, message: firstLine(suite.message) });
+      found.push({ file, name: "(le fichier)", line: 1, message: firstLine(suite.message, undefined) });
     }
   }
   return found;

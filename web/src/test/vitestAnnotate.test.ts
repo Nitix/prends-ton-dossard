@@ -63,3 +63,46 @@ test("annotations — nothing for no failure, at most 9 files, under 60 KB", () 
   expect(out[0]).toContain("et ");
   expect(escapeData("a\nb")).toBe("a%0Ab");
 });
+
+const at = (failureMessages: string[], failureDetails?: unknown[]) => ({
+  testResults: [
+    {
+      name: "/repo/web/src/w.test.tsx",
+      status: "failed",
+      assertionResults: [{ status: "failed", fullName: "T", failureMessages, failureDetails }],
+    },
+  ],
+});
+
+test("failures — the assertion, not the stack frame, in WebKit and Firefox style messages", () => {
+  // WebKit: the message, then frames ending in native code.
+  expect(
+    failures(
+      at([
+        "AssertionError: expected 1 to be 2\n@[native code]\nfoo@http://localhost:63315/a.js:1:2",
+      ]),
+      "/repo",
+    )[0].message,
+  ).toBe("AssertionError: expected 1 to be 2");
+  // Firefox: frames first, the message after them.
+  expect(
+    failures(
+      at([
+        "getElementError@http://localhost:63315/@fs/x/context.js:3:4\n@http://localhost:63315/b.js:5:6\nCannot find element",
+      ]),
+      "/repo",
+    )[0].message,
+  ).toBe("Cannot find element");
+  // Only frames: the name and the message of the error, when the report has them.
+  expect(
+    failures(
+      at(
+        ["@[native code]\nfoo@http://localhost:63315/a.js:1:2"],
+        [{ name: "TypeError", message: "x is null\nmore" }],
+      ),
+      "/repo",
+    )[0].message,
+  ).toBe("TypeError: x is null");
+  // Long lines are cut.
+  expect(failures(at(["e".repeat(900)]), "/repo")[0].message.length).toBeLessThanOrEqual(300);
+});
