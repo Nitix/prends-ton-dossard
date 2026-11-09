@@ -25,7 +25,18 @@ function firstLine(message, error) {
   let line = plain.split("\n").find((one) => !STACK_FRAME.some((frame) => frame.test(one)))?.trim();
   if (!line && error?.message) line = `${error.name ?? "Error"}: ${error.message}`.split("\n")[0];
   if (!line) line = plain.split("\n").find((one) => one.trim() !== "")?.trim() ?? "";
-  return line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line;
+  if (line.length > MAX_LINE) line = `${line.slice(0, MAX_LINE - 1)}…`;
+  // A Playwright timeout says why in its call log (« intercepts pointer events », « not stable »):
+  // the last lines of it are kept.
+  const log = plain.split("Call log:")[1];
+  if (log) {
+    const lines = log
+      .split("\n")
+      .map((one) => one.trim())
+      .filter((one) => one !== "" && !STACK_FRAME.some((frame) => frame.test(one)));
+    line += ` [${lines.slice(-4).join(" / ").slice(0, 400)}]`;
+  }
+  return line;
 }
 
 /** The text of a workflow command's data: `%`, CR and LF are escaped. */

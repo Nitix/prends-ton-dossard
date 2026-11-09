@@ -359,6 +359,8 @@ describe("adding someone", () => {
   test("AddToOfferDialog — Annuler ne crée rien et rend le focus au bouton d'ouverture", async () => {
     const { screen, onClose, opener } = await openDialog();
     await expect.element(dialogOf(screen)).toBeVisible();
+    // The form comes when the runners have loaded, and it moves what is in the window.
+    await expect.element(runnerSelect(screen)).toBeVisible();
 
     await screen.getByRole("button", { name: fr.common.cancel }).click();
 

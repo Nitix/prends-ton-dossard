@@ -79,8 +79,6 @@ const contextOptions = deviceFromEnv(browserName);
 // its actions get more time: GitHub's machines are slower than a desktop, desktop Chromium too (a
 // heavy file given to an input took more than 2 s there). Local runs stay strict.
 const tolerant = process.env.CI !== undefined;
-// An emulated phone on a CI runner is the slowest target: its dialogs are long to settle.
-const slowest = tolerant && contextOptions !== undefined;
 
 export default defineConfig({
   plugins: [
@@ -133,7 +131,6 @@ export default defineConfig({
         test: {
           name: "browser",
           retry: process.env.CI !== undefined ? 2 : 0,
-          ...(slowest && { testTimeout: 30_000 }),
           expect: { poll: { timeout: tolerant ? 5000 : 1000 } },
           include: ["src/**/*.test.tsx"],
           // The first makes any real WebAuthn call fail: it would open a dialog
@@ -151,7 +148,7 @@ export default defineConfig({
             // A click or a fill on a missing element fails after 2 s, not at
             // the 15 s test timeout. Below 2 s, passing tests failed at times.
             provider: playwright({
-              actionTimeout: slowest ? 10_000 : tolerant ? 5000 : 2000,
+              actionTimeout: tolerant ? 5000 : 2000,
               // Linux WebKit says « reduced motion » by itself when the desktop has animations
               // off: the tests of the motion ask for it themselves.
               contextOptions: { reducedMotion: "no-preference", ...contextOptions },
