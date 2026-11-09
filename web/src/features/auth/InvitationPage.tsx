@@ -92,44 +92,28 @@ function tokenFromAddress(): string {
 }
 
 /**
- * Takes the fragment out of the address bar. The state of the history entry is
- * the router's own (its position in the history), so it is handed back as it is.
- */
-function removeFragment(): void {
-  if (window.location.hash === "") return;
-  window.history.replaceState(
-    window.history.state,
-    "",
-    window.location.pathname + window.location.search,
-  );
-}
-
-/**
  * The page the shared links lead to, `/invitation#<token>`: it creates the
  * account of an invitation, or gives a new password for a reset.
  *
- * The token is in the fragment, which the browser never sends to a server. It
- * is kept in the state of the page and taken out of the address bar at once,
- * so that it stays neither in the history nor in a link copied from there.
+ * The token is in the fragment, which the browser never sends to a server nor
+ * logs, and it stays in the address while the page is open: a reload, the back
+ * button or a restored tab must show the same invitation again, since opening
+ * a link does not use it up (only creating the account does). Once used, the
+ * link is useless, and the page leaves it behind when it navigates to `/`.
  */
 export function InvitationPage() {
   const { t, lang } = useI18n();
   usePageTitle(t.titles.invitation);
 
-  // Only read here: rendering must not change anything, and React renders
-  // twice in development, so the address is cleaned in the effect below.
   const [token, setToken] = useState(tokenFromAddress);
 
   useEffect(() => {
-    removeFragment();
-
     // A link opened in the tab that shows this page (a new one, after the
     // first was refused) only changes the fragment: the browser does not load
     // the page again, it fires this event.
     function onHashChange() {
       const next = tokenFromAddress();
       if (next !== "") setToken(next);
-      removeFragment();
     }
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -152,8 +136,7 @@ export function InvitationPage() {
   if (lookup.isError) {
     const code = errorCode(lookup.error);
     if (code === "invitation_invalid") return <Invalid message={t.errors.invitation_invalid} />;
-    // Reloading the page would lose the token, which is not in the address
-    // any more: trying again is up to the button.
+    // A button, not a reload: it asks again without loading the page anew.
     return (
       <div className="flex flex-col gap-4">
         <Invalid message={translateError(t, code)} />
@@ -209,7 +192,8 @@ function InvitationForm({ token, invitation }: { token: string; invitation: Invi
       }
 
       pb.authStore.save(session.token, session.record);
-      // The link is used up: coming back to it with the back button is no use.
+      // The link is used up: `replace` takes it out of the history, so the back
+      // button does not lead to it.
       await router.navigate({ to: "/", replace: true });
       return EMPTY_FORM;
     },

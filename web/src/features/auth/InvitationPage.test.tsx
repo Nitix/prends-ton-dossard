@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
+  createBrowserHistory,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -45,8 +46,10 @@ beforeEach(() => {
   openLink("the-token");
 });
 
+const RUNNER_PATH = `${location.pathname}${location.search}`;
+
 afterEach(() => {
-  window.history.replaceState(null, "", `${location.pathname}${location.search}`);
+  window.history.replaceState(null, "", RUNNER_PATH);
 });
 
 /**
@@ -81,7 +84,8 @@ function fieldRefusal(field: string, code: string) {
 function renderInvitation({
   strict = false,
   languages = ["fr"],
-}: { strict?: boolean; languages?: readonly string[] } = {}) {
+  browserHistory = false,
+}: { strict?: boolean; languages?: readonly string[]; browserHistory?: boolean } = {}) {
   const root = createRootRoute();
   const invitation = createRoute({
     getParentRoute: () => root,
@@ -95,7 +99,9 @@ function renderInvitation({
   });
   const router = createRouter({
     routeTree: root.addChildren([invitation, home]),
-    history: createMemoryHistory({ initialEntries: ["/invitation"] }),
+    history: browserHistory
+      ? createBrowserHistory()
+      : createMemoryHistory({ initialEntries: ["/invitation"] }),
   });
   const page = (
     <QueryClientProvider client={new QueryClient()}>
@@ -154,7 +160,7 @@ test("InvitationPage — un fragment vide est un lien invalide, sans appeler l'A
   expect(send).not.toHaveBeenCalled();
 });
 
-test("InvitationPage — retire le jeton de la barre d'adresse, sans ajouter d'entrée à l'historique", async () => {
+test("InvitationPage — le jeton reste dans la barre d'adresse après la vérification", async () => {
   window.history.replaceState({ kept: true }, "", `${location.pathname}${location.search}#tok`);
   const entries = window.history.length;
   serve({ lookup: INVITE });
@@ -162,13 +168,28 @@ test("InvitationPage — retire le jeton de la barre d'adresse, sans ajouter d'e
   const screen = await renderInvitation();
 
   await expect.element(screen.getByRole("heading")).toHaveTextContent(fr.auth.welcome("Sam"));
-  expect(location.hash).toBe("");
-  expect(location.href).not.toContain("tok");
+  expect(location.hash).toBe("#tok");
   expect(window.history.length).toBe(entries);
-  // What else is in the history state (the router's own) is left alone.
   expect(window.history.state).toEqual({ kept: true });
-  // The token is still known to the page: it is the one that was looked up.
   expect(send).toHaveBeenCalledWith(LOOKUP, { method: "POST", body: { token: "tok", lang: "fr" } });
+});
+
+test("InvitationPage — un rechargement à la même adresse montre encore l'invitation", async () => {
+  serve({ lookup: INVITE });
+  const first = await renderInvitation();
+  await expect.element(first.getByRole("heading")).toHaveTextContent(fr.auth.welcome("Sam"));
+  await first.unmount();
+
+  // A reload, a back/forward or a restored tab: a new page, the same address.
+  const second = await renderInvitation();
+
+  await expect.element(second.getByRole("heading")).toHaveTextContent(fr.auth.welcome("Sam"));
+  await expect.element(second.getByText(fr.errors.invitation_invalid)).not.toBeInTheDocument();
+  const lookups = send.mock.calls.filter(([path]) => path === LOOKUP);
+  expect(lookups).toHaveLength(2);
+  for (const call of lookups) {
+    expect(call).toEqual([LOOKUP, { method: "POST", body: { token: "the-token", lang: "fr" } }]);
+  }
 });
 
 test("InvitationPage — un nouveau lien ouvert dans le même onglet remplace le précédent", async () => {
@@ -185,7 +206,7 @@ test("InvitationPage — un nouveau lien ouvert dans le même onglet remplace le
     method: "POST",
     body: { token: "the-new-token", lang: "fr" },
   });
-  expect(location.hash).toBe("");
+  expect(location.hash).toBe("#the-new-token");
 });
 
 test("InvitationPage — en StrictMode, le jeton survit au double rendu et au double effet", async () => {
@@ -193,7 +214,7 @@ test("InvitationPage — en StrictMode, le jeton survit au double rendu et au do
   const screen = await renderInvitation({ strict: true });
 
   await expect.element(screen.getByRole("heading")).toHaveTextContent(fr.auth.welcome("Sam"));
-  expect(location.hash).toBe("");
+  expect(location.hash).toBe("#the-token");
   expect(send).toHaveBeenCalled();
   for (const call of send.mock.calls) {
     expect(call).toEqual([LOOKUP, { method: "POST", body: { token: "the-token", lang: "fr" } }]);
@@ -363,6 +384,21 @@ test("InvitationPage — succès d'une invitation : envoie le jeton, l'email et 
     },
   });
   expect(save).toHaveBeenCalledExactlyOnceWith("session-token", SESSION.record);
+});
+
+test("InvitationPage — après la création du compte, le lien utilisé quitte l'adresse", async () => {
+  // The real history, to see the address: /invitation#token becomes /.
+  window.history.replaceState(null, "", "/invitation#the-token");
+  serve({ lookup: INVITE, accept: SESSION });
+  const screen = await renderInvitation({ browserHistory: true });
+
+  await expect.element(email(screen)).toBeVisible();
+  await fillInvite(screen);
+  await screen.getByRole("button", { name: fr.auth.createAccount }).click();
+
+  await expect.element(screen.getByText("Page d'accueil")).toBeVisible();
+  expect(location.hash).toBe("");
+  expect(location.pathname).toBe("/");
 });
 
 test("InvitationPage — succès d'une réinitialisation : pas d'email dans la requête", async () => {
