@@ -2,6 +2,15 @@
 
 Idées notées le 2026-11-03, mises à jour le 2026-11-08 après la v7.
 
+## Fait en v8
+
+Sur dev depuis le 2026-11-09, en attente de ton essai (pas encore en production) :
+- la page d'invitation montre qui invite, tes prochaines courses avec les amis qui y vont, et celles du groupe ;
+- le message prêt à envoyer avec le lien, ou le lien seul, depuis l'admin et le MCP ;
+- une invitation vaut 30 jours.
+
+Le détail est dans `docs/superpowers/decisions/2026-11-09-decisions-v8.md`.
+
 ## Fait en v7
 
 En production depuis le 2026-11-08 :

@@ -99,6 +99,7 @@ Voir § 12.
 
 - **Un lien invalide, expiré ou déjà utilisé** répond toujours `404 invitation_invalid`, sans aucune donnée.
 - **Tout est calculé à chaque appel**, depuis la base telle qu'elle est, avec le jour de Paris au moment de l'appel. Rien n'est enregistré dans l'invitation.
+- **Si le calcul de l'aperçu échoue** (une erreur de la base), la route le note dans le journal du serveur (jamais le jeton) et répond comme pour une invitation sans aperçu, `{ "runnerName", "kind" }` : la personne peut toujours créer son compte. (Ajouté après la relecture finale.)
 
 ### 4.2 Les règles
 
@@ -116,7 +117,7 @@ Voir § 12.
   - `event`, `location` : le nom et le lieu de la course ;
   - `day` : le jour de la ligne, `YYYY-MM-DD`. Pour une ligne de `upcoming`, le jour de l'épreuve la plus proche du coureur parmi celles qui ne sont pas passées (date effective : `format.date ?? event.start_date`), ou le premier jour de la course pour une participation sans épreuve. Pour une ligne de `group`, le premier jour de la course. Pour une course au mois, le premier jour de son mois. Le jour peut donc être passé pour une course de plusieurs jours déjà commencée (§ 5.2) ;
   - `monthOnly` : `true` pour une course connue seulement par son mois ;
-  - `formats` (dans `upcoming` seulement) : les noms des épreuves du coureur sur cette course, comme le site les nomme (`wording.RaceName`, dans la langue de `lang`), dans l'ordre de leurs jours ; vide pour une participation sans épreuve ;
+  - `formats` (dans `upcoming` seulement) : les noms des épreuves du coureur sur cette course qui ne sont pas passées (comme `day` ; précisé pendant la réalisation), comme le site les nomme (`wording.RaceName`, dans la langue de `lang`), dans l'ordre de leurs jours ; vide pour une participation sans épreuve ;
   - `people` : les autres coureurs qui ont une participation autre que `dns` sur cette course (supporters compris), **sans le coureur invité**, triés par nom comme sur le site, **3 au plus**, les noms tels qu'ils sont enregistrés ;
   - `morePeople` : le nombre de ces coureurs au-delà des 3.
 
@@ -198,6 +199,7 @@ avec Anne Mangeolle, Maxime Richard, Violaine Sourisse +1
 - Pour une **invitation**, la réponse devient `{ "url", "expiresAt", "message" }`. Pour une **réinitialisation**, elle reste `{ "url", "expiresAt" }`.
 - Le message s'écrit **à la création**, avec l'aperçu du coureur à ce moment-là (§ 4.2 : `invitedBy`, `upcoming.total` et la première ligne). Il ne change plus ensuite : c'est un texte que l'admin envoie.
 - Il est écrit par le paquet `server/wording`, comme les autres textes lus hors du site.
+- **Si l'aperçu ne peut pas être calculé** à la création (une erreur de la base, après l'enregistrement de l'invitation), la route le note dans le journal (jamais le lien ni le message) et répond `{ "url", "expiresAt" }` sans message : le lien n'est pas perdu, et la fenêtre de partage comme le MCP montrent alors le lien seul. (Ajouté après la relecture finale.)
 
 ### 6.2 Le texte, mot pour mot
 
