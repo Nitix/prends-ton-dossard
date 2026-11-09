@@ -193,7 +193,7 @@ after it when the skin is chosen: what they draw must not depend on it.
   `build.test.ts` checks it on the real build; `cascade.test.tsx` draws every
   skin's motifs and the agenda at 1280 px with the look's sheets before and
   after `styles.css`, and finds the same boxes.
-- `utilities.css` declares the order of the layers first, as `styles.css` does, `properties` included: Tailwind's fallback for browsers without `@property` (Safari before 16.4) puts its resets there, and a page that read this sheet first would have them win over the utilities.
+- `utilities.css` declares the order of the layers first, as `styles.css` does, `properties` included: Tailwind's fallback for browsers that cannot take `@property` (old Safari, and the WebKit that Playwright builds, which also lacks `margin-trim`, the test the fallback is gated on) puts its resets there, and a page that read this sheet first would have them win over the utilities.
 
 ## Adding a skin, step by step
 

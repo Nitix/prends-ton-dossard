@@ -28,7 +28,7 @@ Le détail est dans `docs/superpowers/decisions/2026-11-07-decisions-v7.md`.
 
 ## Mes idées
 
-- **Vérifier sur un vrai iPhone** (Safari et l'app installée) : les notifications, les alarmes d'un agenda abonné, la feuille de partage, les thèmes, le mode hors ligne, la carte et le D+, et Claude Code avec le MCP. Les tests ne tournent que dans Chrome.
+- **Vérifier sur un vrai iPhone** (Safari et l'app installée) : les notifications, les alarmes d'un agenda abonné, la feuille de partage, les thèmes, le mode hors ligne, la carte et le D+, et Claude Code avec le MCP. Les tests tournent maintenant sur Chrome, Firefox et Safari (WebKit), mais en émulation. À confirmer en particulier : l'anneau de focus d'un choix après les flèches (thèmes, Réglages), qu'un test ne vérifie pas sur WebKit ; les chiffres du profil et des tuiles à 320 px, où WebKit les dessine un peu plus larges ; et le toucher sur le tracé de la carte (aucun test ne le fait avec de vrais doigts sur un téléphone émulé).
 - **Les tests automatiques sur GitHub : faits** (Go, `govulncheck`, web, et les tests navigateur sur Chrome, Firefox, Safari, iPhone 15 et Pixel 7 émulés). Reste de les vérifier sur de vrais appareils (voir la première idée) : un téléphone émulé n'est pas un iPhone.
 - **Des sauvegardes automatiques avec une copie hors du serveur.** Aujourd'hui, elles se font seulement avant un déploiement, et sur le même disque.
 - **Garder les thèmes qui servent :** dans quelques semaines, regarder quels thèmes sont choisis (ils sont sur les comptes) et retirer les autres, pour alléger le code et les tests.
