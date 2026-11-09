@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { page, userEvent } from "vitest/browser";
+import { page, server, userEvent } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { fontsReady } from "../../test/fontsReady";
@@ -409,8 +409,9 @@ test("FormatFieldset — le résumé de « Options avancées » se lit le jour, 
 
     // In forced colours the browser picks the colours: the text, and the marker that says open or closed, are not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });
-    // Playwright's WebKit on Linux does not emulate forced colours: nothing to check there.
-    if (!matchMedia("(forced-colors: active)").matches) context.skip();
+    // Safari has no forced colours mode (Playwright only answers the media query there).
+    if (server.browser === "webkit" || !matchMedia("(forced-colors: active)").matches)
+      context.skip();
     const ground = getComputedStyle(row.element()).backgroundColor;
     expect(getComputedStyle(opener).color).not.toBe(ground);
     expect(getComputedStyle(opener, "::marker").color).not.toBe(ground);

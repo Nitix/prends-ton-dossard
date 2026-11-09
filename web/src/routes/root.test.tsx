@@ -9,6 +9,8 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { ensureTemporal } from "../lib/temporal";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
+import { frameFacts } from "../test/diagFrame";
+import { isTouchDevice } from "../test/support";
 
 import "../styles.css";
 
@@ -138,4 +140,14 @@ test("root — le menu de l'admin, qui reste affiché, mène au titre de la sous
     .element(screen.getByRole("heading", heading(fr.admin.duplicatesTitle)))
     .toHaveFocus();
   expect(router.state.location.pathname).toBe("/admin/doublons");
+});
+
+// TEMPORARY diagnostic (round 11), removed after one CI run.
+test.skipIf(!import.meta.env.VITE_CI || !isTouchDevice)("DIAG3 root — onglet", async () => {
+  expect(1).toBe(1);
+  const { screen } = await openApp("/");
+  const tabs = screen.getByRole("navigation", { name: fr.nav.main });
+  throw new Error(
+    await frameFacts("root-tab", tabs.getByRole("link", { name: fr.nav.list, exact: true })),
+  );
 });

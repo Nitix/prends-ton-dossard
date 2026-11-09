@@ -286,10 +286,16 @@ test("AppShell — barre d'onglets en bas sous md, qui flotte ; en haut à parti
   window.scrollTo(0, 0);
   await page.viewport(1024, 768);
   expect(getComputedStyle(nav.element()).position).toBe("sticky");
-  const header = screen.getByRole("banner").element().getBoundingClientRect();
-  const bar = nav.element().getBoundingClientRect();
-  expect(bar.top).toBeGreaterThanOrEqual(0);
-  expect(bar.bottom).toBeLessThanOrEqual(header.bottom);
+  // The page lays itself out for the new size a moment after the viewport answers (WebKit on Linux).
+  await vi.waitFor(
+    () => {
+      const header = screen.getByRole("banner").element().getBoundingClientRect();
+      const bar = nav.element().getBoundingClientRect();
+      const where = `header ${Math.round(header.top)}..${Math.round(header.bottom)}, bar ${Math.round(bar.top)}..${Math.round(bar.bottom)}, window ${window.innerWidth}x${window.innerHeight}, position ${getComputedStyle(nav.element()).position}`;
+      if (bar.top < 0 || bar.bottom > header.bottom) throw new Error(where);
+    },
+    { timeout: 3000 },
+  );
   window.scrollTo(0, 1000);
   expect(window.scrollY, "the page has scrolled").toBeGreaterThan(0);
   const top = nav.element().getBoundingClientRect().top;

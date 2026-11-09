@@ -939,7 +939,9 @@ test("RouteSection — la carte suit la portion : elle se cadre dessus, la met e
   expect(whole.getSouth()).toBeCloseTo(lat(0), 6);
   expect(whole.getNorth()).toBeCloseTo(lat(STEADY_KM), 6);
   expect(screen.container.querySelector("path.track-portion")).toBeNull();
-  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("1");
+  await expect
+    .poll(() => getComputedStyle(part(screen, "path.track-line")).strokeOpacity)
+    .toBe("1");
 });
 
 test("RouteSection — un point de la carte hors de la portion n'y met pas de curseur", async () => {

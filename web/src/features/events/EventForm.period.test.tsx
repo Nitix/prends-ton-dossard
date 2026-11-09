@@ -1,4 +1,5 @@
 import { expect, test, vi } from "vitest";
+import { server } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { emulateMedia, resetMedia } from "../../test/media";
@@ -538,8 +539,9 @@ test("EventForm — I1 : la phrase au-dessus d'« Enregistrer » se lit le jour,
 
     // In forced colours the browser picks the colours: the text is not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });
-    // Playwright's WebKit on Linux does not emulate forced colours: nothing to check there.
-    if (!matchMedia("(forced-colors: active)").matches) context.skip();
+    // Safari has no forced colours mode (Playwright only answers the media query there).
+    if (server.browser === "webkit" || !matchMedia("(forced-colors: active)").matches)
+      context.skip();
     expect(getComputedStyle(note).color).not.toBe(getComputedStyle(document.body).backgroundColor);
     expect(getComputedStyle(note).color).toBe(getComputedStyle(label).color);
   } finally {
