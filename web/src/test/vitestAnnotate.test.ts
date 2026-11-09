@@ -1,7 +1,9 @@
 import { expect, test } from "vitest";
 
 // @ts-expect-error a script in plain JavaScript
-import { annotations, escapeData, failures } from "../../../tools/ci/vitest-annotate.mjs";
+import * as tool from "../../../tools/ci/vitest-annotate.mjs";
+
+const { annotations, escapeData, failures, flaky, flakyAnnotations } = tool;
 
 const report = {
   testResults: [
@@ -105,4 +107,39 @@ test("failures — the assertion, not the stack frame, in WebKit and Firefox sty
   ).toBe("TypeError: x is null");
   // Long lines are cut.
   expect(failures(at(["e".repeat(900)]), "/repo")[0].message.length).toBeLessThanOrEqual(300);
+});
+
+test("flaky — a test that passed after a failed attempt is a warning, with its attempt", () => {
+  const flakyReport = {
+    testResults: [
+      {
+        name: "/repo/web/src/f.test.tsx",
+        status: "passed",
+        assertionResults: [
+          { status: "passed", fullName: "Stable", failureMessages: [] },
+          {
+            status: "passed",
+            fullName: "Instable",
+            failureMessages: ["Error: Timeout\n@[native code]", "AssertionError: x\n at y"],
+          },
+          { status: "failed", fullName: "Cassé", failureMessages: ["Error: z"] },
+        ],
+      },
+    ],
+  };
+  const list = flaky(flakyReport, "/repo");
+  expect(list).toEqual([
+    {
+      file: "web/src/f.test.tsx",
+      name: "Instable",
+      line: 1,
+      attempts: 3,
+      message: "Error: Timeout",
+    },
+  ]);
+  const out = flakyAnnotations(list, "Tests instables — Chrome");
+  expect(out[0]).toContain("::warning title=Tests instables — Chrome (1)::");
+  expect(out[0]).toContain("Instable (réussi au 3e essai): Error: Timeout");
+  expect(out[1]).toContain("title=Test instable (réussi au 3e essai)");
+  expect(flakyAnnotations([])).toEqual([]);
 });

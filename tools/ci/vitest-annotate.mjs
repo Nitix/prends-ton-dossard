@@ -73,6 +73,50 @@ export function failures(report, root = process.cwd()) {
   return found;
 }
 
+/**
+ * The tests that failed and then passed on a retry: Vitest keeps the errors of the attempts that
+ * failed on a test that ends passed. { file, name, line, attempts, message }.
+ */
+export function flaky(report, root = process.cwd()) {
+  const found = [];
+  for (const suite of report.testResults ?? []) {
+    const file = String(suite.name ?? "")
+      .replaceAll("\\", "/")
+      .replace(`${root.replaceAll("\\", "/")}/`, "");
+    for (const test of suite.assertionResults ?? []) {
+      const errors = test.failureMessages ?? [];
+      if (test.status !== "passed" || errors.length === 0) continue;
+      found.push({
+        file,
+        name: test.fullName ?? test.title ?? "",
+        line: test.location?.line ?? 1,
+        attempts: errors.length + 1,
+        message: firstLine(test.meta?.failure ?? errors[0], undefined),
+      });
+    }
+  }
+  return found;
+}
+
+/** The warnings for the flaky tests: the list in one, then one per file (9 at most). */
+export function flakyAnnotations(list, title = "Tests instables") {
+  if (list.length === 0) return [];
+  const body = list
+    .map((one) => `${one.file} › ${one.name} (réussi au ${one.attempts}e essai): ${one.message}`)
+    .join(String.fromCharCode(10));
+  const out = [
+    `::warning title=${escapeProperty(`${title} (${list.length})`)}::${escapeData(body.slice(0, MAX_BYTES / 2))}`,
+  ];
+  const byFile = new Map();
+  for (const one of list) if (!byFile.has(one.file)) byFile.set(one.file, one);
+  for (const one of [...byFile.values()].slice(0, MAX_FILES)) {
+    out.push(
+      `::warning file=${escapeProperty(one.file)},line=${one.line},title=${escapeProperty(`Test instable (réussi au ${one.attempts}e essai)`)}::${escapeData(`${one.name}: ${one.message}`)}`,
+    );
+  }
+  return out;
+}
+
 /** The workflow commands for a list of failures. */
 export function annotations(list, title = "Tests en échec") {
   if (list.length === 0) return [];
@@ -105,7 +149,11 @@ if (process.argv[1]?.endsWith("vitest-annotate.mjs")) {
   if (!path || !existsSync(path)) {
     console.log(`::error title=Rapport Vitest absent::${escapeData(String(path))} n'existe pas : Vitest n'a pas fini.`);
   } else {
-    for (const line of annotations(failures(JSON.parse(readFileSync(path, "utf8"))), title)) {
+    const report = JSON.parse(readFileSync(path, "utf8"));
+    for (const line of [
+      ...annotations(failures(report), title),
+      ...flakyAnnotations(flaky(report), `Tests instables — ${String(title).replace(/^[^—]*—s*/, "")}`),
+    ]) {
       console.log(line);
     }
   }
