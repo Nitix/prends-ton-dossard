@@ -994,3 +994,31 @@ test("ParticipationMenu — un résultat sur une participation introuvable (404)
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
   expect(keys).toContainEqual(["event", "event"]);
 });
+
+test("ParticipationMenu — dans Safari, un statut choisi rend le focus au bouton du menu, mais un clic ailleurs ne le prend pas", async () => {
+  const { screen } = await renderMenu();
+  // Safari does not focus a button that is clicked: Chromium does, unless the press is cancelled.
+  const button = trigger(screen).element();
+  button.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+  });
+
+  await open(screen);
+  expect(focused()).not.toBe(button);
+  await screen.getByRole("button", { name: fr.status.finished }).click();
+  await vi.waitFor(() => {
+    expect(mocks.update).toHaveBeenCalledOnce();
+  });
+  await vi.waitFor(() => {
+    expect(focused()).toBe(button);
+  });
+
+  // Light dismiss: the page keeps the focus where the person put it.
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  await open(screen);
+  await userEvent.click(document.body, { position: { x: 1, y: 1 } });
+  await vi.waitFor(() => {
+    expect(document.querySelector(":popover-open")).toBeNull();
+  });
+  expect(focused()).not.toBe(button);
+});

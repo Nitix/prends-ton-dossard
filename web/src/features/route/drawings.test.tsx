@@ -858,3 +858,15 @@ test("ElevationProfile — zoomé, le détail de la trace apparaît", async () =
   expect(pathPoints(zoomed.screen.container)).toBeLessThanOrEqual(1000);
   expect(zoomed.screen.container.innerHTML).not.toContain("NaN");
 });
+
+test("ElevationProfile — dans Safari, un clic donne le focus au curseur, qui ne le prend pas à l'appui", async () => {
+  const { cursor } = await renderZoom(mountain());
+  // Safari does not focus a range that is clicked: Chromium does, unless the press is cancelled.
+  cursor.element().addEventListener("mousedown", (event) => {
+    event.preventDefault();
+  });
+
+  await userEvent.click(cursor);
+
+  expect(document.activeElement).toBe(cursor.element());
+});

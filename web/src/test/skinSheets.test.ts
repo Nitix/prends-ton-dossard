@@ -72,3 +72,28 @@ test("skinSheets — les arrêts d'un dégradé linéaire sont des #rrggbb, ou u
   );
   expect(() => linearStops("linear-gradient(oklch(0.5 0.1 200), #ffffff)")).toThrow(/oklch/);
 });
+
+test("skinSheets — chaque feuille d'utilitaires déclare d'abord l'ordre des couches de styles.css, « properties » compris", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dirs = readdirSync(new URL("../skins", import.meta.url), { withFileTypes: true }).filter(
+    (entry) => entry.isDirectory(),
+  );
+  const sheets = dirs
+    .map((entry) => new URL(`../skins/${entry.name}/utilities.css`, import.meta.url))
+    .filter((url) => {
+      try {
+        readFileSync(url);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  expect(sheets.length).toBeGreaterThan(5);
+  for (const url of sheets) {
+    // Read before styles.css, a sheet that names the layers without « properties » puts Tailwind's
+    // fallback resets (browsers without @property) above its utilities.
+    expect(readFileSync(url, "utf8")).toContain(
+      "@layer properties, theme, base, components, utilities;",
+    );
+  }
+});

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { userEvent } from "vitest/browser";
@@ -112,4 +113,56 @@ test("Dialog — fermer la fenêtre qu'elle contient n'appelle pas son propre on
   // The event of the inner dialog goes up the React tree, past the outer one.
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(onOuterClose).not.toHaveBeenCalled();
+});
+
+// Safari does not give the focus to a button that is clicked (and takes it from the page).
+// Chromium does, unless the press is cancelled: so the opener here cancels `mousedown`.
+function SafariOpener({ onClose }: { onClose: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <I18nProvider languages={["fr"]}>
+      <button
+        type="button"
+        onMouseDown={(event) => {
+          event.preventDefault();
+        }}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        Ouvrir
+      </button>
+      <Dialog
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          onClose();
+        }}
+        title="Retirer la course"
+      >
+        <button type="button">Dans la boîte</button>
+      </Dialog>
+    </I18nProvider>
+  );
+}
+
+test("Dialog — dans Safari, un bouton qui n'a pas le focus le retrouve à la fermeture, par Fermer ou par Échap", async () => {
+  const screen = await render(<SafariOpener onClose={() => {}} />);
+  const opener = screen.getByRole("button", { name: "Ouvrir" });
+
+  await opener.click();
+  expect(document.activeElement).not.toBe(opener.element());
+  await screen.getByRole("button", { name: fr.common.close }).click();
+  await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
+  await vi.waitFor(() => {
+    expect(document.activeElement).toBe(opener.element());
+  });
+
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  await opener.click();
+  await expect.element(screen.getByRole("dialog")).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await vi.waitFor(() => {
+    expect(document.activeElement).toBe(opener.element());
+  });
 });
