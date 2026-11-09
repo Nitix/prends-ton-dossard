@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 // @ts-expect-error a script in plain JavaScript
 import * as tool from "../../../tools/ci/vitest-annotate.mjs";
 
-const { annotations, escapeData, failures, flaky, flakyAnnotations } = tool;
+const { annotations, escapeData, failures, flaky, flakyAnnotations, silentFailure } = tool;
 
 const report = {
   testResults: [
@@ -142,4 +142,28 @@ test("flaky — a test that passed after a failed attempt is a warning, with its
   expect(out[0]).toContain("Instable (réussi au 3e essai): Error: Timeout");
   expect(out[1]).toContain("title=Test instable (réussi au 3e essai)");
   expect(flakyAnnotations([])).toEqual([]);
+});
+
+test("silentFailure — a failed run with no failed test names its unhandled errors", () => {
+  const log = [
+    "ok line",
+    "⎯⎯ Unhandled Errors ⎯⎯",
+    "Error: boom in a timer",
+    "    at x",
+    "Test Files 1 passed",
+  ].join("\n");
+  const out = silentFailure({ success: false, testResults: [] }, log);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toContain("::error title=La suite a échoué sans test en échec::");
+  expect(out[0]).toContain("Error: boom in a timer");
+  // No such section: the end of the log.
+  expect(silentFailure({ success: false, testResults: [] }, "a\nb")[0]).toContain("a%0Ab");
+  // A test failed, or the run succeeded: nothing to add.
+  expect(silentFailure({ success: true, testResults: [] }, log)).toEqual([]);
+  expect(
+    silentFailure(
+      { success: false, testResults: [{ name: "f", assertionResults: [{ status: "failed" }] }] },
+      log,
+    ),
+  ).toEqual([]);
 });

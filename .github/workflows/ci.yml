@@ -129,13 +129,18 @@ jobs:
       # A first run on a cold cache of Vite can fail on files it re-optimises (the README says to
       # run again before believing a failure): the suite is run again only for that signature.
       - name: Browser tests
+        shell: bash
         run: |
+          set -o pipefail
           report="${{ runner.temp }}/vitest-browser.json"
+          log="${{ runner.temp }}/vitest-browser.log"
           run() {
-            pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$report"
+            pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$report" 2>&1 | tee "$log"
           }
           if ! run; then
-            if grep -qE "Failed to import test file|Vite unexpectedly reloaded|Failed to fetch dynamically imported module" "$report"; then
+            # The signature is in the JSON (a file that did not import) or in the log (an error
+            # thrown outside of a test). A run with unhandled errors and no such sign is a failure.
+            if grep -qE "Failed to import test file|Vite unexpectedly reloaded|Failed to fetch dynamically imported module" "$report" "$log"; then
               echo "A cold cache of Vite: the suite is run again."
               run
             else
@@ -144,4 +149,4 @@ jobs:
           fi
       - name: Failing and flaky tests, as annotations
         if: always()
-        run: node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }}"
+        run: node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }}" "${{ runner.temp }}/vitest-browser.log"

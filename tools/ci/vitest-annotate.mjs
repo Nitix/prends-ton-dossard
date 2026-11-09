@@ -117,6 +117,23 @@ export function flakyAnnotations(list, title = "Tests instables") {
   return out;
 }
 
+/**
+ * A run that failed with no test failed: Vitest reports unhandled errors (an error thrown outside
+ * a test) as a failed run. The annotation holds the « Unhandled Errors » section of the log, or
+ * its last 40 lines.
+ */
+export function silentFailure(report, log) {
+  if (report.success !== false || failures(report).length > 0) return [];
+  // oxlint-disable-next-line no-control-regex
+  const lines = String(log ?? "").replace(/\u001b\[[0-9;]*m/g, "").split(String.fromCharCode(10));
+  const at = lines.findIndex((line) => line.includes("Unhandled Error"));
+  const shown = at >= 0 ? lines.slice(at, at + 40) : lines.slice(-40);
+  const text = shown.join(String.fromCharCode(10)).trim() || "(pas de journal)";
+  return [
+    `::error title=${escapeProperty("La suite a échoué sans test en échec")}::${escapeData(text.slice(0, 3500))}`,
+  ];
+}
+
 /** The workflow commands for a list of failures. */
 export function annotations(list, title = "Tests en échec") {
   if (list.length === 0) return [];
@@ -145,13 +162,15 @@ export function annotations(list, title = "Tests en échec") {
 
 if (process.argv[1]?.endsWith("vitest-annotate.mjs")) {
   const { readFileSync, existsSync } = await import("node:fs");
-  const [path, title] = process.argv.slice(2);
+  const [path, title, logPath] = process.argv.slice(2);
   if (!path || !existsSync(path)) {
     console.log(`::error title=Rapport Vitest absent::${escapeData(String(path))} n'existe pas : Vitest n'a pas fini.`);
   } else {
     const report = JSON.parse(readFileSync(path, "utf8"));
+    const log = logPath && existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
     for (const line of [
       ...annotations(failures(report), title),
+      ...silentFailure(report, log),
       ...flakyAnnotations(flaky(report), `Tests instables — ${String(title).replace(/^[^—]*—s*/, "")}`),
     ]) {
       console.log(line);

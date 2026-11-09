@@ -46,6 +46,24 @@ beforeEach(() => {
   session.record = { id: "u1", collectionName: "users", role: "member" };
 });
 
+const describeElement = (element: Element | null) =>
+  element === null
+    ? "null"
+    : `${element.tagName}${element.id === "" ? "" : "#" + element.id}: ${(element.textContent ?? "").slice(0, 30)}`;
+
+/**
+ * The element has the focus, within 5 s. The message says what has it instead (an error of
+ * `toHaveFocus` in a poll says nothing of it, and the report keeps only its first line).
+ */
+async function expectFocusOn(locator: { element(): Element }) {
+  await vi.waitFor(
+    () => {
+      expect(describeElement(document.activeElement)).toBe(describeElement(locator.element()));
+    },
+    { timeout: 5000 },
+  );
+}
+
 async function openApp(path: string) {
   const router = createRouter({
     routeTree,
@@ -77,11 +95,11 @@ test("root — un onglet mène au titre de la page, d'une page à l'autre", asyn
   const tabs = screen.getByRole("navigation", { name: fr.nav.main });
 
   await tabs.getByRole("link", { name: fr.nav.list, exact: true }).click();
-  await expect.element(screen.getByRole("heading", heading(fr.nav.list))).toHaveFocus();
+  await expectFocusOn(screen.getByRole("heading", heading(fr.nav.list)));
   expect(router.state.location.pathname).toBe("/liste");
 
   await tabs.getByRole("link", { name: fr.nav.calendar, exact: true }).click();
-  await expect.element(screen.getByRole("heading", heading(fr.nav.calendar))).toHaveFocus();
+  await expectFocusOn(screen.getByRole("heading", heading(fr.nav.calendar)));
   expect(router.state.location.pathname).toBe("/agenda");
 });
 
@@ -130,12 +148,10 @@ test("root — le menu de l'admin, qui reste affiché, mène au titre de la sous
 
   // The menu is in `<main>` and stays there: the tap leaves the focus on the link.
   await menu.getByRole("link", { name: fr.admin.typesTitle, exact: true }).click();
-  await expect.element(screen.getByRole("heading", heading(fr.admin.typesTitle))).toHaveFocus();
+  await expectFocusOn(screen.getByRole("heading", heading(fr.admin.typesTitle)));
   expect(router.state.location.pathname).toBe("/admin/types");
 
   await menu.getByRole("link", { name: fr.admin.duplicatesTitle, exact: true }).click();
-  await expect
-    .element(screen.getByRole("heading", heading(fr.admin.duplicatesTitle)))
-    .toHaveFocus();
+  await expectFocusOn(screen.getByRole("heading", heading(fr.admin.duplicatesTitle)));
   expect(router.state.location.pathname).toBe("/admin/doublons");
 });

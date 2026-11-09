@@ -1,4 +1,5 @@
 import {
+  Browser as LeafletBrowser,
   LatLngBounds,
   latLngBounds,
   Map as LeafletMap,
@@ -206,8 +207,13 @@ test("TrackMap — a race that ends where it starts shows both marks", async () 
     label.getBoundingClientRect(),
   );
   expect(labels).toHaveLength(2);
-  const [a, b] = labels;
-  expect(a && b && (a.bottom <= b.top + 1 || b.bottom <= a.top + 1)).toBe(true);
+  // Leaflet places the labels a moment after they exist (WebKit on Linux measured them before).
+  await vi.waitFor(() => {
+    const [a, b] = [...screen.container.querySelectorAll(".leaflet-tooltip")].map((label) =>
+      label.getBoundingClientRect(),
+    );
+    expect(a && b && (a.bottom <= b.top + 1 || b.bottom <= a.top + 1)).toBe(true);
+  });
 });
 
 test("TrackMap — zoom buttons are 44 px, the plain wheel is left to the page", async () => {
@@ -480,7 +486,10 @@ test("TrackMap — without the preference, the map animates", async () => {
   expect(part(screen, ".leaflet-marker-pane").classList.contains("leaflet-zoom-hide")).toBe(false);
 });
 
-test("TrackMap — a map removed in the middle of a zoom leaves nothing that fails later", async () => {
+test("TrackMap — a map removed in the middle of a zoom leaves nothing that fails later", async (context) => {
+  // Leaflet animates a zoom only where it has 3D transforms (Browser.any3d); Playwright's WebKit on
+  // Linux has none, so there is no zoom on its way to remove the map in the middle of.
+  if (!LeafletBrowser.any3d) context.skip();
   // Leaflet ends an animated zoom with a timer of 250 ms that it does not cancel
   // when the map is removed, and that then works on a map that is gone.
   prefersReducedMotion(false);
