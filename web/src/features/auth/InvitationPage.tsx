@@ -9,17 +9,13 @@ import { errorCode, fieldErrors, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
 import { usePageTitle } from "../../lib/usePageTitle";
-import { useToday } from "../../lib/useToday";
 import { InvitationPreview } from "./InvitationPreview";
 
 /** A race of the preview of an invitation: no id, no link, only what the page shows. */
 export type PreviewLine = {
   event: string;
-  location: string;
   day: string;
   monthOnly: boolean;
-  /** Only on the races of the person invited; can be empty. */
-  formats?: string[];
   people: string[];
   morePeople: number;
 };
@@ -188,7 +184,6 @@ function Invalid({ message }: { message: string }) {
 function InvitationForm({ token, invitation }: { token: string; invitation: Invitation }) {
   const { t } = useI18n();
   const router = useRouter();
-  const today = useToday();
   const isInvite = invitation.kind === "invite";
 
   // React empties an uncontrolled form once its action is over, so what was
@@ -237,12 +232,8 @@ function InvitationForm({ token, invitation }: { token: string; invitation: Invi
             ? t.auth.welcome(invitation.runnerName)
             : t.auth.invitedYou(invitedBy)}
       </h1>
-      {isInvite && (
-        <p className="text-base">
-          {invitedBy === null ? t.auth.intro : t.auth.welcomeIntro(invitation.runnerName)}
-        </p>
-      )}
-      {isInvite && <InvitationPreview invitation={invitation} today={today} />}
+      {isInvite && <p className="text-base">{t.auth.intro}</p>}
+      {isInvite && <InvitationPreview invitation={invitation} />}
       <form action={submit} className="flex flex-col gap-4">
         {isInvite && (
           <TextField

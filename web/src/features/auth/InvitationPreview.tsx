@@ -2,105 +2,68 @@ import { useId } from "react";
 
 import { BlockTitle } from "../../components/BlockTitle";
 import { useI18n } from "../../i18n/I18nProvider";
-import { daysBetween } from "../../lib/dates";
-import { dayOrMonth } from "../events/eventWhen";
+import type { Formatters } from "../../lib/format";
 import type { Invitation, PreviewLine } from "./InvitationPage";
 
-const SEPARATOR = " · ";
-
 /**
- * What waits behind an invitation link: the races of the person invited (with
- * the friends going), then the next races of the group. Each block is absent
- * when it has nothing to show; with no race of their own, the group's block says
- * it is the group's next races rather than « also ».
+ * What waits behind an invitation link, kept light: the races of the person
+ * invited as a plain list (with the friends going), then the races of the group
+ * in one sentence. Each part is absent when it has nothing to show; with no race
+ * of their own, the sentence says the group goes rather than « also goes ».
  */
-export function InvitationPreview({
-  invitation,
-  today,
-}: {
-  invitation: Invitation;
-  today: Temporal.PlainDate;
-}) {
-  const { t } = useI18n();
+export function InvitationPreview({ invitation }: { invitation: Invitation }) {
+  const { t, f } = useI18n();
   const mine = invitation.upcoming?.races ?? [];
   const total = invitation.upcoming?.total ?? 0;
   const group = invitation.group ?? [];
 
+  const groupList = f.list(group.map((line) => `${line.event} (${shortWhen(line, true, f)})`));
+
   return (
     <>
-      {mine.length > 0 && (
-        <PreviewSection title={t.auth.yourRaces(total)} lines={mine} today={today}>
-          {total > mine.length && (
-            <p className="text-sm text-neutral-600">{t.auth.more(total - mine.length)}</p>
-          )}
-        </PreviewSection>
-      )}
+      {mine.length > 0 && <RaceList lines={mine} total={total} />}
       {group.length > 0 && (
-        <PreviewSection
-          title={mine.length > 0 ? t.auth.groupToo : t.auth.groupNext}
-          lines={group}
-          today={today}
-        />
+        <p className="text-sm">
+          {mine.length > 0 ? t.auth.groupAlso(groupList) : t.auth.groupOnly(groupList)}
+        </p>
       )}
     </>
   );
 }
 
-function PreviewSection({
-  title,
-  lines,
-  today,
-  children,
-}: {
-  title: string;
-  lines: PreviewLine[];
-  today: Temporal.PlainDate;
-  children?: React.ReactNode;
-}) {
-  const headingId = useId();
-  return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <BlockTitle id={headingId}>{title}</BlockTitle>
-      <ul className="race-list flex flex-col gap-2">
-        {lines.map((line) => (
-          <PreviewRow key={`${line.event}|${line.day}`} line={line} today={today} />
-        ))}
-      </ul>
-      {children}
-    </section>
-  );
+/** The day of a race (« sam. 14 nov. », or « 14 nov. » when short), or its month and year when only the month is known. */
+function shortWhen(line: PreviewLine, short: boolean, f: Formatters): string {
+  const day = Temporal.PlainDate.from(line.day);
+  if (line.monthOnly) return f.monthTitle(day.toPlainYearMonth());
+  return short ? f.dayMonth(day) : f.date(day);
 }
 
-/** A race, in the style of a row of « Mes prochaines courses ». It is not a link: the page of a race needs an account. */
-function PreviewRow({ line, today }: { line: PreviewLine; today: Temporal.PlainDate }) {
+function RaceList({ lines, total }: { lines: PreviewLine[]; total: number }) {
   const { t, f } = useI18n();
-  const day = Temporal.PlainDate.from(line.day);
-  const daysLeft = daysBetween(today, day);
-  // A race that has begun (several days) has no countdown, nor has a race known by its month.
-  const countdown = !line.monthOnly && daysLeft >= 0 ? f.inDays(daysLeft) : null;
-  const when = dayOrMonth(
-    { start_date: line.day, date_precision: line.monthOnly ? "month" : "day" },
-    day,
-    f,
-    t,
-  );
-  const formats = line.formats ?? [];
-
+  const headingId = useId();
   return (
-    <li className="upcoming-row card flex flex-col p-3.5 pr-4">
-      <p className="text-sm text-neutral-600">
-        {countdown === null ? when : `${when}${SEPARATOR}${countdown}`}
-      </p>
-      <h3 className="card-title">{line.event}</h3>
-      <p className="text-sm text-neutral-800">
-        {formats.length > 0 ? `${line.location}${SEPARATOR}${formats.join(", ")}` : line.location}
-      </p>
-      {line.people.length > 0 && (
-        <p className="text-sm text-neutral-600">
-          {t.auth.with(line.people.join(", "))}
-          {line.morePeople > 0 && ` ${t.auth.morePeople(line.morePeople)}`}
-        </p>
+    <section aria-labelledby={headingId} className="flex flex-col gap-2">
+      <BlockTitle id={headingId}>{t.auth.yourRaces(total)}</BlockTitle>
+      <ul className="flex flex-col gap-2 text-sm">
+        {lines.map((line) => (
+          // Not a link: the page of a race needs an account.
+          <li key={`${line.event}|${line.day}`} className="grid grid-cols-[7rem_1fr] gap-x-3">
+            <span className="text-neutral-600">{shortWhen(line, false, f)}</span>
+            <span className="flex flex-col">
+              <span className="font-medium">{line.event}</span>
+              {line.people.length > 0 && (
+                <span className="text-xs text-neutral-600">
+                  {t.auth.with(line.people.join(", "))}
+                  {line.morePeople > 0 && ` ${t.auth.morePeople(line.morePeople)}`}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {total > lines.length && (
+        <p className="text-sm text-neutral-600">{t.auth.more(total - lines.length)}</p>
       )}
-    </li>
+    </section>
   );
 }
