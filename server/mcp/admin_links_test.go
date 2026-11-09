@@ -86,17 +86,17 @@ func looksUp(t *testing.T, app *tests.TestApp, token string, status int) {
 	}).Test(t)
 }
 
-// expiresIn7Days checks that an answer's expires_at is the one of the route: a
-// UTC time, 7 days from now.
-func expiresIn7Days(t testing.TB, result toolResult) {
+// expiresInDays checks that an answer's expires_at is the one of the route: a
+// UTC time, so many days from now.
+func expiresInDays(t testing.TB, result toolResult, days int) {
 	t.Helper()
 	text, _ := result.Structured["expires_at"].(string)
 	at, err := time.Parse(time.RFC3339, text)
 	if err != nil || !strings.HasSuffix(text, "Z") {
 		t.Fatalf("expires_at = %q, want a UTC time", text)
 	}
-	if want := time.Now().Add(7 * 24 * time.Hour); at.Before(want.Add(-time.Minute)) || at.After(want.Add(time.Minute)) {
-		t.Errorf("expires_at = %s, want 7 days from now (%s)", text, want.UTC().Format(time.RFC3339))
+	if want := time.Now().Add(time.Duration(days) * 24 * time.Hour); at.Before(want.Add(-time.Minute)) || at.After(want.Add(time.Minute)) {
+		t.Errorf("expires_at = %s, want %d days from now (%s)", text, days, want.UTC().Format(time.RFC3339))
 	}
 }
 
@@ -120,7 +120,7 @@ func TestAdmin_CreateLink_Invite(t *testing.T) {
 	counted := mcp.CountInnerRequests(t)
 	first := confirmAndCall(t, app, admin, "admin_create_link", args)
 	_, oldToken := linkIn(t, first)
-	expiresIn7Days(t, first)
+	expiresInDays(t, first, 30)
 	if got := counted.Of(http.MethodPost); got != 1 {
 		t.Errorf("%d POST, want the one of the route", got)
 	}
@@ -178,7 +178,7 @@ func TestAdmin_CreateLink_Reset(t *testing.T) {
 		"ses jetons d'assistant (MCP) supprimés")
 	result := confirmAndCall(t, app, admin, "admin_create_link", args)
 	linkIn(t, result)
-	expiresIn7Days(t, result)
+	expiresInDays(t, result, 7)
 	if summary, _ := result.Structured["summary"].(string); !strings.Contains(summary, "ses jetons d'assistant (MCP) supprimés") {
 		t.Errorf("the summary of a reset says %q, want that the tokens of the account go", summary)
 	}
@@ -250,8 +250,8 @@ func TestAdmin_RevokeLink(t *testing.T) {
 				"expires_at": time.Now().Add(time.Duration(days) * 24 * time.Hour),
 			})
 		}
-		// Beyond the 7 days of the one that the case above made.
-		sooner, later := waiting(strings.Repeat("a", 64), 8), waiting(strings.Repeat("b", 64), 9)
+		// Beyond the 30 days of the one that the case above made.
+		sooner, later := waiting(strings.Repeat("a", 64), 38), waiting(strings.Repeat("b", 64), 39)
 		confirmAndCall(t, app, admin, "admin_revoke_link", map[string]any{"runner": "Sam", "kind": "invite"})
 		if storedRecord(t, app, "invitations", later.Id) != nil || storedRecord(t, app, "invitations", sooner.Id) == nil {
 			t.Error("the invitation revoked is not the one valid the longest")
@@ -312,5 +312,41 @@ func TestAdmin_LinkIsNotLogged(t *testing.T) {
 	}
 	if !route {
 		t.Error("no inner POST /api/app/invitations in the log")
+	}
+}
+
+// An invitation comes with its ready message, which holds the link; a reset has
+// none. The description says how long each lasts.
+func TestAdmin_CreateLinkMessage(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	admin := newToken(t, app, fx.Admin)
+
+	invite := confirmAndCall(t, app, admin, "admin_create_link", map[string]any{"runner": "Sam", "kind": "invite"})
+	address, _ := linkIn(t, invite)
+	message, _ := invite.Structured["message"].(string)
+	if !strings.Contains(message, address) || !strings.HasSuffix(message, address) {
+		t.Errorf("message %q does not end with the link", message)
+	}
+	if !strings.Contains(message, "Sam") || !strings.Contains(message, "Admin") {
+		t.Errorf("message %q does not name the invitee and the author", message)
+	}
+	if summary := summaryOfResult(invite); !strings.Contains(summary, "Le message prêt (message) contient le lien : montre-le avec le lien, la personne choisira lequel envoyer, et ne le transmets qu'à la personne concernée.") {
+		t.Errorf("the summary %q does not tell to show the message", summary)
+	}
+
+	reset := confirmAndCall(t, app, admin, "admin_create_link", map[string]any{"runner": "Bob", "kind": "reset"})
+	if _, has := reset.Structured["message"]; has {
+		t.Error("a reset has a message")
+	}
+	if strings.Contains(summaryOfResult(reset), "Le message prêt") {
+		t.Error("the summary of a reset speaks of a message")
+	}
+
+	_, body := rpc(t, app, bearer(admin), http.StatusOK, "tools/list", nil)
+	for _, want := range []string{"30 jours pour une invitation, 7 jours pour une réinitialisation", "un message prêt à envoyer à la personne"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("tools/list does not say %q", want)
+		}
 	}
 }

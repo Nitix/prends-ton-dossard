@@ -546,12 +546,98 @@ func TestPreview_Group(t *testing.T) {
 
 	// Nothing for the group: [] and not null.
 	empty := testutil.NewApp(t)
-	testutil.Seed(t, empty)
-	data, err := json.Marshal(compute(t, empty, fx.SamRunner, "2026-11-09"))
+	emptyFx := testutil.Seed(t, empty)
+	data, err := json.Marshal(compute(t, empty, emptyFx.SamRunner, "2026-11-09"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(data), `"group":[]`) || !strings.Contains(string(data), `"races":[]`) {
 		t.Errorf("want empty lists, got %s", data)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The create route
+
+// created posts a create request as the admin and returns its response as a map.
+func created(t *testing.T, app *tests.TestApp, fx testutil.Fixture, body string) map[string]any {
+	t.Helper()
+	response := testutil.NewSequence(t, app).Step("create", http.MethodPost, baseURL, testutil.Token(t, fx.Admin), body, http.StatusOK, `"url"`)
+	var out map[string]any
+	if err := json.Unmarshal([]byte(response), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestCreate_Validity(t *testing.T) {
+	for kind, days := range map[invitations.Kind]int{invitations.KindInvite: 30, invitations.KindReset: 7} {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		runner := fx.SamRunner
+		if kind == invitations.KindReset {
+			runner = fx.BobRunner
+		}
+		out := created(t, app, fx, fmt.Sprintf(`{"runnerId":%q,"kind":%q}`, runner.Id, kind))
+		got, err := time.Parse(time.RFC3339, out["expiresAt"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+		if got.Before(want.Add(-time.Minute)) || got.After(want.Add(time.Minute)) {
+			t.Errorf("%s: expiresAt = %s, want about %s", kind, got, want)
+		}
+	}
+}
+
+func TestCreate_Message(t *testing.T) {
+	at(t, "2026-11-09T12:00:00Z")
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	a := newEvent(t, app, "Trail A", "2026-11-14", "")
+	join(t, app, fx.SamRunner, a, nil, "interested")
+	b := newEvent(t, app, "Course B", "2026-11-20", "")
+	join(t, app, fx.SamRunner, b, nil, "interested")
+	sam := fmt.Sprintf(`{"runnerId":%q,"kind":"invite"`, fx.SamRunner.Id)
+
+	for lang, body := range map[string]string{"fr": sam + `}`, "en": sam + `,"lang":"en"}`, "de": sam + `,"lang":"de"}`} {
+		out := created(t, app, fx, body)
+		url, _ := out["url"].(string)
+		wordsLang := lang
+		if lang != "en" {
+			wordsLang = "fr"
+		}
+		want := wording.Of(wordsLang).InvitationMessage(wording.InvitationMessage{
+			Invitee: "Sam", Inviter: "Admin", Total: 2, NextEvent: "Trail A", NextDay: "2026-11-14", URL: url,
+		})
+		if out["message"] != want {
+			t.Errorf("lang %s: message = %q, want %q", lang, out["message"], want)
+		}
+		if !strings.HasSuffix(want, url) {
+			t.Errorf("lang %s: the message does not end with the url", lang)
+		}
+	}
+
+	out := created(t, app, fx, fmt.Sprintf(`{"runnerId":%q,"kind":"reset"}`, fx.BobRunner.Id))
+	if _, has := out["message"]; has {
+		t.Error("a reset has a message")
+	}
+}
+
+// An author whose account has no runner is shown as nobody.
+func TestLookup_AuthorWithoutRunner(t *testing.T) {
+	at(t, "2026-11-09T12:00:00Z")
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	orphan := save(t, app, "users", map[string]any{"email": "orphan@example.test", "password": "a-long-password", "verified": true, "role": "admin"})
+	inv := seed(t, app, fx.SamRunner, invitations.KindInvite, samToken)
+	inv.Set("created_by", orphan.Id)
+	if err := app.Save(inv); err != nil {
+		t.Fatal(err)
+	}
+
+	status, body := lookup(t, app, lookupBody(samToken, "fr"))
+	if status != http.StatusOK || !strings.Contains(body, `"invitedBy":null`) {
+		t.Errorf("status %d, body %s: want 200 and invitedBy null", status, body)
 	}
 }

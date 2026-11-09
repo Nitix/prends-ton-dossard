@@ -52,6 +52,7 @@ func createRoute(cfg config.Config) func(*core.RequestEvent) error {
 			RunnerID string `json:"runnerId"`
 			Kind     Kind   `json:"kind"`
 			Role     string `json:"role"`
+			Lang     string `json:"lang"`
 		}
 		// A body that cannot be read leaves what is missing empty, and no runner
 		// has an empty id.
@@ -67,10 +68,32 @@ func createRoute(cfg config.Config) func(*core.RequestEvent) error {
 			return fail(e, err)
 		}
 
-		return e.JSON(http.StatusOK, map[string]any{
+		out := map[string]any{
 			"url":       URL(cfg.AppURL, token),
 			"expiresAt": inv.GetDateTime("expires_at").Time().UTC().Format(time.RFC3339),
-		})
+		}
+		if body.Kind == KindInvite {
+			// Written now, from the preview of the moment: the admin sends this text.
+			w := wording.Of(body.Lang)
+			preview, err := ComputePreview(e.App, inv.GetString("runner"), e.Auth.Id, ParisDay(now()), w)
+			if err != nil {
+				return e.InternalServerError("", err)
+			}
+			runner, err := e.App.FindRecordById("runners", inv.GetString("runner"))
+			if err != nil {
+				return e.InternalServerError("", err)
+			}
+			m := wording.InvitationMessage{Invitee: runner.GetString("name"), Total: preview.Upcoming.Total, URL: out["url"].(string)}
+			if preview.InvitedBy != nil {
+				m.Inviter = *preview.InvitedBy
+			}
+			if m.Total > 0 {
+				first := preview.Upcoming.Races[0]
+				m.NextEvent, m.NextDay, m.NextMonthOnly = first.Event, first.Day, first.MonthOnly
+			}
+			out["message"] = w.InvitationMessage(m)
+		}
+		return e.JSON(http.StatusOK, out)
 	}
 }
 

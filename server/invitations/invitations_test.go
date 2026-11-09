@@ -318,7 +318,7 @@ func TestInvitations_Create(t *testing.T) {
 				if got := len(inv.GetString("token_hash")); got != 64 {
 					t.Errorf("len(token_hash) = %d, want 64", got)
 				}
-				want := time.Now().Add(7 * 24 * time.Hour)
+				want := time.Now().Add(30 * 24 * time.Hour)
 				if got := inv.GetDateTime("expires_at").Time(); got.Before(want.Add(-time.Minute)) || got.After(want.Add(time.Minute)) {
 					t.Errorf("expires_at = %s, want about %s", got, want)
 				}
@@ -1087,7 +1087,7 @@ func TestInvitations_CreateReturnsAWorkingLink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expiresAt = %q is not an RFC 3339 date: %v", created.ExpiresAt, err)
 	}
-	want := time.Now().Add(7 * 24 * time.Hour)
+	want := time.Now().Add(30 * 24 * time.Hour)
 	if expiresAt.Before(want.Add(-time.Minute)) || expiresAt.After(want.Add(time.Minute)) {
 		t.Errorf("expiresAt = %s, want about %s", expiresAt, want)
 	}
