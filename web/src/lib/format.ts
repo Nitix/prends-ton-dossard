@@ -163,7 +163,16 @@ export function createFormatters(locale: string): Formatters {
       // French writes « 7 h 30 », not « 7:30 »: the digits and the day period are the locale's, the colon is not.
       if (new Intl.Locale(locale).language !== "fr")
         return parts.map((part) => part.value).join("");
-      return parts.map((part) => (part.type === "literal" ? "\u00A0h\u00A0" : part.value)).join("");
+      // Firefox writes the hour of French on two digits (« 09 h 00 »), Chrome and Safari on one.
+      return parts
+        .map((part) =>
+          part.type === "literal"
+            ? "\u00A0h\u00A0"
+            : part.type === "hour"
+              ? String(Number(part.value))
+              : part.value,
+        )
+        .join("");
     },
     integer: (n) => integers.format(n),
     km: (n) => kilometers.format(n),
