@@ -160,32 +160,6 @@ export function applySkin(id: string): void {
   put(byId(id) ?? DEFAULT);
 }
 
-/**
- * WebKit (seen in Playwright's build for Linux, with the stylesheets that Vite's dev server adds
- * as `<style>` elements) resolves the page wrongly for the first skin chosen in a page: right
- * after its sheets and `data-skin` are in, the custom properties are the skin's but what depends
- * on them (the background of `<body>`) is the previous look's, and the animations of its motifs
- * do not start. Every later choice is right. Two frames and a read of a style after the first
- * one let the page resolve. The wait is not made for the next ones, nor where there is no
- * `requestAnimationFrame` (the tests of this module in Node), and it gives up after 100 ms (a
- * page in a background tab draws no frame).
- */
-let settledOnce = false;
-async function settleFirstChoice(): Promise<void> {
-  if (settledOnce || typeof requestAnimationFrame !== "function") return;
-  settledOnce = true;
-  for (let frame = 0; frame < 2; frame++) {
-    await new Promise<void>((resolve) => {
-      const giveUp = setTimeout(resolve, 100);
-      requestAnimationFrame(() => {
-        clearTimeout(giveUp);
-        resolve();
-      });
-    });
-  }
-  void getComputedStyle(document.body).backgroundColor;
-}
-
 /** What `applySkin` puts on the page, without counting as a choice. */
 function put(skin: Skin): void {
   shown = skin;
@@ -256,7 +230,6 @@ async function showLoaded(id: string, before: (skin: Skin) => void = () => {}): 
   if (ask !== asked) return "replaced";
   before(skin);
   applySkin(skin.id);
-  await settleFirstChoice();
   return "chosen";
 }
 
