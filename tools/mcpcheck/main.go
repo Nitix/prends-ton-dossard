@@ -1817,8 +1817,13 @@ func (c *checker) adminSteps() {
 		if err != nil {
 			return "", errors.New("le lien n'a pas de date d'expiration")
 		}
-		if left := time.Until(expires); left < 6*24*time.Hour || left > 8*24*time.Hour {
-			return "", fmt.Errorf("le lien vaut %s, pas 7 jours", left.Round(time.Hour))
+		// An invitation lasts 30 days since v8 (a reset link keeps 7).
+		if left := time.Until(expires); left < 29*24*time.Hour || left > 31*24*time.Hour {
+			return "", fmt.Errorf("le lien vaut %s, pas 30 jours", left.Round(time.Hour))
+		}
+		// The ready message ends with the link. Neither is ever printed.
+		if message := strings.TrimSpace(r.data.text("message")); message == "" || !strings.HasSuffix(message, link) {
+			return "", errors.New("le message prêt manque ou ne finit pas par le lien")
 		}
 		return "confirmé, lien reçu, expire le " + expires.UTC().Format(time.DateOnly), nil
 	})

@@ -794,8 +794,9 @@ func (f *fakeSite) handle(tool string, args obj) (obj, string) {
 		if !proceed {
 			return answer, ""
 		}
-		expires := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
-		return done("Le lien est fait.", obj{"url": f.base() + "/invitation#abcdefghijklmnopqrstuvwxyz", "expires_at": expires})
+		expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+		link := f.base() + "/invitation#abcdefghijklmnopqrstuvwxyz"
+		return done("Le lien est fait.", obj{"url": link, "expires_at": expires, "message": "Bonjour, voici ton invitation : " + link})
 	case "admin_revoke_link":
 		proceed, answer := f.guard(tool, args, true, "Le lien d'invitation en attente cesserait de marcher.")
 		if !proceed {
