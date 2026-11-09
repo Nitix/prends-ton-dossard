@@ -94,7 +94,7 @@ jobs:
           - name: Firefox
             browser: firefox
             device: ""
-            experimental: true
+            experimental: false
           - name: Safari
             browser: webkit
             device: ""
