@@ -570,7 +570,7 @@ test("MembersPage — Inviter : on choisit le rôle (membre par défaut), le lie
   await expect.element(share.getByLabelText(t.link, { exact: true })).toHaveValue(NEW_LINK);
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-sam", kind: "invite", role: "member" },
+    body: { runnerId: "r-sam", kind: "invite", role: "member", lang: "fr" },
   });
   // Nothing of the link is kept by the cache: it is in the dialog, and only there.
   const cached = JSON.stringify([
@@ -606,7 +606,7 @@ test("MembersPage — Inviter en admin envoie le rôle admin", async () => {
     .toBeVisible();
   expect(mocks.send).toHaveBeenCalledWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-sam", kind: "invite", role: "admin" },
+    body: { runnerId: "r-sam", kind: "invite", role: "admin", lang: "fr" },
   });
 });
 
@@ -644,7 +644,7 @@ test("MembersPage — Régénérer propose le rôle de l'invitation en attente e
     .toBeVisible();
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-lea", kind: "invite", role: "admin" },
+    body: { runnerId: "r-lea", kind: "invite", role: "admin", lang: "fr" },
   });
 });
 
@@ -681,7 +681,7 @@ test("MembersPage — Lien de réinitialisation : un lien sans rôle, partagé",
   await expect.element(share.getByLabelText(t.link, { exact: true })).toHaveValue(NEW_LINK);
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith("/api/app/invitations", {
     method: "POST",
-    body: { runnerId: "r-max", kind: "reset" },
+    body: { runnerId: "r-max", kind: "reset", lang: "fr" },
   });
 });
 

@@ -64,7 +64,7 @@ export function usePasskeys(userId: string): UseQueryResult<PasskeyRecord[]> {
  * the token of the invitation in its fragment: it is only ever kept by the
  * dialog that shows it, never by a cache, a log or the address bar.
  */
-export type ShareLink = { url: string; expiresAt: string };
+export type ShareLink = { url: string; expiresAt: string; message?: string };
 
 /**
  * What the admin changes. Each action makes the screens that show its result
@@ -122,6 +122,8 @@ export function useMemberActions() {
       runnerId: string;
       kind: InvitationKind;
       role?: Role;
+      /** The language of the interface: the invitation message is written in it. */
+      lang: "fr" | "en";
     }): Promise<ShareLink> =>
       guarded(async () => {
         const link = await pb.send<ShareLink>("/api/app/invitations", {

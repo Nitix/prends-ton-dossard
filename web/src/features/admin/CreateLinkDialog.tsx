@@ -60,7 +60,7 @@ function LinkForm({
   onCreated: (target: CreateLinkTarget, link: ShareLink) => void;
   onClose: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const actions = useMemberActions();
   const { member, kind } = target;
   const replaces = kind === "invite" ? member.invitation !== undefined : member.reset !== undefined;
@@ -73,8 +73,8 @@ function LinkForm({
       try {
         const link = await actions.createLink(
           kind === "invite"
-            ? { runnerId: member.runner.id, kind, role }
-            : { runnerId: member.runner.id, kind },
+            ? { runnerId: member.runner.id, kind, role, lang }
+            : { runnerId: member.runner.id, kind, lang },
         );
         onCreated(target, link);
         return { role, message: null };

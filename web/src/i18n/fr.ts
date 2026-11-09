@@ -907,6 +907,14 @@ export const fr = {
     copied: "Lien copié.",
     copyFailed: "Copie impossible. Sélectionne le lien et copie-le à la main.",
     shareFailed: "Le partage a échoué. Copie le lien à la place.",
+    // What an invitation can send: the ready message, or the bare link.
+    shareWhat: "Que partager ?",
+    shareMessage: "Le message",
+    shareLinkOnly: "Le lien seul",
+    messageLabel: "Message",
+    messageCopied: "Message copié.",
+    messageCopyFailed: "Copie impossible. Sélectionne le message et copie-le à la main.",
+    messageShareFailed: "Le partage a échoué. Copie le message à la place.",
     // The title of what the share sheet of the phone sends (the subject of an email, for instance).
     shareSubject: {
       invite: "Invitation sur Prends ton dossard",

@@ -718,6 +718,13 @@ export const en = {
     copied: "Link copied.",
     copyFailed: "Could not copy. Select the link and copy it by hand.",
     shareFailed: "Sharing failed. Copy the link instead.",
+    shareWhat: "What to share?",
+    shareMessage: "The message",
+    shareLinkOnly: "The link only",
+    messageLabel: "Message",
+    messageCopied: "Message copied.",
+    messageCopyFailed: "Could not copy. Select the message and copy it by hand.",
+    messageShareFailed: "Sharing failed. Copy the message instead.",
     shareSubject: {
       invite: "Invitation to Prends ton dossard",
       reset: "New password on Prends ton dossard",

@@ -49,9 +49,14 @@ function withShare(share = vi.fn<(data: ShareData) => Promise<void>>().mockResol
 }
 
 async function renderDialog(
-  props: { kind?: "invite" | "reset"; languages?: string[]; onClose?: () => void } = {},
+  props: {
+    kind?: "invite" | "reset";
+    languages?: string[];
+    message?: string;
+    onClose?: () => void;
+  } = {},
 ) {
-  const { kind = "invite", languages = ["fr-FR"], onClose = () => {} } = props;
+  const { kind = "invite", languages = ["fr-FR"], message, onClose = () => {} } = props;
   const screen = await render(
     <QueryClientProvider client={new QueryClient()}>
       <I18nProvider languages={languages}>
@@ -62,6 +67,7 @@ async function renderDialog(
             url={URL_OF_LINK}
             expiresAt={EXPIRES_AT}
             kind={kind}
+            message={message}
             runnerName="Alice"
           />
         </ToastProvider>
@@ -301,4 +307,121 @@ test("ShareLinkDialog — les boutons font au moins 44 px", async () => {
   for (const button of [shareButton(screen), copyButton(screen)]) {
     expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   }
+});
+
+const MESSAGE = `Alice t'invite sur Prends ton dossard.\n\n${URL_OF_LINK}`;
+
+const messageChoice = (screen: Screen) =>
+  screen.getByRole("radio", { name: fr.admin.shareMessage });
+const linkChoice = (screen: Screen) => screen.getByRole("radio", { name: fr.admin.shareLinkOnly });
+
+test("ShareLinkDialog — invitation : « Le message » est choisi et le texte est montré", async () => {
+  withClipboard();
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await expect.element(screen.getByRole("group", { name: fr.admin.shareWhat })).toBeVisible();
+  await expect.element(messageChoice(screen)).toBeChecked();
+  await expect.element(linkChoice(screen)).not.toBeChecked();
+  const box = screen.getByLabelText(fr.admin.messageLabel);
+  await expect.element(box).toHaveValue(MESSAGE);
+  expect(box.element()).toHaveProperty("readOnly", true);
+});
+
+test("ShareLinkDialog — Partager envoie { title, text } pour le message", async () => {
+  withClipboard();
+  const { share, canShare } = withShare();
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await shareButton(screen).click();
+
+  expect(canShare).toHaveBeenCalledWith({ text: MESSAGE });
+  expect(share).toHaveBeenCalledExactlyOnceWith({
+    title: fr.admin.shareSubject.invite,
+    text: MESSAGE,
+  });
+});
+
+test("ShareLinkDialog — Partager envoie { url, title } pour le lien seul", async () => {
+  withClipboard();
+  const { share } = withShare();
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await linkChoice(screen).click();
+  await expect.element(screen.getByLabelText(fr.admin.link)).toHaveValue(URL_OF_LINK);
+  await shareButton(screen).click();
+
+  expect(share).toHaveBeenCalledExactlyOnceWith({
+    url: URL_OF_LINK,
+    title: fr.admin.shareSubject.invite,
+  });
+});
+
+test("ShareLinkDialog — Copier copie le message, puis le lien après le changement de choix", async () => {
+  const writeText = withClipboard();
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await copyButton(screen).click();
+  expect(writeText).toHaveBeenLastCalledWith(MESSAGE);
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.messageCopied);
+
+  await linkChoice(screen).click();
+  await copyButton(screen).click();
+  expect(writeText).toHaveBeenLastCalledWith(URL_OF_LINK);
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.copied);
+});
+
+test("ShareLinkDialog — une copie du message refusée est dite", async () => {
+  withClipboard(vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error("no")));
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await copyButton(screen).click();
+
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.messageCopyFailed);
+});
+
+test("ShareLinkDialog — un partage du message qui échoue le dit", async () => {
+  withClipboard();
+  withShare(vi.fn<(data: ShareData) => Promise<void>>().mockRejectedValue(new Error("no")));
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await shareButton(screen).click();
+
+  await expect.element(status(screen)).toHaveTextContent(fr.admin.messageShareFailed);
+});
+
+test("ShareLinkDialog — un partage annulé ne dit rien", async () => {
+  withClipboard();
+  const { share } = withShare(
+    vi
+      .fn<(data: ShareData) => Promise<void>>()
+      .mockRejectedValue(new DOMException("Share canceled", "AbortError")),
+  );
+  const screen = await renderDialog({ message: MESSAGE });
+
+  await shareButton(screen).click();
+
+  await vi.waitFor(() => {
+    expect(share).toHaveBeenCalledOnce();
+  });
+  expect(toastText(screen)).toBe("");
+  expect(status(screen).element().textContent).toBe("");
+});
+
+test("ShareLinkDialog — réinitialisation : pas de choix, le lien comme avant", async () => {
+  const writeText = withClipboard();
+  const screen = await renderDialog({ kind: "reset" });
+
+  await expect
+    .element(screen.getByRole("group", { name: fr.admin.shareWhat }))
+    .not.toBeInTheDocument();
+  await expect.element(screen.getByLabelText(fr.admin.link)).toHaveValue(URL_OF_LINK);
+  await copyButton(screen).click();
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(URL_OF_LINK);
+});
+
+test("ShareLinkDialog — en anglais, les mots du choix suivent la langue", async () => {
+  withClipboard();
+  const screen = await renderDialog({ message: MESSAGE, languages: ["en-GB"] });
+
+  await expect.element(screen.getByRole("radio", { name: en.admin.shareMessage })).toBeChecked();
 });
