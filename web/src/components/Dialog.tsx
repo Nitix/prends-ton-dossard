@@ -67,6 +67,7 @@ export function Dialog({
       const active = document.activeElement;
       opener.current =
         active instanceof HTMLElement && active !== document.body ? active : lastPressed;
+      lastPressed = null;
       dialog.showModal();
     }
     if (!open && dialog.open) {
