@@ -365,9 +365,17 @@ describe("adding someone", () => {
     await screen.getByRole("button", { name: fr.common.cancel }).click();
 
     // The native dialog says it is closed a moment after the click, in Firefox.
-    await vi.waitFor(() => {
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
+    try {
+      await vi.waitFor(() => {
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
+    } catch (error) {
+      const open = document.querySelector("dialog")?.open;
+      throw new Error(
+        `onClose not called; dialog open=${String(open)}; active=${document.activeElement?.tagName}; ${String(error)}`,
+        { cause: error },
+      );
+    }
     expect(mocks.take).not.toHaveBeenCalled();
     await expect.element(opener).toHaveFocus();
   });
@@ -380,9 +388,17 @@ describe("adding someone", () => {
     await expect.element(dialog.getByRole("alert").getByText(fr.errors.generic)).toBeVisible();
     await dialog.getByRole("button", { name: fr.common.retry }).click();
 
-    await vi.waitFor(() => {
-      expect(offered(screen)).toEqual(["Admin", "Nina", "Zoe"]);
-    });
+    try {
+      await vi.waitFor(() => {
+        expect(offered(screen)).toEqual(["Admin", "Nina", "Zoe"]);
+      });
+    } catch (error) {
+      // What the window shows when the list is not there (Firefox): kept in the message.
+      const text = dialogOf(screen).element().textContent;
+      throw new Error(`list not shown; the window says « ${text} »; ${String(error)}`, {
+        cause: error,
+      });
+    }
   });
 
   test("AddToOfferDialog — en anglais, les textes suivent la langue", async () => {

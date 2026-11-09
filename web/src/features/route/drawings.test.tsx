@@ -391,8 +391,11 @@ describe("ElevationProfile", () => {
         `${seen(cursor.element().getAttribute("aria-valuetext"))} | ${pill(screen.container)}`,
       );
     }
-    expect(readings.filter((reading) => /[-−]\s*0/.test(reading))).toEqual([]);
-    expect(readings.filter((reading) => !/pente 0 % \| .* · 0 %$/.test(reading))).toEqual([]);
+    // The first offending readings are in the message: what an engine writes is what is wanted.
+    const negative = readings.filter((reading) => /[-−]\s*0/.test(reading));
+    expect(negative.slice(0, 3), `${negative.length} readings with a minus zero`).toEqual([]);
+    const other = readings.filter((reading) => !/pente 0 % \| .* · 0 %$/.test(reading));
+    expect(other.slice(0, 3), `${other.length} readings not « pente 0 % | … · 0 % »`).toEqual([]);
     // The cursor did go along the flat.
     expect(Number.parseFloat(readings.at(-1)?.replace(",", ".") ?? "")).toBeGreaterThan(1.5);
   });
