@@ -160,12 +160,31 @@ export function applySkin(id: string): void {
   put(byId(id) ?? DEFAULT);
 }
 
+/**
+ * WebKit (seen in Playwright's build for Linux, with the stylesheets that Vite's dev server
+ * adds as `<style>` elements) resolves the page one skin behind: right after the sheets and
+ * `data-skin` are in, the custom properties are the skin's but what depends on them (the
+ * background of `<body>`) is the previous skin's, and the animations of its motifs do not
+ * start, until some later change restyles the page. Taking the attribute off, reading a style
+ * and putting it back makes the page resolve again from the sheets that are there. A no-op
+ * for the other engines, and for Crête (no attribute).
+ */
+function restyle(root: HTMLElement, skin: Skin): void {
+  // (No styles to resolve in the tests of this module, which run on a stand-in for the page.)
+  if (skin === DEFAULT || typeof getComputedStyle !== "function") return;
+  delete root.dataset.skin;
+  void getComputedStyle(root).getPropertyValue("--color-neutral-50");
+  root.dataset.skin = skin.id;
+  void getComputedStyle(document.body).backgroundColor;
+}
+
 /** What `applySkin` puts on the page, without counting as a choice. */
 function put(skin: Skin): void {
   shown = skin;
   const root = document.documentElement;
   if (skin === DEFAULT) delete root.dataset.skin;
   else root.dataset.skin = skin.id;
+  restyle(root, skin);
   forceMode(skin.modes.length === 1 ? (skin.modes[0] ?? null) : null);
   const bar = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (bar !== null) bar.content = skin.themeColor;
