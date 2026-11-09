@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createFormatters } from "./format";
 
@@ -295,6 +295,13 @@ describe("integer", () => {
   });
 });
 
+/** The parts an engine gives for a time: the hour as it writes it. */
+const parts = (hour: string, literal: string): Intl.DateTimeFormatPart[] => [
+  { type: "hour", value: hour },
+  { type: "literal", value: literal },
+  { type: "minute", value: "30" },
+];
+
 describe("startTime", () => {
   test.each([
     { locale: "fr-FR", at: "07:30", expected: "7 h 30" },
@@ -305,6 +312,15 @@ describe("startTime", () => {
     { locale: "en-US", at: "19:05", expected: "7:05 PM" },
   ])("startTime, $locale $at: $expected", ({ locale, at, expected }) => {
     expect(plain(createFormatters(locale).startTime(at))).toBe(expected);
+  });
+
+  test("startTime — the hour has no leading zero, whatever the engine writes (Firefox gives « 07 »)", () => {
+    const spy = vi.spyOn(Intl.DateTimeFormat.prototype, "formatToParts");
+    spy.mockReturnValue(parts("07", ":"));
+    expect(createFormatters("en-GB").startTime("07:30")).toBe("7:30");
+    spy.mockReturnValue(parts("09", " h "));
+    expect(plain(createFormatters("fr-FR").startTime("09:30"))).toBe("9 h 30");
+    spy.mockRestore();
   });
 
   test("startTime — a text that is not a time is given back as it is", () => {

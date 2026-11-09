@@ -84,6 +84,14 @@ const ORDINAL_ENDINGS: Record<
   en: { one: "st", two: "nd", few: "rd", other: "th" },
 };
 
+/**
+ * A part of a formatted time, with its hour as one digit at least: Firefox writes the hour on two
+ * digits (« 09 h 00 », « 07:30 AM »), Chrome and Safari on one: it is told the same everywhere.
+ */
+function plainHour(part: Intl.DateTimeFormatPart): string {
+  return part.type === "hour" ? String(Number(part.value)) : part.value;
+}
+
 export function createFormatters(locale: string): Formatters {
   const relativeTime = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const counted = new Intl.RelativeTimeFormat(locale, { numeric: "always" });
@@ -161,17 +169,9 @@ export function createFormatters(locale: string): Formatters {
       if (!m) return hhmm;
       const parts = clock.formatToParts(Date.UTC(2000, 0, 1, Number(m[1]), Number(m[2])));
       // French writes « 7 h 30 », not « 7:30 »: the digits and the day period are the locale's, the colon is not.
-      if (new Intl.Locale(locale).language !== "fr")
-        return parts.map((part) => part.value).join("");
-      // Firefox writes the hour of French on two digits (« 09 h 00 »), Chrome and Safari on one.
+      if (new Intl.Locale(locale).language !== "fr") return parts.map(plainHour).join("");
       return parts
-        .map((part) =>
-          part.type === "literal"
-            ? "\u00A0h\u00A0"
-            : part.type === "hour"
-              ? String(Number(part.value))
-              : part.value,
-        )
+        .map((part) => (part.type === "literal" ? "\u00A0h\u00A0" : plainHour(part)))
         .join("");
     },
     integer: (n) => integers.format(n),
