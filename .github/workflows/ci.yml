@@ -104,7 +104,7 @@ jobs:
           - name: Chrome (Pixel 7)
             browser: chromium
             device: Pixel 7
-            experimental: false
+            experimental: true
     env:
       VITEST_BROWSER: ${{ matrix.browser }}
       VITEST_DEVICE: ${{ matrix.device }}
