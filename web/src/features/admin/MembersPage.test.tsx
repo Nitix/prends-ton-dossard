@@ -596,10 +596,10 @@ test("MembersPage — Inviter : on choisit le rôle (membre par défaut), le lie
 test("MembersPage — Inviter : une invitation qui arrive avec son message le montre dans le partage", async () => {
   const MESSAGE = "Salut Sam, voici ton invitation. https://example.test/invitation#fresh-t0ken";
   const answer = mocks.send.getMockImplementation();
-  mocks.send.mockImplementationOnce(async (...args) => ({
-    ...((await answer?.(...args)) as object),
-    message: MESSAGE,
-  }));
+  mocks.send.mockImplementationOnce(async (...args) => {
+    const sent: unknown = await answer?.(...args);
+    return { ...(typeof sent === "object" ? sent : {}), message: MESSAGE };
+  });
   const { screen } = await renderPage();
 
   await action(screen, t.invite, "Sam").click();
