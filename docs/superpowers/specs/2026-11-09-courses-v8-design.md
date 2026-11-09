@@ -148,38 +148,49 @@ La spec v1 § 6.1 dit : « Hors invitation et réinitialisation, seuls les utili
 
 La page garde son cadre (la carte sur le fond, comme la page de connexion) et son formulaire. Elle appelle `lookup` avec `lang` = la langue de l'interface. Pour une **invitation** :
 
+> **Allégée après l'essai sur dev** (2026-11-09) : « la page d'invitation est trop lourde, elle est beaucoup trop grande ». L'utilisateur a choisi une **liste compacte** : plus de cartes, une ligne par course, le groupe en une phrase. La route `lookup` ne change pas : la page n'affiche plus `location` ni `formats`.
+
 ### 5.1 L'ordre
+
+```
+Guillaume Pierson t'invite
+Le groupe prépare ses courses ici.
+
+Tes prochaines courses (4)
+ sam. 14 nov.   Trail des Crêtes
+                avec Anne Mangeolle, Maxime Richard +2
+ dim. 29 nov.   Backyard des Aiguilles
+                avec Alice, Bob
+ lun. 14 déc.   6 heures de la Doua
+ et 1 autre
+
+Le groupe va aussi à Hyrox Lyon (18 janv.).
+
+[formulaire]
+```
 
 1. **Le titre** (`<h1>`) :
    - avec un auteur : « Guillaume Pierson t'invite » / « Guillaume Pierson invited you » ;
    - sans auteur : le titre d'aujourd'hui, « Bienvenue Arnaud Hildenbrand » / « Welcome Arnaud Hildenbrand ».
-2. **La phrase** sous le titre :
-   - avec un auteur : « Bienvenue Arnaud Hildenbrand. Le groupe prépare ses courses ici : qui court quoi, les inscriptions, le covoiturage. » / « Welcome Arnaud Hildenbrand. The group plans its races here: who runs what, registrations, car sharing. » ;
-   - sans auteur : « Le groupe prépare ses courses ici : qui court quoi, les inscriptions, le covoiturage. » / « The group plans its races here: who runs what, registrations, car sharing. »
-3. **Ses courses** (`<h2>`) : « Tes prochaines courses · 8 » / « Your next races · 8 », puis une liste des lignes de `upcoming.races`. Quand `total` dépasse 3, une ligne après la liste : « et 1 autre » / « and 1 more », « et 5 autres » / « and 5 more ».
-4. **Le groupe** (`<h2>`) : « Le groupe va aussi à » / « The group is also going to », puis la liste des lignes de `group`.
+2. **La phrase** sous le titre, la même avec ou sans auteur : « Le groupe prépare ses courses ici. » / « The group plans its races here. »
+3. **Ses courses** (`<h2>`) : « Tes prochaines courses (8) » / « Your next races (8) », puis la liste des lignes de `upcoming.races`. Quand `total` dépasse 3, une ligne après la liste : « et 1 autre » / « and 1 more », « et 5 autres » / « and 5 more ».
+4. **Le groupe, en une phrase** (un `<p>`) : les courses de `group` jointes avec `Intl.ListFormat` (conjonction, langue de l'interface), chacune « Nom (date) », la date en jour et mois (« 18 janv. »), ou le mois et l'année pour une course au mois (« juin 2027 ») :
+   - avec des courses à lui : « Le groupe va aussi à Hyrox Lyon (18 janv.), 6 heures de la Doua (14 déc.) et Trail du Vercors (juin 2027). » / « The group is also going to … » ;
+   - sans course à lui : « Le groupe va à … » / « The group is going to … ».
 5. **Le formulaire**, inchangé : email, mot de passe, confirmation, « Créer mon compte ». Après la création, l'accueil, comme aujourd'hui.
 
 ### 5.2 Une ligne
 
-```
-sam. 14 nov. · dans 5 jours
-Trail des Crêtes
-Annecy · Trail long
-avec Anne Mangeolle, Maxime Richard, Violaine Sourisse +1
-```
-
-- **La date** : le jour avec le format court du site (`f.date`, « sam. 14 nov. »), puis le compte à rebours de l'accueil (« dans 5 jours », « demain », « aujourd'hui »). Pas de compte à rebours quand le jour est passé (une course de plusieurs jours déjà commencée). Une course au mois : « juin 2027 · date à préciser » (le texte `monthWhen` de l'accueil), sans compte à rebours.
+- **La date**, dans une colonne de largeur fixe, en texte discret : le format court du site (`f.date`, « sam. 14 nov. ») ; une course au mois : le mois et l'année (« juin 2027 »). Pas de compte à rebours.
 - **Le nom** de la course.
-- **Le détail** : le lieu, puis ` · ` et les épreuves séparées par des virgules quand `formats` n'est pas vide. Les lignes du groupe n'ont que le lieu.
-- **Les personnes** : « avec » / « with », les noms séparés par des virgules, puis « +1 » quand `morePeople` > 0. Pas de ligne quand `people` est vide (une course où l'invité va seul).
+- **Les personnes**, sous le nom, en petit et discret : « avec » / « with », les noms séparés par des virgules, puis « +1 » quand `morePeople` > 0. Pas de ligne quand `people` est vide.
+- Ni lieu, ni épreuve, ni carte : une simple liste.
 - **Les lignes ne sont pas des liens** : la page d'une course demande un compte.
-- Le style des cartes reprend celui de « Mes prochaines courses » sur l'accueil.
 
 ### 5.3 Les cas particuliers
 
-- **`upcoming.total` = 0 et `group` non vide** : pas de bloc 3, et le bloc 4 s'intitule « Les prochaines courses du groupe » / « The group's next races ».
-- **`group` vide** : pas de bloc 4.
+- **`upcoming.total` = 0 et `group` non vide** : pas de bloc 3, et la phrase du groupe dit « Le groupe va à … ».
+- **`group` vide** : pas de phrase.
 - **Les deux vides** : le titre, la phrase et le formulaire.
 - **Une réinitialisation** : la page ne change pas.
 - **Un lien invalide, expiré ou utilisé** : le message d'aujourd'hui (« Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau à l'admin. »).
@@ -187,9 +198,9 @@ avec Anne Mangeolle, Maxime Richard, Violaine Sourisse +1
 
 ### 5.4 Accessibilité
 
-- Les deux blocs sont des `<section>` titrées par leur `<h2>` (`aria-labelledby`), et leurs lignes une liste (`<ul>`).
+- Ses courses sont une `<section>` titrée par son `<h2>` (`aria-labelledby`), et ses lignes une liste (`<ul>`). La phrase du groupe est un paragraphe.
 - Le focus va au `<h1>` à l'arrivée, comme aujourd'hui.
-- Le compte à rebours et « +1 » sont du texte, lu tel quel.
+- « +1 » est du texte, lu tel quel ; rien n'est dit par la couleur seule.
 
 ## 6. Le message prêt
 
@@ -236,22 +247,19 @@ https://prends-ton-dossard.ketra.fr/invitation#…
 
 ## 7. La fenêtre de partage de l'admin
 
-Pour une **invitation** (`ShareLinkDialog`), sous la phrase d'aujourd'hui (« Envoie ce lien à Arnaud Hildenbrand : il lui permet de créer son compte. ») :
+Pour une **invitation** (`ShareLinkDialog`), sous la phrase d'aujourd'hui (« Envoie ce lien à Arnaud Hildenbrand : il lui permet de créer son compte. »), **le message et le lien sont affichés tous les deux**, sans sélecteur (à la demande de l'utilisateur après l'essai sur dev : « pas besoin de faire un sélecteur pour le message, affiche les deux directement ») :
 
-- **Un choix** (groupe de boutons radio, `<fieldset>` avec sa `<legend>`) : « Que partager ? » / « What to share? », avec « Le message » / « The message » (choisi par défaut) et « Le lien seul » / « The link only ».
-- **Ce qui partira**, en lecture seule :
-  - « Le message » : un champ multiligne « Message » / « Message » avec le texte du § 6, qui se sélectionne en entier au focus ;
-  - « Le lien seul » : le champ « Lien » d'aujourd'hui.
-- **La date et l'avertissement** d'aujourd'hui restent (« Valable jusqu'au … », « Ce lien ne sera plus affiché une fois cette fenêtre fermée : copie-le ou partage-le maintenant. »).
-- **« Partager »**, là où le navigateur a une feuille de partage :
-  - « Le message » : `navigator.share({ title: shareSubject, text: message })`, l'adresse dans le texte (comme le partage d'une course, spec v7 § 8). Le bouton n'apparaît que si `navigator.canShare({ text: message })` ;
-  - « Le lien seul » : comme aujourd'hui, `navigator.share({ url, title })`.
-  - Une annulation (`AbortError`) ne fait rien. Un autre refus : « Le partage a échoué. Copie le message à la place. » / « Sharing failed. Copy the message instead. » pour le message ; le texte d'aujourd'hui pour le lien.
-- **« Copier »** copie le message ou le lien, selon le choix :
-  - message : « Message copié. » / « Message copied. » ; en cas d'échec, « Copie impossible. Sélectionne le message et copie-le à la main. » / « Could not copy. Select the message and copy it by hand. » ;
-  - lien : les textes d'aujourd'hui.
-- Le compte rendu (`<output>`) et le toast fonctionnent comme aujourd'hui.
-- **Une réinitialisation** : la fenêtre ne change pas (pas de choix, pas de message).
+1. **Le message** : un champ multiligne en lecture seule « Message » / « Message » avec le texte du § 6, qui se sélectionne en entier au focus, puis :
+   - « Partager le message » / « Share the message », là où le navigateur a une feuille de partage (`navigator.canShare({ text: message })`) : `navigator.share({ title: shareSubject, text: message })`, l'adresse dans le texte (comme le partage d'une course, spec v7 § 8) ;
+   - « Copier le message » / « Copy the message ».
+2. **Le lien** : le champ « Lien » d'aujourd'hui, puis :
+   - « Partager le lien » / « Share the link », quand `navigator.canShare({ url })` : `navigator.share({ url, title })` ;
+   - « Copier le lien » / « Copy the link ».
+3. **La date et l'avertissement** d'aujourd'hui (« Valable jusqu'au … », « Ce lien ne sera plus affiché une fois cette fenêtre fermée : copie-le ou partage-le maintenant. »).
+
+- **Un seul bouton principal** : « Partager le message » quand il est là, sinon « Copier le message ».
+- **Les comptes rendus** (`<output>` et toast, comme aujourd'hui) : « Message copié. » / « Message copied. », « Lien copié. » / « Link copied. » ; en cas d'échec de la copie, « Copie impossible. Sélectionne le message et copie-le à la main. » / « Could not copy. Select the message and copy it by hand. », ou le texte d'aujourd'hui pour le lien ; en cas d'échec du partage, « Le partage a échoué. Copie le message à la place. » / « Sharing failed. Copy the message instead. », ou le texte d'aujourd'hui pour le lien. Une annulation (`AbortError`) ne fait rien.
+- **Une réinitialisation**, ou une invitation sans message : la fenêtre d'avant la v8 (le lien, « Partager », « Copier »).
 
 ## 8. Le MCP
 
@@ -310,20 +318,22 @@ Les tests suivent le CLAUDE.md (§ 4.6) : Go en tests externes avec une horloge 
 
 - `InvitationPage` :
   - le titre et la phrase, avec et sans auteur ;
-  - les deux blocs, « et 5 autres », « et 1 autre » ;
-  - les trois cas sans course (§ 5.3) ;
-  - une course au mois (« juin 2027 · date à préciser ») ;
-  - pas de compte à rebours pour un jour passé ;
+  - une ligne : la date et le nom, « avec … +N » dessous, ni lieu, ni épreuve, ni compte à rebours ;
+  - « Tes prochaines courses (8) », « et 5 autres », « et 1 autre » ;
+  - la phrase du groupe avec une course, avec trois (« A (…), B (…) et C (…) »), sans course à lui (« Le groupe va à … »), absente quand `group` est vide ;
+  - le cas sans aucune course ;
+  - une course au mois (« juin 2027 ») ;
   - une ligne sans personne ;
   - aucune ligne n'est un lien ;
   - `lang` envoyé avec la langue de l'interface ;
   - la réinitialisation, le lien invalide et le formulaire comme avant (les tests existants passent).
 - `ShareLinkDialog` :
-  - « Le message » choisi par défaut, le texte affiché ;
-  - « Partager » envoie `{ title, text }` pour le message, `{ url, title }` pour le lien seul ;
-  - « Copier » copie le message ou le lien selon le choix, avec le bon compte rendu ;
+  - pour une invitation, le message et le lien affichés ensemble ;
+  - « Partager le message » envoie `{ title, text }`, « Partager le lien » `{ url, title }` ;
+  - chaque bouton « Copier » copie son contenu, avec le bon compte rendu ;
+  - un seul bouton principal ;
   - une annulation du partage ne fait rien ;
-  - une réinitialisation n'a pas de choix.
+  - une réinitialisation garde la fenêtre d'avant.
 
 **Avant la prod** : les vérifications complètes du CLAUDE.md (§ 3), puis un essai sur dev : créer une invitation pour un coureur de test qui a des courses, ouvrir le lien sur un téléphone, partager le message, créer le compte.
 
@@ -361,12 +371,12 @@ Ce que ni tes réponses ni la conversation ne tranchaient ; dis lesquelles revoi
 **La page**
 
 9. **Les lignes ne sont pas des liens.**
-10. **Pas de second bouton « Créer mon compte » en haut** : le formulaire reste en bas, après les courses.
+10. **Pas de second bouton « Créer mon compte » en haut** : le formulaire reste en bas ; la liste compacte (après l'essai sur dev) le fait arriver presque tout de suite.
 
 **Le message et le partage**
 
 11. **Les prénoms du message sont le premier mot de chaque nom** (« Salut Arnaud ! Guillaume t'invite… ») ; l'admin relit le message avant de l'envoyer.
 12. **L'anglais au format britannique** (« Sat 14 Nov ») ; une langue autre que `en` donne le français.
-13. **« Le message » est choisi par défaut** dans la fenêtre de partage.
+13. **Le message et le lien sont affichés ensemble** dans la fenêtre de partage, chacun avec ses boutons (après l'essai sur dev ; d'abord un choix « Le message » / « Le lien seul »).
 14. **Pas de message pour une réinitialisation**, dont la fenêtre ne change pas.
 15. **Le message est figé à la création**, la page est calculée à chaque ouverture.

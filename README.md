@@ -228,8 +228,8 @@ Un lien de chaque sorte par compte ; en renouveler un ne touche pas l'autre. Ils
 
 Admin, « Membres », puis « Inviter » sur un coureur sans compte : le lien vaut **30 jours** (un lien de réinitialisation, 7 jours) et un nouveau lien remplace celui qui attendait.
 
-- **La fenêtre de partage** propose **« Le message »** (par défaut) ou **« Le lien seul »**. Le message est prêt à envoyer : « Salut Arnaud ! Guillaume t'invite sur Prends ton dossard… », avec le nombre de courses déjà prévues et la prochaine. Il contient le lien : comme le lien, il ne s'envoie qu'à la personne concernée. L'outil MCP `admin_create_link` renvoie les deux.
-- **La page que la personne ouvre** montre qui l'invite, ses prochaines courses avec les amis qui y vont, et les prochaines courses du groupe, au-dessus du formulaire de création du compte. Elle est calculée à chaque ouverture : une course ajoutée après l'envoi y apparaît. Elle ne montre que des noms de courses, des lieux, des jours, des épreuves et des noms de coureurs ; un lien expiré ou déjà utilisé ne montre rien.
+- **La fenêtre de partage** montre **le message prêt et le lien**, chacun avec « Partager » et « Copier ». Le message est prêt à envoyer : « Salut Arnaud ! Guillaume t'invite sur Prends ton dossard… », avec le nombre de courses déjà prévues et la prochaine. Il contient le lien : comme le lien, il ne s'envoie qu'à la personne concernée. L'outil MCP `admin_create_link` renvoie les deux.
+- **La page que la personne ouvre** montre qui l'invite, une liste courte de ses prochaines courses avec les amis qui y vont, et en une phrase les prochaines courses du groupe, au-dessus du formulaire de création du compte. Elle est calculée à chaque ouverture : une course ajoutée après l'envoi y apparaît. Elle ne montre que des noms de courses, des lieux, des jours, des épreuves et des noms de coureurs ; un lien expiré ou déjà utilisé ne montre rien.
 - **Pour essayer :** sur dev, inviter un coureur sans compte qui a des courses à venir, ouvrir le lien sur un téléphone (sans être connecté), puis créer le compte.
 
 ## Environnement de dev
