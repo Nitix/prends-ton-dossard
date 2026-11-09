@@ -20,9 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # The newest 1.27: go.mod says 1.27.0, which has the vulnerabilities of the standard
+      # library that govulncheck finds and 1.27.2 fixes. go.mod stays the minimum of the module.
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: 1.27.x
+          check-latest: true
       # Lists the files that need formatting, then fails if there are any.
       - name: gofmt
         run: test -z "$(gofmt -l server tools | tee /dev/stderr)"
@@ -54,15 +57,25 @@ jobs:
         run: pnpm --dir web lint
       - name: Format check
         run: pnpm --dir web fmt:check
-      # The unit tests (Node) only: the browser tests are in web-browser.
+      # src/skins/lookFailure.test.ts starts Chromium itself, so the unit tests need it. The
+      # other browsers are in web-browser, with the browser tests.
+      - name: Install Chromium
+        run: pnpm --dir web exec playwright install --with-deps chromium
+      # The unit tests (Node) only: the browser tests are in web-browser. The JSON report is
+      # read by the next step when they fail: the logs of a run need a sign-in to be read.
       - name: Unit tests
-        run: pnpm --dir web exec vitest run --project unit
+        run: pnpm --dir web exec vitest run --project unit --reporter=default --reporter=json --outputFile.json=${{ runner.temp }}/vitest-unit.json
+      - name: Failing unit tests, as annotations
+        if: failure()
+        run: node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-unit.json" "Tests unitaires en échec"
       - name: Build
         run: pnpm --dir web build
 
   web-browser:
     name: Navigateur — ${{ matrix.name }}
     runs-on: ubuntu-latest
+    # A hung browser would otherwise run for six hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -98,5 +111,10 @@ jobs:
       # a cache would need an action that this file does not use yet.
       - name: Install the browser
         run: pnpm --dir web exec playwright install --with-deps ${{ matrix.browser }}
+      # CI=true (set by GitHub) gives the targets other than desktop Chromium 2 retries and
+      # longer timeouts (web/vite.config.ts). The JSON report feeds the annotations.
       - name: Browser tests
-        run: pnpm --dir web exec vitest run --project browser
+        run: pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json=${{ runner.temp }}/vitest-browser.json
+      - name: Failing tests, as annotations
+        if: failure()
+        run: node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }}"
