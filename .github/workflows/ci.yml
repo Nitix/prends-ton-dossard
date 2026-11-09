@@ -1,7 +1,9 @@
 name: CI
 
-# The end-to-end tests (Playwright, three browsers) are planned for v5: this
-# workflow runs the checks and the unit and component tests only.
+# Go and the web checks run on every push; the browser tests of Vitest run on
+# five targets: Chromium, Firefox and WebKit on a computer, and WebKit as an
+# iPhone 15 and Chromium as a Pixel 7. The phones are emulated by Playwright
+# (viewport, touch, user agent): they are not real devices.
 on: push
 
 permissions:
@@ -23,15 +25,17 @@ jobs:
           go-version-file: go.mod
       # Lists the files that need formatting, then fails if there are any.
       - name: gofmt
-        run: test -z "$(gofmt -l server | tee /dev/stderr)"
+        run: test -z "$(gofmt -l server tools | tee /dev/stderr)"
       - name: go vet
         run: go vet ./...
       # server/webdist/dist/.gitkeep is committed: it lets the program, which
       # embeds the front end, compile without building the front end first.
       - name: go test
         run: go test ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-  web:
+  web-checks:
     name: Web
     runs-on: ubuntu-latest
     steps:
@@ -50,10 +54,49 @@ jobs:
         run: pnpm --dir web lint
       - name: Format check
         run: pnpm --dir web fmt:check
-      # The browser tests of Vitest run in a headless Chromium.
-      - name: Install Chromium
-        run: pnpm --dir web exec playwright install --with-deps chromium
-      - name: Test
-        run: pnpm --dir web test
+      # The unit tests (Node) only: the browser tests are in web-browser.
+      - name: Unit tests
+        run: pnpm --dir web exec vitest run --project unit
       - name: Build
         run: pnpm --dir web build
+
+  web-browser:
+    name: Navigateur — ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Chrome
+            browser: chromium
+            device: ""
+          - name: Firefox
+            browser: firefox
+            device: ""
+          - name: Safari
+            browser: webkit
+            device: ""
+          - name: Safari (iPhone 15)
+            browser: webkit
+            device: iPhone 15
+          - name: Chrome (Pixel 7)
+            browser: chromium
+            device: Pixel 7
+    env:
+      VITEST_BROWSER: ${{ matrix.browser }}
+      VITEST_DEVICE: ${{ matrix.device }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install the dependencies
+        run: pnpm install --frozen-lockfile
+      # Only the browser of the target. No cache: the downloads are small next to the run, and
+      # a cache would need an action that this file does not use yet.
+      - name: Install the browser
+        run: pnpm --dir web exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Browser tests
+        run: pnpm --dir web exec vitest run --project browser
