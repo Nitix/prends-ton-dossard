@@ -15,6 +15,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
+import { FRAME } from "../../test/frame";
 import { pixelURL } from "../../test/images";
 import { EVENT_EXPAND } from "./api";
 import { ListPage } from "./ListPage";
@@ -862,7 +863,7 @@ test("ListPage — zones tactiles d'au moins 44 px", async () => {
     expect(width).toBeGreaterThanOrEqual(44);
     expect(height).toBeGreaterThanOrEqual(44);
   }
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 /** The columns of a grid, as the browser lays it out (`none`, for what is not a grid, is one). */
@@ -900,7 +901,7 @@ test("ListPage — les événements d'un mois sont sur deux colonnes dès `md` (
       expect(lefts[2], `${width} px: the third is under the first`).toBe(lefts[0]);
     }
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 

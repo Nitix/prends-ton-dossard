@@ -9,6 +9,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import type { OfferKind } from "../../lib/types";
+import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
 import { toEventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
@@ -1582,7 +1583,7 @@ describe("tap targets", () => {
 
     expect(heights).toHaveLength(5);
     for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   });
 
   test("OffersSection — Proposer, Modifier et Ajouter quelqu'un font au moins 44 px", async () => {
@@ -1600,6 +1601,6 @@ describe("tap targets", () => {
 
     expect(heights).toHaveLength(3);
     for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   });
 });

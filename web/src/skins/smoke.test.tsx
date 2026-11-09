@@ -24,6 +24,7 @@ import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
 import { colourOf, ownDeclaration, shadowLayers, textContrast, toldApart } from "../test/computed";
 import { fontsReady } from "../test/fontsReady";
+import { FRAME } from "../test/frame";
 import { withoutIds } from "../test/ids";
 import { emulateMedia, resetMedia } from "../test/media";
 import type { Mode, Skin } from "./types";
@@ -130,7 +131,7 @@ afterEach(async () => {
   await chooseSkin("crete");
   chooseTheme("auto");
   window.scrollTo(0, 0);
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 /**

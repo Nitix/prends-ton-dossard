@@ -17,6 +17,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 
 import "../styles.css";
 import { fontsReady } from "../test/fontsReady";
+import { FRAME } from "../test/frame";
 import { emulateMedia, resetMedia } from "../test/media";
 import { AppShell } from "./AppShell";
 import { DANGER, PRIMARY } from "./buttons";
@@ -51,7 +52,7 @@ beforeEach(() => {
 afterEach(async () => {
   // Back to the top and to the default viewport for the other tests.
   window.scrollTo(0, 0);
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 function renderShell(content: ReactNode = <p>Contenu de la page</p>) {

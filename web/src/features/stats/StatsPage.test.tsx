@@ -18,6 +18,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice } from "../../test/busyButton";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { spaceGaps } from "../../test/gaps";
 import { spokenText } from "../../test/spoken";
 import {
@@ -276,7 +277,7 @@ test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans d�
       expect(title?.getBoundingClientRect().height).toBe(0);
     }
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 

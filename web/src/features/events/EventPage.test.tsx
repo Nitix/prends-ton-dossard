@@ -19,6 +19,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { pixelURL } from "../../test/images";
 import { EventPage } from "./EventPage";
 import {
@@ -1316,7 +1317,7 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       await screen.unmount();
     }
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 
@@ -1363,7 +1364,7 @@ test("EventPage — sur un téléphone, une action seule au bout prend toute la 
       await screen.unmount();
     }
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 

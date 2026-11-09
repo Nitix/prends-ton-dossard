@@ -27,6 +27,7 @@ import { routeTree } from "../routeTree.gen";
 import { contrast } from "../test/colour";
 import { colourOf, rgbaOf } from "../test/computed";
 import { fontsReady } from "../test/fontsReady";
+import { FRAME } from "../test/frame";
 
 import "../styles.css";
 
@@ -90,7 +91,7 @@ afterEach(async () => {
   await chooseSkin("crete");
   chooseTheme("auto");
   window.scrollTo(0, 0);
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 async function openApp(path: string) {

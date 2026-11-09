@@ -11,6 +11,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { eventLabel } from "../events/eventLabel";
 import { eventRecord, event2Record, f15, f42, trailType } from "../events/testFixture";
 import { DuplicatesPage } from "./DuplicatesPage";
@@ -146,7 +147,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 function refusal(status: number, data: unknown) {

@@ -11,6 +11,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
 import type { Me } from "../participations/permissions";
 import { CommentsSection } from "./CommentsSection";
@@ -766,6 +767,6 @@ describe("tap targets", () => {
       expect(width).toBeGreaterThanOrEqual(44);
       expect(height).toBeGreaterThanOrEqual(44);
     }
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   });
 });

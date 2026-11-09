@@ -12,6 +12,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import type { OfferKind } from "../../lib/types";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { FRAME } from "../../test/frame";
 import { toEventView, type EventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
 import { offersKey, toOfferView, type OfferView } from "./api";
@@ -655,6 +656,6 @@ describe("the dialog", () => {
 
     expect(heights).toHaveLength(6);
     for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   });
 });

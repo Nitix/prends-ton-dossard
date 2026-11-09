@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { pressFocused } from "../../test/pressFocused";
 import {
@@ -384,7 +385,7 @@ test("FormatFieldset — le résumé de « Options avancées » fait au moins 44
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 
@@ -433,7 +434,7 @@ test("FormatFieldset — le résumé le plus long, en anglais, tient sur un tél
     expect(opener.getBoundingClientRect().right).toBeLessThanOrEqual(375);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 

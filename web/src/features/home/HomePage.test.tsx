@@ -19,6 +19,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
 import {
   aliceRunner,
@@ -1059,7 +1060,7 @@ test("Inscriptions à faire — zones tactiles d'au moins 44 px", async () => {
     expect(width).toBeGreaterThanOrEqual(44);
     expect(height).toBeGreaterThanOrEqual(44);
   }
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 // ---- Résultats à saisir
@@ -1499,7 +1500,7 @@ test("Résultats à saisir — zones tactiles d'au moins 44 px", async () => {
     expect(width).toBeGreaterThanOrEqual(44);
     expect(height).toBeGreaterThanOrEqual(44);
   }
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 // ---- Une inscription non confirmée, à saisir ou à confirmer
@@ -2167,7 +2168,7 @@ test("LatestComments — le lien de l'événement fait au moins 44 px", async ()
     .getBoundingClientRect();
   expect(width).toBeGreaterThanOrEqual(44);
   expect(height).toBeGreaterThanOrEqual(44);
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 test("HomePage — demande les événements à venir une seule fois pour les deux blocs", async () => {
@@ -2364,7 +2365,7 @@ test("HomePage — zones tactiles d'au moins 44 px", async () => {
     expect(width).toBeGreaterThanOrEqual(44);
     expect(height).toBeGreaterThanOrEqual(44);
   }
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 // ---- Inscriptions à faire, avant et le jour de l'ouverture

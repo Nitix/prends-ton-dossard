@@ -10,6 +10,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { monthGrid } from "../lib/dates";
 import { ensureTemporal } from "../lib/temporal";
 import { fontsReady } from "../test/fontsReady";
+import { FRAME } from "../test/frame";
 import type { Skin } from "./types";
 
 import "../styles.css";
@@ -33,7 +34,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await chooseSkin("crete");
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 /** The skins but Crête and the one of development. */

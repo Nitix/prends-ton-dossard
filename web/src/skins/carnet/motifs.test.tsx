@@ -4,6 +4,7 @@ import { page } from "vitest/browser";
 
 import { SKINS, chooseSkin } from "..";
 import { chooseAmbient } from "../../lib/ambient";
+import { FRAME } from "../../test/frame";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { HeaderArt, HeroArt, PageArt } from "./motifs";
 
@@ -273,7 +274,7 @@ test("Carnet — la feuille de points reste sous les yeux quand la page défile,
     expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(top + 3000 + 1);
   } finally {
     window.scrollTo(0, 0);
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 

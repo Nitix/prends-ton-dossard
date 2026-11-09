@@ -17,6 +17,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { spaceGaps } from "../../test/gaps";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { isTouchDevice } from "../../test/support";
@@ -241,7 +242,7 @@ test("RouteSection — sur un téléphone de 320 px, les grands chiffres gardent
     }
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 
@@ -895,7 +896,7 @@ test.skipIf(!canMakeTouches || isTouchDevice)(
       await frames(10);
       expectStill(line(), afterSlide, "after a tap away from the track");
     } finally {
-      await page.viewport(414, 896);
+      await page.viewport(FRAME.width, FRAME.height);
     }
   },
 );

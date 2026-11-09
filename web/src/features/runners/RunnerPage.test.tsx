@@ -18,6 +18,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice } from "../../test/busyButton";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { pixelURL } from "../../test/images";
 import { spokenText } from "../../test/spoken";
 import { EVENT_EXPAND } from "../events/api";
@@ -308,7 +309,7 @@ test("RunnerPage — sur un téléphone de 320 px, le nom passe à la ligne entr
       await screen.unmount();
     }
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 });
 

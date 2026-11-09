@@ -18,6 +18,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import {
   aliceRunner,
   bobRunner,
@@ -170,7 +171,7 @@ async function inViewport(width: number, height: number, body: () => Promise<voi
   try {
     await body();
   } finally {
-    await page.viewport(414, 896);
+    await page.viewport(FRAME.width, FRAME.height);
   }
 }
 

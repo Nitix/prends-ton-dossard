@@ -58,11 +58,10 @@ function deviceFromEnv(browser: BrowserName) {
     );
   }
   const { deviceScaleFactor, isMobile, hasTouch, userAgent } = device;
-  // The tests draw in a frame of 414 × 896 (Vitest's default, which they put back after a test
-  // that sets another): a phone whose screen is shorter would leave the bottom of the frame off
-  // the screen, where nothing can be clicked. The screen is the frame; the rest is the phone's.
+  // The tests draw in a frame the size of the screen (src/test/frame.ts): a frame larger than the
+  // screen leaves buttons outside of it, where nothing can be clicked or scrolled to.
   return {
-    viewport: { width: 414, height: 896 },
+    viewport: device.viewport,
     // On CI (software rendering), a phone's 2.6 or 3 pixels per point made every frame, and so
     // every animation a click waits to end, many times slower: the tests draw at 1.
     deviceScaleFactor: process.env.CI !== undefined ? 1 : deviceScaleFactor,
@@ -79,6 +78,9 @@ const contextOptions = deviceFromEnv(browserName);
 // its actions get more time: GitHub's machines are slower than a desktop, desktop Chromium too (a
 // heavy file given to an input took more than 2 s there). Local runs stay strict.
 const tolerant = process.env.CI !== undefined;
+
+// The frame of the tests: the screen of the emulated phone, else Vitest's 414 × 896.
+const frame = contextOptions?.viewport ?? { width: 414, height: 896 };
 
 export default defineConfig({
   plugins: [
@@ -130,6 +132,7 @@ export default defineConfig({
         optimizeDeps: { include: ["leaflet", "react/compiler-runtime"] },
         test: {
           name: "browser",
+          env: { VITE_TEST_FRAME: `${frame.width}x${frame.height}` },
           retry: process.env.CI !== undefined ? 2 : 0,
           expect: { poll: { timeout: tolerant ? 5000 : 1000 } },
           include: ["src/**/*.test.tsx"],
@@ -145,6 +148,7 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
+            viewport: frame,
             // A click or a fill on a missing element fails after 2 s, not at
             // the 15 s test timeout. Below 2 s, passing tests failed at times.
             provider: playwright({

@@ -31,6 +31,7 @@ import { chooseTheme } from "../lib/theme";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
 import { fontsReady } from "../test/fontsReady";
+import { FRAME } from "../test/frame";
 
 import "../styles.css";
 
@@ -124,7 +125,7 @@ afterEach(async () => {
   await chooseSkin("crete");
   chooseTheme("auto");
   window.scrollTo(0, 0);
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 /** The columns of a grid, as the browser lays it out (`none`, for what is not a grid, is one). */

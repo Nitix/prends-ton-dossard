@@ -8,7 +8,9 @@ import { ToastProvider } from "../../components/Toast";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { animationsDone } from "../../test/animations";
 import { fontsReady } from "../../test/fontsReady";
+import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
 import { TypesPage } from "./TypesPage";
 
@@ -83,7 +85,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  await page.viewport(414, 896);
+  await page.viewport(FRAME.width, FRAME.height);
 });
 
 function refusal(status: number, data: unknown) {
@@ -509,6 +511,8 @@ test("TypesPage — les zones tactiles font au moins 44 px, sur un téléphone",
   // In the window of the measures, the label of a checkbox is the tap target.
   await action(screen, t.measures, "Trail").click();
   const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Trail") });
+  // The window rises as it opens: a box is a fraction of a pixel short until it has.
+  await animationsDone();
   for (const label of MEASURE_LABELS) {
     const row = measureBox(dialog, label).element().closest("label");
     expect(row?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

@@ -6,6 +6,7 @@ import { userEvent } from "vitest/browser";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import type { FormatRecord } from "../../lib/types";
+import { isTouchDevice } from "../../test/support";
 import { RouteSection } from "./RouteSection";
 
 // The sizes are classes of Tailwind, which the styles load.
@@ -79,7 +80,8 @@ test("RouteSection — if the map cannot be loaded, a line says so, and the numb
 // Intl separates a number from its unit with a no-break space: tests read the text as it looks.
 const plain = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
-test("RouteSection — sans carte, le profil marche seul", async () => {
+// The pointer leaves the profile (unhover): on a touch screen there is no pointer to leave.
+test.skipIf(isTouchDevice)("RouteSection — sans carte, le profil marche seul", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(TRACK)));
   vi.spyOn(console, "error").mockImplementation(() => {});
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
