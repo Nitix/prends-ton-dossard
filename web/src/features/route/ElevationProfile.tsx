@@ -361,6 +361,8 @@ function Profile({
     style: "unit",
     unit: "percent",
     maximumFractionDigits: 0,
+    // A slope that rounds to zero is « 0 % », whatever the sign it had (Firefox shows « -0 % »).
+    signDisplay: "negative",
   });
   const legend = SLOPE_ZONES.map((zone, i) => {
     const low = i === 0 ? undefined : SLOPE_STEPS[i - 1];
