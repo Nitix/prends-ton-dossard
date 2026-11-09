@@ -76,7 +76,9 @@ jobs:
     runs-on: ubuntu-latest
     # Firefox, Safari and the iPhone have failing tests that are not looked at yet (docs/TODO.md):
     # they run and annotate, and do not make the run red.
-    continue-on-error: ${{ matrix.experimental }}
+    # Compared with true: a target without the key would give an empty value, which GitHub
+    # refuses, and then no browser job runs at all.
+    continue-on-error: ${{ matrix.experimental == true }}
     # A hung browser would otherwise run for six hours.
     timeout-minutes: 30
     strategy:
@@ -98,9 +100,11 @@ jobs:
           - name: Safari (iPhone 15)
             browser: webkit
             device: iPhone 15
+            experimental: true
           - name: Chrome (Pixel 7)
             browser: chromium
             device: Pixel 7
+            experimental: false
     env:
       VITEST_BROWSER: ${{ matrix.browser }}
       VITEST_DEVICE: ${{ matrix.device }}
