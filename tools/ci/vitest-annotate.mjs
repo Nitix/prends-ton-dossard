@@ -10,7 +10,7 @@ const MAX_BYTES = 60_000;
 const MAX_FILES = 9;
 
 /** A line of a stack: V8's « at … », Firefox's and WebKit's « fn@http://… » and « @[native code] ». */
-const STACK_FRAME = [/^\s*at\s/, /@\[native code\]/, /^[\w$.<>/]*@https?:\/\//, /^\s*$/];
+const STACK_FRAME = [/^\s*at\s/, /@\[native code\]/, /^\s*(?:async\s+)?\S*@(?:https?|file):/, /^\s*$/];
 
 const MAX_LINE = 300;
 
@@ -51,7 +51,7 @@ export function failures(report, root = process.cwd()) {
         file,
         name: test.fullName ?? test.title ?? "",
         line: test.location?.line ?? 1,
-        message: firstLine(test.failureMessages?.[0], test.failureDetails?.[0]),
+        message: firstLine(test.meta?.failure ?? test.failureMessages?.[0], test.failureDetails?.[0]),
       });
     }
     // A file that did not run at all (an error at import) has no test, only a message.
