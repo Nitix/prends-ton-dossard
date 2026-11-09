@@ -2,7 +2,7 @@
 
 La v8 rend la page d'invitation engageante. Tu as fixé le but (« Je te propose une page d'invitation qui donne envie ? » — « Oui, propose »), puis tes réponses : le détail des courses plutôt qu'un résumé, rien d'enregistré dans l'invitation, la création du compte inchangée, le message prêt ou le lien seul au choix, 30 jours pour une invitation, « Guillaume t'invite » sans date d'expiration dans le message. Enfin : « on passe au plan, je te laisse faire, déploie sur l'env de dev à la fin ».
 
-Le reste a été décidé en route, et il y a 22 décisions. Dis lesquelles revoir, par leur numéro.
+Le reste a été décidé en route, et il y a 23 décisions. Dis lesquelles revoir, par leur numéro.
 
 Conception : `docs/superpowers/specs/2026-11-09-courses-v8-design.md` (son § 13 était la première liste de celle-ci) ; plan : `docs/superpowers/plans/2026-11-09-courses-v8.md` ; branche `feat/v8`. Essayée sur dev, allégée après ton essai (n° 13 et 17), puis fusionnée dans `main` et mise en production le 2026-11-09 avec ton accord (« C'est bon, en prod »).
 
@@ -39,6 +39,7 @@ Conception : `docs/superpowers/specs/2026-11-09-courses-v8-design.md` (son § 13
 20. **Les règles des jours** (le jour qui range une course, le dernier jour où elle est à venir) sont dans `server/events`, partagées par le MCP et l'invitation, plutôt que dans un nouveau paquet.
 21. **L'aperçu lit les courses, épreuves et participations en entier** et filtre en Go : quelques dizaines de courses, un seul chemin simple.
 22. **Les commits des sous-agents** portent la ligne d'attribution de leur propre session (« Claude Sonnet 5.5 »), qui nomme le modèle qui a écrit le code.
+23. **Le jeton reste dans l'adresse** tant que le compte n'est pas créé (ta demande après la mise en production) : ouvrir le lien par curiosité, recharger ou rouvrir l'onglet ne fait plus croire qu'il a expiré. Il ne quitte l'historique qu'une fois le compte créé. Le jeton est dans la partie après `#`, que le navigateur n'envoie jamais au serveur.
 
 ## Reporté
 
