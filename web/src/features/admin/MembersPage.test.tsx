@@ -593,6 +593,24 @@ test("MembersPage — Inviter : on choisit le rôle (membre par défaut), le lie
   expect(document.body.innerHTML).not.toContain("fresh-t0ken");
 });
 
+test("MembersPage — Inviter : une invitation qui arrive avec son message le montre dans le partage", async () => {
+  const MESSAGE = "Salut Sam, voici ton invitation. https://example.test/invitation#fresh-t0ken";
+  const answer = mocks.send.getMockImplementation();
+  mocks.send.mockImplementationOnce(async (...args) => ({
+    ...((await answer?.(...args)) as object),
+    message: MESSAGE,
+  }));
+  const { screen } = await renderPage();
+
+  await action(screen, t.invite, "Sam").click();
+  const invite = screen.getByRole("dialog", { name: t.inviteTitle("Sam") });
+  await invite.getByRole("button", { name: t.createLink }).click();
+
+  const share = screen.getByRole("dialog", { name: t.shareTitle.invite("Sam") });
+  await expect.element(share.getByRole("radio", { name: t.shareMessage })).toBeChecked();
+  await expect.element(share.getByLabelText(t.messageLabel, { exact: true })).toHaveValue(MESSAGE);
+});
+
 test("MembersPage — Inviter en admin envoie le rôle admin", async () => {
   const { screen } = await renderPage();
 
