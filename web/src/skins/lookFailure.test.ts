@@ -567,7 +567,9 @@ test(
       loads++;
     });
 
-    await cardOf(page, SKIN).check();
+    // A click, not check(): when the look fails, the page puts the choice back at once, and
+    // check() then fails on its own « the state did not change » before the assertions below.
+    await cardOf(page, SKIN).click();
 
     // The page reloads, and is in the skin: kept on the device, it is the new build that wears it.
     await expect.poll(() => loads, { timeout: 10_000 }).toBeGreaterThan(0);
@@ -590,7 +592,9 @@ test(
     lookOffline("abort");
     await context.setOffline(true);
 
-    await cardOf(page, SKIN).check();
+    // A click, not check(): when the look fails, the page puts the choice back at once, and
+    // check() then fails on its own « the state did not change » before the assertions below.
+    await cardOf(page, SKIN).click();
 
     await page.getByText(fr.settings.skinLoadFailed).waitFor({ timeout: 10_000 });
     expect(await notReloaded(page), "the page was reloaded").toBe(true);
@@ -615,7 +619,9 @@ test(
       loads++;
     });
 
-    await cardOf(page, SKIN).check();
+    // A click, not check(): when the look fails, the page puts the choice back at once, and
+    // check() then fails on its own « the state did not change » before the assertions below.
+    await cardOf(page, SKIN).click();
     await expect.poll(() => loads, { timeout: 10_000 }).toBe(1);
     await picker(page).waitFor();
     // The reloaded page wears Crête (the kept skin has no look), and the choice is on the device.
@@ -623,7 +629,9 @@ test(
     expect(await page.evaluate(() => localStorage.getItem("ptd-skin"))).toBe(SKIN);
 
     // Again: the guard knows the page was just reloaded, and says so.
-    await cardOf(page, SKIN).check();
+    // A click, not check(): when the look fails, the page puts the choice back at once, and
+    // check() then fails on its own « the state did not change » before the assertions below.
+    await cardOf(page, SKIN).click();
 
     await page.getByText(fr.settings.skinLoadFailedOnline).waitFor({ timeout: 10_000 });
     expect(loads, "the page reloaded again").toBe(1);
