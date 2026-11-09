@@ -10,7 +10,7 @@ import {
 } from "leaflet";
 import { afterEach, beforeEach, expect, test, vi, type MockInstance } from "vitest";
 import { render } from "vitest-browser-react";
-import { page, userEvent, type Locator } from "vitest/browser";
+import { page, server, userEvent, type Locator } from "vitest/browser";
 
 import { SECTION } from "../../components/section";
 import { fr } from "../../i18n/fr";
@@ -233,10 +233,11 @@ test("RouteSection — sur un téléphone de 320 px, les grands chiffres gardent
       expect(lines.size, `lines of ${what}`).toBe(1);
       const box = value.getBoundingClientRect();
       const tile = tiles[i]?.getBoundingClientRect();
-      // Within a pixel: WebKit draws the same text about 1 % wider than Chromium, which is less than
-      // a pixel here, on the padding of the tile.
-      expect(box.left, `left of ${what}`).toBeGreaterThanOrEqual((tile?.left ?? Infinity) - 1);
-      expect(box.right, `right of ${what}`).toBeLessThanOrEqual((tile?.right ?? -Infinity) + 1);
+      // WebKit draws the same text about 1 % wider than Chromium, less than a pixel here, on the
+      // padding of the tile: a pixel of room there, none elsewhere.
+      const room = server.browser === "webkit" ? 1 : 0;
+      expect(box.left, `left of ${what}`).toBeGreaterThanOrEqual((tile?.left ?? Infinity) - room);
+      expect(box.right, `right of ${what}`).toBeLessThanOrEqual((tile?.right ?? -Infinity) + room);
     }
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
   } finally {

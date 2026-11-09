@@ -368,7 +368,8 @@ test("Thème — au clavier, les flèches passent d'un skin à l'autre", async (
     .toBeChecked();
   expect(document.documentElement.dataset.skin).toBe(second?.id);
   // The ring follows the arrows, in the engines that tell the keyboard moved the focus: WebKit
-  // does not for the arrows of a group of radios (`:focus-visible` is false after them).
+  // does not for the arrows of a group of radios (`:focus-visible` is false after them). KNOWN WebKit
+  // behaviour of Playwright's build, TO CONFIRM on a real Safari: if it is there too, the card needs a ring of its own.
   const ring = getComputedStyle(document.activeElement ?? document.body).outlineStyle;
   expect(server.browser === "webkit" || ring !== "none", `outline: ${ring}`).toBe(true);
 });

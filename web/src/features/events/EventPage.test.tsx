@@ -1740,7 +1740,9 @@ async function openRemovalDialog(screen: Screen, runner: string) {
   // list of the non starters) that its offsetParent is not null, and the
   // offsetParent of a modal dialog, which is fixed, is null there.
   await vi.waitFor(() => {
-    expect(dialog.element().checkVisibility()).toBe(true);
+    expect(
+      dialog.element().checkVisibility({ visibilityProperty: true, opacityProperty: true }),
+    ).toBe(true);
   });
   return dialog;
 }

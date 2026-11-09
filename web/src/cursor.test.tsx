@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { render } from "vitest-browser-react";
+import { server } from "vitest/browser";
 
 import "./styles.css";
 
@@ -64,7 +65,7 @@ test("cursor — un bouton, un menu dépliant, une case et la carte qui la porte
     radioCard: "pointer",
     disabledCard: "not-allowed",
     // The browser's own: Chromium says "text", WebKit "auto", which draws the same I-beam.
-    textField: expect.stringMatching(/^(text|auto)$/),
+    textField: server.browser === "webkit" ? "auto" : "text",
   });
   await screen.unmount();
 });

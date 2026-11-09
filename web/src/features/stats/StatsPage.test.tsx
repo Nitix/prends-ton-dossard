@@ -10,7 +10,7 @@ import {
 import { ClientResponseError } from "pocketbase";
 import { beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
-import { page } from "vitest/browser";
+import { page, server } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -250,10 +250,11 @@ test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans d�
         const text = plain(spokenText(cell));
         expect(cell.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(cell.clientWidth);
         for (const part of cell.children) {
-          // Within 8 %: WebKit draws the same digits a few percent wider, an overflow that
-          // is not seen (the cell, and the page, do not scroll).
+          // WebKit draws the same digits a few percent wider (measured on Windows; to be looked at
+          // on a real iPhone SE): 8 % of room there, none elsewhere.
+          const room = server.browser === "webkit" ? 1.08 : 1;
           expect(part.scrollWidth, `${text} at ${width} px`).toBeLessThanOrEqual(
-            part.clientWidth * 1.08,
+            part.clientWidth * room,
           );
         }
         expect(cell.getBoundingClientRect().right, `${text} at ${width} px`).toBeLessThanOrEqual(

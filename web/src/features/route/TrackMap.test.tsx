@@ -328,51 +328,48 @@ async function pixelsOf(base64: string): Promise<{ data: Uint8ClampedArray; widt
   };
 }
 
-// The pixels are read from a screenshot of the map, whose scale on a phone screen (a device pixel
-// ratio of 2.6 or 3) is not the one the reading works out.
-test.skipIf(isTouchDevice)(
-  "TrackMap — une trace toute droite, plein est ou plein nord, est dessinée",
-  async () => {
-    // Its box has no height (or no width): a gradient laid on that box cannot be
-    // drawn, and the line must still show, in the colour of the dawn.
-    for (const [what, points] of [
-      [
-        "due east",
-        toTrack([
-          { lat: 45, lon: 6 },
-          { lat: 45, lon: 6.03 },
-        ]),
-      ],
-      [
-        "due north",
-        toTrack([
-          { lat: 45, lon: 6 },
-          { lat: 45.03, lon: 6 },
-        ]),
-      ],
-    ] as const) {
-      const screen = await renderMap({ points });
-      const map = screen.getByRole("region", { name: fr.route.map });
-      const line = part(screen, "path.track-line").getBoundingClientRect();
-      const box = map.element().getBoundingClientRect();
+test("TrackMap — une trace toute droite, plein est ou plein nord, est dessinée", async () => {
+  // Its box has no height (or no width): a gradient laid on that box cannot be
+  // drawn, and the line must still show, in the colour of the dawn.
+  for (const [what, points] of [
+    [
+      "due east",
+      toTrack([
+        { lat: 45, lon: 6 },
+        { lat: 45, lon: 6.03 },
+      ]),
+    ],
+    [
+      "due north",
+      toTrack([
+        { lat: 45, lon: 6 },
+        { lat: 45.03, lon: 6 },
+      ]),
+    ],
+  ] as const) {
+    const screen = await renderMap({ points });
+    const map = screen.getByRole("region", { name: fr.route.map });
+    const line = part(screen, "path.track-line").getBoundingClientRect();
+    const box = map.element().getBoundingClientRect();
 
-      const { data, width } = await pixelsOf(await page.screenshot({ element: map, save: false }));
-      const scale = width / box.width;
-      // Along the middle third of the line, away from the dots of the start and the finish.
-      const vivid = Array.from({ length: 21 }, (_, i) => {
-        const x = line.left + (line.width * (i + 10)) / 40;
-        const y = line.top + (line.height * (i + 10)) / 40;
-        const at =
-          (Math.round((y - box.top) * scale) * width + Math.round((x - box.left) * scale)) * 4;
-        const [r = 0, g = 0, b = 0] = data.slice(at, at + 3);
-        // The dawn is vivid; the map, the halo and the tiles are white or grey.
-        return Math.max(r, g, b) - Math.min(r, g, b) > 80;
-      }).filter(Boolean).length;
-      expect(vivid, `the line of a track ${what}, in colour`).toBeGreaterThanOrEqual(18);
-      await screen.unmount();
-    }
-  },
-);
+    const { data, width } = await pixelsOf(
+      await page.screenshot({ element: map, save: false, scale: "css" }),
+    );
+    const scale = width / box.width;
+    // Along the middle third of the line, away from the dots of the start and the finish.
+    const vivid = Array.from({ length: 21 }, (_, i) => {
+      const x = line.left + (line.width * (i + 10)) / 40;
+      const y = line.top + (line.height * (i + 10)) / 40;
+      const at =
+        (Math.round((y - box.top) * scale) * width + Math.round((x - box.left) * scale)) * 4;
+      const [r = 0, g = 0, b = 0] = data.slice(at, at + 3);
+      // The dawn is vivid; the map, the halo and the tiles are white or grey.
+      return Math.max(r, g, b) - Math.min(r, g, b) > 80;
+    }).filter(Boolean).length;
+    expect(vivid, `the line of a track ${what}, in colour`).toBeGreaterThanOrEqual(18);
+    await screen.unmount();
+  }
+});
 
 test("TrackMap — deux cartes sur la page ont chacune leur dégradé, sans id en double", async () => {
   const screen = await render(
