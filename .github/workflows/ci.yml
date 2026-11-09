@@ -80,7 +80,9 @@ jobs:
     # refuses, and then no browser job runs at all.
     continue-on-error: ${{ matrix.experimental == true }}
     # A hung browser would otherwise run for six hours.
-    timeout-minutes: 30
+    # The emulated iPhone is the slowest target (WebKit, a phone, retries): it gets an hour, so it
+    # ends on its own result instead of a cancel, which would mark the whole run « cancelled ».
+    timeout-minutes: ${{ matrix.device == 'iPhone 15' && 60 || 30 }}
     strategy:
       fail-fast: false
       matrix:
