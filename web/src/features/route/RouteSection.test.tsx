@@ -240,7 +240,20 @@ test("RouteSection — sur un téléphone de 320 px, les grands chiffres gardent
       expect(box.left, `left of ${what}`).toBeGreaterThanOrEqual((tile?.left ?? Infinity) - room);
       expect(box.right, `right of ${what}`).toBeLessThanOrEqual((tile?.right ?? -Infinity) + room);
     }
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
+    // Nothing makes the page wider than the phone; if something does, the message names the widest.
+    const wide = [...document.body.querySelectorAll("*")]
+      .map((element) => ({ element, right: Math.round(element.getBoundingClientRect().right) }))
+      .filter(({ right }) => right > 321)
+      .toSorted((x, y) => y.right - x.right)
+      .slice(0, 3)
+      .map(
+        ({ element, right }) =>
+          `${element.tagName}.${String(element.getAttribute("class")).slice(0, 40)}@${right}`,
+      );
+    expect(
+      document.documentElement.scrollWidth,
+      `wider than the phone, by: ${wide.join(" ")}; window ${window.innerWidth}`,
+    ).toBeLessThanOrEqual(320);
   } finally {
     await page.viewport(FRAME.width, FRAME.height);
   }

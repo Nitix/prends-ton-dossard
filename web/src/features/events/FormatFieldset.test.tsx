@@ -403,9 +403,10 @@ test("FormatFieldset — le résumé de « Options avancées » se lit le jour, 
     const day = getComputedStyle(opener).color;
     expect(day).toBe(getComputedStyle(label).color);
     await emulateMedia({ colorScheme: "dark", forcedColors: "none" });
+    // The scheme is applied a moment after the command answers (WebKit on Linux).
+    await expect.poll(() => getComputedStyle(opener).color).not.toBe(day);
     const night = getComputedStyle(opener).color;
     expect(night).toBe(getComputedStyle(label).color);
-    expect(night).not.toBe(day);
 
     // In forced colours the browser picks the colours: the text, and the marker that says open or closed, are not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });

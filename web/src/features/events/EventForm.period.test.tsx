@@ -533,9 +533,10 @@ test("EventForm — I1 : la phrase au-dessus d'« Enregistrer » se lit le jour,
     const day = getComputedStyle(note).color;
     expect(day).toBe(getComputedStyle(label).color);
     await emulateMedia({ colorScheme: "dark", forcedColors: "none" });
+    // The scheme is applied a moment after the command answers (WebKit on Linux).
+    await expect.poll(() => getComputedStyle(note).color).not.toBe(day);
     const night = getComputedStyle(note).color;
     expect(night).toBe(getComputedStyle(label).color);
-    expect(night).not.toBe(day);
 
     // In forced colours the browser picks the colours: the text is not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });

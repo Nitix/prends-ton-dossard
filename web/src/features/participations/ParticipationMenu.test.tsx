@@ -11,8 +11,6 @@ import { ensureTemporal } from "../../lib/temporal";
 import type { ParticipationRecord, RunnerRecord } from "../../lib/types";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { frameFacts } from "../../test/diagFrame";
-import { isTouchDevice } from "../../test/support";
 import { toEventView, type EventView } from "../events/api";
 import {
   aliceRunner,
@@ -1023,14 +1021,4 @@ test("ParticipationMenu — dans Safari, un statut choisi rend le focus au bouto
     expect(document.querySelector(":popover-open")).toBeNull();
   });
   expect(focused()).not.toBe(button);
-});
-
-// TEMPORARY diagnostic (round 11), removed after one CI run.
-test.skipIf(!import.meta.env.VITE_CI || !isTouchDevice)("DIAG3 menu — Annuler", async () => {
-  expect(1).toBe(1);
-  const { screen } = await renderMenu();
-  const dialog = await openRemovalDialog(screen);
-  throw new Error(
-    await frameFacts("menu-cancel", dialog.getByRole("button", { name: fr.common.cancel })),
-  );
 });
