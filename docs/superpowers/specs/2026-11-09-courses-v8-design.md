@@ -195,6 +195,7 @@ Le groupe va aussi à Hyrox Lyon (18 janv.).
 - **Une réinitialisation** : la page ne change pas.
 - **Un lien invalide, expiré ou utilisé** : le message d'aujourd'hui (« Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau à l'admin. »).
 - **Le chargement et l'erreur réseau** : comme aujourd'hui (« Chargement… », puis l'erreur et « Réessayer »).
+- **Ouvrir le lien ne le consomme pas** : le jeton reste dans l'adresse (le fragment, jamais envoyé au serveur ni écrit dans un journal) tant que le compte n'est pas créé. Recharger la page, revenir en arrière ou rouvrir l'onglet montre toujours l'invitation. Après la création du compte, la page part vers l'accueil en remplaçant l'entrée de l'historique. (Corrigé après la mise en production, à la demande de l'utilisateur : « enlève l'expiration au premier accès, ça fout la merde s'il regarde par curiosité ou erreur » ; avant, la page effaçait le jeton de l'adresse dès l'ouverture.)
 
 ### 5.4 Accessibilité
 
