@@ -24,7 +24,7 @@ const NONE = "–";
 // narrower there, for « 45 230 m » (70 px, its spaces widened by `Figure`) and
 // « ABANDONS » (65 px) to fit.
 const CELL =
-  "stat-tile flex flex-col-reverse rounded-xl bg-neutral-50 px-1.5 py-2 text-left tabular-nums min-[22.5rem]:px-2.5 sm:table-cell sm:rounded-none sm:bg-transparent sm:px-2 sm:py-2.5 sm:text-right";
+  "stat-tile flex flex-col-reverse rounded-xl bg-neutral-50 px-1 py-2 text-left tabular-nums min-[22.5rem]:px-2.5 sm:table-cell sm:rounded-none sm:bg-transparent sm:px-2 sm:py-2.5 sm:text-right";
 const VALUE =
   "font-display text-base font-extrabold text-ink sm:font-sans sm:text-sm sm:font-medium";
 const TILE_TITLE = "stat-tile-title eyebrow text-[0.625rem] sm:hidden";
