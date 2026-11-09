@@ -329,7 +329,7 @@ for (const width of [768, 1024, 1280, 1440]) {
       .getAnimations({ subtree: true })
       .filter(
         (animation): animation is CSSAnimation =>
-          animation instanceof CSSAnimation && animation.animationName === "carnet-orbit",
+          "animationName" in animation && animation.animationName === "carnet-orbit",
       );
     expect(turning).toHaveLength(2);
     const dots = [...orbit.querySelectorAll("circle[r='4']")];

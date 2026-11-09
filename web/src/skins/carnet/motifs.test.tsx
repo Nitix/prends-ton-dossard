@@ -33,11 +33,15 @@ const middle = (element: Element) => {
   return [box.left + box.width / 2, box.top + box.height / 2] as const;
 };
 
+/** An animation of CSS: it has a name. (Not `instanceof CSSAnimation`: Playwright's WebKit on Linux has no such global.) */
+const isCssAnimation = (animation: Animation): animation is CSSAnimation =>
+  "animationName" in animation;
+
 /** What moves in a drawing: its animations of CSS, by name, with how they run. */
 function moving(root: Element) {
   return root
     .getAnimations({ subtree: true })
-    .filter((animation): animation is CSSAnimation => animation instanceof CSSAnimation)
+    .filter(isCssAnimation)
     .map((animation) => {
       const timing = animation.effect?.getComputedTiming();
       return {
@@ -134,10 +138,7 @@ test("Carnet — chaque bague tourne autour de son milieu, pas autour d'un coin 
   const screen = await render(<HeroArt place="event" />);
   const turning = screen.container
     .getAnimations({ subtree: true })
-    .filter(
-      (animation) =>
-        animation instanceof CSSAnimation && animation.animationName === "carnet-orbit",
-    );
+    .filter((animation) => isCssAnimation(animation) && animation.animationName === "carnet-orbit");
   expect(turning).toHaveLength(2);
   for (const animation of turning) {
     const group = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
@@ -299,9 +300,7 @@ test("Carnet — ce qui bouge est une boîte HTML, jamais un élément d'un <svg
     await render(<Sheet />),
   ];
   for (const { container } of drawings) {
-    const animations = container
-      .getAnimations({ subtree: true })
-      .filter((animation): animation is CSSAnimation => animation instanceof CSSAnimation);
+    const animations = container.getAnimations({ subtree: true }).filter(isCssAnimation);
     expect(animations.length).toBeGreaterThan(0);
     for (const animation of animations) {
       const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
@@ -326,7 +325,7 @@ test("Carnet — la pulsation reste sur le point teal de sa bague, où qu'elle t
     .getAnimations({ subtree: true })
     .find(
       (animation) =>
-        animation instanceof CSSAnimation &&
+        isCssAnimation(animation) &&
         animation.animationName === "carnet-orbit" &&
         animation.effect instanceof KeyframeEffect &&
         animation.effect.target?.classList.contains("carnet-orbit-back"),
