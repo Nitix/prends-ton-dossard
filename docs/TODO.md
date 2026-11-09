@@ -29,7 +29,7 @@ Le détail est dans `docs/superpowers/decisions/2026-11-07-decisions-v7.md`.
 ## Mes idées
 
 - **Vérifier sur un vrai iPhone** (Safari et l'app installée) : les notifications, les alarmes d'un agenda abonné, la feuille de partage, les thèmes, le mode hors ligne, la carte et le D+, et Claude Code avec le MCP. Les tests ne tournent que dans Chrome.
-- **Les tests automatiques sur GitHub** (Go et web), avec Firefox et Safari (WebKit), qui ne se lancent pas sur ce PC Windows.
+- **Les tests automatiques sur GitHub : faits** (Go, `govulncheck`, web, et les tests navigateur sur Chrome, Firefox, Safari, iPhone 15 et Pixel 7 émulés). Reste de les vérifier sur de vrais appareils (voir la première idée) : un téléphone émulé n'est pas un iPhone.
 - **Des sauvegardes automatiques avec une copie hors du serveur.** Aujourd'hui, elles se font seulement avant un déploiement, et sur le même disque.
 - **Garder les thèmes qui servent :** dans quelques semaines, regarder quels thèmes sont choisis (ils sont sur les comptes) et retirer les autres, pour alléger le code et les tests.
 - **Petits restes des versions passées :**

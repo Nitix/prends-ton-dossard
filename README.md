@@ -53,7 +53,7 @@ Pour tester le tableau de bord de PocketBase (`http://127.0.0.1:8090/_/`), crée
 ```sh
 go test ./...                    # serveur
 go vet ./...
-gofmt -l server                  # ne doit rien afficher
+gofmt -l server tools            # ne doit rien afficher
 
 pnpm --dir web typecheck
 pnpm --dir web lint
@@ -61,15 +61,25 @@ pnpm --dir web fmt:check
 pnpm --dir web test              # Vitest : tests unitaires et tests navigateur
 ```
 
-Les tests navigateur de Vitest tournent dans un Chromium sans fenêtre. Il faut l'installer une fois sur chaque machine :
+Les tests navigateur de Vitest tournent dans un navigateur sans fenêtre, Chromium par défaut. Il faut l'installer une fois sur chaque machine :
 
 ```sh
 pnpm --dir web exec playwright install chromium
 ```
 
+Pour la suite sur un autre moteur, ou sur un téléphone émulé, deux variables d'environnement : `VITEST_BROWSER` (`chromium`, `firefox` ou `webkit`) et `VITEST_DEVICE` (un nom d'appareil de Playwright, par exemple `iPhone 15` ou `Pixel 7`). Une valeur inconnue est une erreur, et Firefox ne sait pas émuler un téléphone.
+
+```sh
+pnpm --dir web exec playwright install firefox webkit
+VITEST_BROWSER=firefox pnpm --dir web test --project browser
+VITEST_BROWSER=webkit VITEST_DEVICE="iPhone 15" pnpm --dir web test --project browser
+```
+
+**Les téléphones sont émulés** : Playwright prend la taille d'écran, le toucher et l'identité (user agent) de l'appareil, dans le moteur du bureau. Ce n'est pas un vrai iPhone ni un vrai Android : les polices, le clavier, la barre d'adresse, les notifications et l'app installée ne sont pas testés. Vérifier sur un vrai téléphone reste à faire à la main. Sur Windows, le WebKit de Playwright est une version plus pauvre que Safari (pas de `OffscreenCanvas`, ni de champ date) : quelques tests sautent alors, et la même suite peut y différer de celle de GitHub (Linux).
+
 `pnpm --dir web build` compile le front dans `server/webdist/dist`, le dossier que le programme Go embarque.
 
-GitHub Actions lance tout cela à chaque push (`.github/workflows/ci.yml`).
+GitHub Actions lance tout cela à chaque push (`.github/workflows/ci.yml`) : les tests Go et `govulncheck`, les contrôles du web (types, lint, format, tests unitaires, build), puis les tests navigateur sur cinq cibles : Chrome, Firefox et Safari (WebKit) sur ordinateur, Safari émulé en iPhone 15 et Chrome émulé en Pixel 7.
 
 ## Mise en service
 
