@@ -104,7 +104,7 @@ func Create(app core.App, in CreateInput) (token string, inv *core.Record, err e
 			inv.Set("role", role)
 		}
 		inv.Set("token_hash", hash)
-		inv.Set("expires_at", time.Now().UTC().Add(validity))
+		inv.Set("expires_at", now().UTC().Add(validity))
 		inv.Set("created_by", in.CreatedBy)
 		return txApp.Save(inv)
 	})
@@ -129,7 +129,7 @@ func Find(app core.App, token string) (inv, runner *core.Record, err error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if !inv.GetDateTime("used_at").IsZero() || !inv.GetDateTime("expires_at").Time().After(time.Now()) {
+	if !inv.GetDateTime("used_at").IsZero() || !inv.GetDateTime("expires_at").Time().After(now()) {
 		return nil, nil, invalid
 	}
 

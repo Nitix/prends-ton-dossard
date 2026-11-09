@@ -14,6 +14,7 @@ import (
 	"courses/server/accounts"
 	"courses/server/apperr"
 	"courses/server/config"
+	"courses/server/wording"
 )
 
 // Register adds the routes of the invitations to app: creating and revoking
@@ -95,6 +96,7 @@ func revokeRoute(e *core.RequestEvent) error {
 func lookupRoute(e *core.RequestEvent) error {
 	var body struct {
 		Token string `json:"token"`
+		Lang  string `json:"lang"`
 	}
 	// A body that cannot be read leaves the token empty, which no invitation has.
 	_ = e.BindBody(&body)
@@ -103,10 +105,22 @@ func lookupRoute(e *core.RequestEvent) error {
 	if err != nil {
 		return fail(e, err)
 	}
-	return e.JSON(http.StatusOK, map[string]any{
-		"runnerName": runner.GetString("name"),
-		"kind":       inv.GetString("kind"),
-	})
+	if Kind(inv.GetString("kind")) != KindInvite {
+		return e.JSON(http.StatusOK, map[string]any{
+			"runnerName": runner.GetString("name"),
+			"kind":       inv.GetString("kind"),
+		})
+	}
+
+	preview, err := ComputePreview(e.App, runner.Id, inv.GetString("created_by"), ParisDay(now()), wording.Of(body.Lang))
+	if err != nil {
+		return e.InternalServerError("", err)
+	}
+	return e.JSON(http.StatusOK, struct {
+		RunnerName string `json:"runnerName"`
+		Kind       string `json:"kind"`
+		Preview
+	}{runner.GetString("name"), inv.GetString("kind"), preview})
 }
 
 func acceptRoute(e *core.RequestEvent) error {
