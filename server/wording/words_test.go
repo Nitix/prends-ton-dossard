@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -370,5 +371,113 @@ func TestWords_Group(t *testing.T) {
 		if got := w.Roster("Trail 42 km", []string{"Alice (Inscrit)", "Bob"}); got != row.roster {
 			t.Errorf("Of(%q).Roster() = %q, want %q", row.lang, got, row.roster)
 		}
+	}
+}
+
+func TestShortDate(t *testing.T) {
+	fr, en := Of("fr"), Of("en")
+	weekdays := []struct{ day, fr, en string }{
+		{"2026-11-09", "lun. 9 nov.", "Mon 9 Nov"},
+		{"2026-11-10", "mar. 10 nov.", "Tue 10 Nov"},
+		{"2026-11-11", "mer. 11 nov.", "Wed 11 Nov"},
+		{"2026-11-12", "jeu. 12 nov.", "Thu 12 Nov"},
+		{"2026-11-13", "ven. 13 nov.", "Fri 13 Nov"},
+		{"2026-11-14", "sam. 14 nov.", "Sat 14 Nov"},
+		{"2026-11-15", "dim. 15 nov.", "Sun 15 Nov"},
+	}
+	for _, c := range weekdays {
+		if got := fr.ShortDate(c.day); got != c.fr {
+			t.Errorf("fr ShortDate(%s) = %q, want %q", c.day, got, c.fr)
+		}
+		if got := en.ShortDate(c.day); got != c.en {
+			t.Errorf("en ShortDate(%s) = %q, want %q", c.day, got, c.en)
+		}
+	}
+	frMonths := []string{"janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."}
+	enMonths := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+	for i := range 12 {
+		day := time.Date(2027, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
+		iso := day.Format("2006-01-02")
+		fw := map[time.Weekday]string{time.Monday: "lun.", time.Tuesday: "mar.", time.Wednesday: "mer.", time.Thursday: "jeu.", time.Friday: "ven.", time.Saturday: "sam.", time.Sunday: "dim."}[day.Weekday()]
+		ew := day.Format("Mon")
+		if got, want := fr.ShortDate(iso), fw+" 1 "+frMonths[i]; got != want {
+			t.Errorf("fr ShortDate(%s) = %q, want %q", iso, got, want)
+		}
+		if got, want := en.ShortDate(iso), ew+" 1 "+enMonths[i]; got != want {
+			t.Errorf("en ShortDate(%s) = %q, want %q", iso, got, want)
+		}
+	}
+	if got := fr.ShortDate("n'importe quoi"); got != "n'importe quoi" {
+		t.Errorf("a day that does not parse is returned unchanged, got %q", got)
+	}
+}
+
+func TestMonthYear(t *testing.T) {
+	if got := Of("fr").MonthYear("2027-06-01"); got != "juin 2027" {
+		t.Errorf("fr = %q", got)
+	}
+	if got := Of("en").MonthYear("2027-06-01"); got != "June 2027" {
+		t.Errorf("en = %q", got)
+	}
+	fr := []string{"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"}
+	for i := range 12 {
+		day := time.Date(2027, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		if got := Of("fr").MonthYear(day); got != fr[i]+" 2027" {
+			t.Errorf("fr MonthYear(%s) = %q", day, got)
+		}
+		if got := Of("en").MonthYear(day); got != time.Month(i+1).String()+" 2027" {
+			t.Errorf("en MonthYear(%s) = %q", day, got)
+		}
+	}
+	if got := Of("fr").MonthYear("x"); got != "x" {
+		t.Errorf("unparsable day should be unchanged, got %q", got)
+	}
+}
+
+func TestInvitationMessage(t *testing.T) {
+	base := InvitationMessage{Invitee: "Arnaud Hildenbrand", Inviter: "Guillaume Pierson", Total: 8, NextEvent: "Trail des Crêtes", NextDay: "2026-11-14", URL: "https://x.test/invitation#t"}
+	with := func(f func(m *InvitationMessage)) InvitationMessage {
+		m := base
+		f(&m)
+		return m
+	}
+	const frTail = "\n\nCrée ton compte ici, ce lien n'est que pour toi :\nhttps://x.test/invitation#t"
+	const enTail = "\n\nCreate your account here, this link is just for you:\nhttps://x.test/invitation#t"
+	const frHead = "Salut Arnaud ! Guillaume t'invite sur Prends ton dossard, le site où on prépare nos courses."
+	const enHead = "Hi Arnaud! Guillaume invited you to Prends ton dossard, the site where we plan our races."
+	cases := []struct {
+		name, lang, want string
+		m                InvitationMessage
+	}{
+		{"fr many", "fr", frHead + " Tu as déjà 8 courses prévues avec nous, la prochaine : Trail des Crêtes, sam. 14 nov." + frTail, base},
+		{"en many", "en", enHead + " You already have 8 races planned with us, the next one: Trail des Crêtes, Sat 14 Nov." + enTail, base},
+		{"fr one", "fr", frHead + " Tu as déjà une course prévue avec nous : Trail des Crêtes, sam. 14 nov." + frTail, with(func(m *InvitationMessage) { m.Total = 1 })},
+		{"en one", "en", enHead + " You already have one race planned with us: Trail des Crêtes, Sat 14 Nov." + enTail, with(func(m *InvitationMessage) { m.Total = 1 })},
+		{"fr none", "fr", frHead + frTail, with(func(m *InvitationMessage) { m.Total = 0; m.NextEvent = ""; m.NextDay = "" })},
+		{"en none", "en", enHead + enTail, with(func(m *InvitationMessage) { m.Total = 0; m.NextEvent = ""; m.NextDay = "" })},
+		{"fr month", "fr", frHead + " Tu as déjà 8 courses prévues avec nous, la prochaine : Trail des Crêtes, juin 2027." + frTail, with(func(m *InvitationMessage) { m.NextMonthOnly = true; m.NextDay = "2027-06-01" })},
+		{"en month", "en", enHead + " You already have 8 races planned with us, the next one: Trail des Crêtes, June 2027." + enTail, with(func(m *InvitationMessage) { m.NextMonthOnly = true; m.NextDay = "2027-06-01" })},
+		{"fr no inviter", "fr", "Salut Arnaud ! Voici ton invitation pour Prends ton dossard, le site où on prépare nos courses. Tu as déjà 8 courses prévues avec nous, la prochaine : Trail des Crêtes, sam. 14 nov." + frTail, with(func(m *InvitationMessage) { m.Inviter = "" })},
+		{"en no inviter", "en", "Hi Arnaud! Here's your invitation to Prends ton dossard, the site where we plan our races. You already have 8 races planned with us, the next one: Trail des Crêtes, Sat 14 Nov." + enTail, with(func(m *InvitationMessage) { m.Inviter = "" })},
+		{"fr one word", "fr", "Salut Bruno !", with(func(m *InvitationMessage) { m.Invitee = "Bruno" })},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Of(c.lang).InvitationMessage(c.m)
+			if c.name == "fr one word" {
+				if !strings.HasPrefix(got, c.want) {
+					t.Errorf("got %q", got)
+				}
+				return
+			}
+			if got != c.want {
+				t.Errorf("got  %q\nwant %q", got, c.want)
+			}
+			for _, banned := range []string{"jusqu", "until", "aujourd'hui", "demain"} {
+				if strings.Contains(got, banned) {
+					t.Errorf("message contains %q", banned)
+				}
+			}
+		})
 	}
 }

@@ -302,11 +302,7 @@ func upcomingOf(rows []participationRow, today string) []participationRow {
 		if r.Participation.Status == statusDNS {
 			return true
 		}
-		day := r.lastDay()
-		if r.Participation.Format == "" && !r.Event.monthOnly() {
-			day = cmp.Or(r.Event.EndDate, r.Event.StartDate)
-		}
-		return day < today
+		return events.UpcomingUntil(r.Event.StartDate, r.Event.EndDate, r.Day, r.Participation.Format != "", r.Event.monthOnly()) < today
 	})
 	slices.SortFunc(kept, func(a, b participationRow) int {
 		return cmp.Or(cmp.Compare(a.lastDay(), b.lastDay()), cmp.Compare(a.Event.monthRank(), b.Event.monthRank()),

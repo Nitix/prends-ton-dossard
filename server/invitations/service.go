@@ -25,7 +25,10 @@ const (
 )
 
 const (
-	validity          = 7 * 24 * time.Hour
+	// An invitation lasts longer than a reset: the person who opens it late is the
+	// risk, while a reset gives access to an existing account and is opened at once.
+	inviteValidity    = 30 * 24 * time.Hour
+	resetValidity     = 7 * 24 * time.Hour
 	minPasswordLength = 10
 )
 
@@ -41,7 +44,7 @@ type CreateInput struct {
 	CreatedBy string
 }
 
-// Create makes an invitation valid for seven days and returns its token, which
+// Create makes an invitation valid for 30 days (7 for a reset) and returns its token, which
 // only exists here: the database keeps its hash. The pending invitations of the
 // same kind for the same runner are deleted first, so that only the last link
 // works.
@@ -104,7 +107,11 @@ func Create(app core.App, in CreateInput) (token string, inv *core.Record, err e
 			inv.Set("role", role)
 		}
 		inv.Set("token_hash", hash)
-		inv.Set("expires_at", time.Now().UTC().Add(validity))
+		validity := resetValidity
+		if in.Kind == KindInvite {
+			validity = inviteValidity
+		}
+		inv.Set("expires_at", now().UTC().Add(validity))
 		inv.Set("created_by", in.CreatedBy)
 		return txApp.Save(inv)
 	})
@@ -129,7 +136,7 @@ func Find(app core.App, token string) (inv, runner *core.Record, err error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if !inv.GetDateTime("used_at").IsZero() || !inv.GetDateTime("expires_at").Time().After(time.Now()) {
+	if !inv.GetDateTime("used_at").IsZero() || !inv.GetDateTime("expires_at").Time().After(now()) {
 		return nil, nil, invalid
 	}
 

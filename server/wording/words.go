@@ -48,6 +48,12 @@ type Words struct {
 	// ending is the ending of an ordinal number agreeing with its number: "er" for
 	// 1 in French, "st" for 21 in English (the plural rules of the language).
 	ending func(n int) string
+	// weekdays (from Sunday), shortMonths and months are the names of the days and
+	// months in the short date and the month with its year.
+	weekdays            [7]string
+	shortMonths, months [12]string
+	// invitation holds the pieces of the message that comes with an invitation link.
+	invitation invitationWords
 }
 
 var texts = map[string]Words{
@@ -78,6 +84,17 @@ var texts = map[string]Words{
 				return "er"
 			}
 			return "e"
+		},
+		weekdays:    [7]string{"dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."},
+		shortMonths: [12]string{"janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."},
+		months:      [12]string{"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"},
+		invitation: invitationWords{
+			hello:     "Salut %s\u00a0!",
+			inviter:   "%s t'invite sur Prends ton dossard, le site où on prépare nos courses.",
+			noInviter: "Voici ton invitation pour Prends ton dossard, le site où on prépare nos courses.",
+			many:      "Tu as déjà %d courses prévues avec nous, la prochaine\u00a0: %s, %s",
+			one:       "Tu as déjà une course prévue avec nous\u00a0: %s, %s",
+			create:    "Crée ton compte ici, ce lien n'est que pour toi\u00a0:",
 		},
 	},
 	"en": {
@@ -111,6 +128,17 @@ var texts = map[string]Words{
 				return "rd"
 			}
 			return "th"
+		},
+		weekdays:    [7]string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
+		shortMonths: [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
+		months:      [12]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"},
+		invitation: invitationWords{
+			hello:     "Hi %s!",
+			inviter:   "%s invited you to Prends ton dossard, the site where we plan our races.",
+			noInviter: "Here's your invitation to Prends ton dossard, the site where we plan our races.",
+			many:      "You already have %d races planned with us, the next one: %s, %s",
+			one:       "You already have one race planned with us: %s, %s",
+			create:    "Create your account here, this link is just for you:",
 		},
 	},
 }
@@ -333,4 +361,73 @@ func (w Words) Supporters() string {
 // and joined by a comma and a space ("Trail 42 km : Alice (Inscrit), Bob").
 func (w Words) Roster(label string, people []string) string {
 	return label + w.colon + strings.Join(people, ", ")
+}
+
+// invitationWords are the pieces of the invitation message (spec v8 § 6.2). The
+// French ones carry U+00A0 before "!" and ":", written   so a review sees it.
+type invitationWords struct{ hello, inviter, noInviter, many, one, create string }
+
+// ShortDate is a day as the site's f.date writes it: "sam. 14 nov.", "Sat 14 Nov".
+// A day that does not parse is returned unchanged.
+func (w Words) ShortDate(day string) string {
+	d, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return day
+	}
+	return fmt.Sprintf("%s %d %s", w.weekdays[d.Weekday()], d.Day(), w.shortMonths[d.Month()-1])
+}
+
+// MonthYear is the month of a day with its year: "juin 2027", "June 2027". A day
+// that does not parse is returned unchanged.
+func (w Words) MonthYear(day string) string {
+	d, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return day
+	}
+	return fmt.Sprintf("%s %d", w.months[d.Month()-1], d.Year())
+}
+
+// InvitationMessage is what the admin sends with an invitation link.
+type InvitationMessage struct {
+	Invitee, Inviter string // full runner names; Inviter "" when the admin has no runner
+	Total            int    // upcoming.total
+	NextEvent        string // name of the first upcoming line ("" when Total == 0)
+	NextDay          string // its day
+	NextMonthOnly    bool
+	URL              string
+}
+
+// firstName is the first word of a name, never guessing anything from it.
+func firstName(name string) string {
+	if f := strings.Fields(name); len(f) > 0 {
+		return f[0]
+	}
+	return name
+}
+
+// InvitationMessage is the ready text of spec v8 § 6.2. It says no relative day
+// and no expiry: it is read later than it is made.
+func (w Words) InvitationMessage(m InvitationMessage) string {
+	t := w.invitation
+	intro := t.noInviter
+	if m.Inviter != "" {
+		intro = fmt.Sprintf(t.inviter, firstName(m.Inviter))
+	}
+	text := fmt.Sprintf(t.hello, firstName(m.Invitee)) + " " + intro
+	if m.Total > 0 {
+		when := w.ShortDate(m.NextDay)
+		if m.NextMonthOnly {
+			when = w.MonthYear(m.NextDay)
+		}
+		// The short date of the languages ends with a dot already ("nov.").
+		if !strings.HasSuffix(when, ".") {
+			when += "."
+		}
+		if m.Total == 1 {
+			text += " " + fmt.Sprintf(t.one, m.NextEvent, when)
+		} else {
+			text += " " + fmt.Sprintf(t.many, m.Total, m.NextEvent, when)
+		}
+	}
+	return text + "\n\n" + t.create + "\n" + m.URL
 }

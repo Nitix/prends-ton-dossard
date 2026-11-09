@@ -571,10 +571,7 @@ func lastDayOfMonth(day string) string {
 // is behind and orders it, the last day of the month for an event known by its
 // month only, otherwise the day of the race (its own, or the start of the event).
 func lastRaceDay(event eventRecord, formatDate string) string {
-	if event.monthOnly() {
-		return lastDayOfMonth(event.StartDate)
-	}
-	return cmp.Or(formatDate, event.StartDate)
+	return events.LastRaceDay(event.StartDate, formatDate, event.monthOnly())
 }
 
 // sortEvents ports sortEvents of the site: the events that start first come first

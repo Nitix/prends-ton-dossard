@@ -9,9 +9,28 @@ import { errorCode, fieldErrors, translateError } from "../../i18n/errors";
 import { useI18n } from "../../i18n/I18nProvider";
 import { pb } from "../../lib/pb";
 import { usePageTitle } from "../../lib/usePageTitle";
+import { InvitationPreview } from "./InvitationPreview";
 
-/** What the server tells about a link: who it is for, and what it does. */
-type Invitation = { runnerName: string; kind: "invite" | "reset" };
+/** A race of the preview of an invitation: no id, no link, only what the page shows. */
+export type PreviewLine = {
+  event: string;
+  day: string;
+  monthOnly: boolean;
+  people: string[];
+  morePeople: number;
+};
+
+/**
+ * What the server tells about a link: who it is for, and what it does. An
+ * invitation also says who invites and what waits (a reset says nothing more).
+ */
+export type Invitation = {
+  runnerName: string;
+  kind: "invite" | "reset";
+  invitedBy?: string | null;
+  upcoming?: { total: number; races: PreviewLine[] };
+  group?: PreviewLine[];
+};
 
 /** The fields that can carry an error of their own. */
 type Field = "email" | "password" | "passwordConfirm";
@@ -94,7 +113,7 @@ function removeFragment(): void {
  * so that it stays neither in the history nor in a link copied from there.
  */
 export function InvitationPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   usePageTitle(t.titles.invitation);
 
   // Only read here: rendering must not change anything, and React renders
@@ -119,7 +138,7 @@ export function InvitationPage() {
   const lookup = useQuery({
     queryKey: ["invitation", token],
     queryFn: () =>
-      pb.send<Invitation>("/api/app/invitations/lookup", { method: "POST", body: { token } }),
+      pb.send<Invitation>("/api/app/invitations/lookup", { method: "POST", body: { token, lang } }),
     enabled: token !== "",
     // An unknown token is not a failure to try again, and a known one does
     // not change: it is looked up once, and forgotten with the page.
@@ -197,54 +216,63 @@ function InvitationForm({ token, invitation }: { token: string; invitation: Invi
     EMPTY_FORM,
   );
 
+  // An empty name is as good as none.
+  const invitedBy = invitation.invitedBy?.trim() ? invitation.invitedBy : null;
+
   const failure = state.failure;
   const message = failure === null ? null : translateError(t, failure.code);
   const messageFor = (field: Field): string | null => (failure?.field === field ? message : null);
 
   return (
-    <form action={submit} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <h1 tabIndex={-1} className="page-title">
-        {isInvite
-          ? t.auth.welcome(invitation.runnerName)
-          : t.auth.resetTitle(invitation.runnerName)}
+        {!isInvite
+          ? t.auth.resetTitle(invitation.runnerName)
+          : invitedBy === null
+            ? t.auth.welcome(invitation.runnerName)
+            : t.auth.invitedYou(invitedBy)}
       </h1>
-      {isInvite && (
+      {isInvite && <p className="text-base">{t.auth.intro}</p>}
+      {isInvite && <InvitationPreview invitation={invitation} />}
+      <form action={submit} className="flex flex-col gap-4">
+        {isInvite && (
+          <TextField
+            label={t.auth.email}
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            defaultValue={state.email}
+            error={messageFor("email")}
+          />
+        )}
         <TextField
-          label={t.auth.email}
-          name="email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          defaultValue={state.email}
-          error={messageFor("email")}
+          label={t.auth.password}
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          defaultValue={state.password}
+          hint={t.auth.passwordHint}
+          error={messageFor("password")}
         />
-      )}
-      <TextField
-        label={t.auth.password}
-        name="password"
-        type="password"
-        autoComplete="new-password"
-        defaultValue={state.password}
-        hint={t.auth.passwordHint}
-        error={messageFor("password")}
-      />
-      <TextField
-        label={t.auth.passwordConfirm}
-        name="passwordConfirm"
-        type="password"
-        autoComplete="new-password"
-        defaultValue={state.passwordConfirm}
-        error={messageFor("passwordConfirm")}
-      />
-      {message !== null && failure?.field === null && (
-        <p role="alert" className="text-sm font-medium text-red-700">
-          {message}
-        </p>
-      )}
-      <button type="submit" disabled={pending} className={PRIMARY}>
-        {pending ? t.auth.saving : isInvite ? t.auth.createAccount : t.auth.changePassword}
-      </button>
-    </form>
+        <TextField
+          label={t.auth.passwordConfirm}
+          name="passwordConfirm"
+          type="password"
+          autoComplete="new-password"
+          defaultValue={state.passwordConfirm}
+          error={messageFor("passwordConfirm")}
+        />
+        {message !== null && failure?.field === null && (
+          <p role="alert" className="text-sm font-medium text-red-700">
+            {message}
+          </p>
+        )}
+        <button type="submit" disabled={pending} className={PRIMARY}>
+          {pending ? t.auth.saving : isInvite ? t.auth.createAccount : t.auth.changePassword}
+        </button>
+      </form>
+    </div>
   );
 }
 
