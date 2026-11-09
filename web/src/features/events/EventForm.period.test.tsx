@@ -541,7 +541,10 @@ test("EventForm — I1 : la phrase au-dessus d'« Enregistrer » se lit le jour,
     // In forced colours the browser picks the colours: the text is not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });
     // Safari has no forced colours mode (Playwright only answers the media query there).
-    if (server.browser === "webkit" || !matchMedia("(forced-colors: active)").matches)
+    if (
+      server.browser === "webkit" ||
+      (server.browser !== "chromium" && !matchMedia("(forced-colors: active)").matches)
+    )
       context.skip();
     expect(getComputedStyle(note).color).not.toBe(getComputedStyle(document.body).backgroundColor);
     expect(getComputedStyle(note).color).toBe(getComputedStyle(label).color);

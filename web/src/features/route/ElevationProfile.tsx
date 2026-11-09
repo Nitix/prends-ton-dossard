@@ -366,7 +366,7 @@ function Profile({
   });
   // A slope that rounds to zero is « 0 % », never « -0 % » (Firefox writes it, whatever signDisplay):
   // the number is rounded here, and `+ 0` makes a negative zero a zero.
-  const pct = (slope: number) => percent.format(Math.round(slope) + 0);
+  const pct = (slope: number) => percent.format(Math.sign(slope) * Math.round(Math.abs(slope)) + 0);
   const legend = SLOPE_ZONES.map((zone, i) => {
     const low = i === 0 ? undefined : SLOPE_STEPS[i - 1];
     const high = SLOPE_STEPS[i];

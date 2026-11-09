@@ -74,7 +74,8 @@ function deviceFromEnv(browser: BrowserName) {
 const browserName = browserFromEnv();
 const contextOptions = deviceFromEnv(browserName);
 
-// On CI every target gets two more tries for a failing test (the report shows the flaky ones), and
+// On CI every target gets two more tries for a failing test (tools/ci/vitest-annotate.mjs warns of
+// each test that needed one, so it is seen), and
 // its actions get more time: GitHub's machines are slower than a desktop, desktop Chromium too (a
 // heavy file given to an input took more than 2 s there). Local runs stay strict.
 const tolerant = process.env.CI !== undefined;

@@ -64,7 +64,6 @@ const seen = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " "
 const rgb = (hex: string) =>
   `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(", ")})`;
 
-/** The figures over the drawing: the summit's altitude, or the cursor's reading in its place. */
 /** The UTF-16 codes of the first characters of a text, to see a space that is not the usual one. */
 const hex = (text: string) =>
   text
@@ -73,6 +72,7 @@ const hex = (text: string) =>
     .map((c) => c.charCodeAt(0).toString(16))
     .join(" ");
 
+/** The figures over the drawing: the summit's altitude, or the cursor's reading in its place. */
 const pill = (container: HTMLElement) => seen(container.querySelector("p")?.textContent);
 
 /**

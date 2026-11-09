@@ -98,8 +98,9 @@ export function ParticipationMenu({
   const popover = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = popover.current;
-    const mark = () => {
-      used.current = true;
+    // A click on one of its buttons (not on its padding).
+    const mark = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest("button")) used.current = true;
     };
     element?.addEventListener("click", mark);
     return () => element?.removeEventListener("click", mark);

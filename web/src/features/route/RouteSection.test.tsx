@@ -627,6 +627,8 @@ const tabStops = (region: Element) =>
     (element) => element.tabIndex >= 0,
   );
 
+// Its last part passes a mouse over the map while the keys hold the cursor: on a touch screen
+// the hover lands elsewhere on the track, and there is no pointer to pass.
 test.skipIf(isTouchDevice)("RouteSection — au clavier, le repère suit", async () => {
   serve(STEADY.file);
   const placed = vi.spyOn(CircleMarker.prototype, "setLatLng");

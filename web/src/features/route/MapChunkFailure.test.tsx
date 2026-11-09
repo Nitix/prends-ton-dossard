@@ -80,7 +80,8 @@ test("RouteSection — if the map cannot be loaded, a line says so, and the numb
 // Intl separates a number from its unit with a no-break space: tests read the text as it looks.
 const plain = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
-// The pointer leaves the profile (unhover): on a touch screen there is no pointer to leave.
+// The test hovers the profile and then leaves it (unhover): the figures of a pointer are what it
+// checks, and on a touch screen there is no pointer to put on it or to take off.
 test.skipIf(isTouchDevice)("RouteSection — sans carte, le profil marche seul", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(TRACK)));
   vi.spyOn(console, "error").mockImplementation(() => {});

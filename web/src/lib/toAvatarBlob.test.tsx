@@ -145,8 +145,9 @@ async function withOrientation(jpeg: Blob, orientation: number): Promise<Blob> {
   return new Blob([bytes.slice(0, 2), exif, bytes.slice(2)], { type: "image/jpeg" });
 }
 
-// Firefox refuses to decode the JPEG with the hand-made EXIF segment of this test (the other
-// browsers read it); a photo from a camera has a whole one. To be checked with such a photo.
+// The cause is the image of this test, not Firefox: the hand-made EXIF segment is put before the
+// JFIF header of the canvas's JPEG, which Firefox's decoder refuses (the other browsers read it);
+// a photo from a camera is whole. To be checked with such a photo (docs/TODO.md).
 test.skipIf(server.browser === "firefox")(
   "toAvatarBlob — la photo tournée par son EXIF est redressée",
   async () => {

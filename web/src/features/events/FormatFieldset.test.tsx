@@ -411,7 +411,10 @@ test("FormatFieldset — le résumé de « Options avancées » se lit le jour, 
     // In forced colours the browser picks the colours: the text, and the marker that says open or closed, are not the colour of the ground.
     await emulateMedia({ colorScheme: "light", forcedColors: "active" });
     // Safari has no forced colours mode (Playwright only answers the media query there).
-    if (server.browser === "webkit" || !matchMedia("(forced-colors: active)").matches)
+    if (
+      server.browser === "webkit" ||
+      (server.browser !== "chromium" && !matchMedia("(forced-colors: active)").matches)
+    )
       context.skip();
     const ground = getComputedStyle(row.element()).backgroundColor;
     expect(getComputedStyle(opener).color).not.toBe(ground);

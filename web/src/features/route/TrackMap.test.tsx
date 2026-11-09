@@ -7,7 +7,7 @@ import {
 import { StrictMode, type ComponentProps } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
-import { page } from "vitest/browser";
+import { page, server } from "vitest/browser";
 
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -330,8 +330,8 @@ async function pixelsOf(base64: string): Promise<{ data: Uint8ClampedArray; widt
 
 // On the emulated Pixel 7 of the Linux runner, the screenshot of the map holds no coloured pixel
 // (0 of 21 read), though it passes on the same device on Windows: not understood yet, see
-// docs/TODO.md. It runs on every other target.
-test.skipIf(isTouchDevice)(
+// docs/TODO.md. It runs on the iPhone and on every other target.
+test.skipIf(isTouchDevice && server.browser === "chromium")(
   "TrackMap — une trace toute droite, plein est ou plein nord, est dessinée",
   async () => {
     // Its box has no height (or no width): a gradient laid on that box cannot be
@@ -561,7 +561,7 @@ test("TrackMap — Ctrl + molette zoome", async () => {
 
 // Leaflet takes a touch screen for a phone: the mouse and the wheel it reads are a computer's.
 test.skipIf(isTouchDevice)(
-  "TrackMap — zoomSnap 0,5 : un cran de molette reste d'un niveau, un pincement garde son demi-niveau",
+  "TrackMap — zoomSnap 0,5 : un cran de molette zoome d'au moins un niveau, en demi-niveaux ; un pincement garde son demi-niveau",
   async () => {
     const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
     const screen = await renderMap();

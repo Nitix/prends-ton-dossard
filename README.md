@@ -79,7 +79,7 @@ VITEST_BROWSER=webkit VITEST_DEVICE="iPhone 15" pnpm --dir web test --project br
 
 `pnpm --dir web build` compile le front dans `server/webdist/dist`, le dossier que le programme Go embarque.
 
-GitHub Actions lance tout cela à chaque push (`.github/workflows/ci.yml`) : les tests Go et `govulncheck`, les contrôles du web (types, lint, format, tests unitaires, build), puis les tests navigateur sur cinq cibles : Chrome, Firefox et Safari (WebKit) sur ordinateur, Safari émulé en iPhone 15 et Chrome émulé en Pixel 7.
+GitHub Actions lance tout cela à chaque push (`.github/workflows/ci.yml`) : les tests Go et `govulncheck`, les contrôles du web (types, lint, format, tests unitaires, build), puis les tests navigateur sur cinq cibles : Chrome, Firefox et Safari (WebKit) sur ordinateur, Safari émulé en iPhone 15 et Chrome émulé en Pixel 7. Chrome, Firefox et Safari bloquent ; l'iPhone et le Pixel émulés tournent et annotent sans bloquer. En CI, un test qui échoue est retenté deux fois, et chaque test qui n'a réussi qu'à un nouvel essai est signalé par un avertissement : un test instable se voit, il n'est pas relancé jusqu'au vert en silence.
 
 ## Mise en service
 
@@ -540,6 +540,7 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] Se déconnecter : la page de connexion est dessinée dans le thème choisi (en Carnet, rien n'y bouge).
 - [ ] En **mode avion**, choisir un thème jamais choisi sur cet iPhone : un message dit qu'il n'a pas pu être chargé, la page ne se recharge pas et garde son thème. Reprendre le réseau et choisir de nouveau le même thème : il se charge, sans relancer l'appli.
 - [ ] Se connecter avec le même compte sur un **deuxième appareil** : le thème choisi sur le premier le suit.
+- [ ] **Thèmes, plusieurs changements.** Changer de thème cinq ou six fois de suite (Carnet, Nuit, un autre, puis Carnet de nouveau), sans recharger : à chaque fois le fond de la page prend tout de suite la couleur du thème et, en Carnet, les points et les orbites bougent (voir `docs/TODO.md`, « Skins sur WebKit Linux »).
 - [ ] Choisir « Carnet », parcourir une longue liste, la fiche d'un événement et celle d'un coureur : le fond (points qui s'effacent par plaques, orbites qui tournent, une pulsation) bouge **sans saccade** au défilement. Laisser l'accueil ouvert 2 minutes ; depuis un Mac, dans Safari (Développement, Inspecteur web, Chronologies) il n'y a pas de Mise en page ni de Peinture en continu. « Animer le fond » (Profil, Réglages, Apparence) l'arrête ; avec Réglages d'iOS, Accessibilité, Mouvement, Réduire les animations, rien ne bouge non plus.
 - [ ] **MCP, brancher.** Depuis un ordinateur (pas l'iPhone), avec Claude Code et le même compte de test, sur le vrai domaine : Profil, Réglages, « Assistant IA (MCP) », « Nouveau jeton », puis la commande copiée dans un terminal. `claude mcp list` montre `prends-ton-dossard` « Connected ». Sans jeton, `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<domaine>/mcp` répond `401`.
 - [ ] **MCP, lire.** Demander à Claude « Qui suis-je, et quelles courses arrivent ? » : il donne le nom du coureur de test et des courses du site. Dans Réglages (page rechargée), le jeton dit « Utilisé le » avec la date du jour.

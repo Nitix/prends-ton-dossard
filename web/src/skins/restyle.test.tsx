@@ -7,8 +7,8 @@ import { HeaderArt } from "./carnet/motifs";
 
 import "../styles.css";
 
-// WebKit on Linux resolved the page wrongly for the first skin chosen in a page (see `settleFirstChoice` in
-// index.ts): the colours that depend on the palette, and the animations of the motifs.
+// WebKit on Linux resolved the page wrongly for the first skin chosen in a page (not understood: see
+// docs/TODO.md, « Skins sur WebKit Linux »): the colours that depend on the palette, and the animations of the motifs.
 
 afterEach(async () => {
   await chooseSkin("crete");

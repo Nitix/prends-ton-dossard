@@ -32,7 +32,7 @@ beforeEach(pin);
 
 /**
  * Gives the test the real identity of the phone of the run, for the tests that are about it
- * (src/test/phoneIdentity.test.ts). The pin is put back before the next test.
+ * (src/test/phoneIdentity.test.tsx). The pin is put back before the next test.
  */
 export function useRealIdentity(): void {
   for (const name of Object.keys(DESKTOP)) Reflect.deleteProperty(navigator, name);
