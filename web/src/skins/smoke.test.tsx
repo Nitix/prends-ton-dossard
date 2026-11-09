@@ -377,9 +377,14 @@ for (const { skin, mode } of CASES) {
       .element(screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" }))
       .toBeVisible();
     const trail42 = screen.getByRole("region", { name: /^Trail 42/ });
-    await expect.element(trail42.getByRole("region", { name: fr.route.map })).toBeVisible();
+    // The map is a lazy chunk: the first test of the file waits for it to be fetched.
     await expect
-      .element(trail42.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) }))
+      .element(trail42.getByRole("region", { name: fr.route.map }), { timeout: 10_000 })
+      .toBeVisible();
+    await expect
+      .element(trail42.getByRole("img", { name: new RegExp(`^${fr.route.profileLabel}`) }), {
+        timeout: 10_000,
+      })
       .toBeVisible();
     await expect.element(trail42.getByText(/D\+/).first()).toBeVisible();
     await framed(screen);
