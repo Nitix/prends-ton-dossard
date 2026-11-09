@@ -30,7 +30,7 @@ if (typeof document !== "undefined") {
 function giveFocusBack(dialog: HTMLDialogElement, opener: HTMLElement | null) {
   const active = document.activeElement;
   if (!(active === document.body || dialog.contains(active))) return;
-  if (opener?.isConnected) opener.focus();
+  if (opener?.isConnected) opener.focus({ preventScroll: true });
   else if (active instanceof HTMLElement) active.blur();
 }
 

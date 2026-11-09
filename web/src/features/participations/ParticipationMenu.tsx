@@ -93,6 +93,17 @@ export function ParticipationMenu({
   // button of the menu gets it, once the dialog is closed (the effect of the
   // dialog, a child of this component, closes it before this one runs).
   const trigger = useRef<HTMLButtonElement>(null);
+  // The popover was used (a click in it, or the focus in it) since it opened.
+  const used = useRef(false);
+  const popover = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = popover.current;
+    const mark = () => {
+      used.current = true;
+    };
+    element?.addEventListener("click", mark);
+    return () => element?.removeEventListener("click", mark);
+  }, []);
   const dismissed = useRef(false);
   useEffect(() => {
     if (opened !== null || !dismissed.current) return;
@@ -145,15 +156,24 @@ export function ParticipationMenu({
       {/* No `display` class here: it would override the browser's `display: none` of a closed popover. */}
       <div
         id={menuId}
+        ref={popover}
         popover="auto"
-        // The browser gives the focus back to the button when the popover closes, if the button
-        // had it: Safari does not focus a button that is clicked, and the focus falls to the page.
+        // The browser gives the focus back to the button when the popover closes, if the focus
+        // was in the popover. Safari does not focus an item that is clicked, so a use of the
+        // popover (a click inside, or the focus in it) is what says the focus is to go back: a
+        // light dismiss (a click elsewhere) leaves the focus where the person put it.
+        onBeforeToggle={(event) => {
+          if (event.newState === "open") used.current = false;
+          else if (event.currentTarget.contains(document.activeElement)) used.current = true;
+        }}
         onToggle={(event) => {
           if (
-            !event.currentTarget.matches(":popover-open") &&
-            document.activeElement === document.body
+            event.newState === "closed" &&
+            used.current &&
+            (document.activeElement === document.body ||
+              event.currentTarget.contains(document.activeElement))
           ) {
-            trigger.current?.focus();
+            trigger.current?.focus({ preventScroll: true });
           }
         }}
         className="menu-popover rounded-2xl border border-neutral-200 bg-raised p-1.5 text-ink shadow-lift"
