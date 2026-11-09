@@ -4,7 +4,7 @@ La v8 rend la page d'invitation engageante. Tu as fixé le but (« Je te propose
 
 Le reste a été décidé en route, et il y a 22 décisions. Dis lesquelles revoir, par leur numéro.
 
-Conception : `docs/superpowers/specs/2026-11-09-courses-v8-design.md` (son § 13 était la première liste de celle-ci) ; plan : `docs/superpowers/plans/2026-11-09-courses-v8.md` ; branche `feat/v8`. Déployée sur dev (`442d1ce`) ; rien n'est fusionné, poussé ni en production.
+Conception : `docs/superpowers/specs/2026-11-09-courses-v8-design.md` (son § 13 était la première liste de celle-ci) ; plan : `docs/superpowers/plans/2026-11-09-courses-v8.md` ; branche `feat/v8`. Essayée sur dev, allégée après ton essai (n° 13 et 17), puis fusionnée dans `main` et mise en production le 2026-11-09 avec ton accord (« C'est bon, en prod »).
 
 ## L'aperçu (la page que la personne ouvre)
 
