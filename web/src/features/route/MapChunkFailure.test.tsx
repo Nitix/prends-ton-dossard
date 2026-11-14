@@ -80,9 +80,7 @@ test("RouteSection — if the map cannot be loaded, a line says so, and the numb
 // Intl separates a number from its unit with a no-break space: tests read the text as it looks.
 const plain = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
-// The test hovers the profile and then leaves it (unhover): the figures of a pointer are what it
-// checks, and on a touch screen there is no pointer to put on it or to take off.
-test.skipIf(isTouchDevice)("RouteSection — sans carte, le profil marche seul", async () => {
+test("RouteSection — sans carte, le profil marche seul", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(TRACK)));
   vi.spyOn(console, "error").mockImplementation(() => {});
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -99,21 +97,28 @@ test.skipIf(isTouchDevice)("RouteSection — sans carte, le profil marche seul",
   const cursor = screen.getByRole("slider", { name: fr.route.profileCursor });
   expect(pill()).toBe("650 m");
 
-  // The pointer on the profile: its figures, in the middle of the 1.1 km.
-  await userEvent.hover(cursor);
-  await expect.poll(pill).toMatch(/^0,6 km · \d+ m · 18 %$/);
-  await userEvent.unhover(cursor);
-  await expect.poll(pill).toBe("650 m");
+  // The pointer on the profile: its figures, in the middle of the 1.1 km. Not on a touch screen,
+  // where there is no pointer to put on the profile or to take off it.
+  const pointerOnTheProfile = async () => {
+    await userEvent.hover(cursor);
+    await expect.poll(pill).toMatch(/^0,6 km · \d+ m · 18 %$/);
+    await userEvent.unhover(cursor);
+    await expect.poll(pill).toBe("650 m");
+  };
+  if (!isTouchDevice) await pointerOnTheProfile();
 
   // The keys: what a screen reader hears, and the figures.
+  // The focus is waited for before the key, and the readings are polled: the page draws the new
+  // position after the key (Firefox, CI: the reading was still the start, 0 km, right after End).
   cursor.element().focus();
+  await expect.poll(() => document.activeElement === cursor.element()).toBe(true);
   await userEvent.keyboard("{End}");
-  expect(plain(cursor.element().getAttribute("aria-valuetext"))).toBe(
-    "1,1 km, altitude 650 m, pente 18 %",
-  );
-  expect(pill()).toBe("1,1 km · 650 m · 18 %");
+  await expect
+    .poll(() => plain(cursor.element().getAttribute("aria-valuetext")))
+    .toBe("1,1 km, altitude 650 m, pente 18 %");
+  await expect.poll(pill).toBe("1,1 km · 650 m · 18 %");
   await userEvent.keyboard("{Escape}");
-  expect(pill()).toBe("650 m");
+  await expect.poll(pill).toBe("650 m");
   // No mark of a map that is not there.
   expect(screen.container.querySelector(".track-marker")).toBeNull();
 });

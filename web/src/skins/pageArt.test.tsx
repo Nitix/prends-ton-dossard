@@ -271,9 +271,18 @@ for (const [path, width, empty, least] of [
     // The dots are there to be seen: not the colour of the paper.
     expect(contrast(dots, paper), "the dots against the paper").toBeGreaterThan(1.1);
 
-    const words = textOnPaper();
-    // Not an empty search: the title, and what is under it.
-    expect(words.length, "the words on the paper").toBeGreaterThanOrEqual(least);
+    // Read again, polled: the words are counted a second time after the fonts, and the first count (a
+    // page still loading) may have counted a word that is gone when the page settles: probably what
+    // failed on the Pixel 7 in CI (2 words where 3 were wanted); the cause is a guess.
+    let words: Element[] = [];
+    await vi.waitFor(
+      () => {
+        words = textOnPaper();
+        // Not an empty search: the title, and what is under it.
+        expect(words.length, "the words on the paper").toBeGreaterThanOrEqual(least);
+      },
+      { timeout: 10_000 },
+    );
     const weak = words.flatMap((element) => {
       const hex = hexOf(getComputedStyle(element).color);
       // On the paper, and on a dot of the sheet (the darker of the two grounds).

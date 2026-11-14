@@ -487,8 +487,9 @@ test("TrackMap — without the preference, the map animates", async () => {
 });
 
 test("TrackMap — a map removed in the middle of a zoom leaves nothing that fails later", async (context) => {
-  // Leaflet animates a zoom only where it has 3D transforms (Browser.any3d); Playwright's WebKit on
-  // Linux has none, so there is no zoom on its way to remove the map in the middle of.
+  // Leaflet animates a zoom only where it has 3D transforms (Browser.any3d): where it has none (a
+  // browser without them, or Playwright's WebKit on Windows), there is no zoom on its way to remove
+  // the map in the middle of. Linux WebKit has them, and the test runs there.
   if (!LeafletBrowser.any3d) context.skip();
   // Leaflet ends an animated zoom with a timer of 250 ms that it does not cancel
   // when the map is removed, and that then works on a map that is gone.
@@ -500,10 +501,16 @@ test("TrackMap — a map removed in the middle of a zoom leaves nothing that fai
   };
   window.addEventListener("error", onError);
   try {
+    const fit = vi.spyOn(LeafletMap.prototype, "fitBounds");
     const screen = await renderMap();
+    const map = leafletOf(fit);
+    // Leaflet fires "zoomanim" when it starts the animation, just before it sets its 250 ms timer.
+    // Waiting for that event, not for the class `leaflet-zoom-anim`, which the timer takes away
+    // again within 250 ms: a slow runner polled after that and saw nothing.
+    const started = new Promise<void>((resolve) => map.once("zoomanim", () => resolve()));
     await screen.getByRole("button", { name: fr.route.zoomIn }).click();
     // The animation is on its way...
-    await expect.poll(() => screen.container.querySelector(".leaflet-zoom-anim")).not.toBeNull();
+    await started;
     // ... when the map goes away (the person leaves the page): the timer is due after that.
     await screen.unmount();
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -580,11 +587,13 @@ test.skipIf(isTouchDevice)(
 
     // A notch of a mouse (100 px) is at least one level, in half levels. Leaflet divides the wheel
     // by 2 in Chrome on Windows only (getWheelDelta), so the same notch is one level there and one
-    // and a half on Linux: what matters is that it is never less than one.
+    // and a half on Linux. Windows Chromium keeps exactly one (as on main); elsewhere it is one or
+    // one and a half, never less than one (whether 1,5 is wanted on a Mac is in docs/TODO.md).
+    const windowsChromium = server.browser === "chromium" && navigator.platform.startsWith("Win");
     const zoom = map.getZoom();
     wheelOver(screen, { ctrlKey: true, deltaY: -100 });
     await expect.poll(() => map.getZoom() - zoom, { timeout: 4000 }).toBeGreaterThanOrEqual(1);
-    expect(map.getZoom() - zoom).toBeLessThanOrEqual(1.5);
+    expect(map.getZoom() - zoom).toBeLessThanOrEqual(windowsChromium ? 1 : 1.5);
     expect(((map.getZoom() - zoom) * 2) % 1).toBe(0);
 
     await new Promise((resolve) => setTimeout(resolve, 500));

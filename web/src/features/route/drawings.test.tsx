@@ -359,8 +359,15 @@ describe("ElevationProfile", () => {
     expect(pill(screen.container)).toBe("800 m");
 
     // Tab reaches it, with a ring to show it (drawn, wide and coloured); it starts at the start.
+    // The slider is waited for first, and the focus is polled: on Firefox (CI) the focus was
+    // still on the body right after Tab.
+    await expect.element(cursor).toBeVisible();
     await userEvent.tab();
-    expect(document.activeElement).toBe(cursor.element());
+    await expect
+      .poll(() => document.activeElement === cursor.element(), {
+        message: "the slider has the focus after Tab",
+      })
+      .toBe(true);
     const ring = getComputedStyle(cursor.element());
     expect(ring.outlineStyle).not.toBe("none");
     expect(Number.parseFloat(ring.outlineWidth)).toBeGreaterThan(0);
@@ -370,10 +377,10 @@ describe("ElevationProfile", () => {
 
     // End goes to the finish, at the top of the wall; Home back to the start.
     await userEvent.keyboard("{End}");
-    expect(reading()).toBe("3 km, altitude 800 m, pente 30 %");
-    expect(pill(screen.container)).toBe("3 km · 800 m · 30 %");
+    await expect.poll(reading).toBe("3 km, altitude 800 m, pente 30 %");
+    await expect.poll(() => pill(screen.container)).toBe("3 km · 800 m · 30 %");
     await userEvent.keyboard("{Home}");
-    expect(reading()).toBe("0 km, altitude 500 m, pente 0 %");
+    await expect.poll(reading).toBe("0 km, altitude 500 m, pente 0 %");
 
     // Escape puts the cursor away: the summit is named again, the focus stays.
     await userEvent.keyboard("{End}{Escape}");
@@ -916,6 +923,26 @@ test("ElevationProfile — le curseur ne dépasse jamais son conteneur, même pl
   const input = screen.getByRole("slider", { name: fr.route.profileCursor }).element();
   const box = input.getBoundingClientRect();
   // The range has 4 px of room on each side of the plot (CURSOR_BLEED), inside the margins.
+  expect(box.left).toBeGreaterThanOrEqual(container.left);
+  expect(box.right).toBeLessThanOrEqual(container.right);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+});
+
+test("ElevationProfile — le sommet, au bout de la trace, reste dans son conteneur sur un téléphone de 320 px", async () => {
+  // A 320 px phone leaves about 254 px to the profile, which starts at 33 px. The summit is at the
+  // very end of the track (the finish, at 3 km), where the label is the furthest to the right.
+  const screen = await render(
+    <I18nProvider languages={["fr"]}>
+      <div data-testid="phone" style={{ width: 254, marginLeft: 33 }}>
+        <ElevationProfile points={flatThenWall()} label="Profil" />
+      </div>
+    </I18nProvider>,
+  );
+  const container = screen.getByTestId("phone").element().getBoundingClientRect();
+  const label = screen.container.querySelector("p");
+  if (!label) throw new Error("the label of the summit is not there");
+  expect(pill(screen.container)).toBe("800 m");
+  const box = label.getBoundingClientRect();
   expect(box.left).toBeGreaterThanOrEqual(container.left);
   expect(box.right).toBeLessThanOrEqual(container.right);
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
