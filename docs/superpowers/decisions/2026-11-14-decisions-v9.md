@@ -1,6 +1,6 @@
 # Décisions prises en route (v9)
 
-La v9 donne à chaque épreuve sa propre ouverture des inscriptions. Tu es partie d'un cas réel, le Marathon du lac d'Annecy, qui ouvre un jour différent pour chaque épreuve : « Sur Annecy on a des dates et heures d'inscriptions différentes selon l'épreuve, il faudrait qu'on le gère. » Puis tes réponses : « S'il est inscrit à une course ou intéressé, on doit montrer sa date. Sinon l'inscription générale. » ; « le rappel général, c'est souvent le premier » ; « si la course a plusieurs dates d'inscriptions mais pas une générale et qu'on veut une date générale, on prend la plus proche » ; et pour une valeur partielle : « on peut remplir date et heure, date uniquement ou heure uniquement. Ça récupère la valeur de la date générale. Du coup, en cas de valeur partielle pour une épreuve, la valeur générale doit être remplie. » Tu as aussi voulu une seule version complète plutôt qu'un minimum livré en vitesse.
+La v9 donne à chaque épreuve sa propre ouverture des inscriptions. Le point de départ est un cas réel, le Marathon du lac d'Annecy, qui ouvre un jour différent pour chaque épreuve : « Sur Annecy on a des dates et heures d'inscriptions différentes selon l'épreuve, il faudrait qu'on le gère. » Puis tes réponses : « S'il est inscrit à une course ou intéressé, on doit montrer sa date. Sinon l'inscription générale. » ; « le rappel général, c'est souvent le premier » ; « si la course a plusieurs dates d'inscriptions mais pas une générale et qu'on veut une date générale, on prend la plus proche » ; et pour une valeur partielle : « on peut remplir date et heure, date uniquement ou heure uniquement. Ça récupère la valeur de la date générale. Du coup, en cas de valeur partielle pour une épreuve, la valeur générale doit être remplie. » Tu as aussi voulu une seule version complète plutôt qu'un minimum livré en vitesse.
 
 Le reste a été décidé en route, et il y a 25 décisions. Dis lesquelles revoir, par leur numéro.
 
@@ -40,7 +40,7 @@ Conception : `docs/superpowers/specs/2026-11-14-courses-v9-design.md` (son § 1
 17. **La fusion efface** une ouverture d'épreuve qui ne serait plus valable, et le dit.
 18. **La fusion complète** une ouverture partielle avec la course d'où vient l'épreuve, avant de la vérifier contre la course gardée. Elle l'efface si elle prendrait l'heure d'une autre course, ou si elle ne tient pas.
 19. **Annecy** : une fois en production, je saisis le jour seul du semi (mar. 17), du 10 km (mer. 18) et du 5 km (jeu. 19), qui reprennent les 12:00 de la course, avec ton accord ; la marche nordique n'est pas une épreuve de la fiche.
-20. **Le calendrier** : la v9 n'arrivera pas à temps pour les ouvertures d'Annecy ; d'ici là, le site dit le lundi pour toutes les épreuves. Personne du groupe n'est encore sur le semi, le 10 km ou le 5 km, donc le rappel de lundi est le bon pour tous.
+20. **Le calendrier** : la v9 n'arrivera pas à temps pour les ouvertures d'Annecy ; d'ici là, le site dit le lundi pour toutes les épreuves. D'après la fiche de la course sur le site de production, le 2026-11-14, personne du groupe n'est encore sur le semi, le 10 km ou le 5 km, donc le rappel de lundi est le bon pour tous.
 
 ## La façon de faire
 
@@ -62,15 +62,15 @@ Conception : `docs/superpowers/specs/2026-11-14-courses-v9-design.md` (son § 1
 
 Sur `https://dev-prends-ton-dossard.ketra.fr` (comptes `alice@`, `bob@` ou `admin@example.test` ; le mot de passe du seed est dans `/opt/ptd-dev-secrets/SEED_PASSWORD`, sur le serveur). Je déploie la v9 sur dev quand tu me le dis.
 
-1. **Saisir.** Prends une course d'essai qui a une ouverture (« Hyrox Lyon » ou « Grand Trail du Vercors »). Dans le formulaire, sur une épreuve, coche « Cette épreuve ouvre ses inscriptions à un autre moment » et donne **un jour seul** : l'épreuve garde l'heure de la course. (« Hyrox Doubles » a déjà le sien dans le seed.)
+1. **Saisir.** Sur dev, choisis une course à venir avec des épreuves et une ouverture des inscriptions (ou donne-lui-en une). Dans le formulaire, sur une épreuve, coche « Cette épreuve ouvre ses inscriptions à un autre moment » et donne **un jour seul** : l'épreuve garde l'heure de la course. Dev garde les données d'un ancien seed, dont les dates ont vieilli : le nouvel exemple du seed (« Hyrox Doubles ») n'y est pas.
 2. **La fiche, en haut.** Regarde-la :
    - comme quelqu'un d'« Intéressé » par cette épreuve : la ligne du haut dit son ouverture, avec le nom de l'épreuve entre parenthèses ;
    - comme un supporteur : la ligne du haut dit l'ouverture générale ;
    - la ligne de l'épreuve elle-même, qui dit sa propre ouverture à tout le monde.
-3. **L'accueil.** Dans « Inscriptions à faire », la course montre l'ouverture de ton épreuve.
+3. **L'accueil.** Connecté avec un compte « Intéressé » par cette épreuve, regarde « Inscriptions à faire » : la course montre l'ouverture de l'épreuve, pas celle de la course.
 4. **L'agenda.** Dans le calendrier abonné (« Mes courses »), une entrée par ouverture ; puis « Ajouter à l'agenda » sur la fiche : le fichier porte « Ouverture des inscriptions : <course> · <épreuve> ».
 5. **Le partage.** « Partager » donne l'ouverture générale et celle de l'épreuve dans la ligne des épreuves.
-6. **Un rappel.** Dans Réglages, « Rappels », choisis « 1 heure avant » et active un appareil (« Activer sur cet appareil »). Mets l'ouverture de l'épreuve dans 70 minutes et attends la notification : son titre porte le nom de la course et celui de l'épreuve.
+6. **Un rappel.** Dans Réglages, « Rappels », choisis « 1 heure avant » (ou « 1 jour avant ») : sans choix, c'est « Jamais » et rien ne part. Active un appareil (« Activer sur cet appareil »). Sur une épreuve dont tu es « Intéressé », donne une ouverture complète dans 70 minutes (le jour d'aujourd'hui et l'heure), et attends la notification : son titre porte le nom de la course et celui de l'épreuve.
 7. **Sur ton téléphone**, regarde le formulaire à 320 px de large, en clair et en sombre : la case, les deux champs et leurs messages d'erreur doivent tenir sans défilement horizontal.
 8. **Assistant (facultatif).** Demande à l'assistant la course : chaque épreuve dit ses champs et `opens`.
 9. Si tout te va : dis « c'est bon, en prod », et je fusionne `feat/v9` dans `main`, puis je déploie la production (avec la sauvegarde du volume avant). Annecy se saisit alors (n° 19).
