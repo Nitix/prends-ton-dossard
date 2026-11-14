@@ -14,7 +14,7 @@ import { page, server, userEvent, type Locator } from "vitest/browser";
 // It is done here, once, on the click of every locator, rather than at each call site: a call
 // site cannot tell that it is on the one target where the click is unreliable. Every other
 // engine and device keeps its real click, which is the pointer path of the app, and
-// `realClick` is the real click for a test that wants one anyway. docs/TODO.md lists it.
+// `realClick` is the real click for a test that wants one anyway (none does for a dialog button: a real tap there failed in run 26 even after scrolling to the centre; a real phone check is still needed). docs/TODO.md lists it.
 
 type Click = (this: Locator, options?: unknown) => Promise<void>;
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the class of the locators is not exported

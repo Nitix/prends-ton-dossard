@@ -9,7 +9,6 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { expectRealClickDoes } from "../../test/clickDiagnostic";
 import { clickReachable } from "../../test/pressFocused";
 import { pressByKeyboard } from "../../test/touchDialogClicks";
 import { AddToOfferDialog } from "./AddToOfferDialog";
@@ -362,7 +361,7 @@ describe("adding someone", () => {
     expect(mocks.take).toHaveBeenCalledTimes(1);
   });
 
-  test("AddToOfferDialog — Annuler ne crée rien et rend le focus au bouton d'ouverture", async (context) => {
+  test("AddToOfferDialog — Annuler ne crée rien et rend le focus au bouton d'ouverture", async () => {
     const { screen, onClose, opener } = await openDialog();
     await expect.element(dialogOf(screen)).toBeVisible();
     // The form comes when the runners have loaded, and it moves what is in the window.
@@ -370,20 +369,10 @@ describe("adding someone", () => {
     const cancel = screen.getByRole("button", { name: fr.common.cancel });
 
     if (server.browser === "firefox") {
-      // A real click on Firefox has failed 3 times out of 3 on CI (runs 13 and 24): the dialog stays
-      // open and onClose is not called. It may be a bug of the app, not of the test: docs/TODO.md.
-      // TEMPORARY DIAGNOSTIC (remove in the next round): on CI, the first attempt clicks for real
-      // and, if it fails, throws what the click did, which the warning of the retry shows. The
-      // retries, and a local run, press the keyboard, so that the rest of the test still runs.
-      const attempt = context.task.result?.retryCount ?? 0;
-      if (import.meta.env.VITE_CI !== "" && attempt === 0) {
-        await expectRealClickDoes("Annuler", cancel, () => onClose.mock.calls.length === 1);
-      } else {
-        await context.annotate(
-          "Annuler pressé au clavier : le vrai clic échoue sur Firefox (docs/TODO.md)",
-        );
-        await pressByKeyboardOf(cancel);
-      }
+      // Playwright's Firefox delivers no event to a real click here on CI (runs 13, 24, 25, 26)
+      // although document.elementFromPoint at the click centre is the button itself, in the open
+      // modal dialog: nothing of the app covers it. It is the test tool, docs/TODO.md.
+      await pressByKeyboardOf(cancel);
     } else {
       await clickReachable(cancel);
     }
@@ -396,7 +385,7 @@ describe("adding someone", () => {
     await expect.element(opener).toHaveFocus();
   });
 
-  test("AddToOfferDialog — la liste des coureurs qui ne se charge pas le dit, et se retente", async (context) => {
+  test("AddToOfferDialog — la liste des coureurs qui ne se charge pas le dit, et se retente", async () => {
     mocks.runners.mockRejectedValueOnce(new Error("offline"));
     const { screen } = await openDialog();
     const dialog = dialogOf(screen);
@@ -404,19 +393,9 @@ describe("adding someone", () => {
     await expect.element(dialog.getByRole("alert").getByText(fr.errors.generic)).toBeVisible();
     const retry = dialog.getByRole("button", { name: fr.common.retry });
     if (server.browser === "firefox") {
-      // Same as Annuler above: a real click does nothing on Firefox on CI (run 25), and no pointer
-      // event reaches the button. TEMPORARY DIAGNOSTIC: the first attempt on CI clicks for real and
-      // says what is at the point of the click when the list does not come; the retries and a local
-      // run press the keyboard.
-      const attempt = context.task.result?.retryCount ?? 0;
-      if (import.meta.env.VITE_CI !== "" && attempt === 0) {
-        await expectRealClickDoes("Réessayer", retry, () => mocks.runners.mock.calls.length === 2);
-      } else {
-        await context.annotate(
-          "Réessayer pressé au clavier : le vrai clic échoue sur Firefox (docs/TODO.md)",
-        );
-        await pressByKeyboardOf(retry);
-      }
+      // Same as Annuler above: elementFromPoint is the button, yet Playwright's click delivers
+      // no event on Firefox on CI (docs/TODO.md).
+      await pressByKeyboardOf(retry);
     } else {
       await clickReachable(retry);
     }

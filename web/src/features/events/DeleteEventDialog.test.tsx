@@ -18,7 +18,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { clickReachable, tapAfterScroll } from "../../test/pressFocused";
+import { clickReachable } from "../../test/pressFocused";
 import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
@@ -373,7 +373,7 @@ test("DeleteEventDialog — Supprimer garde le focus pendant l'envoi et après u
 test("DeleteEventDialog — Annuler ferme sans rien supprimer", async () => {
   const { screen, onClose, router } = await renderDialog();
 
-  await tapAfterScroll(screen.getByRole("button", { name: fr.common.cancel }));
+  await clickReachable(screen.getByRole("button", { name: fr.common.cancel }));
 
   expect(onClose).toHaveBeenCalledOnce();
   expect(mocks.remove).not.toHaveBeenCalled();

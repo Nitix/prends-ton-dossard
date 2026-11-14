@@ -39,8 +39,9 @@ export async function clickReachable(locator: Locator): Promise<void> {
 
 /**
  * A real click after the button is scrolled to the middle of the screen, as smoke.test.tsx does
- * for the map. Where the clicks of a dialog are done by the keyboard (touchDialogClicks.ts), a
- * test that calls this keeps a real tap, so that a button truly out of reach still fails.
+ * for the map. Not for a button of a <dialog>: on emulated touch Chromium in CI a real tap there
+ * fails intermittently even after the scroll (run 26), so those go by the keyboard
+ * (touchDialogClicks.ts). A real phone check is still needed.
  *
  * The scroll is only done on a phone (coarse pointer): there the tab bar is fixed at the foot of
  * the screen and a button near the bottom of a page, which Playwright's own scroll leaves at the
