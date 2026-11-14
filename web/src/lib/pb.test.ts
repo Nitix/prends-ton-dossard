@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 
 import { pb } from "./pb";
 
@@ -11,6 +11,27 @@ test("a 401 answer ends the stored session", () => {
 
   expect(pb.authStore.token).toBe("");
   expect(pb.authStore.record).toBeNull();
+});
+
+test("a 401 answer to a request ends the session once", async () => {
+  const fetchSpy = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(Response.json({ status: 401, message: "", data: {} }, { status: 401 }));
+  let changes = 0;
+  const stop = pb.authStore.onChange(() => changes++);
+  try {
+    await expect(pb.send("/api/collections/events/records", {})).rejects.toMatchObject({
+      status: 401,
+    });
+  } finally {
+    stop();
+    fetchSpy.mockRestore();
+  }
+
+  expect(pb.authStore.token).toBe("");
+  // One end of the session, not one more from the SDK's own clearing: each one
+  // forgets the queries and checks the page again (connectSession).
+  expect(changes).toBe(1);
 });
 
 test.each([400, 403, 404, 500])("a %i answer keeps the stored session", (status) => {
