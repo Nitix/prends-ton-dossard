@@ -271,45 +271,50 @@ test("Thème — chaque pastille a un bord qui se voit sur sa carte, cochée ou 
   }
 });
 
-test.skipIf(isLinuxWebkit)(
-  "Thème — choisir un skin l'applique à la page tout de suite et le garde sur l'appareil",
-  async () => {
-    expect(other, "a skin other than Crête").toBeDefined();
-    // The colour of the bar of the browser, as index.html has it.
-    const bar = document.createElement("meta");
-    bar.name = "theme-color";
-    bar.content = crete.themeColor;
-    document.head.append(bar);
-    try {
-      const screen = await renderAppearance();
-      const root = document.documentElement;
-      const day = sheet();
+/** Runs a check of the page's paint, except on Linux WebKit, where it does not resolve (docs/TODO.md). */
+const whereSkinsPaint = (check: () => void) => {
+  if (!isLinuxWebkit) check();
+};
 
-      await skins(screen).getByRole("radio", { name: other?.label.fr, exact: true }).click();
-      await expect
-        .element(skins(screen).getByRole("radio", { name: other?.label.fr, exact: true }))
-        .toBeChecked();
-      expect(root.dataset.skin).toBe(other?.id);
-      expect(localStorage.getItem(SKIN_KEY)).toBe(other?.id);
-      // Its stylesheet paints the page: the sheet is the colour that the skin gives `neutral-50`.
-      expect(sheet()).toBe(painted(getComputedStyle(root).getPropertyValue("--color-neutral-50")));
-      // And the bar of the browser takes its colour.
-      expect(bar.content).toBe(other?.themeColor);
+test("Thème — choisir un skin l'applique à la page tout de suite et le garde sur l'appareil", async () => {
+  expect(other, "a skin other than Crête").toBeDefined();
+  // The colour of the bar of the browser, as index.html has it.
+  const bar = document.createElement("meta");
+  bar.name = "theme-color";
+  bar.content = crete.themeColor;
+  document.head.append(bar);
+  try {
+    const screen = await renderAppearance();
+    const root = document.documentElement;
+    const day = sheet();
 
-      // Back to Crête: nothing on the page, nothing kept, its violet on the bar.
-      await skins(screen).getByRole("radio", { name: crete.label.fr, exact: true }).click();
-      await expect
-        .element(skins(screen).getByRole("radio", { name: crete.label.fr, exact: true }))
-        .toBeChecked();
-      expect(root.dataset.skin).toBeUndefined();
-      expect(localStorage.getItem(SKIN_KEY)).toBeNull();
-      expect(sheet()).toBe(day);
-      expect(bar.content).toBe(crete.themeColor);
-    } finally {
-      bar.remove();
-    }
-  },
-);
+    await skins(screen).getByRole("radio", { name: other?.label.fr, exact: true }).click();
+    await expect
+      .element(skins(screen).getByRole("radio", { name: other?.label.fr, exact: true }))
+      .toBeChecked();
+    expect(root.dataset.skin).toBe(other?.id);
+    expect(localStorage.getItem(SKIN_KEY)).toBe(other?.id);
+    // Its stylesheet paints the page: the sheet is the colour that the skin gives `neutral-50`.
+    // Only this is not checked on Linux WebKit (docs/TODO.md, « Skins sur WebKit Linux »).
+    whereSkinsPaint(() =>
+      expect(sheet()).toBe(painted(getComputedStyle(root).getPropertyValue("--color-neutral-50"))),
+    );
+    // And the bar of the browser takes its colour.
+    expect(bar.content).toBe(other?.themeColor);
+
+    // Back to Crête: nothing on the page, nothing kept, its violet on the bar.
+    await skins(screen).getByRole("radio", { name: crete.label.fr, exact: true }).click();
+    await expect
+      .element(skins(screen).getByRole("radio", { name: crete.label.fr, exact: true }))
+      .toBeChecked();
+    expect(root.dataset.skin).toBeUndefined();
+    expect(localStorage.getItem(SKIN_KEY)).toBeNull();
+    whereSkinsPaint(() => expect(sheet()).toBe(day));
+    expect(bar.content).toBe(crete.themeColor);
+  } finally {
+    bar.remove();
+  }
+});
 
 test("Thème — « Clair ou sombre » seulement pour un skin qui a les deux modes ; sinon une phrase le dit", async () => {
   expect(singleMode, "a skin with one mode only").toBeDefined();

@@ -627,9 +627,7 @@ const tabStops = (region: Element) =>
     (element) => element.tabIndex >= 0,
   );
 
-// Its last part passes a mouse over the map while the keys hold the cursor: on a touch screen
-// the hover lands elsewhere on the track, and there is no pointer to pass.
-test.skipIf(isTouchDevice)("RouteSection — au clavier, le repère suit", async () => {
+test("RouteSection — au clavier, le repère suit", async () => {
   serve(STEADY.file);
   const placed = vi.spyOn(CircleMarker.prototype, "setLatLng");
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
@@ -669,16 +667,21 @@ test.skipIf(isTouchDevice)("RouteSection — au clavier, le repère suit", async
   // A mouse that passes over the map while the keys use the cursor: on the
   // track, the cursor goes there; off the track, then off the map, it stays
   // (the keys still have it), with its mark, and the focus stays on the profile.
-  const at = onScreen(screen, 1.1 / STEADY_KM);
-  await hoverMap(screen, at);
-  await expect.poll(() => valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
-  await hoverMap(screen, { x: at.x + 40, y: at.y });
-  await userEvent.unhover(trackMap(screen));
-  await frames(4);
-  expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
-  expect(pill(screen)).toMatch(/^1,1 km/);
-  expect(mark(screen)).not.toBeNull();
-  expect(document.activeElement).toBe(cursor.element());
+  // Only this step is skipped on a touch screen: the hover lands elsewhere on the track there, and
+  // there is no pointer to pass.
+  const mouseOverTheMap = async () => {
+    const at = onScreen(screen, 1.1 / STEADY_KM);
+    await hoverMap(screen, at);
+    await expect.poll(() => valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+    await hoverMap(screen, { x: at.x + 40, y: at.y });
+    await userEvent.unhover(trackMap(screen));
+    await frames(4);
+    expect(valueText(cursor)).toMatch(/^1,1 km, altitude \d+ m, pente 8 %$/);
+    expect(pill(screen)).toMatch(/^1,1 km/);
+    expect(mark(screen)).not.toBeNull();
+    expect(document.activeElement).toBe(cursor.element());
+  };
+  if (!isTouchDevice) await mouseOverTheMap();
 
   // Escape puts the cursor away, and its mark; the focus stays.
   await userEvent.keyboard("{Escape}");

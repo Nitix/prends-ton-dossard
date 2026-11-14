@@ -7,6 +7,7 @@ import { ToastProvider } from "../../components/Toast";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { CalendarSection } from "./CalendarSection";
 
@@ -208,7 +209,11 @@ test("CalendarSection — créer affiche le lien, avec Copier", async () => {
   expect(writeText).toHaveBeenCalledExactlyOnceWith(link(1));
   await expect.element(screen.getByText(fr.calendar.copied)).toBeVisible();
   // The tap target of the button is at least 44 px.
-  expect(buttonOf(button(screen, fr.calendar.copy)).offsetHeight).toBeGreaterThanOrEqual(44);
+  // After the press has shrunk back (scale 0.97): the rectangle on the screen, as a finger gets it.
+  await animationsDone();
+  expect(
+    buttonOf(button(screen, fr.calendar.copy)).getBoundingClientRect().height,
+  ).toBeGreaterThanOrEqual(44);
 
   // Once the page is left, the link is not on screen any more: the page says there
   // is one, and shows it again when asked to.
@@ -248,7 +253,11 @@ test("CalendarSection — « Afficher le lien » montre le lien avec Copier", as
   await button(screen, fr.calendar.copy).click();
   expect(writeText).toHaveBeenCalledExactlyOnceWith(link(0));
   await expect.element(screen.getByText(fr.calendar.copied)).toBeVisible();
-  expect(buttonOf(button(screen, fr.calendar.copy)).offsetHeight).toBeGreaterThanOrEqual(44);
+  // After the press has shrunk back (scale 0.97): the rectangle on the screen, as a finger gets it.
+  await animationsDone();
+  expect(
+    buttonOf(button(screen, fr.calendar.copy)).getBoundingClientRect().height,
+  ).toBeGreaterThanOrEqual(44);
 });
 
 test("CalendarSection — Nouveau lien et Supprimer restent proposés, même après la création", async () => {

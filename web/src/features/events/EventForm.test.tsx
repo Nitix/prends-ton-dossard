@@ -6,6 +6,7 @@ import { render } from "vitest-browser-react";
 import { ToastProvider } from "../../components/Toast";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { animationsDone } from "../../test/animations";
 import { pressFocused } from "../../test/pressFocused";
 import { EditEventPage } from "./EventForm";
 import {
@@ -1264,11 +1265,12 @@ test("EventForm — les champs et les boutons font au moins 44 px de haut", asyn
     screen.getByLabelText(fr.participation.status),
   ];
 
+  // The button that was just pressed is still shrinking back from its press (scale 0.97), as
+  // WebKit shows it: the rectangle is measured when the animations are over.
+  await animationsDone();
   for (const target of targets) {
-    // The layout height, not the rectangle on the screen: the button that was just pressed
-    // is still shrinking back from its press (scale 0.97), as WebKit shows it.
     const element = target.element();
-    expect(element instanceof HTMLElement ? element.offsetHeight : 0).toBeGreaterThanOrEqual(44);
+    expect(element.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   }
   // The checkbox is small, its label is the tap target.
   const label = joinBox(screen).element().closest("label");

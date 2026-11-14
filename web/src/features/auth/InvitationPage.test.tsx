@@ -11,6 +11,7 @@ import { ClientResponseError } from "pocketbase";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { server } from "vitest/browser";
 
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
@@ -42,13 +43,16 @@ function openLink(token: string) {
 
 // Safari refuses history.replaceState() after 100 calls in 10 seconds (a SecurityError): each test
 // makes a few (this file's, and the page's, which takes the token off the address), and WebKit runs
-// them fast. The calls are counted, and a test waits for room before it starts.
+// them fast. The calls are counted, and a test waits for room before it starts. Only in WebKit: the
+// other engines have no such limit, and have no reason to be slowed.
 const replaceTimes: number[] = [];
 const realReplaceState = window.history.replaceState.bind(window.history);
-window.history.replaceState = (...args: Parameters<History["replaceState"]>) => {
-  replaceTimes.push(performance.now());
-  realReplaceState(...args);
-};
+if (server.browser === "webkit") {
+  window.history.replaceState = (...args: Parameters<History["replaceState"]>) => {
+    replaceTimes.push(performance.now());
+    realReplaceState(...args);
+  };
+}
 
 async function roomForReplaceState() {
   while (replaceTimes.filter((time) => performance.now() - time < 10_000).length > 70) {

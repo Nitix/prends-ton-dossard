@@ -240,14 +240,12 @@ test.skipIf(isLinuxWebkit)(
   },
 );
 
-test.skipIf(isLinuxWebkit)(
-  "Carnet — seul un skin au fond animé le dit : Carnet (et lui seul)",
-  () => {
-    expect(SKINS.filter((skin) => skin.animatedBackground).map((skin) => skin.id)).toEqual([
-      "carnet",
-    ]);
-  },
-);
+// Pure data, no style: it runs everywhere.
+test("Carnet — seul un skin au fond animé le dit : Carnet (et lui seul)", () => {
+  expect(SKINS.filter((skin) => skin.animatedBackground).map((skin) => skin.id)).toEqual([
+    "carnet",
+  ]);
+});
 
 // --- The sheet of dots behind the pages: the v4's living background ---
 
