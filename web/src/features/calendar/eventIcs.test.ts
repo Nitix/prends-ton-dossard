@@ -447,7 +447,7 @@ describe("eventIcs — l'ouverture de chaque épreuve", () => {
     expect(others).toEqual([]);
     expect(opening).toMatchObject({
       UID: "opening-f42@prends-ton-dossard",
-      SUMMARY: "Ouverture des inscriptions · Trail des Crêtes · Semi",
+      SUMMARY: "Ouverture des inscriptions : Trail des Crêtes · Semi",
       DTSTART: "20261117T110000Z",
       DTEND: "20261117T113000Z",
     });
@@ -481,7 +481,7 @@ describe("eventIcs — l'ouverture de chaque épreuve", () => {
     expect(others).toEqual([]);
     expect(first?.UID).toBe("opening-f15@prends-ton-dossard");
     expect(first?.SUMMARY?.replaceAll(/\s/g, " ")).toBe(
-      "Ouverture des inscriptions · Trail des Crêtes · Trail 15 km",
+      "Ouverture des inscriptions : Trail des Crêtes · Trail 15 km",
     );
     expect(second?.UID).toBe("opening-f42@prends-ton-dossard");
   });

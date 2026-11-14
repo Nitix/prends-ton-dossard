@@ -6,6 +6,9 @@ import { plural } from "./plural";
 // (`satisfies Messages`), so a missing or extra key fails the type check.
 // A text with a variable is a function; one that is put in a sentence with a
 // link (see `home.commentOn`) takes nodes, and gives a node.
+
+/** The title of the opening in a calendar file; the one of a format's opening is built on it. */
+const openingCalendarTitle = (name: string) => `Ouverture des inscriptions : ${name}`;
 export const fr = {
   common: {
     appName: "Prends ton dossard",
@@ -442,10 +445,10 @@ export const fr = {
     // After the opening, in the page's line, when the event has a deadline: the date is already formatted.
     openingDeadline: (date: string) => `jusqu'au ${date}`,
     // The title of the opening in a calendar file: the name of the event is its own.
-    openingCalendarTitle: (name: string) => `Ouverture des inscriptions : ${name}`,
+    openingCalendarTitle,
     // The same for the opening of a format: the names of its formats follow the name of the event.
     openingCalendarTitleOf: (event: string, names: string) =>
-      `Ouverture des inscriptions · ${event} · ${names}`,
+      `${openingCalendarTitle(event)} · ${names}`,
     // The button that downloads a calendar file of the event, and the name of that file when the event's own name
     // has nothing left once the characters a file name cannot have are taken out (the extension is added).
     addToCalendar: "Ajouter à mon agenda",

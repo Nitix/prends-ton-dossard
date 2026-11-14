@@ -5,6 +5,9 @@ import { plural } from "./plural";
 
 // The English dictionary. `satisfies Messages` makes a missing or extra key
 // fail the type check.
+
+/** The title of the opening in a calendar file; the one of a format's opening is built on it. */
+const openingCalendarTitle = (name: string) => `Registration opens: ${name}`;
 export const en = {
   common: {
     appName: "Prends ton dossard",
@@ -362,9 +365,9 @@ export const en = {
     openingAt: (time: string) => `at ${time}`,
     openingNames: (names: string) => `(${names})`,
     openingDeadline: (date: string) => `until ${date}`,
-    openingCalendarTitle: (name: string) => `Registration opens: ${name}`,
+    openingCalendarTitle,
     openingCalendarTitleOf: (event: string, names: string) =>
-      `Registration opens: ${event} · ${names}`,
+      `${openingCalendarTitle(event)} · ${names}`,
     addToCalendar: "Add to my calendar",
     calendarFileName: "event",
   },
