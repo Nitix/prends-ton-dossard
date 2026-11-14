@@ -928,22 +928,54 @@ test("ElevationProfile — le curseur ne dépasse jamais son conteneur, même pl
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
 });
 
-test("ElevationProfile — le sommet, au bout de la trace, reste dans son conteneur sur un téléphone de 320 px", async () => {
+test("ElevationProfile — le sommet, au bout de la trace, reste dans son conteneur sur un téléphone de 320 px, dès la première mise en page", async () => {
   // A 320 px phone leaves about 254 px to the profile, which starts at 33 px. The summit is at the
   // very end of the track (the finish, at 3 km), where the label is the furthest to the right.
-  const screen = await render(
-    <I18nProvider languages={["fr"]}>
-      <div data-testid="phone" style={{ width: 254, marginLeft: 33 }}>
-        <ElevationProfile points={flatThenWall()} label="Profil" />
-      </div>
-    </I18nProvider>,
-  );
-  const container = screen.getByTestId("phone").element().getBoundingClientRect();
-  const label = screen.container.querySelector("p");
-  if (!label) throw new Error("the label of the summit is not there");
-  expect(pill(screen.container)).toBe("800 m");
-  const box = label.getBoundingClientRect();
-  expect(box.left).toBeGreaterThanOrEqual(container.left);
-  expect(box.right).toBeLessThanOrEqual(container.right);
-  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+  // The width is a guess (FIRST_WIDTH) until the profile has measured itself, and the page draws
+  // the profile again at once, before it paints: so the box of the label is read at the first
+  // measure, when the guess is what the layout uses, not after (it was right after, whatever the guess).
+  // oxlint-disable-next-line typescript/unbound-method -- called with `call`, on the element
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  let first: DOMRect | undefined;
+  const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    if (first === undefined && this.classList.contains("profile-chart")) {
+      const label = this.parentElement?.querySelector("p") ?? this.querySelector("p");
+      if (label) first = original.call(label);
+    }
+    return original.call(this);
+  });
+  try {
+    const screen = await render(
+      <I18nProvider languages={["fr"]}>
+        <div data-testid="phone" style={{ width: 254, marginLeft: 33 }}>
+          <ElevationProfile points={flatThenWall()} label="Profil" />
+        </div>
+      </I18nProvider>,
+    );
+    const container = screen.getByTestId("phone").element().getBoundingClientRect();
+    const label = screen.container.querySelector("p");
+    if (!label) throw new Error("the label of the summit is not there");
+    expect(pill(screen.container)).toBe("800 m");
+    // Inside the container at the first measure, and once settled; the name says which.
+    const inside = (when: string, box: DOMRect | undefined) => ({
+      when,
+      left: box !== undefined && box.left >= container.left,
+      right: box !== undefined && box.right <= container.right,
+    });
+    expect(inside("settled", original.call(label))).toEqual({
+      when: "settled",
+      left: true,
+      right: true,
+    });
+    expect(inside("at the first measure", first)).toEqual({
+      when: "at the first measure",
+      left: true,
+      right: true,
+    });
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+  } finally {
+    spy.mockRestore();
+  }
 });
