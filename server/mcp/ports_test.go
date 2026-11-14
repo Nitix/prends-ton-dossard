@@ -31,7 +31,7 @@ var ports = []struct {
 	{"features/events/registration.ts", "registrationState (registrationStateOf) of home.go", "a1d8b8c7961118feb6823007bf64b3af229529d4287fd17ba1f916e37b9d3001"},
 	{"features/events/participants.ts", "hasStarters of home.go", "e7694134868064d0d35baf7a500ee506c3b8076d41b7ec100f4bd5f1fa3539d9"},
 	{"features/home/pending.ts", "pendingOf of home.go", "39aefdaf708e6ba4152bcbd86005df0f6fe5dc6df225ece3545b84169b1ce0a6"},
-	{"features/home/registrationTodo.ts", "registrationTodo, todosOf of home.go", "fb8a696e8551390ead3cbffcef0f38fb270ed8cd705be5c5d64ee99fb4019c71"},
+	{"features/home/registrationTodo.ts", "registrationTodo, todosOf of home.go", "2a5bdf076b911f7984693b065119a7f7bfe29406340f0b7e783a5fb85bd43f01"},
 	{"features/results/resultsToEnter.ts", "resultsToEnter of home.go", "b916672a8c6f5e1c5e216ed1e6ba167c295fc86bf04e362732187232897ae734"},
 	{"features/results/resultText.ts", "ResultParts of server/wording, hasResult of views.go", "ddb1ac5bfe9a8827d35fb7f8d31fb2805e094b9794e21740e7363c44dbae981a"},
 	{"features/stats/stats.ts", "stats.go", "5065bc790b58d26603a19d7f96c5ddfb329b3b5743e1573db34a95d0db20c1bc"},

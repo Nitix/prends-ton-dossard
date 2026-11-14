@@ -229,6 +229,16 @@ type registrationTodo struct {
 	DaysLeft int
 }
 
+// openingsOf gathers the openings of an event from its own and from its formats'
+// (expanded in the record, as formats_via_event).
+func openingsOf(event eventRecord) events.EventOpenings {
+	fields := make([]events.FormatOpeningFields, 0, len(event.Expand.Formats))
+	for _, f := range event.Expand.Formats {
+		fields = append(fields, events.FormatOpeningFields{ID: f.ID, Day: f.RegistrationOpening, Time: f.RegistrationOpeningTime})
+	}
+	return events.OpeningsOf(event.RegistrationOpening, event.RegistrationOpeningTime, fields)
+}
+
 // registrationStateOf ports registrationState of features/events/registration.ts, for
 // the states that are to do: "" for the others (closed, or nothing to say). An opening
 // after today is "soon", on today it is "today" (to the day, not to the hour); once it
@@ -258,7 +268,7 @@ func registrationStateOf(event eventRecord, opening events.Opening, hasOpening b
 	return registrationTodo{}, false
 }
 
-// todosOf ports todosOf of features/home/registrationTodo.ts, with
+// todosOf ports todosOf of features/home/registrationTodo.ts (each row by the opening of its own format), with
 // registrationState of features/events/registration.ts: what the runner has to
 // register for, which is their "Interested" participations (on a race, or on the
 // event alone) in the events whose registration is open (the deadline being today
@@ -273,10 +283,10 @@ func todosOf(rows []participationRow, today string) []registrationTodo {
 		if row.Participation.Status != "interested" {
 			continue
 		}
-		// The event's own opening until the formats' are ported here (the site's
-		// todosOf gives each participation its own).
-		own := events.Opening{Day: row.Event.RegistrationOpening, Time: row.Event.RegistrationOpeningTime}
-		if todo, ok := registrationStateOf(row.Event, own, own.Day != "", today); ok {
+		// The opening of the participation's own format, else the event's (or, with none,
+		// the one that comes from its formats): what the site's todosOf asks of openingOf.
+		opening, hasOpening := openingsOf(row.Event).Of(row.Participation.Format, events.PastOnDay(today))
+		if todo, ok := registrationStateOf(row.Event, opening, hasOpening, today); ok {
 			todo.Row = row
 			todos = append(todos, todo)
 		}
@@ -452,7 +462,7 @@ func homeFilter(userID, today string) string {
 
 // homeExpand is what a row needs, and what the answer says of its runner and of who
 // added it (the site's PENDING_EXPAND).
-const homeExpand = "event,format.race_type,added_by,runner"
+const homeExpand = "event,event.formats_via_event,format.race_type,added_by,runner"
 
 // commentsOnHome is how many comments the home page shows.
 const commentsOnHome = 5

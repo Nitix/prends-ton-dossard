@@ -83,9 +83,12 @@ type formatRecord struct {
 	RouteURL       string  `json:"route_url"`
 	Date           string  `json:"date"`
 	StartTime      string  `json:"start_time"`
-	Event          string  `json:"event"`
-	Updated        string  `json:"updated"`
-	Expand         struct {
+	// RegistrationOpening and its time are the format's own opening ("" for none).
+	RegistrationOpening     string `json:"registration_opening"`
+	RegistrationOpeningTime string `json:"registration_opening_time"`
+	Event                   string `json:"event"`
+	Updated                 string `json:"updated"`
+	Expand                  struct {
 		RaceType raceTypeRecord `json:"race_type"`
 	} `json:"expand"`
 }
