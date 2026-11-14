@@ -40,10 +40,10 @@ const (
 //     registration deadline: the day it closes, whether it is over or not, once
 //     for the event however many races the runner is interested in.
 //
-//   - one for each event that has a registration opening, and that the runner is
-//     interested in or registered to, whatever the race: the opening, once for
-//     the event, with the alarms that chosen asks for. A supporter does not
-//     register, so they have none.
+//   - one for each registration opening that matters to the runner, for the
+//     events they are interested in or registered to: the one of each format
+//     they are in, else the event's (see openingEntriesOf), with the alarms that
+//     chosen asks for. A supporter does not register, so they have none.
 //
 // chosen is the choice of the account (reminders.Of): the kinds of alarm that
 // an opening has. An empty choice gives openings with no alarm.
@@ -61,7 +61,10 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 
 	var entries []Entry
 	closing := map[string]bool{} // the events whose deadline is in the entries
-	opening := map[string]bool{} // the events whose opening is in the entries
+	// counted is, for each event the runner is interested in or registered to,
+	// the formats they are in ("" for a participation with no format).
+	counted := map[string]map[string]bool{}
+	var countedOrder []*core.Record
 	for _, p := range participations {
 		status := p.GetString("status")
 		event := p.ExpandedOne("event")
@@ -84,11 +87,12 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 			}
 		}
 
-		if (status == statusInterested || status == statusRegistered) && !opening[event.Id] {
-			opening[event.Id] = true
-			if entry, ok := openingEntry(event, runner, eventURL, w, chosen); ok {
-				entries = append(entries, entry)
+		if status == statusInterested || status == statusRegistered {
+			if counted[event.Id] == nil {
+				counted[event.Id] = map[string]bool{}
+				countedOrder = append(countedOrder, event)
 			}
+			counted[event.Id][p.GetString("format")] = true
 		}
 
 		entry := Entry{
@@ -134,15 +138,80 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 		entries = append(entries, entry)
 	}
 
+	openingEntries, err := openingEntriesOf(app, countedOrder, counted, runner, appURL, w, chosen)
+	if err != nil {
+		return nil, err
+	}
+	entries = append(entries, openingEntries...)
+
 	slices.SortFunc(entries, func(a, b Entry) int {
 		return cmp.Or(cmp.Compare(a.Start, b.Start), cmp.Compare(a.UID, b.UID))
 	})
 	return entries, nil
 }
 
-// openingEntry is the entry of the registration opening of the event for the
-// runner, with an alarm for each reminder. It reports false for an event that has
-// no opening, or whose day is not a real one.
+// openingEntriesOf returns the opening entries of the runner: for each event,
+// the openings of the formats the runner is in (the event's own for a
+// participation with no format), merged when they fall at the same instant. A
+// feed does not depend on when it is read, so an event with no opening of its
+// own and a runner with no format has all the openings of its formats.
+//
+// The formats of all the events come from one query, with their race types for
+// the names.
+func openingEntriesOf(app core.App, eventRecords []*core.Record, counted map[string]map[string]bool, runner *core.Record, appURL string, w wording.Words, chosen []string) ([]Entry, error) {
+	if len(eventRecords) == 0 {
+		return nil, nil
+	}
+	ids := make([]any, len(eventRecords))
+	for i, event := range eventRecords {
+		ids[i] = event.Id
+	}
+	formats, err := app.FindAllRecords("formats", dbx.In("event", ids...))
+	if err != nil {
+		return nil, err
+	}
+	if failed := app.ExpandRecords(formats, []string{"race_type"}, nil); len(failed) > 0 {
+		return nil, fmt.Errorf("expanding the formats: %v", failed)
+	}
+	byEvent := map[string][]*core.Record{}
+	for _, format := range formats {
+		byEvent[format.GetString("event")] = append(byEvent[format.GetString("event")], format)
+	}
+
+	var entries []Entry
+	for _, event := range eventRecords {
+		fields := make([]events.FormatOpeningFields, 0, len(byEvent[event.Id]))
+		byID := map[string]*core.Record{}
+		for _, format := range byEvent[event.Id] {
+			byID[format.Id] = format
+			fields = append(fields, events.FormatOpeningFields{
+				ID:   format.Id,
+				Day:  format.GetString("registration_opening"),
+				Time: format.GetString("registration_opening_time"),
+			})
+		}
+		all := events.OpeningsOf(event.GetString("registration_opening"), event.GetString("registration_opening_time"), fields)
+		var mine []events.Opening
+		for formatID := range counted[event.Id] {
+			mine = append(mine, all.ForCalendar(formatID)...)
+		}
+		eventURL := appURL + "/evenements/" + event.Id
+		for _, opening := range events.MergeSameInstant(mine) {
+			if entry, ok := openingEntry(event, opening, byID, runner, eventURL, w, chosen); ok {
+				entries = append(entries, entry)
+			}
+		}
+	}
+	return entries, nil
+}
+
+// openingEntry is the entry of one registration opening of the event for the
+// runner, with an alarm for each reminder. It reports false for an opening whose
+// day is not a real one.
+//
+// The UID is the one of the event for its own opening, else the one of the
+// smallest format id that has it; the summary of a format opening adds the
+// names of those formats.
 //
 // With a time, the entry is the instant of the opening (Paris time turned into
 // UTC, see events.OpeningInstant), and the alarms are relative to it: a day
@@ -150,14 +219,31 @@ func entriesOf(app core.App, runner *core.Record, appURL string, w wording.Words
 // say the moments that the notifications use for such an opening, from the
 // start of that day: the day before at 9 h (15 hours before the start) and the
 // day itself at 8 h.
-func openingEntry(event, runner *core.Record, eventURL string, w wording.Words, chosen []string) (Entry, bool) {
-	day, ok := dayEntry(event.GetString("registration_opening"), "")
+func openingEntry(event *core.Record, opening events.Opening, formats map[string]*core.Record, runner *core.Record, eventURL string, w wording.Words, chosen []string) (Entry, bool) {
+	day, ok := dayEntry(opening.Day, "")
 	if !ok {
 		return Entry{}, false
 	}
+	uidOf, summary := event.Id, w.Opening()+wording.Separator+event.GetString("name")
+	if len(opening.FormatIDs) > 0 {
+		uidOf = opening.FormatIDs[0]
+		var names []string
+		for _, id := range opening.FormatIDs {
+			if format := formats[id]; format != nil {
+				names = append(names, w.RaceName(
+					format.GetString("name"),
+					raceTypeLabel(format),
+					format.GetFloat("distance_km"),
+					format.GetInt("duration_min"),
+					format.GetInt("time_limit_min"),
+				))
+			}
+		}
+		summary += wording.Separator + strings.Join(names, ", ")
+	}
 	entry := Entry{
-		UID:     "opening-" + event.Id + "-" + runner.Id + uidSuffix,
-		Summary: w.Opening() + wording.Separator + event.GetString("name"),
+		UID:     "opening-" + uidOf + "-" + runner.Id + uidSuffix,
+		Summary: summary,
 		URL:     eventURL,
 		Start:   day.Start,
 		End:     day.End,
@@ -168,8 +254,8 @@ func openingEntry(event, runner *core.Record, eventURL string, w wording.Words, 
 	}
 
 	dayBefore, hourBefore := "-PT15H", "PT8H"
-	if hhmm := event.GetString("registration_opening_time"); events.ValidTime(hhmm) {
-		if at, ok := events.OpeningInstant(event.GetString("registration_opening"), hhmm); ok {
+	if hhmm := opening.Time; events.ValidTime(hhmm) {
+		if at, ok := opening.Instant(); ok {
 			entry.At = at
 			dayBefore, hourBefore = "-P1D", "-PT1H"
 		}
