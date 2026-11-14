@@ -2170,3 +2170,28 @@ test("EventForm — format_opening_after_deadline s'affiche sous la date limite,
     start.element().id,
   );
 });
+
+test("EventForm — un jour d'ouverture d'épreuve après le jour de l'épreuve le dit avec les mots de l'épreuve", async () => {
+  mocks.send.mockRejectedValue(
+    refused(1, 400, { registration_opening: field("registration_opening_after_start") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningDay(row).fill("2026-06-20");
+
+  await save(screen).click();
+
+  const message = row.getByText(fr.form.formatOpeningAfterDay);
+  await expect.element(message).toBeVisible();
+  expect(fr.form.formatOpeningAfterDay).toBe(
+    "L'ouverture des inscriptions de l'épreuve doit être au plus tard le jour de l'épreuve.",
+  );
+  expect(formatOpeningDay(row).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  await expect
+    .element(screen.getByText(fr.errors.registration_opening_after_start))
+    .not.toBeInTheDocument();
+});

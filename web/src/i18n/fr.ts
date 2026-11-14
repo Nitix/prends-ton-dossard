@@ -737,6 +737,9 @@ export const fr = {
       "La date limite d'inscription ne peut pas être après la fin du mois de la course.",
     openingAfterMonthEnd:
       "L'ouverture des inscriptions ne peut pas être après la fin du mois de la course.",
+    // Under the day of a format: its opening is held against that day, not against the first day of the race.
+    formatOpeningAfterDay:
+      "L'ouverture des inscriptions de l'épreuve doit être au plus tard le jour de l'épreuve.",
     formatDatesLater: "Les épreuves auront leur date quand le jour sera connu.",
     notes: "Notes",
     formatsTitle: "Épreuves",

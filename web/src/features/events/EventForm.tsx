@@ -419,6 +419,7 @@ function EventFields({
     if (draft.monthOnly) {
       if (code === "registration_deadline_after_start") return t.form.deadlineAfterMonthEnd;
       if (code === "registration_opening_after_start") return t.form.openingAfterMonthEnd;
+      if (code === "format_opening_after_start") return t.form.openingAfterMonthEnd;
     }
     return translateError(t, code);
   };

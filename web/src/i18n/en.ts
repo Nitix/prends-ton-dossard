@@ -577,6 +577,7 @@ export const en = {
     periodMonth: (month: string) => `${month}, date to be set`,
     deadlineAfterMonthEnd: "The registration deadline cannot be after the end of the race month.",
     openingAfterMonthEnd: "Registration cannot open after the end of the race month.",
+    formatOpeningAfterDay: "The race's registration must open on or before the race's day.",
     formatDatesLater: "The races will have their date once the day is known.",
     notes: "Notes",
     formatsTitle: "Races",

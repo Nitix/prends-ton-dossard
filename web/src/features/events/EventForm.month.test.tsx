@@ -7,6 +7,8 @@ import {
   fillEvent,
   format,
   formatDate,
+  formatOpeningDay,
+  formatOpeningToggle,
   formatStartTime,
   location,
   name,
@@ -222,4 +224,32 @@ test("EventForm — une course au mois s'enregistre sans heure de départ", asyn
 
   await savedEvent(router);
   expect(mocks.calls.find(({ collection }) => collection === "formats")?.body?.start_time).toBe("");
+});
+
+test("EventForm — pour une course au mois, une ouverture d'épreuve trop tardive parle de la fin du mois, sous l'épreuve comme sous le mois", async () => {
+  mocks.send.mockRejectedValueOnce(
+    refused(1, 400, { registration_opening: field("registration_opening_after_start") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await unknownDay(screen).click();
+  await monthSelect(screen).selectOptions("2027-06");
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningDay(row).fill("2027-07-02");
+
+  await save(screen).click();
+
+  await expect.element(row.getByText(fr.form.openingAfterMonthEnd)).toBeVisible();
+  await expect.element(screen.getByText(fr.form.formatOpeningAfterDay)).not.toBeInTheDocument();
+
+  mocks.send.mockRejectedValueOnce(
+    refused(0, 400, { start_date: field("format_opening_after_start") }),
+  );
+  await save(screen).click();
+
+  await expect
+    .element(screen.getByText(fr.errors.format_opening_after_start))
+    .not.toBeInTheDocument();
+  await expect.element(screen.getByText(fr.form.openingAfterMonthEnd).last()).toBeVisible();
 });

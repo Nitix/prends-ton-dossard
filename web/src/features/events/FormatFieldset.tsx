@@ -77,6 +77,10 @@ export function FormatFieldset({
 
   const message = (field: string): string | null => {
     const code = errors[field];
+    // The opening of a format is held against the day of the format, or the end of the month of a race known by its month.
+    if (field === "registration_opening" && code === "registration_opening_after_start") {
+      return monthOnly ? t.form.openingAfterMonthEnd : t.form.formatOpeningAfterDay;
+    }
     return code === undefined ? null : translateFieldError(t, field, code);
   };
   const trackError =
