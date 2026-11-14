@@ -2,9 +2,9 @@
 
 Idées notées le 2026-11-03, mises à jour le 2026-11-08 après la v7.
 
-## Super admin (sur la branche, pas encore en production)
+## Fait : le super admin
 
-Un compte que les autres admins ne peuvent pas modifier, marqué par la commande `super-admin` sur le serveur (voir le README, « Super admin »). Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-super-admin.md`.
+En production depuis le 2026-11-14 (ton compte est marqué) : un compte que les autres admins ne peuvent pas modifier, marqué par la commande `super-admin` sur le serveur (voir le README, « Super admin »). Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-super-admin.md`.
 
 ## Fait en v8
 
