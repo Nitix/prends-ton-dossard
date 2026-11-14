@@ -17,7 +17,8 @@ Ce que tu as décidé :
 5. **Plusieurs comptes peuvent porter la marque**, si la commande est lancée plusieurs fois.
 6. **Le contenu que tu as écrit reste modérable par les admins** : courses, épreuves, commentaires. Seuls ton compte et ton coureur sont protégés.
 7. **Un refus répond « introuvable » (404) quand quelqu'un force la requête** : c'est ainsi que PocketBase répond quand une règle refuse. Le site cache les boutons, et l'assistant IA annonce le refus d'avance, avec la phrase « Ce compte est super admin : personne d'autre ne peut le modifier. ». Le code `super_admin_protected` (403) sort quand une écriture passe les règles mais pas la garde du serveur, et quand un autre admin demande un lien de réinitialisation pour toi.
-8. **Mot de passe oublié :** aucun autre admin ne peut te créer de lien. Tu te connectes avec une clé d'accès, ou on passe par le serveur : le tableau de bord par le tunnel SSH, ou `--remove`, un lien créé par un autre admin, puis la marque remise. C'est écrit dans le README (« Mot de passe oublié »).
+8. **Mot de passe oublié :** aucun autre admin ne peut te créer de lien. Tu te connectes avec une clé d'accès, ou tu donnes un nouveau mot de passe au compte depuis le tableau de bord, par le tunnel SSH. Retirer la marque pour te faire créer un lien par un autre admin est déconseillé : cet admin verrait le lien et pourrait l'ouvrir avant toi. C'est écrit dans le README (« Mot de passe oublié »).
+9. **Un autre admin peut encore révoquer un lien de réinitialisation que tu as créé pour toi** (relecture finale, point mineur, reporté). C'est une gêne, pas une prise de compte : tu peux en refaire un.
 
 ## Reporté
 

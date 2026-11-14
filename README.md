@@ -539,7 +539,7 @@ Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les com
 
     Ouvrir le lien affiché pour créer ce compte, puis, depuis l'administration des membres, créer un lien de réinitialisation pour le compte d'origine et l'utiliser. Désactiver ensuite le compte de secours ;
   - ou ouvrir le tableau de bord par le tunnel SSH (voir « Tableau de bord PocketBase »), et dans la collection `users`, donner un nouveau mot de passe au compte (10 caractères au moins). Ses sessions ouvertes sont fermées, et ses jetons d'assistant IA (MCP) supprimés.
-- **Un super admin** : aucun autre admin ne peut lui créer ce lien (voir « Super admin »). Il se connecte avec une de ses clés d'accès s'il en a, sinon on passe par le serveur : le tableau de bord par le tunnel SSH comme ci-dessus, ou `super-admin "<Prénom>" --remove`, un lien de réinitialisation créé par un autre admin, puis `super-admin "<Prénom>"` pour remettre la marque.
+- **Un super admin** : aucun autre admin ne peut lui créer ce lien (voir « Super admin »). Il se connecte avec une de ses clés d'accès s'il en a ; sinon, le tableau de bord par le tunnel SSH, comme ci-dessus, pour donner un nouveau mot de passe au compte. Ne pas retirer la marque pour se faire créer un lien par un autre admin : cet admin verrait le lien et pourrait l'ouvrir le premier, ce que la marque sert justement à empêcher.
 
 ## Recette manuelle sur iPhone
 
