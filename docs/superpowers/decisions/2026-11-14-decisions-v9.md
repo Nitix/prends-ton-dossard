@@ -33,7 +33,7 @@ Conception : `docs/superpowers/specs/2026-11-14-courses-v9-design.md` (son § 1
 13. **Rappels** : le titre « Course · Épreuve », un `Topic` par ouverture, un seul rappel par personne et par instant. Une course que le rappel ne peut pas lire n'empêche pas ceux des autres.
 14. **Le flux d'agenda** : une entrée par ouverture ; celle de la course garde son `UID`. Pour une course sans ouverture à elle, une personne sans épreuve a dans son agenda toutes les ouvertures d'épreuve (une entrée chacune, `UID` stable), comme elle a un rappel pour chacune : l'agenda ne dépend pas de l'heure à laquelle il est lu (ajouté après la relecture de la spec). Le flux garde son titre « Ouverture des inscriptions · Marathon du lac d'Annecy · Semi ».
 15. **Le fichier d'agenda d'une course** (« Ajouter à l'agenda ») porte les ouvertures de la personne qui le télécharge, sinon la générale. Le titre d'une ouverture d'épreuve y suit la forme que ce fichier a depuis la v7, « Ouverture des inscriptions : Marathon du lac d'Annecy · Semi », et non celle du flux : un seul style dans un même fichier (la spec avait écrit son exemple avec la forme du flux).
-16. **L'assistant** : `get_event` donne, pour chaque épreuve, les champs enregistrés et `opens`, l'ouverture qui en résulte (la sienne, ou celle de la course). `add_format` et `update_format` prennent `registration_opening` et `registration_opening_time`.
+16. **L'assistant** : `get_event` donne, pour chaque épreuve, les champs enregistrés et `opens`, l'ouverture qui en résulte, pour une épreuve qui a sa propre ouverture ; une épreuve qui suit la course n'a ni l'un ni l'autre. `add_format` et `update_format` prennent `registration_opening` et `registration_opening_time`.
 
 ## Fusion et mise en service
 
@@ -64,13 +64,13 @@ Sur `https://dev-prends-ton-dossard.ketra.fr` (comptes `alice@`, `bob@` ou `admi
 
 1. **Saisir.** Sur dev, choisis une course à venir avec des épreuves et une ouverture des inscriptions (ou donne-lui-en une). Dans le formulaire, sur une épreuve, coche « Cette épreuve ouvre ses inscriptions à un autre moment » et donne **un jour seul** : l'épreuve garde l'heure de la course. Dev garde les données d'un ancien seed, dont les dates ont vieilli : le nouvel exemple du seed (« Hyrox Doubles ») n'y est pas.
 2. **La fiche, en haut.** Regarde-la :
-   - comme quelqu'un d'« Intéressé » par cette épreuve : la ligne du haut dit son ouverture, avec le nom de l'épreuve entre parenthèses ;
+   - avec le statut « Intéressé » sur cette épreuve : la ligne du haut dit son ouverture, avec le nom de l'épreuve entre parenthèses ;
    - comme un supporteur : la ligne du haut dit l'ouverture générale ;
    - la ligne de l'épreuve elle-même, qui dit sa propre ouverture à tout le monde.
-3. **L'accueil.** Connecté avec un compte « Intéressé » par cette épreuve, regarde « Inscriptions à faire » : la course montre l'ouverture de l'épreuve, pas celle de la course.
+3. **L'accueil.** Avec un compte qui a le statut « Intéressé » sur cette épreuve, regarde « Inscriptions à faire » : la course montre l'ouverture de l'épreuve, pas celle de la course.
 4. **L'agenda.** Dans le calendrier abonné (« Mes courses »), une entrée par ouverture ; puis « Ajouter à l'agenda » sur la fiche : le fichier porte « Ouverture des inscriptions : <course> · <épreuve> ».
 5. **Le partage.** « Partager » donne l'ouverture générale et celle de l'épreuve dans la ligne des épreuves.
-6. **Un rappel.** Dans Réglages, « Rappels », choisis « 1 heure avant » (ou « 1 jour avant ») : sans choix, c'est « Jamais » et rien ne part. Active un appareil (« Activer sur cet appareil »). Sur une épreuve dont tu es « Intéressé », donne une ouverture complète dans 70 minutes (le jour d'aujourd'hui et l'heure), et attends la notification : son titre porte le nom de la course et celui de l'épreuve.
+6. **Un rappel.** Dans Réglages, « Rappels », choisis « 1 heure avant » (ou « 1 jour avant ») : sans choix, c'est « Jamais » et rien ne part. Active un appareil (« Activer sur cet appareil »). Sur une épreuve où tu as le statut « Intéressé », donne une ouverture complète dans 70 minutes (le jour d'aujourd'hui et l'heure), et attends la notification : son titre porte le nom de la course et celui de l'épreuve.
 7. **Sur ton téléphone**, regarde le formulaire à 320 px de large, en clair et en sombre : la case, les deux champs et leurs messages d'erreur doivent tenir sans défilement horizontal.
-8. **Assistant (facultatif).** Demande à l'assistant la course : chaque épreuve dit ses champs et `opens`.
+8. **Assistant (facultatif).** Demande à l'assistant la course : une épreuve qui a sa propre ouverture donne ses champs et `opens` ; une épreuve qui suit la course n'en a pas.
 9. Si tout te va : dis « c'est bon, en prod », et je fusionne `feat/v9` dans `main`, puis je déploie la production (avec la sauvegarde du volume avant). Annecy se saisit alors (n° 19).

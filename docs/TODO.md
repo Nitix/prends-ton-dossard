@@ -35,7 +35,7 @@ Le détail est dans `docs/superpowers/decisions/2026-11-07-decisions-v7.md`.
 
 ## Tes idées
 
-- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, que chacun coche la veille. Reporté pendant la v7. La spec est prête dans `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (§ 11). Sa migration prendra la lettre qui suit `9s` (celle du super admin).
+- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, que chacun coche la veille. Reporté pendant la v7. La spec est prête dans `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (§ 11). Sa migration prendra la lettre qui suit `9t` (celle de la v9).
 - **Reporté pendant la v9 :**
   - **une date limite par épreuve** (la course n'en a qu'une) ;
   - **un lien d'inscription par épreuve** ;
