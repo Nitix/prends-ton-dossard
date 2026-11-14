@@ -655,3 +655,147 @@ func TestTools_UpdateEvent_Opening(t *testing.T) {
 		t.Errorf("the race says %v at %v", result.Structured["registration_opening"], result.Structured["registration_opening_time"])
 	}
 }
+
+// A format has its own opening (v9): stored as sent, a day or a time alone with
+// the opening of the race to take the rest from.
+func TestCreateEvent_FormatOpening(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+
+	result := isDone(t, callTool(t, app, alice, "create_event", map[string]any{
+		"name": "Trail des Cimes", "location": "Chamonix", "start_date": "2026-08-20",
+		"registration_opening": "2026-06-01", "registration_opening_time": "09:00",
+		"formats": []any{
+			map[string]any{"race_type": "Trail", "distance_km": 42, "registration_opening": " 2026-06-10 ", "registration_opening_time": "12:00"},
+			map[string]any{"race_type": "Trail", "distance_km": 15, "registration_opening": "2026-06-05"},
+			map[string]any{"race_type": "Trail", "distance_km": 10, "registration_opening_time": "18:30"},
+			map[string]any{"race_type": "Trail", "distance_km": 5},
+		},
+	}))
+	want := map[float64][2]string{42: {"2026-06-10", "12:00"}, 15: {"2026-06-05", ""}, 10: {"", "18:30"}, 5: {"", ""}}
+	// (get_event does not say the openings of the formats yet: the database is read.)
+	formats, err := app.FindAllRecords("formats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen int
+	for _, r := range formats {
+		if r.GetString("event") != result.Structured["id"] {
+			continue
+		}
+		seen++
+		got := [2]string{r.GetString("registration_opening"), r.GetString("registration_opening_time")}
+		if got != want[r.GetFloat("distance_km")] {
+			t.Errorf("the stored %v km format opens %v, want %v", r.GetFloat("distance_km"), got, want[r.GetFloat("distance_km")])
+		}
+	}
+	if seen != 4 {
+		t.Errorf("%d formats stored, want 4", seen)
+	}
+}
+
+// A day alone or a time alone takes the rest from the race: with none, it is
+// refused in the words of the site, before anything is written.
+func TestCreateEvent_FormatOpeningPartialNeedsEvent(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	base := func(format map[string]any) map[string]any {
+		format["race_type"], format["distance_km"] = "Trail", 42
+		return map[string]any{"name": "Trail des Cimes", "location": "Chamonix", "start_date": "2026-08-20", "formats": []any{format}}
+	}
+	text := "Épreuve 1 (« Trail 42 km »), ouverture des inscriptions : remplis d'abord l'ouverture des inscriptions de la course : cette épreuve en reprend le jour ou l'heure. (opening_general_required)"
+	announced(t, app, alice, "create_event", base(map[string]any{"registration_opening": "2026-06-10"}), text)
+	announced(t, app, alice, "create_event", base(map[string]any{"registration_opening_time": "10:00"}), text)
+	announced(t, app, alice, "create_event", base(map[string]any{"registration_opening": "2026-02-31", "registration_opening_time": "10:00"}),
+		"registration_opening : « 2026-02-31 » n'est pas un jour valide (AAAA-MM-JJ).")
+	announced(t, app, alice, "create_event", base(map[string]any{"registration_opening": "2026-06-10", "registration_opening_time": "24:00"}),
+		"heure d'ouverture : l'heure doit être de la forme 06:30. (time_invalid)")
+	announced(t, app, alice, "create_event", base(map[string]any{"registration_opening": "2026-08-21", "registration_opening_time": "10:00"}),
+		"Épreuve 1 (« Trail 42 km »), ouverture des inscriptions : l'ouverture des inscriptions doit être au plus tard le jour du début. (registration_opening_after_start)")
+}
+
+// Clearing the opening of the race while a format takes its day or time from it is
+// refused, and so is a deadline or a start that goes before the opening of a format.
+func TestUpdateEvent_ClearUsedOpening(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	update(t, app, fx.Event, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "10:00", "registration_deadline": "2026-06-01"})
+	update(t, app, fx.F15, map[string]any{"registration_opening_time": "18:30"})
+	update(t, app, fx.F42, map[string]any{"registration_opening": "2026-05-20", "registration_opening_time": "12:00"})
+
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_opening": ""}, "opening_used_by_format")
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_deadline": "2026-05-10"}, "format_opening_after_deadline")
+	// F15 has no day of its own: its opening (the race's day) is after a start moved before it.
+	update(t, app, fx.Event, map[string]any{"registration_deadline": ""})
+	update(t, app, fx.F15, map[string]any{"registration_opening": "2026-06-12"})
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "start_date": "2026-06-10"}, "format_opening_after_start")
+	if r := storedRecord(t, app, "events", fx.Event.Id); r.GetString("registration_opening") != "2026-05-04" {
+		t.Errorf("the opening of the race is %q", r.GetString("registration_opening"))
+	}
+}
+
+// update_format: an empty text clears that field only, and asks first; the first
+// call writes nothing, the same call with the token clears.
+func TestUpdateFormat_ClearOpeningAsksConfirmation(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	writeFast(app)
+	mcp.SetNow(t, at(2026, 5, 1, 10, 0))
+	alice := newToken(t, app, fx.Alice)
+	update(t, app, fx.Event, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "10:00"})
+	update(t, app, fx.F42, map[string]any{"registration_opening": "2026-05-20", "registration_opening_time": "12:00"})
+
+	args := map[string]any{"format_id": fx.F42.Id, "registration_opening": ""}
+	writesNothing(t, app, func() {
+		_, message, details := asked(t, callTool(t, app, alice, "update_format", args))
+		mentions(t, message, details, "l'ouverture des inscriptions de l'épreuve serait effacée", "2026-05-20")
+		if strings.Contains(message+strings.Join(details, "\n"), "ouverture des inscriptions serait effacée") {
+			t.Errorf("the confirmation says the opening of the race: %s", message)
+		}
+	})
+	confirmAndCall(t, app, alice, "update_format", args)
+	f := storedRecord(t, app, "formats", fx.F42.Id)
+	if f.GetString("registration_opening") != "" || f.GetString("registration_opening_time") != "12:00" {
+		t.Errorf("F42 opens on %q at %q, want only the day cleared", f.GetString("registration_opening"), f.GetString("registration_opening_time"))
+	}
+
+	args = map[string]any{"format_id": fx.F42.Id, "registration_opening_time": ""}
+	writesNothing(t, app, func() {
+		_, message, details := asked(t, callTool(t, app, alice, "update_format", args))
+		mentions(t, message, details, "l'heure d'ouverture de l'épreuve serait effacée", "12:00")
+	})
+	confirmAndCall(t, app, alice, "update_format", args)
+	f = storedRecord(t, app, "formats", fx.F42.Id)
+	if f.GetString("registration_opening") != "" || f.GetString("registration_opening_time") != "" {
+		t.Errorf("F42 opens on %q at %q", f.GetString("registration_opening"), f.GetString("registration_opening_time"))
+	}
+
+	// A day set asks nothing (nothing is lost); add_format takes an opening as well.
+	isDone(t, callTool(t, app, alice, "update_format", map[string]any{"format_id": fx.F42.Id, "registration_opening": "2026-05-21"}))
+	if f = storedRecord(t, app, "formats", fx.F42.Id); f.GetString("registration_opening") != "2026-05-21" {
+		t.Errorf("F42 opens on %q", f.GetString("registration_opening"))
+	}
+	isDone(t, callTool(t, app, alice, "add_format", map[string]any{
+		"event_id": fx.Event.Id, "race_type": "Trail", "distance_km": 5, "registration_opening_time": "08:00",
+	}))
+	records, err := app.FindAllRecords("formats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, r := range records {
+		found = found || (r.GetString("event") == fx.Event.Id && r.GetFloat("distance_km") == 5 && r.GetString("registration_opening_time") == "08:00")
+	}
+	if !found {
+		t.Error("the added format has no opening time")
+	}
+}

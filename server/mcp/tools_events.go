@@ -106,7 +106,7 @@ func addCreateEvent(s *mcpsdk.Server, t *tools) {
 			"Chaque épreuve a au moins une mesure, distance_km, duration_min ou time_limit_min : de préférence celles de son type (list_race_types). " +
 			"La date de fin vient des épreuves : une épreuve datée après start_date allonge la course. " +
 			"Quand seul le mois est connu, date_precision: month et start_date AAAA-MM : la course va du 1er au dernier jour du mois, le site pose la fin, et ses épreuves n'ont pas de date. " +
-			"registration_opening (AAAA-MM-JJ) et registration_opening_time (HH:MM, heure de Paris, facultative : sans heure, le site compte 9 h) disent quand les inscriptions ouvrent. " +
+			"registration_opening (AAAA-MM-JJ) et registration_opening_time (HH:MM, heure de Paris, facultative : sans heure, le site compte 9 h) disent quand les inscriptions ouvrent ; chaque épreuve peut avoir la sienne (registration_opening, registration_opening_time dans formats) : un jour seul garde l'heure de la course, une heure seule garde son jour, et l'un ou l'autre seul demande une ouverture sur la course. " +
 			"join ajoute la personne au nom de qui tu agis à une épreuve, comme « Je participe ». La trace GPX d'une épreuve passe par set_track. " +
 			"Donne la course comme get_event.",
 		InputSchema:  createEventSchema(),
@@ -198,6 +198,9 @@ func (t *tools) createEvent(ctx context.Context, _ *mcpsdk.CallToolRequest, in c
 	if err := openingRefusal(draft); err != nil {
 		return refuse(err)
 	}
+	if err := formatOpeningRefusal(w, draft, nil, labels); err != nil {
+		return refuse(err)
+	}
 	if err := dateRefusal(w, draft, labels, startHint); err != nil {
 		return refuse(err)
 	}
@@ -287,6 +290,7 @@ func addUpdateEvent(s *mcpsdk.Server, t *tools) {
 			"Un champ absent ne change pas ; un texte vide efface un champ facultatif. " +
 			"formats modifie des épreuves dans la même écriture (format_id obligatoire, mêmes règles) : c'est ce qui déplace une course avec ses épreuves datées en un appel. " +
 			"registration_opening et registration_opening_time (heure de Paris) disent quand les inscriptions ouvrent ; vider le jour vide aussi l'heure. " +
+			"Dans formats, registration_opening et registration_opening_time donnent à une épreuve sa propre ouverture ; vide, l'un efface l'autre non. " +
 			"date_precision: month (avec start_date AAAA-MM) dit que seul le mois est connu : la course va du 1er au dernier jour du mois, le site pose la fin, et les épreuves perdent leur date ; day la rend à un jour. " +
 			"La date de fin vient des épreuves. Ce qui effacerait ou changerait ce que des personnes ont saisi " +
 			"(un champ vidé, des notes remplacées, une course raccourcie, le jour d'une épreuve qui a des participants, des épreuves datées qui passent au mois) " +

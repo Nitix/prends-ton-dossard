@@ -53,6 +53,9 @@ type formatIn struct {
 	RouteURL       string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
 	Date           string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve quand ce n'est pas le premier jour de la course, jamais avant ; la fin de la course en découle"`
 	StartTime      string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, facultative ; elle donne la météo de l'heure du départ. Pas pour une course dont seul le mois est connu"`
+	// The opening of the format itself (v9): see formatDraft.
+	RegistrationOpening     string `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions de cette épreuve ouvrent, quand ce n'est pas celui de la course ; un jour seul garde l'heure de la course, une heure seule garde son jour ; l'un ou l'autre seul demande une ouverture sur la course"`
+	RegistrationOpeningTime string `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure d'ouverture de cette épreuve, quand ce n'est pas celle de la course ; une heure seule garde le jour de la course"`
 }
 
 // formatPatchIn is a change of a format (update_event.formats, update_format): a
@@ -69,6 +72,9 @@ type formatPatchIn struct {
 	RouteURL       *string  `json:"route_url,omitempty" jsonschema:"un lien vers le parcours ; vide l'efface"`
 	Date           *string  `json:"date,omitempty" jsonschema:"AAAA-MM-JJ : le jour de l'épreuve ; vide : le premier jour de la course. La fin de la course en découle"`
 	StartTime      *string  `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve ; vide l'efface. Pas pour une course dont seul le mois est connu"`
+	// An empty text clears that field only (the day does not take the time with it, as the event's does).
+	RegistrationOpening     *string `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions de cette épreuve ouvrent, quand ce n'est pas celui de la course ; un jour seul garde l'heure de la course, une heure seule garde son jour ; l'un ou l'autre seul demande une ouverture sur la course ; vide l'efface"`
+	RegistrationOpeningTime *string `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure d'ouverture de cette épreuve, quand ce n'est pas celle de la course ; une heure seule garde le jour de la course ; vide l'efface"`
 }
 
 // The numbers of a format, which are never below 0 (the minimum of the form,
@@ -296,6 +302,73 @@ func openingRefusal(draft eventDraft) error {
 	return nil
 }
 
+// formatOpeningRefusal is the refusal of the site for the opening of each format of
+// the draft (validateFormat and validateEvent of the events package), against the
+// race as it will be after the call: the form of the day (date_invalid) and of the
+// time (time_invalid); a day or a time alone with no opening on the race
+// (opening_general_required, or opening_used_by_format when this call clears the
+// opening of the race, stored); the day after the format's own day, else the first
+// day of the race, the last day of its month for a race known by its month
+// (registration_opening_after_start); after the deadline
+// (registration_opening_after_deadline). A format that this call does not change
+// (stored has it with the same opening and day) whose opening the race now refuses
+// is told by the codes of the race (format_opening_after_start,
+// format_opening_after_deadline). It says which format, and all of it before any
+// confirmation. stored is nil for a race that does not exist yet.
+func formatOpeningRefusal(w wording.Words, draft eventDraft, stored *storedEvent, labels map[string]string) error {
+	monthOnly := draft.monthOnly()
+	firstDay := draft.StartDate
+	if monthOnly {
+		firstDay = lastDayOfMonth(draft.StartDate)
+	}
+	for i, f := range draft.Formats {
+		subject := formatSubject(i, titleOf(w, f, labels))
+		refuse := func(field, code string) error {
+			return errors.New(subject + ", " + fieldTextFor(field, code, monthOnly))
+		}
+		day, at := f.RegistrationOpening, f.RegistrationOpeningTime
+		if day != "" {
+			if _, ok := events.ParseDay(day); !ok {
+				return refuse("registration_opening", "date_invalid")
+			}
+		}
+		if at != "" && !events.ValidTime(at) {
+			return refuse("registration_opening_time", "time_invalid")
+		}
+		if (day == "") != (at == "") && draft.RegistrationOpening == "" {
+			if stored != nil && stored.RegistrationOpening != "" {
+				return errors.New("La course, " + fieldText("registration_opening", "opening_used_by_format") + " " + subject + " en reprend le jour ou l'heure.")
+			}
+			return refuse("registration_opening", "opening_general_required")
+		}
+		if day == "" {
+			continue
+		}
+		// What the call does not change of this format is told by the codes of the race.
+		var was *formatDraft
+		if stored != nil && f.ID != "" {
+			if j := slices.IndexFunc(stored.Formats, func(s formatDraft) bool { return s.ID == f.ID }); j >= 0 {
+				was = &stored.Formats[j]
+			}
+		}
+		kept := was != nil && was.RegistrationOpening == day && was.Date == f.Date
+		limit := cmp.Or(f.Date, firstDay)
+		if limit != "" && day > limit {
+			if kept && f.Date == "" {
+				return errors.New("La course, " + fieldTextFor("start_date", "format_opening_after_start", monthOnly) + " " + subject + " ouvre le " + day + ".")
+			}
+			return refuse("registration_opening", "registration_opening_after_start")
+		}
+		if deadline := draft.RegistrationDeadline; deadline != "" && day > deadline {
+			if kept {
+				return errors.New("La course, " + fieldText("registration_deadline", "format_opening_after_deadline") + " " + subject + " ouvre le " + day + ".")
+			}
+			return refuse("registration_opening", "registration_opening_after_deadline")
+		}
+	}
+	return nil
+}
+
 // normalizeFormat is a format of create_event or add_format as the form saves
 // it: its race type by id, its texts trimmed, its day checked.
 func normalizeFormat(in formatIn, raceTypes []raceTypeRecord) (formatDraft, error) {
@@ -311,8 +384,13 @@ func normalizeFormat(in formatIn, raceTypes []raceTypeRecord) (formatDraft, erro
 	if err != nil {
 		return formatDraft{}, err
 	}
+	opening, err := checkDay("registration_opening", in.RegistrationOpening)
+	if err != nil {
+		return formatDraft{}, err
+	}
 	return formatDraft{
 		Name: strings.TrimSpace(in.Name), RaceType: raceType.ID, RouteURL: strings.TrimSpace(in.RouteURL), Date: date, StartTime: startTime,
+		RegistrationOpening: opening, RegistrationOpeningTime: strings.TrimSpace(in.RegistrationOpeningTime),
 		DistanceKm: in.DistanceKm, PriceEur: in.PriceEur,
 		DurationMin: in.DurationMin, TimeLimitMin: in.TimeLimitMin, ElevationGainM: in.ElevationGainM,
 	}, nil
@@ -351,6 +429,14 @@ func normalizePatch(in formatPatchIn, raceTypes []raceTypeRecord) (formatPatchIn
 		}
 		out.StartTime = ptr(at)
 	}
+	if in.RegistrationOpening != nil {
+		day, err := checkDay("registration_opening", *in.RegistrationOpening)
+		if err != nil {
+			return formatPatchIn{}, err
+		}
+		out.RegistrationOpening = ptr(day)
+	}
+	out.RegistrationOpeningTime = trimmed(in.RegistrationOpeningTime)
 	return out, nil
 }
 
@@ -366,6 +452,8 @@ func (p formatPatchIn) apply(f *formatDraft) {
 	set(&f.RouteURL, p.RouteURL)
 	set(&f.Date, p.Date)
 	set(&f.StartTime, p.StartTime)
+	set(&f.RegistrationOpening, p.RegistrationOpening)
+	set(&f.RegistrationOpeningTime, p.RegistrationOpeningTime)
 	if p.DistanceKm != nil {
 		f.DistanceKm = *p.DistanceKm
 	}
@@ -482,6 +570,9 @@ func (t *tools) changeEvent(ctx context.Context, tool string, view eventView, la
 	if err := openingRefusal(draft); err != nil {
 		return eventWriteOut{}, err
 	}
+	if err := formatOpeningRefusal(w, draft, stored, labels); err != nil {
+		return eventWriteOut{}, err
+	}
 	if err := dateRefusal(w, draft, labels, moveHint); err != nil {
 		return eventWriteOut{}, err
 	}
@@ -568,15 +659,18 @@ var clearedPhrases = map[string]string{
 	"registration_deadline":     "la date limite d'inscription serait effacée",
 	"registration_opening":      "l'ouverture des inscriptions serait effacée",
 	"registration_opening_time": "l'heure d'ouverture serait effacée",
-	"name":                      "le nom serait effacé",
-	"distance_km":               "la distance serait effacée",
-	"elevation_gain_m":          "le D+ serait effacé",
-	"duration_min":              "la durée serait effacée",
-	"time_limit_min":            "le temps max serait effacé",
-	"price_eur":                 "le prix serait effacé",
-	"route_url":                 "le lien du parcours serait effacé",
-	"date":                      "la date de l'épreuve serait effacée",
-	"start_time":                "l'heure de départ serait effacée",
+	// The fields of a format are not the ones of the race, though they are called the same.
+	"format_registration_opening":      "l'ouverture des inscriptions de l'épreuve serait effacée",
+	"format_registration_opening_time": "l'heure d'ouverture de l'épreuve serait effacée",
+	"name":                             "le nom serait effacé",
+	"distance_km":                      "la distance serait effacée",
+	"elevation_gain_m":                 "le D+ serait effacé",
+	"duration_min":                     "la durée serait effacée",
+	"time_limit_min":                   "le temps max serait effacé",
+	"price_eur":                        "le prix serait effacé",
+	"route_url":                        "le lien du parcours serait effacé",
+	"date":                             "la date de l'épreuve serait effacée",
+	"start_time":                       "l'heure de départ serait effacée",
 }
 
 // days are the days of a race, as the messages write them: "2026-06-13", or
@@ -675,6 +769,8 @@ func changeRisk(w wording.Words, view eventView, draft eventDraft) *risk {
 			// The day that moves says it already.
 			{"date", was.Date != "" && !dayMoves && !lostToMonth, now.Date != "", was.Date},
 			{"start_time", was.StartTime != "", now.StartTime != "", was.StartTime},
+			{"format_registration_opening", was.RegistrationOpening != "", now.RegistrationOpening != "", was.RegistrationOpening},
+			{"format_registration_opening_time", was.RegistrationOpeningTime != "", now.RegistrationOpeningTime != "", was.RegistrationOpeningTime},
 		} {
 			if field.was && !field.now {
 				lines = append(lines, "Épreuve "+quote(title)+" : "+clearedPhrases[field.name]+" (actuellement : "+field.value+").")
