@@ -607,7 +607,7 @@ export const en = {
     formatStartTime: "Start time",
     formatStartTimeHint: "Optional. It gives the weather at the start.",
     formatOpeningToggle: "This race opens its registration at another time",
-    formatOpening: "Registration opens",
+    formatOpening: "Registration opening",
     formatOpeningTime: "Opening time",
     formatOpeningHelp:
       "Paris time. A day alone keeps the event's time, a time alone keeps its day.",

@@ -1371,8 +1371,94 @@ describe("buildBatch — les ouvertures des épreuves attendent la course", () =
     expect(at(early, "f42")).toHaveLength(1);
     expect(at(early, "f42")[0]?.body).toMatchObject({ registration_opening: "2026-12-20" });
 
-    // The 2nd of January is after it: the stored event refuses it for now.
+    // The 2nd of January is after it. The final state of this draft is not valid, as the race stays in
+    // December: the test only pins the limit that the waiting rule uses.
     const late = buildBatch(draftAt("2027-01-02"), view, ME).ops;
     expect(at(late, "f42")[0]?.body).toMatchObject({ registration_opening: "" });
+  });
+});
+
+describe("buildBatch — l'ouverture d'une épreuve dont la date attend", () => {
+  test("la course avance d'une semaine avec l'épreuve, son ouverture restant dans les nouveaux jours : elle attend avec la date", () => {
+    // 8-10 December becomes 1-3 December, F42 moves from the 10th to the 3rd, its opening stays on the
+    // 2nd: before the event F42 has no date, and the new first day (the 1st) would refuse that opening.
+    const view = stored(
+      {
+        start_date: "2026-12-08",
+        end_date: "2026-12-10",
+        registration_deadline: "",
+        registration_opening: "2026-11-01",
+      },
+      { date: "2026-12-10", registration_opening: "2026-12-02" },
+    );
+    const draft = draftOf(
+      {
+        start_date: "2026-12-01",
+        end_date: "2026-12-03",
+        registration_deadline: undefined,
+        registration_opening: "2026-11-01",
+      },
+      { date: "2026-12-03", registration_opening: "2026-12-02" },
+    );
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    const eventAt = ops.findIndex((op) => op.collection === "events");
+    expect(ops.slice(0, eventAt).find((op) => op.id === "f42")?.body).toMatchObject({
+      date: "",
+      registration_opening: "",
+      registration_opening_time: "",
+    });
+    expect(ops.slice(eventAt + 1).find((op) => op.id === "f42")?.body).toEqual({
+      date: "2026-12-03",
+      registration_opening: "2026-12-02",
+      registration_opening_time: "",
+    });
+  });
+
+  test("de la course au mois à la course d'un jour, avec l'ouverture d'une épreuve", () => {
+    const view = stored(
+      {
+        start_date: "2026-12-01",
+        end_date: "2026-12-31",
+        date_precision: "month",
+        registration_deadline: "",
+      },
+      { registration_opening: "2026-12-10" },
+    );
+    const draft = draftOf(
+      {
+        start_date: "2026-12-05",
+        end_date: "2026-12-12",
+        date_precision: "day",
+        registration_deadline: undefined,
+      },
+      { date: "2026-12-12", registration_opening: "2026-12-10" },
+    );
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    const eventAt = ops.findIndex((op) => op.collection === "events");
+    expect(ops.slice(0, eventAt).find((op) => op.id === "f42")?.body).toMatchObject({
+      date: "",
+      registration_opening: "",
+    });
+    expect(ops.slice(eventAt + 1).find((op) => op.id === "f42")?.body).toMatchObject({
+      date: "2026-12-12",
+      registration_opening: "2026-12-10",
+    });
+  });
+
+  test("une ouverture partielle enregistrée, décochée pendant que celle de la course est vidée : elle part vide avant la course", () => {
+    const view = stored({}, { registration_opening: "2026-11-17" });
+    const draft = draftOf({ registration_opening: undefined });
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(ops.find((op) => op.id === "f42")?.body).toMatchObject({
+      registration_opening: "",
+      registration_opening_time: "",
+    });
   });
 });

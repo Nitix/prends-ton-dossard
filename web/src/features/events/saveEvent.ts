@@ -1,11 +1,12 @@
 import { ClientResponseError } from "pocketbase";
 
 import { errorCode, fieldErrors } from "../../i18n/errors";
-import { isMonthOnly, parseDate } from "../../lib/dates";
+import { isMonthOnly } from "../../lib/dates";
 import { newId } from "../../lib/ids";
 import { pb } from "../../lib/pb";
 import type { Status } from "../../lib/types";
 import type { EventView } from "./api";
+import { lastDayOfMonth } from "./formDraft";
 
 // Saving an event is a single batch request: the event, its formats, the
 // formats that are removed and, when the member creates it, their own
@@ -124,12 +125,6 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
   };
 }
 
-/** The last day of the month of a day (`YYYY-MM-DD`, a real one). */
-function lastDayOfMonth(day: string): string {
-  const date = parseDate(day);
-  return date.with({ day: date.daysInMonth }).toString();
-}
-
 /**
  * Whether the opening of a kept format has to wait for the event, because the stored event would
  * refuse it. `day` is the date the format is sent with (empty when it waits too). The stored event
@@ -233,7 +228,11 @@ export function buildBatch(
       const waitsTime = isMonthOnly(existing.event) && !!format.start_time;
       // The opening of the format waits, day and time together, when the stored event would refuse
       // it, as `openingWaits` says: the format keeps what it has until the event is saved.
-      const waitsOpening = openingWaits(existing.event, waits ? undefined : format.date, format);
+      // A format whose date waits has no date in phase 2, so the new first day of the event would hold its
+      // opening day against it in phase 3: the opening waits with the date.
+      const waitsOpening =
+        openingWaits(existing.event, waits ? undefined : format.date, format) ||
+        (waits && !!format.registration_opening);
       const kept = {
         ...format,
         ...(waits ? { date: undefined } : {}),

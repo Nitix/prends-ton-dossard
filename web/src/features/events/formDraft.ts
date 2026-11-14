@@ -195,7 +195,7 @@ export function eventEndDate(
 }
 
 /** The last day of the month of a day (`YYYY-MM-DD`, a real one). */
-function lastDayOfMonth(day: string): string {
+export function lastDayOfMonth(day: string): string {
   const date = parseDate(day);
   return date.with({ day: date.daysInMonth }).toString();
 }

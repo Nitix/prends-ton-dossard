@@ -203,8 +203,8 @@ func openingWaits(stored *storedEvent, sentDate string, f formatDraft) bool {
 // event against its formats, as they are when each request runs: whatever the
 // final state, if it is valid, no request of the batch fails on the way (see
 // buildBatch). The opening of a format follows the same rule (openingWaits): it is sent
-// before the event when the stored event accepts it, and after it otherwise. Without an update of the event, its days do not change, and no
-// format waits for them: a draft dated within them is valid as it is stored. A
+// before the event when the stored event accepts it, and after it otherwise. Without an
+// update of the event, its days do not change, and no format waits for them: a draft dated within them is valid as it is stored. A
 // format is never sent with its event once it exists.
 //
 // draft.Join, when set, names a format of draft.Formats, and myRunnerID is the
@@ -270,7 +270,9 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 		}
 		// The opening of the format waits, day and time together, when the stored event would
 		// refuse it (openingWaits).
-		waitsOpening := openingWaits(stored, sent.Date, f)
+		// A format whose date waits has no date in phase 2, so the new first day of the event would hold its
+		// opening day against it: the opening waits with the date (saveEvent.ts).
+		waitsOpening := openingWaits(stored, sent.Date, f) || (waits && f.RegistrationOpening != "")
 		if waitsOpening {
 			sent.RegistrationOpening, sent.RegistrationOpeningTime = "", ""
 		}
