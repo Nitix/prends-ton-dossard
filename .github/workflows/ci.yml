@@ -18,6 +18,8 @@ jobs:
   go:
     name: Go
     runs-on: ubuntu-latest
+    # About 3 times the 7 minutes of run 27.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       # The newest 1.27: go.mod says 1.27.0, which has the vulnerabilities of the standard
@@ -41,6 +43,8 @@ jobs:
   web-checks:
     name: Web
     runs-on: ubuntu-latest
+    # The job takes about 1 minute (run 27): 10 leaves room for a cold install.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       # The version of pnpm comes from "packageManager" in package.json.
@@ -136,8 +140,7 @@ jobs:
           restore-keys: vite-${{ runner.os }}-
       - name: Say what the cache of Vite found
         run: echo "cache-hit=${{ steps.vite-cache.outputs.cache-hit }} matched-key=${{ steps.vite-cache.outputs.cache-matched-key }}"
-      # Only the browser of the target. No cache: the downloads are small next to the run, and
-      # a cache would need an action that this file does not use yet.
+      # Only the browser of the target. Not cached: the downloads are small next to the run.
       - name: Install the browser
         run: pnpm --dir web exec playwright install --with-deps ${{ matrix.browser }}
       # The reports (JSON, and the annotations of Vitest) are written by the first run. CI=true (set
@@ -152,7 +155,9 @@ jobs:
       - name: Browser tests
         shell: bash
         run: |
-          set -o pipefail
+          # -e is explicit: the exit code of the step must not depend on the shell GitHub picks.
+          # Every variable below is set before it is read.
+          set -euo pipefail
           temp="${{ runner.temp }}"
           run() {
             out="$1"; log="$2"; shift 2
@@ -171,9 +176,10 @@ jobs:
               exit 1
             fi
           fi
-      # After the tests, whatever they did: the cache is saved from a red target too.
+      # After the tests, whatever they did: the cache is saved from a red target too, but not from
+      # a cancelled run (it may stop early, and a key is saved only once).
       - name: Save the cache of Vite
-        if: ${{ always() && steps.vite-cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.vite-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v5
         with:
           path: web/node_modules/.vite
