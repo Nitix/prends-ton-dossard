@@ -1,5 +1,4 @@
 import {
-  Browser as LeafletBrowser,
   LatLngBounds,
   latLngBounds,
   Map as LeafletMap,
@@ -486,11 +485,7 @@ test("TrackMap — without the preference, the map animates", async () => {
   expect(part(screen, ".leaflet-marker-pane").classList.contains("leaflet-zoom-hide")).toBe(false);
 });
 
-test("TrackMap — a map removed in the middle of a zoom leaves nothing that fails later", async (context) => {
-  // Leaflet animates a zoom only where it has 3D transforms (Browser.any3d): where it has none (a
-  // browser without them, or Playwright's WebKit on Windows), there is no zoom on its way to remove
-  // the map in the middle of. Linux WebKit has them, and the test runs there.
-  if (!LeafletBrowser.any3d) context.skip();
+test("TrackMap — a map removed in the middle of a zoom leaves nothing that fails later", async () => {
   // Leaflet ends an animated zoom with a timer of 250 ms that it does not cancel
   // when the map is removed, and that then works on a map that is gone.
   prefersReducedMotion(false);

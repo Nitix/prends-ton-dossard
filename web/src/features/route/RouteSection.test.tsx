@@ -627,7 +627,7 @@ const tabStops = (region: Element) =>
     (element) => element.tabIndex >= 0,
   );
 
-test("RouteSection — au clavier, le repère suit", async () => {
+test("RouteSection — au clavier, le repère suit", async (context) => {
   serve(STEADY.file);
   const placed = vi.spyOn(CircleMarker.prototype, "setLatLng");
   const screen = await renderSection(formatOf({ gpx: "trace_ab12cd.gpx" }));
@@ -681,7 +681,11 @@ test("RouteSection — au clavier, le repère suit", async () => {
     expect(mark(screen)).not.toBeNull();
     expect(document.activeElement).toBe(cursor.element());
   };
-  if (!isTouchDevice) await mouseOverTheMap();
+  if (isTouchDevice) {
+    await context.annotate("étape sautée : la souris sur la carte (écran tactile, pas de souris)");
+  } else {
+    await mouseOverTheMap();
+  }
 
   // Escape puts the cursor away, and its mark; the focus stays.
   await userEvent.keyboard("{Escape}");

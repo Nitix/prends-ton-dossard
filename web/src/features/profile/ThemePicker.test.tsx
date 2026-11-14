@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, type TestContext } from "vitest";
 import { render } from "vitest-browser-react";
 import { server, userEvent } from "vitest/browser";
 
@@ -272,11 +272,16 @@ test("Thème — chaque pastille a un bord qui se voit sur sa carte, cochée ou 
 });
 
 /** Runs a check of the page's paint, except on Linux WebKit, where it does not resolve (docs/TODO.md). */
-const whereSkinsPaint = (check: () => void) => {
-  if (!isLinuxWebkit) check();
+// The steps left out are said in the report of the test (context.annotate), so that « passed » does not hide them.
+const whereSkinsPaint = async (context: TestContext, check: () => void) => {
+  if (!isLinuxWebkit) {
+    check();
+    return;
+  }
+  await context.annotate("étape sautée : la peinture de la page (WebKit sous Linux, docs/TODO.md)");
 };
 
-test("Thème — choisir un skin l'applique à la page tout de suite et le garde sur l'appareil", async () => {
+test("Thème — choisir un skin l'applique à la page tout de suite et le garde sur l'appareil", async (context) => {
   expect(other, "a skin other than Crête").toBeDefined();
   // The colour of the bar of the browser, as index.html has it.
   const bar = document.createElement("meta");
@@ -296,7 +301,7 @@ test("Thème — choisir un skin l'applique à la page tout de suite et le garde
     expect(localStorage.getItem(SKIN_KEY)).toBe(other?.id);
     // Its stylesheet paints the page: the sheet is the colour that the skin gives `neutral-50`.
     // Only this is not checked on Linux WebKit (docs/TODO.md, « Skins sur WebKit Linux »).
-    whereSkinsPaint(() =>
+    await whereSkinsPaint(context, () =>
       expect(sheet()).toBe(painted(getComputedStyle(root).getPropertyValue("--color-neutral-50"))),
     );
     // And the bar of the browser takes its colour.
@@ -309,7 +314,7 @@ test("Thème — choisir un skin l'applique à la page tout de suite et le garde
       .toBeChecked();
     expect(root.dataset.skin).toBeUndefined();
     expect(localStorage.getItem(SKIN_KEY)).toBeNull();
-    whereSkinsPaint(() => expect(sheet()).toBe(day));
+    await whereSkinsPaint(context, () => expect(sheet()).toBe(day));
     expect(bar.content).toBe(crete.themeColor);
   } finally {
     bar.remove();

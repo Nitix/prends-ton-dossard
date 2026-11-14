@@ -80,7 +80,7 @@ test("RouteSection — if the map cannot be loaded, a line says so, and the numb
 // Intl separates a number from its unit with a no-break space: tests read the text as it looks.
 const plain = (s: string | null | undefined) => (s ?? "").replace(/\p{Zs}/gu, " ");
 
-test("RouteSection — sans carte, le profil marche seul", async () => {
+test("RouteSection — sans carte, le profil marche seul", async (context) => {
   vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(TRACK)));
   vi.spyOn(console, "error").mockImplementation(() => {});
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -105,7 +105,13 @@ test("RouteSection — sans carte, le profil marche seul", async () => {
     await userEvent.unhover(cursor);
     await expect.poll(pill).toBe("650 m");
   };
-  if (!isTouchDevice) await pointerOnTheProfile();
+  if (isTouchDevice) {
+    await context.annotate(
+      "étape sautée : le pointeur sur le profil (écran tactile, pas de pointeur)",
+    );
+  } else {
+    await pointerOnTheProfile();
+  }
 
   // The keys: what a screen reader hears, and the figures.
   // The focus is waited for before the key, and the readings are polled: the page draws the new
