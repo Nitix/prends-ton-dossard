@@ -13,6 +13,7 @@ const (
 	CodePasswordTooShort                 = "password_too_short"
 	CodePasswordMismatch                 = "password_mismatch"
 	CodeLastAdmin                        = "last_admin"
+	CodeSuperAdminProtected              = "super_admin_protected"
 	CodeRunnerHasParticipations          = "runner_has_participations"
 	CodeRunnerHasAccount                 = "runner_has_account"
 	CodeRaceTypeInUse                    = "race_type_in_use"

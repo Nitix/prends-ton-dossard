@@ -28,6 +28,8 @@ export type UserRecord = BaseRecord & {
   email: string;
   role: Role;
   disabled: boolean;
+  /** A super admin: no other admin changes this account or its runner (set on the server, never through the API). */
+  super_admin?: boolean;
   /** The id of the skin (the theme) the person chose, for every device: empty until they choose (see features/auth/accountSkin). */
   skin?: string;
   /** When the person wants to be warned before a registration opens (the alarms of the calendar, the notifications): empty, none. */

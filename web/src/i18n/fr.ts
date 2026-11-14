@@ -851,6 +851,9 @@ export const fr = {
     stateDisabled: "Désactivé",
     resetPending: (date: string) => `Lien de réinitialisation en attente · expire le ${date}`,
     roles: { member: "Membre", admin: "Admin" },
+    // A super admin: an admin whose account and runner no other admin changes (the command super-admin sets it).
+    superAdmin: "Super admin",
+    protectedHint: "Compte protégé : personne d'autre ne peut le modifier.",
     // The accessible name of an action of a row: its text, then the runner it is about.
     forRunner: (action: string, name: string) => `${action} · ${name}`,
     rename: "Renommer",
@@ -1056,6 +1059,7 @@ export const fr = {
     password_too_short: "Le mot de passe est trop court (10 caractères minimum).",
     password_mismatch: "Les deux mots de passe sont différents.",
     last_admin: "Il doit toujours rester au moins un admin.",
+    super_admin_protected: "Ce compte est super admin : personne d'autre ne peut le modifier.",
     runner_has_participations:
       "Impossible de supprimer ce coureur : il a encore des participations.",
     runner_has_account:

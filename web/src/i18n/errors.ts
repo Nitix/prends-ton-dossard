@@ -17,6 +17,7 @@ export const ERROR_CODES: readonly string[] = [
   "password_too_short",
   "password_mismatch",
   "last_admin",
+  "super_admin_protected",
   "runner_has_participations",
   "runner_has_account",
   "race_type_in_use",

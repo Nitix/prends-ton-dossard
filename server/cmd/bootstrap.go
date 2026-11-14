@@ -1,5 +1,6 @@
 // Package cmd holds the commands of the server binary that manage its data
-// from the command line: the first administrator, and the demo data.
+// from the command line: the first administrator, the super admin, and the
+// demo data.
 package cmd
 
 import (
