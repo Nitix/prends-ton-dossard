@@ -256,7 +256,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       type="button"
       data-action="calendar"
       onClick={() => {
-        downloadEventIcs(view, t.event.calendarFileName, lang, t, reminders);
+        downloadEventIcs(view, t.event.calendarFileName, lang, t, reminders, me?.runnerId);
       }}
       className={ACTION}
     >

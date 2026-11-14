@@ -363,6 +363,8 @@ export const en = {
     openingNames: (names: string) => `(${names})`,
     openingDeadline: (date: string) => `until ${date}`,
     openingCalendarTitle: (name: string) => `Registration opens: ${name}`,
+    openingCalendarTitleOf: (event: string, names: string) =>
+      `Registration opens: ${event} · ${names}`,
     addToCalendar: "Add to my calendar",
     calendarFileName: "event",
   },
@@ -372,6 +374,7 @@ export const en = {
     title: "Share the race",
     monthWhen: (month: string) => `${month} (date to be set)`,
     formats: (list: string) => `Races: ${list}`,
+    formatOpening: (when: string) => `registration opens ${when}`,
     textLabel: "Text to share",
     copy: "Copy the text",
     copied: "Text copied.",

@@ -443,6 +443,9 @@ export const fr = {
     openingDeadline: (date: string) => `jusqu'au ${date}`,
     // The title of the opening in a calendar file: the name of the event is its own.
     openingCalendarTitle: (name: string) => `Ouverture des inscriptions : ${name}`,
+    // The same for the opening of a format: the names of its formats follow the name of the event.
+    openingCalendarTitleOf: (event: string, names: string) =>
+      `Ouverture des inscriptions · ${event} · ${names}`,
     // The button that downloads a calendar file of the event, and the name of that file when the event's own name
     // has nothing left once the characters a file name cannot have are taken out (the extension is added).
     addToCalendar: "Ajouter à mon agenda",
@@ -455,6 +458,8 @@ export const fr = {
     // After the month of a race known by its month only, in the text that is sent.
     monthWhen: (month: string) => `${month} (date à préciser)`,
     formats: (list: string) => `Épreuves : ${list}`,
+    // After the measures of a format that has its own opening to come: « le mar. 17 nov. à 12:00 » is already made.
+    formatOpening: (when: string) => `ouverture ${when}`,
     textLabel: "Texte à partager",
     copy: "Copier le texte",
     copied: "Texte copié.",
