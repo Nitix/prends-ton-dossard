@@ -1,4 +1,4 @@
-import PocketBase from "pocketbase";
+import PocketBase, { type SendOptions } from "pocketbase";
 
 /**
  * The PocketBase client. The API is served from the same origin as the app
@@ -18,13 +18,28 @@ pb.autoCancellation(false);
 // a token it refuses, so the first request after a session ended elsewhere
 // ends it here too.
 //
-// The SDK (0.29 and later) empties the store on a 401 by itself as well: it is
-// turned off, so that a session ends once (each end forgets the queries and
-// checks the page again), and only when there was one.
+//
+// Only a 401 to the token that is stored ends the session. A new password or a
+// new email kills the token, and a request still under way with the old one is
+// refused after the new one is stored (in this tab, or in another one, which
+// shares the store): that is not the end of the new session.
+//
+// The SDK (0.29 and later) empties the store on any 401 by itself: it is turned
+// off, so that a session ends once (each end forgets the queries and checks the
+// page again), and only for its own token.
 pb.autoClearAuthStore(false);
-pb.afterSend = (response: Response, data: unknown) => {
-  if (response.status === 401 && pb.authStore.token) {
+pb.afterSend = (response: Response, data: unknown, options?: SendOptions) => {
+  const token = pb.authStore.token;
+  if (response.status === 401 && token !== "" && sentToken(options) === token) {
     pb.authStore.clear();
   }
   return data;
 };
+
+/** The token a request went out with: the client puts it in the Authorization header. */
+function sentToken(options: SendOptions | undefined): string | undefined {
+  for (const [name, value] of Object.entries(options?.headers ?? {})) {
+    if (name.toLowerCase() === "authorization") return value;
+  }
+  return undefined;
+}

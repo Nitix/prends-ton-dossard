@@ -36,18 +36,25 @@ const REFUSED = new Set([400, 401, 403, 404]);
  * was replaced, or the account is disabled).
  *
  * A failure to reach the server leaves the session alone: opening the app
- * offline must not sign anybody out.
+ * offline must not sign anybody out. So does a refusal that comes back when the
+ * store no longer holds the token that was sent: a 401 has already emptied it
+ * (afterSend in lib/pb.ts), or somebody signed in again meanwhile.
  */
 async function renewSession(): Promise<boolean> {
   if (!pb.authStore.isValid) {
     pb.authStore.clear();
     return false;
   }
+  const token = pb.authStore.token;
   try {
     await pb.collection("users").authRefresh();
     return true;
   } catch (err) {
-    if (err instanceof ClientResponseError && REFUSED.has(err.status)) {
+    if (
+      err instanceof ClientResponseError &&
+      REFUSED.has(err.status) &&
+      pb.authStore.token === token
+    ) {
       pb.authStore.clear();
     }
     return false;
