@@ -2717,6 +2717,10 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 		before[name] = n
 	}
 
+	// 9s (v9) sits on top of the seven of v7: roll it back first, on its own.
+	if top, err := runner.Down(1); err != nil || !slices.Equal(top, []string{"9s_format_registration_opening.go"}) {
+		t.Fatalf("rolling 9s back: %v, %v", top, err)
+	}
 	reverted, err := runner.Down(7)
 	if err != nil {
 		t.Fatalf("rolling the seven migrations of v7 back: %v", err)
