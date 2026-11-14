@@ -40,6 +40,11 @@ export async function pressByKeyboard(element: Element, key = "{Enter}"): Promis
   if (!(element instanceof HTMLElement)) throw new Error("not an element that can have the focus");
   element.scrollIntoView({ block: "center" });
   element.focus();
+  // Without the focus, Enter or Space would go to whatever has it (a dialog's first button, say):
+  // a silent click on the wrong control.
+  if (document.activeElement !== element) {
+    throw new Error("pressByKeyboard: the element did not take the focus");
+  }
   await userEvent.keyboard(key);
 }
 
@@ -64,6 +69,8 @@ export function isInDialogOrFixed(element: Element): boolean {
 }
 
 async function keyboardClick(this: Locator, options?: unknown): Promise<void> {
+  // A click with options (position, modifiers, force, trial...) means more than an Enter: it stays real.
+  if (options !== undefined) return original.call(this, options);
   // Like a click, wait until it can be pressed; a locator that never matches fails here.
   await expect.element(this).toBeVisible();
   await expect.element(this).toBeEnabled();
@@ -73,7 +80,7 @@ async function keyboardClick(this: Locator, options?: unknown): Promise<void> {
     await pressByKeyboard(element, key);
     return;
   }
-  await original.call(this, options);
+  await original.call(this);
 }
 
 if (keyboardForDialogs() && prototype.click === original) prototype.click = keyboardClick;
