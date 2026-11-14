@@ -101,6 +101,10 @@ export type FormatRecord = BaseRecord & {
   date?: string;
   /** The start time, `HH:MM` Paris time: empty or absent when it is not known. */
   start_time?: string;
+  /** The day registrations open for this format alone (`YYYY-MM-DD`), empty or absent when it has none of its own. */
+  registration_opening?: string;
+  /** The time it opens, `HH:MM`, Paris time: empty for none. A day or a time alone takes the missing part from the opening of the event. */
+  registration_opening_time?: string;
 };
 
 export type ParticipationRecord = BaseRecord & {
