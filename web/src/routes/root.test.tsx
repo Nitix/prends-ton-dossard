@@ -57,12 +57,14 @@ const describeElement = (element: Element | null) =>
  * `expect.poll`. The message says what has it instead (an error of `toHaveFocus` in a poll says
  * nothing of it, and the report keeps only its first line).
  */
-async function expectFocusOn(locator: { element(): Element }) {
+async function expectFocusOn(locator: { query(): Element | null }) {
   try {
-    await expect.poll(() => document.activeElement === locator.element()).toBe(true);
+    await expect.poll(() => document.activeElement === locator.query()).toBe(true);
   } catch {
+    // `query`, not `element`: a missing element must say so here, not throw « cannot find ».
+    const target = locator.query();
     throw new Error(
-      `the focus is on ${describeElement(document.activeElement)}, not on ${describeElement(locator.element())}`,
+      `the focus is on ${describeElement(document.activeElement)}, not on ${target === null ? "an element that is not in the page" : describeElement(target)}`,
     );
   }
 }
