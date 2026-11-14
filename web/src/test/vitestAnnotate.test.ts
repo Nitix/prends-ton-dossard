@@ -207,6 +207,27 @@ test("filesToRerun — seuls les fichiers qui n'ont pas pu être importés sont 
   expect(filesToRerun({ testResults: [passed] }, "some other unhandled error")).toBe(null);
 });
 
+test("filesToRerun — une erreur non gérée sans la signature d'un cache froid est un vrai échec, même avec un fichier non importé", () => {
+  const section = (error: string) =>
+    `\u001b[41m Unhandled Errors \u001b[49m\nVitest caught 1 unhandled error during the test run.\n${error}\n\n Test Files  1 failed | 1 passed`;
+  const files = { testResults: [importFailure, passed] };
+  // A real error outside of a test: nothing is run again, or the second run would hide it.
+  expect(filesToRerun(files, section("TypeError: boom"))).toBe(null);
+  // An unhandled error that is the cold cache itself: the files are run again.
+  expect(filesToRerun(files, section("Error: Vite unexpectedly reloaded a test"))).toEqual([
+    "/w/a.test.tsx",
+  ]);
+});
+
+test("filesToRerun — la signature d'un cache froid dans Firefox et dans WebKit", () => {
+  for (const message of [
+    "TypeError: error loading dynamically imported module: http://localhost:63315/src/a.tsx",
+    "TypeError: Importing a module script failed.",
+  ]) {
+    expect(filesToRerun({ testResults: [passed] }, message)).toEqual([]);
+  }
+});
+
 test("mergeReports — le second passage prend la place des fichiers relancés, les vrais échecs du premier restent", () => {
   const clean = mergeReports({ testResults: [importFailure] }, { testResults: [rerun] });
   expect(clean.success).toBe(true);

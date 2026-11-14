@@ -16,11 +16,20 @@
 // are real stay in the merged report, where they fail the job.
 //
 // It is decided from the JSON: a failed file with no test result at all did not import. A failed
-// test is a real failure, whatever its message says.
+// test is a real failure, whatever its message says, and so is an error outside of a test (the
+// "Unhandled Errors" section of the log) that is not the cold cache: nothing is run again then.
+// When no file failed and the log has the signature, the whole suite is run again.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-const SIGNATURE = /Vite unexpectedly reloaded|Failed to fetch dynamically imported module/;
+// Chromium, Firefox and WebKit word a failed dynamic import differently.
+const SIGNATURE =
+  /Vite unexpectedly reloaded|Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/;
+
+// The banner of the unhandled errors in Vitest 5's default reporter (printUnhandledErrors), up to
+// the summary that follows it. The JSON report does not record these errors, yet they fail the run.
+const UNHANDLED = /Unhandled Errors[\s\S]*?(?=\n\s*Test Files|$)/;
+const stripAnsi = (text) => text.replace(/\u001b\[[0-9;]*m/g, "");
 
 const resultsOf = (report) => (Array.isArray(report?.testResults) ? report.testResults : []);
 const testsOf = (file) => file.assertionResults ?? [];
@@ -31,12 +40,17 @@ const testsOf = (file) => file.assertionResults ?? [];
  * @returns {string[] | null}
  */
 export function filesToRerun(report, log) {
+  const text = stripAnsi(String(log ?? ""));
+  // An unhandled error that is not the cold cache is a real failure: running the files again
+  // would end green and hide it.
+  const unhandled = UNHANDLED.exec(text)?.[0];
+  if (unhandled !== undefined && !SIGNATURE.test(unhandled)) return null;
   const failed = resultsOf(report).filter((file) => file.status === "failed");
   const noImport = failed.filter((file) => testsOf(file).length === 0);
   if (noImport.length > 0) return noImport.map((file) => String(file.name));
   // Only failed tests, or nothing failed at all: an error outside of a test needs the signature.
   if (failed.length > 0) return null;
-  return SIGNATURE.test(String(log ?? "")) ? [] : null;
+  return SIGNATURE.test(text) ? [] : null;
 }
 
 /** The first report, with the files of the second in place of those the second run covered. */
