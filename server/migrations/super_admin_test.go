@@ -125,6 +125,16 @@ func TestRules_SuperAdmin(t *testing.T) {
 			Status: http.StatusOK, After: field("users", admin, "skin", "ocean"),
 		},
 		{
+			Name: "the super admin sets their own reminders", Before: superAdminSetup,
+			As: "admin", Method: http.MethodPatch, URL: recordOf("users", admin), Body: body(`{"reminders":["day"]}`),
+			Status: http.StatusOK,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if got := mustFind(t, app, "users", fx.Admin.Id).GetStringSlice("reminders"); len(got) != 1 || got[0] != "day" {
+					t.Errorf("the reminders of the super admin are %v, want [day]", got)
+				}
+			},
+		},
+		{
 			Name: "the super admin renames their own runner", Before: superAdminSetup,
 			As: "admin", Method: http.MethodPatch, URL: recordOf("runners", adminRunner), Body: body(`{"name":"Boss"}`),
 			Status: http.StatusOK, After: field("runners", adminRunner, "name", "Boss"),
