@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
   getFirstListItem: vi.fn<(filter: string) => Promise<unknown>>(),
   runnerUpdate: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   userUpdate: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
-  authWithPassword: vi.fn<(email: string, password: string) => Promise<unknown>>(),
+  authWithPassword: vi.fn<(email: string, password: string, options?: Rec) => Promise<unknown>>(),
   getFullList: vi.fn<(options: Rec) => Promise<unknown>>(),
   passkeyUpdate: vi.fn<(id: string, body: Rec) => Promise<unknown>>(),
   passkeyDelete: vi.fn<(id: string) => Promise<unknown>>(),
@@ -754,8 +754,12 @@ test("SettingsPage — changer le mot de passe : met le compte à jour, puis se 
     password: "new-password-1",
     passwordConfirm: "new-password-1",
   });
-  // The update replaced the key of the token: the session is renewed with the new password...
-  expect(mocks.authWithPassword).toHaveBeenCalledWith("alice@example.test", "new-password-1");
+  // The update replaced the key of the token: the session is renewed with the
+  // new password, without the dead token (an empty header is none), which
+  // PocketBase would refuse with a 401...
+  expect(mocks.authWithPassword).toHaveBeenCalledWith("alice@example.test", "new-password-1", {
+    headers: { Authorization: "" },
+  });
   expect(mocks.authWithPassword.mock.invocationCallOrder[0]).toBeGreaterThan(
     mocks.userUpdate.mock.invocationCallOrder[0] ?? Infinity,
   );

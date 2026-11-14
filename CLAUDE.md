@@ -9,7 +9,7 @@ Le README dit **quoi** (installer, lancer, sauvegarder). Ce fichier dit **commen
 ## 1. Le projet en bref
 
 - **But :** un site privé où un groupe d'amis prévoit ses courses à pied (trail, route, Hyrox…). On y trouve les courses, les épreuves, qui y va, l'agenda, les résultats et la météo, plus un assistant IA (MCP).
-- **Serveur :** Go et PocketBase v0.41 (module `ganigeorgiev.com/pocketbase/pocketbase`), dans `server/`. Les migrations sont dans `server/migrations`, nommées `9l_…`, `9m_…` : la lettre suivante pour la suivante.
+- **Serveur :** Go et PocketBase v0.42 (module `ganigeorgiev.com/pocketbase/pocketbase`), dans `server/`. Les migrations sont dans `server/migrations`, nommées `9l_…`, `9m_…` : la lettre suivante pour la suivante.
 - **Front :** React 19, Vite, Tailwind 4, TanStack Router/Query et Vitest 5 (mode navigateur avec Playwright), dans `web/`. Il est compilé dans `server/webdist/dist` et embarqué dans le binaire.
 - **Production :** Docker Compose derrière Caddy, sur un serveur à la maison. Trois instances :
   - **prod :** `prends-ton-dossard.ketra.fr` ;

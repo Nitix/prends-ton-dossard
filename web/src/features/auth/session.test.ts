@@ -77,6 +77,32 @@ describe("restoreSession", () => {
     expect(mocks.clear).toHaveBeenCalledTimes(1);
   });
 
+  // The 401 has already ended the session on its way (afterSend in lib/pb.ts):
+  // ending it once more would forget the queries and check the page twice.
+  test("does not end again a session that the 401 already ended", async () => {
+    mocks.authRefresh.mockImplementation(() => {
+      mocks.token = "";
+      return Promise.reject(answer(401));
+    });
+
+    await restoreSession();
+
+    expect(mocks.clear).not.toHaveBeenCalled();
+  });
+
+  // Somebody signed in again (another tab, a new password) while the renewal was
+  // under way: its refusal is about the old token, not the new session.
+  test("keeps a session that replaced the refused token", async () => {
+    mocks.authRefresh.mockImplementation(() => {
+      mocks.token = "new-token";
+      return Promise.reject(answer(403));
+    });
+
+    await restoreSession();
+
+    expect(mocks.clear).not.toHaveBeenCalled();
+  });
+
   test("does not ask the server about a token that is missing or expired", async () => {
     mocks.isValid = false;
 
@@ -242,8 +268,8 @@ describe("sessionCheck", () => {
     expect(mocks.authRefresh).toHaveBeenCalledTimes(2);
   });
 
-  // PocketBase serves a refused token as a guest on the collection routes:
-  // the renewal, which needs a session, is what reveals it.
+  // An app left open asks nothing while nobody uses it: the renewal is what
+  // reveals a session that ended elsewhere.
   test("clears the store when the server refuses the token", async () => {
     mocks.authRefresh.mockRejectedValue(answer(401));
     const run = check();

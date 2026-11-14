@@ -374,6 +374,38 @@ function EventFields({
     };
   }
 
+  /**
+   * What to say when the track of these formats was not sent. When the server
+   * answered each of them with the same refusal of the file, and the form has
+   * words for it (too big, not a GPX file), the message says why; any other
+   * failure, or different reasons, get the general message.
+   */
+  function untracked(names: string[], causes: unknown[]): string {
+    const reasons = new Set(causes.map((cause) => fieldMessage(t, "gpx", fieldErrors(cause).gpx)));
+    const [reason] = reasons;
+    return reasons.size === 1 && reason !== undefined
+      ? t.form.traceFailedBecause(f.list(names), reason)
+      : t.form.traceFailed(f.list(names));
+  }
+
+  /** What a row is called, as the page of the event will call it: none until it has a type. */
+  function displayName(row: FormatRow): string | undefined {
+    const raceType = raceTypes.find(({ id }) => id === row.raceType);
+    if (!raceType) return undefined;
+    return formatDisplayName(
+      {
+        name: row.name,
+        distance_km: Number(row.distanceKm) || undefined,
+        duration_min: row.duration,
+        time_limit_min: row.timeLimit,
+      },
+      raceType.label,
+      f,
+      t,
+    );
+  }
+
+  // The action calls untracked and displayName: they are declared above it.
   const [errors, submit, pending] = useActionState(async (): Promise<Errors> => {
     // The server has the last word, but there is no point in asking it about a
     // format that has no measure at all.
@@ -423,37 +455,6 @@ function EventFields({
     }
     return translateError(t, code);
   };
-
-  /**
-   * What to say when the track of these formats was not sent. When the server
-   * answered each of them with the same refusal of the file, and the form has
-   * words for it (too big, not a GPX file), the message says why; any other
-   * failure, or different reasons, get the general message.
-   */
-  function untracked(names: string[], causes: unknown[]): string {
-    const reasons = new Set(causes.map((cause) => fieldMessage(t, "gpx", fieldErrors(cause).gpx)));
-    const [reason] = reasons;
-    return reasons.size === 1 && reason !== undefined
-      ? t.form.traceFailedBecause(f.list(names), reason)
-      : t.form.traceFailed(f.list(names));
-  }
-
-  /** What a row is called, as the page of the event will call it: none until it has a type. */
-  function displayName(row: FormatRow): string | undefined {
-    const raceType = raceTypes.find(({ id }) => id === row.raceType);
-    if (!raceType) return undefined;
-    return formatDisplayName(
-      {
-        name: row.name,
-        distance_km: Number(row.distanceKm) || undefined,
-        duration_min: row.duration,
-        time_limit_min: row.timeLimit,
-      },
-      raceType.label,
-      f,
-      t,
-    );
-  }
 
   /** What the choice of the format to join says of a row: its place, and what it is when it has begun to be filled in. */
   function rowLabel(row: FormatRow, number: number): string {
