@@ -1441,3 +1441,55 @@ func TestTools_GetEvent_Opening(t *testing.T) {
 		t.Errorf("the race says %v at %v", s["registration_opening"], s["registration_opening_time"])
 	}
 }
+
+// A format with its own opening says it as stored and what results (opens); a
+// format that follows the race says nothing, in get_event and in search_events.
+func TestGetEvent_FormatOpening(t *testing.T) {
+	mcp.SetNow(t, at(2026, 6, 14, 10, 0))
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	alice := newToken(t, app, fx.Alice)
+	update(t, app, fx.Event, map[string]any{"registration_opening": "2026-05-04", "registration_opening_time": "12:00"})
+	update(t, app, fx.F15, map[string]any{"registration_opening": "2026-05-05"})
+
+	check := func(tool string, formats []any) {
+		t.Helper()
+		for _, f := range formats {
+			format := f.(map[string]any)
+			if format["id"] == fx.F15.Id {
+				if format["registration_opening"] != "2026-05-05" {
+					t.Errorf("%s: the format says %v", tool, format["registration_opening"])
+				}
+				if _, ok := format["registration_opening_time"]; ok {
+					t.Errorf("%s: the format says a time of its own: %v", tool, format["registration_opening_time"])
+				}
+				assertJSON(t, format["opens"], map[string]any{"day": "2026-05-05", "time": "12:00"})
+				continue
+			}
+			for _, field := range []string{"registration_opening", "registration_opening_time", "opens"} {
+				if _, ok := format[field]; ok {
+					t.Errorf("%s: the format that follows the race says %s", tool, field)
+				}
+			}
+		}
+	}
+	got := succeeded(t, callTool(t, app, alice, "get_event", map[string]any{"event_id": fx.Event.Id})).Structured
+	check("get_event", got["formats"].([]any))
+	for _, e := range succeeded(t, callTool(t, app, alice, "search_events", nil)).Structured["events"].([]any) {
+		if event := e.(map[string]any); event["id"] == fx.Event.Id {
+			check("search_events", event["formats"].([]any))
+		}
+	}
+
+	// A time alone keeps the day of the race, and no time says nothing.
+	update(t, app, fx.F15, map[string]any{"registration_opening": "", "registration_opening_time": "18:30"})
+	got = succeeded(t, callTool(t, app, alice, "get_event", map[string]any{"event_id": fx.Event.Id})).Structured
+	for _, f := range got["formats"].([]any) {
+		if format := f.(map[string]any); format["id"] == fx.F15.Id {
+			assertJSON(t, format["opens"], map[string]any{"day": "2026-05-04", "time": "18:30"})
+			if _, ok := format["registration_opening"]; ok {
+				t.Errorf("a time alone says a day: %v", format["registration_opening"])
+			}
+		}
+	}
+}

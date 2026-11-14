@@ -732,12 +732,12 @@ func TestUpdateEvent_ClearUsedOpening(t *testing.T) {
 	update(t, app, fx.F15, map[string]any{"registration_opening_time": "18:30"})
 	update(t, app, fx.F42, map[string]any{"registration_opening": "2026-05-20", "registration_opening_time": "12:00"})
 
-	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_opening": ""}, "opening_used_by_format")
-	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_deadline": "2026-05-10"}, "format_opening_after_deadline")
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_opening": ""}, "), ouverture des inscriptions : une épreuve reprend le jour ou l'heure de cette ouverture : elle ne peut pas être vide. (opening_used_by_format)")
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "registration_deadline": "2026-05-10"}, "), date limite d'inscription : une épreuve ouvre ses inscriptions après cette date limite. (format_opening_after_deadline)")
 	// F15 has no day of its own: its opening (the race's day) is after a start moved before it.
 	update(t, app, fx.Event, map[string]any{"registration_deadline": ""})
 	update(t, app, fx.F15, map[string]any{"registration_opening": "2026-06-12"})
-	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "start_date": "2026-06-10"}, "format_opening_after_start")
+	announced(t, app, alice, "update_event", map[string]any{"event_id": fx.Event.Id, "start_date": "2026-06-10"}, "), date de début : une épreuve ouvre ses inscriptions après ce jour. (format_opening_after_start)")
 	if r := storedRecord(t, app, "events", fx.Event.Id); r.GetString("registration_opening") != "2026-05-04" {
 		t.Errorf("the opening of the race is %q", r.GetString("registration_opening"))
 	}

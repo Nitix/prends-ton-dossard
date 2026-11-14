@@ -255,7 +255,7 @@ type eventSummary struct {
 	StartDate               string          `json:"start_date"`
 	EndDate                 string          `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
 	RegistrationDeadline    string          `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
-	RegistrationOpening     string          `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée"`
+	RegistrationOpening     string          `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée ; c'est l'ouverture de toutes les épreuves, sauf celles qui ont la leur"`
 	RegistrationOpeningTime string          `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture, à l'heure de Paris ; absente : le site compte 9 h"`
 	DatePrecision           string          `json:"date_precision,omitempty" jsonschema:"month : seul le mois est connu, le jour ne l'est pas : start_date est le 1er du mois, end_date son dernier jour, et les épreuves n'ont pas de date ; absent : la course a son jour"`
 	URL                     string          `json:"url" jsonschema:"l'adresse de la course sur le site"`
@@ -265,11 +265,21 @@ type eventSummary struct {
 }
 
 type formatSummary struct {
-	ID        string `json:"id"`
-	Title     string `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
-	RaceType  string `json:"race_type" jsonschema:"le nom du type de course"`
-	Date      string `json:"date" jsonschema:"le jour de l'épreuve (le premier jour de la course quand elle n'a pas de date)"`
-	StartTime string `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
+	ID                      string    `json:"id"`
+	Title                   string    `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
+	RaceType                string    `json:"race_type" jsonschema:"le nom du type de course"`
+	Date                    string    `json:"date" jsonschema:"le jour de l'épreuve (le premier jour de la course quand elle n'a pas de date)"`
+	StartTime               string    `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
+	RegistrationOpening     string    `json:"registration_opening,omitempty" jsonschema:"le jour d'ouverture propre à cette épreuve, tel qu'enregistré ; absent : celui de la course"`
+	RegistrationOpeningTime string    `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture propre à cette épreuve, telle qu'enregistrée ; absente : celle de la course"`
+	Opens                   *opensOut `json:"opens,omitempty" jsonschema:"le jour et l'heure où les inscriptions de cette épreuve ouvrent, quand ce n'est pas l'ouverture de la course (un jour seul ou une heure seule complétés par celle de la course) ; absent : l'épreuve suit l'ouverture de la course"`
+}
+
+// opensOut is the opening of a format that has its own: the day, and the time
+// when there is one.
+type opensOut struct {
+	Day  string `json:"day" jsonschema:"AAAA-MM-JJ"`
+	Time string `json:"time,omitempty" jsonschema:"HH:MM, heure de Paris ; absente quand il n'y en a pas"`
 }
 
 type mineOut struct {
@@ -288,7 +298,7 @@ type eventDetail struct {
 	EndDate                 string             `json:"end_date,omitempty" jsonschema:"le dernier jour d'une course de plusieurs jours ; absent pour une course d'un seul jour (start_date en est alors le seul jour)"`
 	RegistrationURL         string             `json:"registration_url,omitempty" jsonschema:"où s'inscrire sur le site officiel de la course"`
 	RegistrationDeadline    string             `json:"registration_deadline,omitempty" jsonschema:"le dernier jour pour s'inscrire, ce jour compris ; absente : la course n'a pas de date limite renseignée"`
-	RegistrationOpening     string             `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée"`
+	RegistrationOpening     string             `json:"registration_opening,omitempty" jsonschema:"le jour où les inscriptions ouvrent ; absente : l'ouverture n'est pas renseignée ; c'est l'ouverture de toutes les épreuves, sauf celles qui ont la leur"`
 	RegistrationOpeningTime string             `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture, à l'heure de Paris ; absente : le site compte 9 h"`
 	DatePrecision           string             `json:"date_precision,omitempty" jsonschema:"month : seul le mois est connu, le jour ne l'est pas : start_date est le 1er du mois, end_date son dernier jour, et les épreuves n'ont pas de date (leur day est le 1er) ; absent : la course a son jour"`
 	Notes                   string             `json:"notes,omitempty"`
@@ -304,21 +314,24 @@ type eventDetail struct {
 }
 
 type formatDetail struct {
-	ID             string             `json:"id"`
-	Title          string             `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
-	Name           string             `json:"name,omitempty" jsonschema:"le nom que la personne qui l'a créée lui a donné"`
-	RaceType       raceTypeRef        `json:"race_type"`
-	DistanceKm     float64            `json:"distance_km,omitempty"`
-	DurationMin    int                `json:"duration_min,omitempty" jsonschema:"la durée d'une course au temps, en minutes"`
-	ElevationGainM int                `json:"elevation_gain_m,omitempty" jsonschema:"le dénivelé positif, en mètres"`
-	TimeLimitMin   int                `json:"time_limit_min,omitempty" jsonschema:"le temps maximum, en minutes"`
-	PriceEur       float64            `json:"price_eur,omitempty"`
-	Date           string             `json:"date,omitempty" jsonschema:"le jour de l'épreuve quand il n'est pas celui du début de la course"`
-	StartTime      string             `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
-	Day            string             `json:"day" jsonschema:"le jour de l'épreuve : sa date, sinon le premier jour de la course"`
-	RouteURL       string             `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
-	TrackURL       string             `json:"track_url,omitempty" jsonschema:"l'adresse du fichier de la trace GPX, s'il y en a un"`
-	Participants   []participationOut `json:"participants" jsonschema:"les participations à cette épreuve, « Non partant » (status dns) compris"`
+	ID                      string             `json:"id"`
+	Title                   string             `json:"title" jsonschema:"comme le site l'écrit : son nom, sinon le type et la mesure (Trail 42 km)"`
+	Name                    string             `json:"name,omitempty" jsonschema:"le nom que la personne qui l'a créée lui a donné"`
+	RaceType                raceTypeRef        `json:"race_type"`
+	DistanceKm              float64            `json:"distance_km,omitempty"`
+	DurationMin             int                `json:"duration_min,omitempty" jsonschema:"la durée d'une course au temps, en minutes"`
+	ElevationGainM          int                `json:"elevation_gain_m,omitempty" jsonschema:"le dénivelé positif, en mètres"`
+	TimeLimitMin            int                `json:"time_limit_min,omitempty" jsonschema:"le temps maximum, en minutes"`
+	PriceEur                float64            `json:"price_eur,omitempty"`
+	Date                    string             `json:"date,omitempty" jsonschema:"le jour de l'épreuve quand il n'est pas celui du début de la course"`
+	StartTime               string             `json:"start_time,omitempty" jsonschema:"HH:MM, heure du lieu de la course (celle de Paris pour une course en France) : l'heure de départ de l'épreuve, absente quand elle n'en a pas"`
+	Day                     string             `json:"day" jsonschema:"le jour de l'épreuve : sa date, sinon le premier jour de la course"`
+	RegistrationOpening     string             `json:"registration_opening,omitempty" jsonschema:"le jour d'ouverture propre à cette épreuve, tel qu'enregistré ; absent : celui de la course"`
+	RegistrationOpeningTime string             `json:"registration_opening_time,omitempty" jsonschema:"l'heure d'ouverture propre à cette épreuve, telle qu'enregistrée ; absente : celle de la course"`
+	Opens                   *opensOut          `json:"opens,omitempty" jsonschema:"le jour et l'heure où les inscriptions de cette épreuve ouvrent, quand ce n'est pas l'ouverture de la course (un jour seul ou une heure seule complétés par celle de la course) ; absent : l'épreuve suit l'ouverture de la course"`
+	RouteURL                string             `json:"route_url,omitempty" jsonschema:"un lien vers le parcours"`
+	TrackURL                string             `json:"track_url,omitempty" jsonschema:"l'adresse du fichier de la trace GPX, s'il y en a un"`
+	Participants            []participationOut `json:"participants" jsonschema:"les participations à cette épreuve, « Non partant » (status dns) compris"`
 }
 
 type raceTypeRef struct {
@@ -630,6 +643,17 @@ func (v eventView) hasRaceType(raceTypeID string) bool {
 	return slices.ContainsFunc(v.formats, func(f formatView) bool { return f.raceType.ID == raceTypeID })
 }
 
+// formatOpens is the opening that results for a format with its own opening
+// (events.FormatOpening), nil for a format that follows the race.
+func (v eventView) formatOpens(f formatView) *opensOut {
+	o, ok := events.FormatOpening(v.record.RegistrationOpening, v.record.RegistrationOpeningTime,
+		events.FormatOpeningFields{ID: f.record.ID, Day: f.record.RegistrationOpening, Time: f.record.RegistrationOpeningTime})
+	if !ok {
+		return nil
+	}
+	return &opensOut{Day: o.Day, Time: o.Time}
+}
+
 // summary is the event as a list shows it. me is the runner of the caller, whose
 // participations are in mine ("" for none).
 func (v eventView) summary(cfg config.Config, w wording.Words, me string) eventSummary {
@@ -644,7 +668,9 @@ func (v eventView) summary(cfg config.Config, w wording.Words, me string) eventS
 		Mine:          []mineOut{},
 	}
 	for _, f := range v.formats {
-		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day, StartTime: f.record.StartTime})
+		out.Formats = append(out.Formats, formatSummary{ID: f.record.ID, Title: f.title(w), RaceType: f.raceType.Label, Date: f.day, StartTime: f.record.StartTime,
+			RegistrationOpening: f.record.RegistrationOpening, RegistrationOpeningTime: f.record.RegistrationOpeningTime,
+			Opens: v.formatOpens(f)})
 	}
 	for _, p := range v.participations() {
 		if p.Status != statusDNS {
@@ -684,6 +710,8 @@ func (v eventView) detail(cfg config.Config, w wording.Words) eventDetail {
 			ElevationGainM: f.record.ElevationGainM, TimeLimitMin: f.record.TimeLimitMin,
 			PriceEur: f.record.PriceEur,
 			Date:     f.record.Date, Day: f.day, StartTime: f.record.StartTime,
+			RegistrationOpening: f.record.RegistrationOpening, RegistrationOpeningTime: f.record.RegistrationOpeningTime,
+			Opens:        v.formatOpens(f),
 			RouteURL:     f.record.RouteURL,
 			Participants: participationsOut(f.participations, w),
 		}

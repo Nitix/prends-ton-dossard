@@ -337,7 +337,7 @@ func formatOpeningRefusal(w wording.Words, draft eventDraft, stored *storedEvent
 		}
 		if (day == "") != (at == "") && draft.RegistrationOpening == "" {
 			if stored != nil && stored.RegistrationOpening != "" {
-				return errors.New("La course, " + fieldText("registration_opening", "opening_used_by_format") + " " + subject + " en reprend le jour ou l'heure.")
+				return errors.New(subject + ", " + fieldText("registration_opening", "opening_used_by_format"))
 			}
 			return refuse("registration_opening", "opening_general_required")
 		}
@@ -355,13 +355,13 @@ func formatOpeningRefusal(w wording.Words, draft eventDraft, stored *storedEvent
 		limit := cmp.Or(f.Date, firstDay)
 		if limit != "" && day > limit {
 			if kept && f.Date == "" {
-				return errors.New("La course, " + fieldTextFor("start_date", "format_opening_after_start", monthOnly) + " " + subject + " ouvre le " + day + ".")
+				return errors.New(subject + ", " + fieldTextFor("start_date", "format_opening_after_start", monthOnly))
 			}
 			return refuse("registration_opening", "registration_opening_after_start")
 		}
 		if deadline := draft.RegistrationDeadline; deadline != "" && day > deadline {
 			if kept {
-				return errors.New("La course, " + fieldText("registration_deadline", "format_opening_after_deadline") + " " + subject + " ouvre le " + day + ".")
+				return errors.New(subject + ", " + fieldText("registration_deadline", "format_opening_after_deadline"))
 			}
 			return refuse("registration_opening", "registration_opening_after_deadline")
 		}

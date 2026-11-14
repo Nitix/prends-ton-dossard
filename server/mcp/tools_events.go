@@ -82,7 +82,7 @@ type createEventIn struct {
 	DatePrecision           string     `json:"date_precision,omitempty" jsonschema:"day (par défaut) : la course a son jour ; month : seul le mois est connu, le jour ne l'est pas. La course va alors du 1er au dernier jour du mois (le site pose la fin) et ses épreuves n'ont pas de date"`
 	RegistrationURL         string     `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle"`
 	RegistrationDeadline    string     `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date"`
-	RegistrationOpening     string     `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date"`
+	RegistrationOpening     string     `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date; c'est l'ouverture de toutes les épreuves, sauf celles qui ont la leur"`
 	RegistrationOpeningTime string     `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de l'ouverture, facultative ; sans heure, le site compte 9 h. Demande registration_opening"`
 	Notes                   string     `json:"notes,omitempty"`
 	Formats                 []formatIn `json:"formats" jsonschema:"les épreuves, de 1 à 20"`
@@ -261,7 +261,7 @@ type updateEventIn struct {
 	DatePrecision           *string         `json:"date_precision,omitempty" jsonschema:"day : la course a son jour ; month : seul le mois est connu, le jour ne l'est pas : la course va du 1er au dernier jour du mois (le site pose la fin) et ses épreuves perdent leur date. Passer de month à day ne demande rien : donne ensuite start_date et les dates des épreuves"`
 	RegistrationURL         *string         `json:"registration_url,omitempty" jsonschema:"la page d'inscription officielle ; vide l'efface"`
 	RegistrationDeadline    *string         `json:"registration_deadline,omitempty" jsonschema:"AAAA-MM-JJ : le dernier jour pour s'inscrire, au plus tard start_date ; vide l'efface"`
-	RegistrationOpening     *string         `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date ; vide l'efface, avec son heure"`
+	RegistrationOpening     *string         `json:"registration_opening,omitempty" jsonschema:"AAAA-MM-JJ : le jour où les inscriptions ouvrent, au plus tard la date limite et start_date; c'est l'ouverture de toutes les épreuves, sauf celles qui ont la leur ; vide l'efface, avec son heure"`
 	RegistrationOpeningTime *string         `json:"registration_opening_time,omitempty" jsonschema:"HH:MM, heure de Paris : l'heure de l'ouverture ; vide l'efface ; sans heure, le site compte 9 h. Demande registration_opening"`
 	Notes                   *string         `json:"notes,omitempty" jsonschema:"vide les efface"`
 	Formats                 []formatPatchIn `json:"formats,omitempty" jsonschema:"des modifications d'épreuves, écrites avec la course"`
