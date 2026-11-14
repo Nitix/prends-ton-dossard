@@ -40,7 +40,8 @@ type Notifier interface {
 		message func(lang string) push.Message, opts push.Options) (push.Delivery, error)
 }
 
-// Report is what a pass did, in reminders (a person and a kind for one event):
+// Report is what a pass did, in reminders (a person and a kind for one opening of
+// one event, an opening being a format's own or the event's):
 // Due were due and had a device, Sent reached at least one device, Failed
 // reached none, Skipped were already done or had no device to reach.
 type Report struct{ Due, Sent, Failed, Skipped int }
@@ -126,16 +127,20 @@ func due(T, now time.Time, kinds []string) (kind string, ok bool) {
 // what it did. Nothing is sent, and nothing is recorded, while the notifier is
 // not available: the pass is a no-op that the next minute tries again.
 //
-// For each event whose opening is today, tomorrow or the day after in Paris and
-// that is due from the same wall-clock time of Paris the day before (see
-// dayOpens; not 24 hours of the clock, which two nights of the year are not
-// the same hour), for each person who gets its reminders (§ 4.2), the
-// kind that is due: a row of reminder_deliveries is inserted first, and a row that
-// the unique index refuses means that the reminder is already done; then the
-// message is sent to the devices of the person. A person with no device has no
-// row, so that a device activated before T still gets the reminder. A program
-// stopped between the insert and the send loses that reminder rather than sending
-// two. Once an hour, at minute 0, the rows older than 60 days are deleted.
+// The events considered are those with an opening today, tomorrow or the day
+// after in Paris, of their own or of one of their formats. For each person who
+// gets their reminders (§ 4.2), the openings that count are those of the formats
+// they are on (the event's, or the next to come, for a person with no format or a
+// format with no opening of its own), taken at the instant of their turn. For
+// each of them that is due from the same wall-clock time of Paris the day before
+// (see dayOpens; not 24 hours of the clock, which two nights of the year are not
+// the same hour), the kind that is due: a row of reminder_deliveries is inserted
+// first, and a row that the unique index refuses means that the reminder is
+// already done; then the message is sent to the devices of the person. A person
+// with no device has no row, so that a device activated before T still gets the
+// reminder. A program stopped between the insert and the send loses that reminder
+// rather than sending two. An event that cannot be read is skipped, and the
+// others go on. Once an hour, at minute 0, the rows older than 60 days are deleted.
 func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Report, error) {
 	var report Report
 	if notifier == nil || !notifier.Available() {
@@ -157,33 +162,84 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 	for i := range days {
 		days[i] = local.AddDate(0, 0, i).Format("2006-01-02")
 	}
-	opening, err := app.FindAllRecords("events", dbx.In("registration_opening", days...))
+	// The events that have an opening in these days, of their own or of one of
+	// their formats (a format with a time alone opens on its event's day, which the
+	// first query already finds).
+	candidates, err := app.FindAllRecords("events", dbx.In("registration_opening", days...))
 	if err != nil {
 		return report, err
 	}
-
-	// The openings that can be due, with their instant, and what was already done
-	// for them: one query for the whole pass, so that a minute with nothing new
-	// makes no failing insert. The unique index stays the real guard.
-	type candidate struct {
-		event *core.Record
-		T     time.Time
+	formatDays, err := app.FindAllRecords("formats", dbx.In("registration_opening", days...))
+	if err != nil {
+		return report, err
 	}
-	var candidates []candidate
+	var more []string
+	for _, f := range formatDays {
+		id := f.GetString("event")
+		if id != "" && !slices.Contains(more, id) && !slices.ContainsFunc(candidates, func(e *core.Record) bool { return e.Id == id }) {
+			more = append(more, id)
+		}
+	}
+	if len(more) > 0 {
+		extra, err := app.FindRecordsByIds("events", more)
+		if err != nil {
+			return report, err
+		}
+		candidates = append(candidates, extra...)
+	}
+
+	// The openings of each event, kept only when one of them can be due now. The
+	// day window opens at the wall clock of the day before, which is up to 25 hours
+	// before T across the change of hour.
+	type candidate struct {
+		event    *core.Record
+		openings events.EventOpenings
+		formats  map[string]*core.Record
+	}
+	var todo []candidate
 	var ids []any
-	for _, event := range opening {
-		T, ok := events.OpeningInstant(event.GetString("registration_opening"), event.GetString("registration_opening_time"))
-		// The day window opens at the wall clock of the day before, which is up to
-		// 25 hours before T across the change of hour.
-		if !ok || !at.Before(T) || T.Sub(at) > 25*time.Hour {
+	var firstErr error
+	for _, event := range candidates {
+		formats, err := app.FindAllRecords("formats", dbx.HashExp{"event": event.Id})
+		if err != nil {
+			// One event that cannot be read does not stop the others.
+			firstErr = errors.Join(firstErr, err)
 			continue
 		}
-		candidates = append(candidates, candidate{event, T})
+		fields := make([]events.FormatOpeningFields, 0, len(formats))
+		byID := make(map[string]*core.Record, len(formats))
+		for _, f := range formats {
+			byID[f.Id] = f
+			fields = append(fields, events.FormatOpeningFields{
+				ID: f.Id, Day: f.GetString("registration_opening"), Time: f.GetString("registration_opening_time"),
+			})
+		}
+		openings := events.OpeningsOf(event.GetString("registration_opening"), event.GetString("registration_opening_time"), fields)
+		soon := func(o events.Opening) bool {
+			T, ok := o.Instant()
+			return ok && at.Before(T) && T.Sub(at) <= 25*time.Hour
+		}
+		possible := openings.Event != nil && soon(*openings.Event)
+		for _, o := range openings.Formats {
+			possible = possible || soon(o)
+		}
+		if !possible {
+			continue
+		}
+		// The names of the race types are only needed for the titles.
+		if err := expandFormats(app, formats); err != nil {
+			firstErr = errors.Join(firstErr, err)
+			continue
+		}
+		todo = append(todo, candidate{event, openings, byID})
 		ids = append(ids, event.Id)
 	}
-	if len(candidates) == 0 {
-		return report, nil
+	if len(todo) == 0 {
+		return report, firstErr
 	}
+	// What was already done for them: one query for the whole pass, so that a
+	// minute with nothing new makes no failing insert. The unique index stays the
+	// real guard.
 	done, err := doneOf(app, ids)
 	if err != nil {
 		return report, err
@@ -192,27 +248,41 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 	// The clock moves during a pass, and a send can take seconds: each person is
 	// handled at the instant when their turn comes, never after T.
 	start := time.Now()
-	var firstErr error
-	for _, c := range candidates {
+	for _, c := range todo {
 		recipients, err := recipientsOf(app, c.event.Id)
 		if err != nil {
 			firstErr = errors.Join(firstErr, err)
 			continue
 		}
-		for _, user := range recipients {
+		for _, who := range recipients {
 			if ctx.Err() != nil {
 				return report, ctx.Err()
 			}
 			current := at.Add(time.Since(start))
-			kind, ok := due(c.T, current, Of(user))
-			if !ok {
-				continue
+			// Their openings: the one of each format they count on, or the general
+			// one when they have no format, as of this instant.
+			var theirs []events.Opening
+			for _, formatID := range who.formats {
+				if o, ok := c.openings.Of(formatID, events.PastAt(current)); ok {
+					theirs = append(theirs, o)
+				}
 			}
-			if done[deliveryKey(user.Id, c.event.Id, kind, c.T)] {
-				report.Skipped++
-				continue
+			for _, o := range events.MergeSameInstant(theirs) {
+				T, ok := o.Instant()
+				if !ok || !current.Before(T) || T.Sub(current) > 25*time.Hour {
+					continue
+				}
+				kind, ok := due(T, current, Of(who.user))
+				if !ok {
+					continue
+				}
+				if done[deliveryKey(who.user.Id, c.event.Id, kind, T)] {
+					report.Skipped++
+					continue
+				}
+				// MergeSameInstant keeps a written time, so o.Time says whether the time is known.
+				remind(ctx, app, notifier, &report, c.event, who.user, kind, o, T, events.ValidTime(o.Time), c.formats, current)
 			}
-			remind(ctx, app, notifier, &report, c.event, user, kind, c.T, current)
 		}
 	}
 	return report, firstErr
@@ -239,7 +309,8 @@ func doneOf(app core.App, eventIDs []any) (map[string]bool, error) {
 // remind does the reminder of one person for one event at the instant at, and
 // counts it in report.
 func remind(ctx context.Context, app core.App, notifier Notifier, report *Report,
-	event, user *core.Record, kind string, T, at time.Time) {
+	event, user *core.Record, kind string, opening events.Opening, T time.Time, timeKnown bool,
+	formats map[string]*core.Record, at time.Time) {
 	devices, err := app.CountRecords("push_subscriptions", dbx.HashExp{"user": user.Id})
 	if err != nil {
 		report.Failed++
@@ -272,17 +343,41 @@ func remind(ctx context.Context, app core.App, notifier Notifier, report *Report
 	}
 	report.Due++
 
-	timeKnown := events.ValidTime(event.GetString("registration_opening_time"))
 	name, url := event.GetString("name"), "/evenements/"+event.Id
+	// An opening of formats says which ones; one of the event does not. The id of
+	// the first format keeps two openings of an event apart in the notification
+	// tray (at most 32 characters: "opening-" and a 15-character id).
+	tag := "opening-" + event.Id
+	if len(opening.FormatIDs) > 0 {
+		tag = "opening-" + opening.FormatIDs[0]
+	}
 	message := func(lang string) push.Message {
+		w := wording.Of(lang)
+		title := name
+		var names []string
+		for _, id := range opening.FormatIDs {
+			f := formats[id]
+			if f == nil {
+				continue
+			}
+			label := ""
+			if raceType := f.ExpandedOne("race_type"); raceType != nil {
+				label = raceType.GetString("label")
+			}
+			names = append(names, w.RaceName(f.GetString("name"), label,
+				f.GetFloat("distance_km"), f.GetInt("duration_min"), f.GetInt("time_limit_min")))
+		}
+		if len(names) > 0 {
+			title += wording.Separator + strings.Join(names, ", ")
+		}
 		return push.Message{
-			Title: name,
-			Body:  wording.Of(lang).ReminderBody(T, timeKnown, at),
+			Title: title,
+			Body:  w.ReminderBody(T, timeKnown, at),
 			URL:   url,
-			Tag:   "opening-" + event.Id,
+			Tag:   tag,
 		}
 	}
-	opts := push.Options{TTL: max(T.Sub(at).Round(time.Second), time.Minute), Urgency: "normal", Topic: "opening-" + event.Id}
+	opts := push.Options{TTL: max(T.Sub(at).Round(time.Second), time.Minute), Urgency: "normal", Topic: tag}
 	if kind == KindHour {
 		opts.Urgency = "high"
 	}
@@ -310,21 +405,37 @@ func remind(ctx context.Context, app core.App, notifier Notifier, report *Report
 	report.Failed++
 }
 
+// recipient is an account that gets the reminders of an event, with the formats
+// it counts on: the id of each format of an interested or registered
+// participation, "" for one on the event alone.
+type recipient struct {
+	user    *core.Record
+	formats []string
+}
+
 // recipientsOf returns the accounts that get the reminders of the event
 // (§ 4.2): those whose runner is interested in it or registered to it, on a
 // format or on the event alone, whose account is not disabled. A person is once,
 // however many formats. A runner with no account, a supporter and a person who
 // does not start have none.
-func recipientsOf(app core.App, eventID string) ([]*core.Record, error) {
+func recipientsOf(app core.App, eventID string) ([]recipient, error) {
 	participations, err := app.FindAllRecords("participations",
 		dbx.HashExp{"event": eventID}, dbx.In("status", "interested", "registered"))
 	if err != nil {
 		return nil, err
 	}
+	formatsOfRunner := map[string][]string{}
 	var runnerIDs []string
 	for _, p := range participations {
-		if id := p.GetString("runner"); id != "" && !slices.Contains(runnerIDs, id) {
+		id := p.GetString("runner")
+		if id == "" {
+			continue
+		}
+		if !slices.Contains(runnerIDs, id) {
 			runnerIDs = append(runnerIDs, id)
+		}
+		if f := p.GetString("format"); !slices.Contains(formatsOfRunner[id], f) {
+			formatsOfRunner[id] = append(formatsOfRunner[id], f)
 		}
 	}
 	if len(runnerIDs) == 0 {
@@ -334,10 +445,20 @@ func recipientsOf(app core.App, eventID string) ([]*core.Record, error) {
 	if err != nil {
 		return nil, err
 	}
+	formatsOfUser := map[string][]string{}
 	var userIDs []string
 	for _, runner := range runners {
-		if id := runner.GetString("user"); id != "" && !slices.Contains(userIDs, id) {
+		id := runner.GetString("user")
+		if id == "" {
+			continue
+		}
+		if !slices.Contains(userIDs, id) {
 			userIDs = append(userIDs, id)
+		}
+		for _, f := range formatsOfRunner[runner.Id] {
+			if !slices.Contains(formatsOfUser[id], f) {
+				formatsOfUser[id] = append(formatsOfUser[id], f)
+			}
 		}
 	}
 	if len(userIDs) == 0 {
@@ -347,13 +468,13 @@ func recipientsOf(app core.App, eventID string) ([]*core.Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := users[:0]
+	var out []recipient
 	for _, user := range users {
 		if !user.GetBool("disabled") {
-			out = append(out, user)
+			out = append(out, recipient{user, formatsOfUser[user.Id]})
 		}
 	}
-	slices.SortFunc(out, func(a, b *core.Record) int { return strings.Compare(a.Id, b.Id) })
+	slices.SortFunc(out, func(a, b recipient) int { return strings.Compare(a.user.Id, b.user.Id) })
 	return out, nil
 }
 
@@ -387,4 +508,13 @@ var parisZone = sync.OnceValue(func() *time.Location {
 // changes of hour of the year (it is T - 24 h on every other day).
 func dayOpens(T time.Time) time.Time {
 	return T.In(parisZone()).AddDate(0, 0, -1)
+}
+
+// expandFormats reads the race types of the formats, for their names; the tests
+// replace it to make one event unreadable.
+var expandFormats = func(app core.App, formats []*core.Record) error {
+	if failed := app.ExpandRecords(formats, []string{"race_type"}, nil); len(failed) > 0 {
+		return errors.New("the race types of the formats could not be read")
+	}
+	return nil
 }

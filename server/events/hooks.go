@@ -197,21 +197,64 @@ func validateEvent(app core.App, event *core.Record) error {
 		}
 	}
 
-	// A format stays inside its event: the range of an event cannot move away
-	// from the formats it holds. An edit that leaves the dates alone is not
-	// held against the formats.
+	// What the formats hold of the event is read only when the event changed
+	// what they are held against: an edit of anything else neither queries nor
+	// refuses.
 	original := event.Original()
-	if event.IsNew() ||
-		(start == original.GetString("start_date") && end == original.GetString("end_date")) {
+	if event.IsNew() {
+		return nil
+	}
+	// A change of precision moves the day the openings are held against (the last
+	// day of the month, or the first day), even when the dates stay.
+	rangeChanged := start != original.GetString("start_date") || end != original.GetString("end_date") ||
+		event.GetString("date_precision") != original.GetString("date_precision")
+	deadlineChanged := event.GetString("registration_deadline") != original.GetString("registration_deadline")
+	openingChanged := opening != original.GetString("registration_opening")
+	if !rangeChanged && !deadlineChanged && !openingChanged {
 		return nil
 	}
 	formats, err := app.FindAllRecords("formats", dbx.HashExp{"event": event.Id})
 	if err != nil {
 		return err
 	}
-	for _, format := range formats {
-		if day := format.GetString("date"); day != "" && !InRange(day, start, end) {
-			return apperr.Field("start_date", apperr.CodeFormatDateOutOfRange)
+
+	// A format stays inside its event: the range of an event cannot move away
+	// from the formats it holds.
+	if rangeChanged {
+		for _, format := range formats {
+			if day := format.GetString("date"); day != "" && !InRange(day, start, end) {
+				return apperr.Field("start_date", apperr.CodeFormatDateOutOfRange)
+			}
+		}
+	}
+
+	// The opening of a format keeps fitting its event: not after the deadline,
+	// and, for a format with no day of its own, not after the first day (the
+	// last day of the month for a month-only event). A time alone has the day of
+	// the event, which the rules above already hold.
+	if deadline := event.GetString("registration_deadline"); deadline != "" {
+		for _, format := range formats {
+			if day := format.GetString("registration_opening"); day != "" && day > deadline {
+				return apperr.Field("registration_deadline", apperr.CodeFormatOpeningAfterDeadline)
+			}
+		}
+	}
+	if rangeChanged {
+		for _, format := range formats {
+			if day := format.GetString("registration_opening"); day != "" && format.GetString("date") == "" && day > firstDay {
+				return apperr.Field("start_date", apperr.CodeFormatOpeningAfterStart)
+			}
+		}
+	}
+
+	// A format with a day alone or a time alone takes the rest from the opening
+	// of the event: it cannot be emptied under it. Emptying only its time is
+	// fine, the day stays.
+	if opening == "" && original.GetString("registration_opening") != "" {
+		for _, format := range formats {
+			if (format.GetString("registration_opening") == "") != (format.GetString("registration_opening_time") == "") {
+				return apperr.Field("registration_opening", apperr.CodeOpeningUsedByFormat)
+			}
 		}
 	}
 	return nil
@@ -238,25 +281,63 @@ var measures = []string{"distance_km", "duration_min", "time_limit_min"}
 
 func validateFormat(app core.App, format *core.Record) error {
 	day, startTime := format.GetString("date"), format.GetString("start_time")
+	opening, openingTime := format.GetString("registration_opening"), format.GetString("registration_opening_time")
 	if day != "" {
 		if _, ok := ParseDay(day); !ok {
 			return apperr.Field("date", apperr.CodeDateInvalid)
 		}
 	}
-	if day != "" || startTime != "" {
+	// The form of the opening comes before anything that needs the event.
+	if opening != "" {
+		if _, ok := ParseDay(opening); !ok {
+			return apperr.Field("registration_opening", apperr.CodeDateInvalid)
+		}
+	}
+	if openingTime != "" && !ValidTime(openingTime) {
+		return apperr.Field("registration_opening_time", apperr.CodeTimeInvalid)
+	}
+	if day != "" || startTime != "" || opening != "" || openingTime != "" {
 		event, err := app.FindRecordById("events", format.GetString("event"))
 		if err != nil {
 			return err
 		}
+		monthOnly := MonthOnly(event)
 		// A race known by its month has no day for a format, nor a time of the day.
-		if MonthOnly(event) {
+		if monthOnly {
 			if day != "" {
 				return apperr.Field("date", apperr.CodeFormatDateMonth)
 			}
-			return apperr.Field("start_time", apperr.CodeFormatTimeMonth)
+			if startTime != "" {
+				return apperr.Field("start_time", apperr.CodeFormatTimeMonth)
+			}
 		}
 		if day != "" && !InRange(day, event.GetString("start_date"), event.GetString("end_date")) {
 			return apperr.Field("date", apperr.CodeFormatDateOutOfRange)
+		}
+
+		// A day alone or a time alone takes the rest from the opening of the
+		// event, so the event must have one of its own.
+		if (opening == "") != (openingTime == "") && event.GetString("registration_opening") == "" {
+			return apperr.Field("registration_opening", apperr.CodeOpeningGeneralRequired)
+		}
+		if opening != "" {
+			// Its limit day: the day of the format, else the first day of the
+			// event, else (known by its month) the last day of the month.
+			limit := day
+			if limit == "" {
+				limit = event.GetString("start_date")
+				if monthOnly {
+					if last, ok := LastDayOfMonth(limit); ok {
+						limit = last
+					}
+				}
+			}
+			if opening > limit {
+				return apperr.Field("registration_opening", apperr.CodeRegistrationOpeningAfterStart)
+			}
+			if deadline := event.GetString("registration_deadline"); deadline != "" && opening > deadline {
+				return apperr.Field("registration_opening", apperr.CodeRegistrationOpeningAfterDeadline)
+			}
 		}
 	}
 

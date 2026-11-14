@@ -38,6 +38,8 @@ func TestDescribeMerge(t *testing.T) {
 			},
 		},
 		{"describeMerge — heures de départ effacées", mcp.MergeResult{ClearedFormatTimes: 2}, []string{"2 heures de départ effacées (la course gardée n'a que son mois)"}},
+		{"describeMerge — ouvertures d'épreuve effacées (1)", mcp.MergeResult{ClearedFormatOpenings: 1}, []string{"1 ouverture d'épreuve effacée (elle ne tenait pas dans la course gardée)"}},
+		{"describeMerge — ouvertures d'épreuve effacées (2)", mcp.MergeResult{ClearedFormatOpenings: 2}, []string{"2 ouvertures d'épreuve effacées (elles ne tenaient pas dans la course gardée)"}},
 		{"describeMerge — commentaires déplacés (1)", mcp.MergeResult{MovedComments: 1}, []string{"1 commentaire déplacé"}},
 		{"describeMerge — commentaires déplacés (3)", mcp.MergeResult{MovedComments: 3}, []string{"3 commentaires déplacés"}},
 		{"describeMerge — offres déplacées (1)", mcp.MergeResult{MovedOffers: 1}, []string{"1 offre déplacée"}},
@@ -106,7 +108,7 @@ func TestAdmin_Merge(t *testing.T) {
 	// With the fresh token: merged, and the result is the route's.
 	done := isDone(t, callTool(t, app, admin, "admin_merge", with(args, fresh)))
 	assertJSON(t, done.Structured["result"], map[string]any{
-		"movedFormats": 1, "movedParticipations": 3, "droppedParticipations": 0, "clearedFormatDates": 0, "clearedFormatTimes": 0, "movedComments": 1, "movedOffers": 1,
+		"movedFormats": 1, "movedParticipations": 3, "droppedParticipations": 0, "clearedFormatDates": 0, "clearedFormatTimes": 0, "clearedFormatOpenings": 0, "movedComments": 1, "movedOffers": 1,
 	})
 	assertJSON(t, done.Structured["kept"], map[string]any{"id": keep.Id, "name": "Marathon d'Annecy"})
 	if storedRecord(t, app, "events", other.Id) != nil {

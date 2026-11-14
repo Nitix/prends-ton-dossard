@@ -68,16 +68,17 @@ func TestCodes_FrontEndContract(t *testing.T) {
 
 	want := []string{
 		"account_disabled", "date_invalid", "email_invalid", "email_taken", "end_before_start",
-		"forbidden", "format_date_month", "format_date_out_of_range", "format_measure_required", "format_other_event",
+		"forbidden", "format_date_month", "format_date_out_of_range", "format_measure_required", "format_opening_after_deadline",
+		"format_opening_after_start", "format_other_event",
 		"format_required", "format_time_month", "invitation_invalid", "invitation_kind_mismatch", "last_admin",
 		"merge_formats_different_events", "merge_same_record", "month_start_invalid", "not_found",
 		"offer_already_member", "offer_full", "offer_owner_member", "offer_seats_below_members",
-		"offer_seats_required",
+		"offer_seats_required", "opening_general_required", "opening_used_by_format",
 		"passkey_failed", "passkey_session_expired", "password_mismatch", "password_too_short", "price_invalid",
 		"push_endpoint_invalid", "push_unavailable",
 		"race_type_in_use", "rank_above_total", "registration_deadline_after_start", "registration_opening_after_deadline",
 		"registration_opening_after_start", "runner_has_account",
-		"runner_has_participations", "status_before_race", "supporter_with_format", "time_invalid",
+		"runner_has_participations", "status_before_race", "super_admin_protected", "supporter_with_format", "time_invalid",
 		"token_invalid", "token_limit", "upload_invalid", "weather_unavailable", "wrong_password",
 	}
 	if !slices.Equal(got, want) {

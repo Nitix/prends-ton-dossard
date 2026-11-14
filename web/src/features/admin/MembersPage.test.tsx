@@ -422,6 +422,55 @@ test("MembersPage — la page est en anglais pour un navigateur anglais", async 
   await expect.element(status(screen, "Sam", en.admin.stateNoAccount)).toBeVisible();
 });
 
+// --- The super admin ---
+
+/** Marks the account of a runner super admin (an admin, as the command makes it). */
+function markSuperAdmin(userId: string) {
+  Object.assign(mocks.db.users.find((u) => u.id === userId) ?? {}, {
+    role: "admin",
+    super_admin: true,
+  });
+}
+
+test("MembersPage — la ligne d'un super admin le dit, et un autre admin n'y a aucune action", async () => {
+  markSuperAdmin("u-bob");
+  const { screen } = await renderPage();
+
+  await expect.element(status(screen, "Bob", `${t.stateActive} · ${t.superAdmin}`)).toBeVisible();
+  await expect.element(status(screen, "Bob", t.protectedHint)).toBeVisible();
+  expect(row(screen, "Bob").getByRole("button").elements()).toHaveLength(0);
+  // The other rows keep their actions.
+  await expect.element(action(screen, t.resetLink, "Max")).toBeVisible();
+  await expect.element(action(screen, t.removeAdmin, "Alice")).toBeVisible();
+});
+
+test("MembersPage — sur sa propre ligne, le super admin n'a ni « Retirer admin » ni « Désactiver »", async () => {
+  markSuperAdmin(ALICE_USER);
+  mocks.store.record = { ...mocks.db.users.find((u) => u.id === ALICE_USER) };
+  const { screen } = await renderPage();
+
+  await expect.element(status(screen, "Alice", `${t.stateActive} · ${t.superAdmin}`)).toBeVisible();
+  for (const label of [t.rename, fr.avatar.title, t.resetLink, t.passkeys]) {
+    await expect.element(action(screen, label, "Alice")).toBeVisible();
+  }
+  for (const label of [t.removeAdmin, t.disable]) {
+    await expect.element(action(screen, label, "Alice")).not.toBeInTheDocument();
+  }
+  await expect.element(status(screen, "Alice", t.protectedHint)).not.toBeInTheDocument();
+  // The super admin manages the others as any admin.
+  await expect.element(action(screen, t.makeAdmin, "Bob")).toBeVisible();
+});
+
+test("MembersPage — la ligne d'un super admin, en anglais", async () => {
+  markSuperAdmin("u-bob");
+  const { screen } = await renderPage(["en-GB"]);
+
+  await expect
+    .element(status(screen, "Bob", `${en.admin.stateActive} · ${en.admin.superAdmin}`))
+    .toBeVisible();
+  await expect.element(status(screen, "Bob", en.admin.protectedHint)).toBeVisible();
+});
+
 test("MembersPage — une liste qui ne vient pas affiche l'erreur, et Réessayer la redemande", async () => {
   mocks.runnersList.mockRejectedValueOnce(refusal(500, {}));
   const screen = await render(

@@ -28,6 +28,8 @@ export type UserRecord = BaseRecord & {
   email: string;
   role: Role;
   disabled: boolean;
+  /** A super admin: no other admin changes this account or its runner (set on the server, never through the API). */
+  super_admin?: boolean;
   /** The id of the skin (the theme) the person chose, for every device: empty until they choose (see features/auth/accountSkin). */
   skin?: string;
   /** When the person wants to be warned before a registration opens (the alarms of the calendar, the notifications): empty, none. */
@@ -101,6 +103,10 @@ export type FormatRecord = BaseRecord & {
   date?: string;
   /** The start time, `HH:MM` Paris time: empty or absent when it is not known. */
   start_time?: string;
+  /** The day registrations open for this format alone (`YYYY-MM-DD`), empty or absent when it has none of its own. */
+  registration_opening?: string;
+  /** The time it opens, `HH:MM`, Paris time: empty for none. A day or a time alone takes the missing part from the opening of the event. */
+  registration_opening_time?: string;
 };
 
 export type ParticipationRecord = BaseRecord & {

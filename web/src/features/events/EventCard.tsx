@@ -5,9 +5,11 @@ import { PinIcon } from "../../components/icons";
 import { useI18n } from "../../i18n/I18nProvider";
 import { isMonthOnly } from "../../lib/dates";
 import { useToday } from "../../lib/useToday";
+import { useSession } from "../auth/session";
 import type { EventView } from "./api";
 import { eventWhen } from "./eventWhen";
 import { FormatLine } from "./FormatLine";
+import { formatNames, shownOpening } from "./opening";
 import { ParticipantChips } from "./ParticipantChips";
 import { starters } from "./participants";
 import { registrationLabel, registrationState } from "./registration";
@@ -28,7 +30,11 @@ export function EventCard({ view }: { view: EventView }) {
   // A race known by its month has no day to say of a format.
   const severalDays = !monthOnly && !start.equals(end);
   const interested = starters(view.interested);
-  const registration = registrationState(event, useToday());
+  const today = useToday();
+  const { runner } = useSession();
+  // The opening that counts for the person who looks (their format's), else the event's.
+  const opening = shownOpening(view, runner?.id, today);
+  const registration = registrationState(event, opening, today);
 
   return (
     <article className="event-card card card-lift flex flex-col gap-3 p-4">
@@ -66,7 +72,12 @@ export function EventCard({ view }: { view: EventView }) {
                   : "bg-neutral-100 text-neutral-700 ring-1 ring-neutral-200"
               }`}
             >
-              {registrationLabel(registration, f, t)}
+              {registrationLabel(
+                registration,
+                f,
+                t,
+                opening ? formatNames(view, opening, t, f) : "",
+              )}
             </p>
           )}
         </div>

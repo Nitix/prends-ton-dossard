@@ -6,6 +6,9 @@ import { plural } from "./plural";
 // (`satisfies Messages`), so a missing or extra key fails the type check.
 // A text with a variable is a function; one that is put in a sentence with a
 // link (see `home.commentOn`) takes nodes, and gives a node.
+
+/** The title of the opening in a calendar file; the one of a format's opening is built on it. */
+const openingCalendarTitle = (name: string) => `Ouverture des inscriptions : ${name}`;
 export const fr = {
   common: {
     appName: "Prends ton dossard",
@@ -433,15 +436,21 @@ export const fr = {
     // interested, and the home page), then the day (« le lun. 12 janv. » or « aujourd'hui »), then the time when there is one («  à 10:00 »).
     openingHero: "Ouverture des inscriptions",
     openingCard: "Ouverture",
+    // Under the name of a format: says what opens, since the name is above and the line is read alone.
+    openingFormat: "Ouverture des inscriptions de l'épreuve",
     openingAside: "Les inscriptions ouvrent",
     openingTodo: "ouvre",
     openingToday: "aujourd'hui",
     openingOnDate: (date: string) => `le ${date}`,
     openingAt: (time: string) => `à ${time}`,
+    openingNames: (names: string) => `(${names})`,
     // After the opening, in the page's line, when the event has a deadline: the date is already formatted.
     openingDeadline: (date: string) => `jusqu'au ${date}`,
     // The title of the opening in a calendar file: the name of the event is its own.
-    openingCalendarTitle: (name: string) => `Ouverture des inscriptions : ${name}`,
+    openingCalendarTitle,
+    // The same for the opening of a format: the names of its formats follow the name of the event.
+    openingCalendarTitleOf: (event: string, names: string) =>
+      `${openingCalendarTitle(event)} · ${names}`,
     // The button that downloads a calendar file of the event, and the name of that file when the event's own name
     // has nothing left once the characters a file name cannot have are taken out (the extension is added).
     addToCalendar: "Ajouter à mon agenda",
@@ -454,6 +463,8 @@ export const fr = {
     // After the month of a race known by its month only, in the text that is sent.
     monthWhen: (month: string) => `${month} (date à préciser)`,
     formats: (list: string) => `Épreuves : ${list}`,
+    // After the measures of a format that has its own opening to come: « le mar. 17 nov. à 12:00 » is already made.
+    formatOpening: (when: string) => `ouverture des inscriptions ${when}`,
     textLabel: "Texte à partager",
     copy: "Copier le texte",
     copied: "Texte copié.",
@@ -716,6 +727,8 @@ export const fr = {
     registrationOpening: "Ouverture des inscriptions",
     registrationOpeningTime: "Heure d'ouverture",
     registrationOpeningTimeHint: "Facultative, à l'heure de Paris.",
+    // Under the day of the opening of the event: the races that have their own opening leave it out.
+    registrationOpeningHelp: "Celle de toutes les épreuves, sauf celles qui ont la leur.",
     // Read with the time field while it is disabled: a time needs a day.
     registrationOpeningTimeNeedsDay: "Choisis d'abord le jour de l'ouverture.",
     // Under the start date: the box that says the day is not known, and the month to give instead.
@@ -726,6 +739,9 @@ export const fr = {
       "La date limite d'inscription ne peut pas être après la fin du mois de la course.",
     openingAfterMonthEnd:
       "L'ouverture des inscriptions ne peut pas être après la fin du mois de la course.",
+    // Under the day of a format: its opening is held against that day, not against the first day of the race.
+    formatOpeningAfterDay:
+      "L'ouverture des inscriptions de l'épreuve doit être au plus tard le jour de l'épreuve.",
     formatDatesLater: "Les épreuves auront leur date quand le jour sera connu.",
     notes: "Notes",
     formatsTitle: "Épreuves",
@@ -760,6 +776,12 @@ export const fr = {
     formatDateHint: "Seulement si ce n'est pas le premier jour.",
     formatStartTime: "Heure de départ",
     formatStartTimeHint: "Facultative. Elle donne la météo de l'heure du départ.",
+    // The opening that a race has of its own: a box, then a day and a time that are independent.
+    formatOpeningToggle: "Cette épreuve ouvre ses inscriptions à un autre moment",
+    formatOpening: "Ouverture des inscriptions",
+    formatOpeningTime: "Heure d'ouverture",
+    formatOpeningHelp:
+      "À l'heure de Paris. Un jour seul garde l'heure de la course, une heure seule garde son jour.",
     addFormat: "Ajouter une épreuve",
     // Next to « Retirer » on a format that already has runners: the server deletes their participations with it.
     formatHasParticipants: (n: number) =>
@@ -850,6 +872,9 @@ export const fr = {
     stateDisabled: "Désactivé",
     resetPending: (date: string) => `Lien de réinitialisation en attente · expire le ${date}`,
     roles: { member: "Membre", admin: "Admin" },
+    // A super admin: an admin whose account and runner no other admin changes (the command super-admin sets it).
+    superAdmin: "Super admin",
+    protectedHint: "Compte protégé : personne d'autre ne peut le modifier.",
     // The accessible name of an action of a row: its text, then the runner it is about.
     forRunner: (action: string, name: string) => `${action} · ${name}`,
     rename: "Renommer",
@@ -1023,6 +1048,10 @@ export const fr = {
         one: "heure de départ effacée (la course gardée n'a que son mois)",
         other: "heures de départ effacées (la course gardée n'a que son mois)",
       },
+      clearedFormatOpenings: {
+        one: "ouverture d'épreuve effacée",
+        other: "ouvertures d'épreuve effacées",
+      },
       movedComments: { one: "commentaire déplacé", other: "commentaires déplacés" },
       movedOffers: { one: "offre déplacée", other: "offres déplacées" },
     },
@@ -1055,6 +1084,7 @@ export const fr = {
     password_too_short: "Le mot de passe est trop court (10 caractères minimum).",
     password_mismatch: "Les deux mots de passe sont différents.",
     last_admin: "Il doit toujours rester au moins un admin.",
+    super_admin_protected: "Ce compte est super admin : personne d'autre ne peut le modifier.",
     runner_has_participations:
       "Impossible de supprimer ce coureur : il a encore des participations.",
     runner_has_account:
@@ -1068,6 +1098,12 @@ export const fr = {
       "L'ouverture des inscriptions doit être au plus tard le jour du début.",
     registration_opening_after_deadline:
       "L'ouverture des inscriptions doit être au plus tard la date limite.",
+    format_opening_after_deadline: "Une épreuve ouvre ses inscriptions après cette date limite.",
+    format_opening_after_start: "Une épreuve ouvre ses inscriptions après ce jour.",
+    opening_general_required:
+      "Remplis d'abord l'ouverture des inscriptions de la course : cette épreuve en reprend le jour ou l'heure.",
+    opening_used_by_format:
+      "Une épreuve reprend le jour ou l'heure de cette ouverture : elle ne peut pas être vide.",
     format_date_month: "Une course dont seul le mois est connu n'a pas de date d'épreuve.",
     format_time_month: "Une épreuve d'une course au mois n'a pas d'heure de départ.",
     month_start_invalid: "Pour une course dont seul le mois est connu, la date est le 1er du mois.",

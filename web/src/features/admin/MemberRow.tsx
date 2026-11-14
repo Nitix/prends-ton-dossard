@@ -7,6 +7,7 @@ import type { Messages } from "../../i18n/fr";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Formatters } from "../../lib/format";
 import type { RunnerRecord } from "../../lib/types";
+import { useSession } from "../auth/session";
 import { useMemberActions } from "./api";
 import { adminError } from "./errors";
 import type { MemberDialog } from "./MemberDialogs";
@@ -24,7 +25,7 @@ function stateLine(t: Messages, f: Formatters, { state, user, invitation }: Memb
   }
   if (user && (state === "active" || state === "disabled")) {
     const label = state === "active" ? t.admin.stateActive : t.admin.stateDisabled;
-    return `${label} · ${t.admin.roles[user.role]}`;
+    return `${label} · ${user.super_admin ? t.admin.superAdmin : t.admin.roles[user.role]}`;
   }
   return t.admin.stateNoAccount;
 }
@@ -32,7 +33,8 @@ function stateLine(t: Messages, f: Formatters, { state, user, invitation }: Memb
 /**
  * A runner of the list: its photo and its name, what it is (no account,
  * invited, active or disabled, and the role of the account), and what the
- * admin can do with it, which depends on that. Most actions ask the page to
+ * admin can do with it, which depends on that (nothing on the row of a super
+ * admin who is somebody else). Most actions ask the page to
  * open a dialog; making somebody admin and enabling an account again happen at
  * once, since they take nothing away.
  */
@@ -48,6 +50,13 @@ export function MemberRow({
   const actions = useMemberActions();
   const [busy, setBusy] = useState(false);
   const { runner, user, state, invitation, reset } = member;
+  const { user: me } = useSession();
+  // A super admin's account and runner are theirs only: the server refuses the
+  // other admins, so their row offers them nothing. On their own row, the super
+  // admin keeps what any member has, but not their role nor their state, which
+  // only change on the server.
+  const superAdmin = user?.super_admin === true;
+  const own = me !== null && user?.id === me.id;
 
   async function change(run: () => Promise<void>, done: string) {
     setBusy(true);
@@ -87,90 +96,98 @@ export function MemberRow({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Action
-          runner={runner}
-          label={t.admin.rename}
-          onClick={() => onOpen({ kind: "rename", runner })}
-        />
-        {/* Everybody has one, an account or not: it is the admin who puts a photo on a runner who has none. */}
-        <Action
-          runner={runner}
-          label={t.avatar.title}
-          onClick={() => onOpen({ kind: "avatar", runner })}
-        />
-        {(state === "no_account" || state === "invited") && (
-          // The same button for both: it keeps the focus when the runner gets invited.
+      {superAdmin && !own ? (
+        <p className="text-sm">{t.admin.protectedHint}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
           <Action
             runner={runner}
-            label={invitation ? t.admin.regenerate : t.admin.invite}
-            onClick={() => onOpen({ kind: "link", member, linkKind: "invite" })}
+            label={t.admin.rename}
+            onClick={() => onOpen({ kind: "rename", runner })}
           />
-        )}
-        {invitation && (
+          {/* Everybody has one, an account or not: it is the admin who puts a photo on a runner who has none. */}
           <Action
             runner={runner}
-            label={t.admin.revokeInvite}
-            danger
-            onClick={() => onOpen({ kind: "revoke", runner, invitation })}
+            label={t.avatar.title}
+            onClick={() => onOpen({ kind: "avatar", runner })}
           />
-        )}
-        {user && (
-          <>
+          {(state === "no_account" || state === "invited") && (
+            // The same button for both: it keeps the focus when the runner gets invited.
             <Action
               runner={runner}
-              label={t.admin.resetLink}
-              onClick={() => onOpen({ kind: "link", member, linkKind: "reset" })}
+              label={invitation ? t.admin.regenerate : t.admin.invite}
+              onClick={() => onOpen({ kind: "link", member, linkKind: "invite" })}
             />
-            {reset && (
+          )}
+          {invitation && (
+            <Action
+              runner={runner}
+              label={t.admin.revokeInvite}
+              danger
+              onClick={() => onOpen({ kind: "revoke", runner, invitation })}
+            />
+          )}
+          {user && (
+            <>
               <Action
                 runner={runner}
-                label={t.admin.revokeReset}
-                danger
-                onClick={() => onOpen({ kind: "revoke", runner, invitation: reset })}
+                label={t.admin.resetLink}
+                onClick={() => onOpen({ kind: "link", member, linkKind: "reset" })}
               />
-            )}
+              {reset && (
+                <Action
+                  runner={runner}
+                  label={t.admin.revokeReset}
+                  danger
+                  onClick={() => onOpen({ kind: "revoke", runner, invitation: reset })}
+                />
+              )}
+              {!superAdmin && (
+                <>
+                  <Action
+                    runner={runner}
+                    label={user.role === "admin" ? t.admin.removeAdmin : t.admin.makeAdmin}
+                    busy={busy}
+                    onClick={() => {
+                      if (user.role === "admin") {
+                        onOpen({ kind: "demote", runner, user });
+                      } else {
+                        void change(() => actions.setRole(user.id, "admin"), t.admin.roleChanged);
+                      }
+                    }}
+                  />
+                  <Action
+                    runner={runner}
+                    label={user.disabled ? t.admin.enable : t.admin.disable}
+                    busy={busy}
+                    onClick={() => {
+                      if (user.disabled) {
+                        void change(() => actions.setDisabled(user.id, false), t.admin.enabledDone);
+                      } else {
+                        onOpen({ kind: "disable", runner, user });
+                      }
+                    }}
+                  />
+                </>
+              )}
+              <Action
+                runner={runner}
+                label={t.admin.passkeys}
+                onClick={() => onOpen({ kind: "passkeys", runner, user })}
+              />
+            </>
+          )}
+          {/* A runner with an account is not deleted (the server refuses): its account is disabled instead. */}
+          {!user && (
             <Action
               runner={runner}
-              label={user.role === "admin" ? t.admin.removeAdmin : t.admin.makeAdmin}
-              busy={busy}
-              onClick={() => {
-                if (user.role === "admin") {
-                  onOpen({ kind: "demote", runner, user });
-                } else {
-                  void change(() => actions.setRole(user.id, "admin"), t.admin.roleChanged);
-                }
-              }}
+              label={t.common.delete}
+              danger
+              onClick={() => onOpen({ kind: "delete", runner })}
             />
-            <Action
-              runner={runner}
-              label={user.disabled ? t.admin.enable : t.admin.disable}
-              busy={busy}
-              onClick={() => {
-                if (user.disabled) {
-                  void change(() => actions.setDisabled(user.id, false), t.admin.enabledDone);
-                } else {
-                  onOpen({ kind: "disable", runner, user });
-                }
-              }}
-            />
-            <Action
-              runner={runner}
-              label={t.admin.passkeys}
-              onClick={() => onOpen({ kind: "passkeys", runner, user })}
-            />
-          </>
-        )}
-        {/* A runner with an account is not deleted (the server refuses): its account is disabled instead. */}
-        {!user && (
-          <Action
-            runner={runner}
-            label={t.common.delete}
-            danger
-            onClick={() => onOpen({ kind: "delete", runner })}
-          />
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }

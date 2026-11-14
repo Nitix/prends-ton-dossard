@@ -20,6 +20,9 @@ import {
   fillEvent,
   format,
   formatDate,
+  formatOpeningDay,
+  formatOpeningTime,
+  formatOpeningToggle,
   formatStartTime,
   gpxField,
   gpxFile,
@@ -63,7 +66,7 @@ setUpFormTests();
 const registrationDeadline = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationDeadline);
 const registrationOpening = (screen: Screen) =>
-  screen.getByLabelText(fr.form.registrationOpening, { exact: true });
+  screen.getByLabelText(fr.form.registrationOpening, { exact: true }).first();
 const registrationOpeningTime = (screen: Screen) =>
   screen.getByLabelText(fr.form.registrationOpeningTime, { exact: true });
 const notes = (screen: Screen) => screen.getByLabelText(fr.form.notes);
@@ -1999,4 +2002,203 @@ test("EventForm — l'erreur du serveur sur l'heure de départ s'affiche sous le
   expect(time.element().getAttribute("aria-describedby")).toContain(message.element().id);
   expect(time.element().getAttribute("aria-invalid")).toBe("true");
   await expect.element(time).toHaveValue("07:30");
+});
+
+// --- The opening of a format of its own ---
+
+test("EventForm — l'ouverture propre d'une épreuve : une case de 44 px, deux champs avec leur aide commune, et le focus reste sur la case", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+  const box = formatOpeningToggle(row);
+
+  await expect.element(box).not.toBeChecked();
+  await expect
+    .element(row.getByLabelText(fr.form.formatOpening, { exact: true }))
+    .not.toBeInTheDocument();
+  const label = box.element().closest("label");
+  expect(label?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+
+  await box.click();
+
+  await expect.element(box).toBeChecked();
+  expect(document.activeElement).toBe(box.element());
+  const day = formatOpeningDay(row);
+  const time = formatOpeningTime(row);
+  await expect.element(day).toHaveAttribute("type", "date");
+  await expect.element(time).toHaveAttribute("type", "time");
+  const help = row.getByText(fr.form.formatOpeningHelp);
+  await expect.element(help).toBeVisible();
+  for (const control of [day, time]) {
+    expect(control.element().getAttribute("aria-describedby")).toContain(help.element().id);
+  }
+});
+
+test("EventForm — décocher cache les deux champs, recocher rend ce qui était saisi", async () => {
+  const { screen } = await renderForm();
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningDay(row).fill("2026-06-10");
+  await formatOpeningTime(row).fill("10:00");
+
+  await formatOpeningToggle(row).click();
+
+  await expect
+    .element(row.getByLabelText(fr.form.formatOpeningTime, { exact: true }))
+    .not.toBeInTheDocument();
+  await expect.element(row.getByText(fr.form.formatOpeningHelp)).not.toBeInTheDocument();
+  await formatOpeningToggle(row).click();
+  await expect.element(formatOpeningDay(row)).toHaveValue("2026-06-10");
+  await expect.element(formatOpeningTime(row)).toHaveValue("10:00");
+});
+
+test("EventForm — l'ouverture de la course dit qu'elle est celle des épreuves qui n'ont pas la leur", async () => {
+  const { screen } = await renderForm();
+
+  const help = screen.getByText(fr.form.registrationOpeningHelp);
+  await expect.element(help).toBeVisible();
+  expect(registrationOpening(screen).element().getAttribute("aria-describedby")).toContain(
+    help.element().id,
+  );
+});
+
+test("EventForm — l'ouverture d'une épreuve part avec elle, décochée elle ne part pas", async () => {
+  const { screen, router } = await renderForm();
+  await fillEvent(screen);
+  await registrationOpening(screen).fill("2026-06-01");
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningTime(row).fill("10:00");
+
+  await save(screen).click();
+
+  await savedEvent(router);
+  expect(mocks.calls.find(({ collection }) => collection === "formats")?.body).toMatchObject({
+    registration_opening: "",
+    registration_opening_time: "10:00",
+  });
+});
+
+test("EventForm — une épreuve qui a un jour d'ouverture ouvre le formulaire case cochée", async () => {
+  mocks.getOne.mockResolvedValue({
+    ...eventRecord,
+    registration_opening: "2026-05-01",
+    expand: {
+      ...eventRecord.expand,
+      formats_via_event: [{ ...f42, registration_opening: "2026-05-17" }, f15],
+    },
+  });
+  const { screen } = await renderEdit();
+
+  // F15 comes first (it has no date), F42 second.
+  await expect.element(formatOpeningToggle(format(screen, 2))).toBeChecked();
+  await expect.element(formatOpeningDay(format(screen, 2))).toHaveValue("2026-05-17");
+  await expect.element(formatOpeningToggle(format(screen, 1))).not.toBeChecked();
+});
+
+test("EventForm — opening_general_required s'affiche sous le jour d'ouverture de l'épreuve", async () => {
+  mocks.send.mockRejectedValue(
+    refused(1, 400, { registration_opening: field("opening_general_required") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningTime(row).fill("10:00");
+
+  await save(screen).click();
+
+  const message = row.getByText(fr.errors.opening_general_required);
+  await expect.element(message).toBeVisible();
+  const day = formatOpeningDay(row);
+  expect(day.element().getAttribute("aria-describedby")).toContain(message.element().id);
+  expect(day.element().getAttribute("aria-invalid")).toBe("true");
+  expect(formatOpeningTime(row).element().getAttribute("aria-invalid")).toBe("false");
+});
+
+test("EventForm — l'erreur de l'heure d'ouverture s'affiche sous l'heure de l'épreuve", async () => {
+  mocks.send.mockRejectedValue(
+    refused(1, 400, { registration_opening_time: field("time_invalid") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningTime(row).fill("10:00");
+
+  await save(screen).click();
+
+  const message = row.getByText(fr.errors.time_invalid);
+  await expect.element(message).toBeVisible();
+  expect(formatOpeningTime(row).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+});
+
+test("EventForm — opening_used_by_format s'affiche sous l'ouverture de la course", async () => {
+  mocks.send.mockRejectedValue(
+    refused(0, 400, { registration_opening: field("opening_used_by_format") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await formatOpeningToggle(format(screen, 1)).click();
+
+  await save(screen).click();
+
+  const message = screen.getByText(fr.errors.opening_used_by_format);
+  await expect.element(message).toBeVisible();
+  expect(registrationOpening(screen).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  await expect
+    .element(format(screen, 1).getByText(fr.errors.opening_used_by_format))
+    .not.toBeInTheDocument();
+});
+
+test("EventForm — format_opening_after_deadline s'affiche sous la date limite, format_opening_after_start sous la date de la course", async () => {
+  mocks.send.mockRejectedValueOnce(
+    refused(0, 400, { registration_deadline: field("format_opening_after_deadline") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  await save(screen).click();
+  const deadline = screen.getByText(fr.errors.format_opening_after_deadline);
+  await expect.element(deadline).toBeVisible();
+  expect(registrationDeadline(screen).element().getAttribute("aria-describedby")).toContain(
+    deadline.element().id,
+  );
+
+  mocks.send.mockRejectedValueOnce(
+    refused(0, 400, { start_date: field("format_opening_after_start") }),
+  );
+  await save(screen).click();
+  const start = screen.getByText(fr.errors.format_opening_after_start);
+  await expect.element(start).toBeVisible();
+  expect(startDate(screen).element().getAttribute("aria-describedby")).toContain(
+    start.element().id,
+  );
+});
+
+test("EventForm — un jour d'ouverture d'épreuve après le jour de l'épreuve le dit avec les mots de l'épreuve", async () => {
+  mocks.send.mockRejectedValue(
+    refused(1, 400, { registration_opening: field("registration_opening_after_start") }),
+  );
+  const { screen } = await renderForm();
+  await fillEvent(screen);
+  const row = format(screen, 1);
+  await formatOpeningToggle(row).click();
+  await formatOpeningDay(row).fill("2026-06-20");
+
+  await save(screen).click();
+
+  const message = row.getByText(fr.form.formatOpeningAfterDay);
+  await expect.element(message).toBeVisible();
+  expect(fr.form.formatOpeningAfterDay).toBe(
+    "L'ouverture des inscriptions de l'épreuve doit être au plus tard le jour de l'épreuve.",
+  );
+  expect(formatOpeningDay(row).element().getAttribute("aria-describedby")).toContain(
+    message.element().id,
+  );
+  await expect
+    .element(screen.getByText(fr.errors.registration_opening_after_start))
+    .not.toBeInTheDocument();
 });

@@ -46,6 +46,7 @@ import { DeleteEventDialog } from "./DeleteEventDialog";
 import { EventHero } from "./EventHero";
 import { formatDisplayName, formatMeasures } from "./formatName";
 import { FormatTitle } from "./FormatTitle";
+import { formatOpening, formatNames, shownOpening } from "./opening";
 import { isInterested, joinOptions, nonStarters, starters, type NonStarter } from "./participants";
 import { RegisterLink } from "./RegisterLink";
 import { openingText, registrationState } from "./registration";
@@ -222,7 +223,8 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
   // A race known by its month has no day to say of a format.
   const severalDays = !isMonthOnly(event) && !start.equals(end);
   const registration = webAddress(event.registration_url);
-  const deadline = registrationState(event, today);
+  const opening = shownOpening(view, me?.runnerId, today);
+  const deadline = registrationState(event, opening, today);
   // A runner who is only interested is told to register before it is too late.
   const reminded =
     deadline !== null && deadline.kind !== "closed" && !!me && isInterested(view, me.runnerId);
@@ -254,7 +256,7 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
       type="button"
       data-action="calendar"
       onClick={() => {
-        downloadEventIcs(view, t.event.calendarFileName, lang, t, reminders);
+        downloadEventIcs(view, t.event.calendarFileName, lang, t, reminders, me?.runnerId);
       }}
       className={ACTION}
     >
@@ -329,7 +331,13 @@ function EventContent({ view, me }: { view: EventView; me: Me | null }) {
             <ClockIcon className="mt-0.5 size-5 shrink-0 text-peach-700" />
             {deadline.kind === "open"
               ? t.event.reminder(f.date(deadline.deadline))
-              : openingText(deadline, f, t, "aside")}
+              : openingText(
+                  deadline,
+                  f,
+                  t,
+                  "aside",
+                  opening ? formatNames(view, opening, t, f) : "",
+                )}
           </p>
           {registration && <RegisterLink href={registration} />}
         </aside>
@@ -523,6 +531,10 @@ function FormatSection({
   const started = raceStarted(format, event, today);
   // A race known by its month has no start time to say, whatever the data holds.
   const startTime = isMonthOnly(event) ? "" : (format.start_time ?? "");
+  // Its own opening, said under its name while it is to come: a format that follows the event says nothing.
+  const own = formatOpening(event, format);
+  const ownState = own && registrationState(event, own, today);
+  const opens = ownState?.kind === "soon" || ownState?.kind === "today" ? ownState : null;
 
   return (
     <section
@@ -543,6 +555,7 @@ function FormatSection({
             .join(" · ")}
         </p>
       )}
+      {opens && <p className="format-opening text-sm">{openingText(opens, f, t, "format")}</p>}
       {onTheStart.length === 0 ? (
         <p className="format-empty text-sm text-neutral-600">{t.event.nobody}</p>
       ) : (

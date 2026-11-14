@@ -1,6 +1,6 @@
 module courses
 
-go 1.27.0
+go 1.27.4
 
 require (
 	ganigeorgiev.com/pocketbase/dbx v1.13.0

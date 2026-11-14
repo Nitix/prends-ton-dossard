@@ -30,6 +30,10 @@ var messages = map[string]string{
 	"registration_deadline_after_start":   "La date limite d'inscription doit être au plus tard le jour du début.",
 	"registration_opening_after_start":    "L'ouverture des inscriptions doit être au plus tard le jour du début.",
 	"registration_opening_after_deadline": "L'ouverture des inscriptions doit être au plus tard la date limite.",
+	"format_opening_after_deadline":       "Une épreuve ouvre ses inscriptions après cette date limite.",
+	"format_opening_after_start":          "Une épreuve ouvre ses inscriptions après ce jour.",
+	"opening_general_required":            "Remplis d'abord l'ouverture des inscriptions de la course : cette épreuve en reprend le jour ou l'heure.",
+	"opening_used_by_format":              "Une épreuve reprend le jour ou l'heure de cette ouverture : elle ne peut pas être vide.",
 	"format_date_month":                   "Une course dont seul le mois est connu n'a pas de date d'épreuve.",
 	"format_time_month":                   "Une épreuve d'une course au mois n'a pas d'heure de départ.",
 	"month_start_invalid":                 "Pour une course dont seul le mois est connu, la date est le 1er du mois.",
@@ -51,6 +55,7 @@ var messages = map[string]string{
 	"time_invalid":              "L'heure doit être de la forme 06:30.",
 	// The admin.
 	"last_admin":                     "Il doit toujours rester au moins un admin.",
+	"super_admin_protected":          "Ce compte est super admin : personne d'autre ne peut le modifier.",
 	"runner_has_account":             "Impossible de supprimer ce coureur : il a un compte. Désactive le compte à la place.",
 	"runner_has_participations":      "Impossible de supprimer ce coureur : il a encore des participations.",
 	"race_type_in_use":               "Impossible de supprimer ce type : des épreuves l'utilisent encore.",

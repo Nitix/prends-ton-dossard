@@ -80,6 +80,8 @@ const FORMAT_FIELDS: readonly string[] = [
   "route_url",
   "date",
   "start_time",
+  "registration_opening",
+  "registration_opening_time",
 ];
 
 const MONTHS_BACK = 12;
@@ -417,6 +419,7 @@ function EventFields({
     if (draft.monthOnly) {
       if (code === "registration_deadline_after_start") return t.form.deadlineAfterMonthEnd;
       if (code === "registration_opening_after_start") return t.form.openingAfterMonthEnd;
+      if (code === "format_opening_after_start") return t.form.openingAfterMonthEnd;
     }
     return translateError(t, code);
   };
@@ -604,7 +607,11 @@ function EventFields({
             />
           )}
         </Field>
-        <Field label={t.form.registrationOpening} error={eventError("registration_opening")}>
+        <Field
+          label={t.form.registrationOpening}
+          hint={t.form.registrationOpeningHelp}
+          error={eventError("registration_opening")}
+        >
           {(control) => (
             <input
               {...control}

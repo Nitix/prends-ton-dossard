@@ -40,7 +40,7 @@ func addAddFormat(s *mcpsdk.Server, t *tools) {
 			"Elle a au moins une mesure, distance_km, duration_min ou time_limit_min : de préférence celles de son type (list_race_types). " +
 			"La fin de la course vient de ses épreuves : une épreuve datée après la fin l'allonge, dans la même écriture. " +
 			"Une course dont le dernier jour ne vient d'aucune épreuve serait raccourcie : rien n'est fait au premier appel, " +
-			"qui le dit et donne un jeton de confirmation. Donne la course comme get_event.",
+			"qui le dit et donne un jeton de confirmation. L'épreuve peut avoir sa propre ouverture des inscriptions : un jour, une heure ou les deux. Donne la course comme get_event.",
 		InputSchema:  addFormatSchema(),
 		OutputSchema: eventWriteSchema(),
 		Annotations:  writeAnnotations(true, false),
@@ -98,7 +98,7 @@ func addUpdateFormat(s *mcpsdk.Server, t *tools) {
 		Description: "Modifie une épreuve, comme une épreuve du formulaire « Modifier » (tout membre le peut) : c'est update_event avec une seule épreuve. " +
 			"Un champ absent ne change pas ; 0 ou un texte vide l'efface. Une épreuve déplacée après la fin de la course l'allonge, dans la même écriture. " +
 			"Un champ vidé, ou le jour d'une épreuve qui a des participants, ou une course raccourcie, " +
-			"n'est fait qu'au second appel, avec le jeton de confirmation que le premier donne. Donne la course comme get_event.",
+			"n'est fait qu'au second appel, avec le jeton de confirmation que le premier donne. L'épreuve peut avoir sa propre ouverture des inscriptions : un jour, une heure ou les deux. Donne la course comme get_event.",
 		InputSchema:  updateFormatSchema(),
 		OutputSchema: eventWriteSchema(),
 		Annotations:  writeAnnotations(true, true),

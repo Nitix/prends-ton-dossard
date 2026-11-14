@@ -124,6 +124,55 @@ describe("shareText", () => {
     expect(text).not.toContain("aujourd");
   });
 
+  test("l'ouverture d'une épreuve : l'ouverture générale en ligne d'ouverture, celle de l'épreuve dans la ligne des épreuves", () => {
+    const view = toEventView({
+      ...eventRecord,
+      registration_opening: "2026-01-12",
+      registration_opening_time: "10:00",
+      expand: {
+        formats_via_event: [
+          f42,
+          { ...f15, registration_opening: "2026-01-13", registration_opening_time: "12:00" },
+        ],
+      },
+    });
+
+    expect(lines(shareText(view, APP, today, FR, fr))).toEqual([
+      "Trail des Crêtes",
+      "Du sam. 13 au dim. 14 juin 2026 · Annecy",
+      "Épreuves : Trail 15 km · 700 m D+ · ouverture des inscriptions le mar. 13 janv. à 12:00 ; Trail 42 km · 2 400 m D+ · max 10h",
+      "Ouverture des inscriptions le lun. 12 janv. à 10:00",
+      `${APP}/evenements/event`,
+    ]);
+  });
+
+  test("l'ouverture d'une épreuve vient après son départ, jamais « aujourd'hui » ; une ouverture passée n'ajoute rien", () => {
+    const view = toEventView({
+      ...eventRecord,
+      registration_opening: "2026-01-02",
+      expand: {
+        formats_via_event: [
+          {
+            ...f15,
+            start_time: "08:30",
+            registration_opening: "2026-01-05",
+            registration_opening_time: "12:00",
+          },
+          { ...f42, registration_opening: "2026-01-03", registration_opening_time: "12:00" },
+        ],
+      },
+    });
+
+    const text = plain(shareText(view, APP, today, FR, fr));
+
+    expect(text).toContain(
+      "Trail 15 km · 700 m D+ · départ à 8 h 30 · ouverture des inscriptions le lun. 5 janv. à 12:00 ;",
+    );
+    expect(text).toContain("Trail 42 km · 2 400 m D+ · max 10h https");
+    expect(text).not.toContain("3 janv.");
+    expect(text).not.toContain("aujourd");
+  });
+
   test("date limite : une ligne, et aucune quand les inscriptions sont closes ou sans date", () => {
     const open = toEventView({ ...event2Record, registration_deadline: "2026-05-31" });
     expect(lines(shareText(open, APP, today, FR, fr))).toContain(

@@ -387,21 +387,21 @@ func specInstructions(t *testing.T) (member, admin string) {
 	return strings.Join(quotes[0], "\n") + "\n" + v7Instruction(t), strings.Join(quotes[1], "\n")
 }
 
-// v7Instruction is the line that the instructions gain in v7 (spec § 12.1 of the
-// v7 spec: « Les instructions du serveur gagnent une ligne : « … » »).
+// v7Instruction is the line of the opening in the instructions, as the v9 spec
+// words it (§ 8: « Les instructions du serveur, ligne de l'ouverture : « … » »).
 func v7Instruction(t *testing.T) string {
 	t.Helper()
-	spec, err := os.ReadFile(filepath.Join(filepath.Dir(specPath(t)), "2026-11-07-courses-v7-design.md"))
+	spec, err := os.ReadFile(filepath.Join(filepath.Dir(specPath(t)), "2026-11-14-courses-v9-design.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, after, ok := strings.Cut(string(spec), "Les instructions du serveur gagnent une ligne : « ")
+	_, after, ok := strings.Cut(string(spec), "Les instructions du serveur, ligne de l'ouverture : « ")
 	if !ok {
-		t.Fatal("no new line of the instructions in the v7 spec (§ 12.1)")
+		t.Fatal("no line of the opening of the instructions in the v9 spec (§ 8)")
 	}
 	line, _, ok := strings.Cut(after, " »")
 	if !ok {
-		t.Fatal("the new line of the instructions in the v7 spec has no end")
+		t.Fatal("the line of the opening of the instructions in the v9 spec has no end")
 	}
 	return "- " + line
 }

@@ -988,6 +988,30 @@ func TestSeed_V7Data(t *testing.T) {
 		t.Errorf("the Hyrox Lyon opens on %q at %q, want %q and no time", got, hyrox.GetString("registration_opening_time"), inDays(1))
 	}
 
+	// The Hyrox Doubles has its own opening, a day alone three days from now; the
+	// Hyrox Open follows the event. The values must be ones the hooks accept.
+	doubles, err := app.FindFirstRecordByData("formats", "name", "Hyrox Doubles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := doubles.GetString("registration_opening"); got != inDays(3) || doubles.GetString("registration_opening_time") != "" {
+		t.Errorf("the Hyrox Doubles opens on %q at %q, want %q and no time", got, doubles.GetString("registration_opening_time"), inDays(3))
+	}
+	if got := doubles.GetString("registration_opening"); got > hyrox.GetString("registration_deadline") || got > hyrox.GetString("start_date") {
+		t.Errorf("the Hyrox Doubles opens on %q, after the deadline or the start of its event", got)
+	}
+	open, err := app.FindFirstRecordByData("formats", "name", "Hyrox Open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open.GetString("registration_opening") != "" || open.GetString("registration_opening_time") != "" {
+		t.Errorf("the Hyrox Open has its own opening, want it to follow the event")
+	}
+	// Saving it again goes through the hooks of v9, which refuse a bad opening.
+	if err := app.Save(doubles); err != nil {
+		t.Errorf("the hooks refuse the opening of the Hyrox Doubles: %v", err)
+	}
+
 	// Nowhere else: the other races have no opening, and none is known by its month.
 	for _, other := range []string{"Backyard des Aiguilles", "6 heures de la Doua", "Semi-marathon d'Annecy", "Cross du Salève"} {
 		record := event(other)

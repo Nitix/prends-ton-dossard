@@ -423,6 +423,79 @@ func TestGuards_RefuseWritesOutsideTheAPI(t *testing.T) {
 	})
 }
 
+// A super admin stays an active admin whatever writes the account, the API or
+// not: the mark has to go first (the command super-admin --remove).
+func TestSuperAdmin_StaysActiveAdmin(t *testing.T) {
+	codeOf := func(t *testing.T, err error) string {
+		t.Helper()
+		var apiErr *router.ApiError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("error = %v, want an API error", err)
+		}
+		if apiErr.Status != http.StatusForbidden {
+			t.Errorf("status = %d, want %d", apiErr.Status, http.StatusForbidden)
+		}
+		got, _ := apiErr.Data["code"].(string)
+		return got
+	}
+	// setup marks Admin super admin, with Bob as another admin so that the
+	// guard of the last admin is not the one that refuses.
+	setup := func(t *testing.T) (*tests.TestApp, testutil.Fixture) {
+		t.Helper()
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		fx.Bob.Set("role", "admin")
+		if err := app.Save(fx.Bob); err != nil {
+			t.Fatal(err)
+		}
+		fx.Admin.Set("super_admin", true)
+		if err := app.Save(fx.Admin); err != nil {
+			t.Fatalf("marking an active admin super admin: %v", err)
+		}
+		return app, fx
+	}
+
+	t.Run("demoting a super admin", func(t *testing.T) {
+		app, fx := setup(t)
+		fx.Admin.Set("role", "member")
+		if got := codeOf(t, app.Save(fx.Admin)); got != apperr.CodeSuperAdminProtected {
+			t.Errorf("code = %q, want %q", got, apperr.CodeSuperAdminProtected)
+		}
+	})
+	t.Run("disabling a super admin", func(t *testing.T) {
+		app, fx := setup(t)
+		fx.Admin.Set("disabled", true)
+		if got := codeOf(t, app.Save(fx.Admin)); got != apperr.CodeSuperAdminProtected {
+			t.Errorf("code = %q, want %q", got, apperr.CodeSuperAdminProtected)
+		}
+	})
+	t.Run("marking a member", func(t *testing.T) {
+		app, fx := setup(t)
+		fx.Alice.Set("super_admin", true)
+		if got := codeOf(t, app.Save(fx.Alice)); got != apperr.CodeSuperAdminProtected {
+			t.Errorf("code = %q, want %q", got, apperr.CodeSuperAdminProtected)
+		}
+	})
+	t.Run("removing the mark, then the role", func(t *testing.T) {
+		app, fx := setup(t)
+		fx.Admin.Set("super_admin", false)
+		if err := app.Save(fx.Admin); err != nil {
+			t.Fatalf("removing the mark: %v", err)
+		}
+		fx.Admin.Set("role", "member")
+		if err := app.Save(fx.Admin); err != nil {
+			t.Errorf("demoting an admin who is no longer super admin: %v", err)
+		}
+	})
+	t.Run("another admin is demoted as before", func(t *testing.T) {
+		app, fx := setup(t)
+		fx.Bob.Set("role", "member")
+		if err := app.Save(fx.Bob); err != nil {
+			t.Errorf("demoting an ordinary admin: %v", err)
+		}
+	})
+}
+
 func TestMeEmail(t *testing.T) {
 	const url = "/api/app/me/email"
 	testutil.RunRows(t, []testutil.Row{

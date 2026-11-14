@@ -40,6 +40,7 @@ func main() {
 
 	app.RootCmd.AddCommand(
 		cmd.NewBootstrapAdminCommand(app, cfg),
+		cmd.NewSuperAdminCommand(app),
 		cmd.NewSeedCommand(app, cfg),
 	)
 

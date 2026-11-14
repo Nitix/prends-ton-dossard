@@ -839,3 +839,63 @@ func TestHome_RegistrationsToDo_Opening(t *testing.T) {
 	update(t, app, todo, map[string]any{"status": "registered"})
 	assertJSON(t, block(t, homeAt(t, app, fx.Alice, at(2026, 5, 11, 10, 0)), "registrations_to_do"), []any{})
 }
+
+func TestHome_TodoPerFormatOpening(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	annecy := create(t, app, "events", map[string]any{
+		"name": "Semi d'Annecy", "location": "Annecy", "start_date": "2026-12-06",
+		"registration_opening": "2026-11-16", "registration_opening_time": "12:00", "registration_deadline": "2026-11-30",
+		"registration_url": "https://inscriptions.example.test/annecy", "created_by": fx.AliceRunner.Id,
+	})
+	fSemi := create(t, app, "formats", map[string]any{
+		"event": annecy.Id, "race_type": fx.Road.Id, "distance_km": 21.1, "registration_opening": "2026-11-17",
+	})
+	other := create(t, app, "events", map[string]any{
+		"name": "Trail des Aravis", "location": "La Clusaz", "start_date": "2026-12-13",
+		"registration_opening": "2026-11-16", "registration_opening_time": "09:00", "registration_deadline": "2026-12-01",
+		"registration_url": "https://inscriptions.example.test/aravis", "created_by": fx.AliceRunner.Id,
+	})
+	interested := func(runner, event *core.Record, format string) *core.Record {
+		fields := map[string]any{
+			"runner": runner.Id, "event": event.Id, "status": "interested", "confirmed": true, "added_by": runner.Id,
+		}
+		if format != "" {
+			fields["format"] = format
+		}
+		return create(t, app, "participations", fields)
+	}
+	semi := interested(fx.AliceRunner, annecy, fSemi.Id)
+	aliceOther := interested(fx.AliceRunner, other, "")
+	bobOnAnnecy := interested(fx.BobRunner, annecy, "")
+	item := func(id string, event *core.Record, title, opening, time, url string) map[string]any {
+		m := map[string]any{
+			"participation_id": id, "event": eventRefOf(event), "state": "soon", "opening": opening,
+			"opening_time": time, "deadline": event.GetString("registration_deadline"), "registration_url": url,
+		}
+		if title != "" {
+			m["format_title"] = title
+		}
+		return m
+	}
+	annecyURL, aravisURL := "https://inscriptions.example.test/annecy", "https://inscriptions.example.test/aravis"
+	now := at(2026, 11, 14, 10, 0)
+
+	// The semi has its own day (the time is the event's), and comes after the other
+	// event's, which opens a day earlier.
+	assertJSON(t, block(t, homeAt(t, app, fx.Alice, now), "registrations_to_do"), []any{
+		item(aliceOther.Id, other, "", "2026-11-16", "09:00", aravisURL),
+		item(semi.Id, annecy, "Route 21,1 km", "2026-11-17", "12:00", annecyURL),
+	})
+	// A participation on the event alone has the event's opening.
+	assertJSON(t, block(t, homeAt(t, app, fx.Bob, now), "registrations_to_do"), []any{
+		item(bobOnAnnecy.Id, annecy, "", "2026-11-16", "12:00", annecyURL),
+	})
+	// With no opening of the event, the format's own one (day and time) is also the general
+	// one, for the participation on the event alone.
+	update(t, app, fSemi, map[string]any{"registration_opening_time": "10:00"})
+	update(t, app, annecy, map[string]any{"registration_opening": "", "registration_opening_time": ""})
+	assertJSON(t, block(t, homeAt(t, app, fx.Bob, now), "registrations_to_do"), []any{
+		item(bobOnAnnecy.Id, annecy, "", "2026-11-17", "10:00", annecyURL),
+	})
+}

@@ -540,6 +540,19 @@ const picker = (page: Page) => page.getByRole("radiogroup", { name: fr.settings.
 const cardOf = (page: Page, id: string) =>
   picker(page).getByRole("radio", { name: label(id), exact: true });
 
+/**
+ * Taps the card of a skin, once, as a person does. Not `check()`: after its
+ * click, `check()` reads the radio again to make sure it is checked, and here
+ * it does not stay so on that page: the choice reloads the page, or it is
+ * refused and the card goes back to the page's skin. On a loaded machine, the
+ * page has reacted before Playwright reads it again: after a reload, `check()`
+ * starts over on the new page and taps a second time (a second choice that
+ * nobody made, and a second message); after a refusal, it fails (« Clicking
+ * the checkbox did not change its state »). What the tap did is read from the
+ * page instead: the reload, the message.
+ */
+const tap = (page: Page, id: string) => cardOf(page, id).click();
+
 /** The settings page of somebody signed in, once the picker is there. */
 async function openSettings(page: Page) {
   await openApp(page, { signedIn: true, path: SETTINGS });
@@ -567,9 +580,7 @@ test(
       loads++;
     });
 
-    // A click, not check(): when the look fails, the page puts the choice back at once, and
-    // check() then fails on its own « the state did not change » before the assertions below.
-    await cardOf(page, SKIN).click();
+    await tap(page, SKIN);
 
     // The page reloads, and is in the skin: kept on the device, it is the new build that wears it.
     await expect.poll(() => loads, { timeout: 10_000 }).toBeGreaterThan(0);
@@ -592,9 +603,7 @@ test(
     lookOffline("abort");
     await context.setOffline(true);
 
-    // A click, not check(): when the look fails, the page puts the choice back at once, and
-    // check() then fails on its own « the state did not change » before the assertions below.
-    await cardOf(page, SKIN).click();
+    await tap(page, SKIN);
 
     await page.getByText(fr.settings.skinLoadFailed).waitFor({ timeout: 10_000 });
     expect(await notReloaded(page), "the page was reloaded").toBe(true);
@@ -619,9 +628,7 @@ test(
       loads++;
     });
 
-    // A click, not check(): when the look fails, the page puts the choice back at once, and
-    // check() then fails on its own « the state did not change » before the assertions below.
-    await cardOf(page, SKIN).click();
+    await tap(page, SKIN);
     await expect.poll(() => loads, { timeout: 10_000 }).toBe(1);
     await picker(page).waitFor();
     // The reloaded page wears Crête (the kept skin has no look), and the choice is on the device.
@@ -629,9 +636,7 @@ test(
     expect(await page.evaluate(() => localStorage.getItem("ptd-skin"))).toBe(SKIN);
 
     // Again: the guard knows the page was just reloaded, and says so.
-    // A click, not check(): when the look fails, the page puts the choice back at once, and
-    // check() then fails on its own « the state did not change » before the assertions below.
-    await cardOf(page, SKIN).click();
+    await tap(page, SKIN);
 
     await page.getByText(fr.settings.skinLoadFailedOnline).waitFor({ timeout: 10_000 });
     expect(loads, "the page reloaded again").toBe(1);

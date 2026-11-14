@@ -2242,6 +2242,11 @@ func TestMigrations_UserRemindersDownThenUp(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
 	migration := migrationFile(t, "9m_user_reminders.go")
+	// The migration 9s replaces the update rule of the accounts after this one
+	// (the super admin): rolled back first, the rule is the one 9m wrote.
+	if err := migrationFile(t, "9s_super_admin.go").Down(app); err != nil {
+		t.Fatal(err)
+	}
 
 	users := func() *core.Collection {
 		t.Helper()
@@ -2717,6 +2722,15 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 		before[name] = n
 	}
 
+	// The migrations that came after v7 go first, so that the seven below are
+	// the ones of v7.
+	after, err := runner.Down(2)
+	if err != nil {
+		t.Fatalf("rolling the migrations after v7 back: %v", err)
+	}
+	if !slices.Equal(after, []string{"9t_format_registration_opening.go", "9s_super_admin.go"}) {
+		t.Fatalf("reverted %v, want the migrations after v7", after)
+	}
 	reverted, err := runner.Down(7)
 	if err != nil {
 		t.Fatalf("rolling the seven migrations of v7 back: %v", err)

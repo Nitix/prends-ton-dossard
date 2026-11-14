@@ -5,13 +5,13 @@
 La spécification est dans [`docs/superpowers/specs/2026-10-31-courses-design.md`](docs/superpowers/specs/2026-10-31-courses-design.md).
 
 ```
-server/   programme Go : API, règles, migrations, commandes (bootstrap-admin, seed)
+server/   programme Go : API, règles, migrations, commandes (bootstrap-admin, super-admin, seed)
 web/      front React 19 + Vite, compilé dans server/webdist/dist puis embarqué
 ```
 
 ## Prérequis
 
-- **Go 1.27** ;
+- **Go 1.27.4** ou plus (`go.mod` l'exige : les versions d'avant ont une faille dans `net/http`, GO-2026-6859 ; avec `GOTOOLCHAIN=auto`, le réglage par défaut, `go` télécharge la bonne version tout seul) ;
 - **Node 26** ou plus (voir `.nvmrc`) ;
 - **pnpm 12** (la version exacte est dans `packageManager`, dans `package.json`) ;
 - pour la production : **Docker** avec Compose, et **Caddy** sur la machine ;
@@ -214,6 +214,14 @@ Un planificateur du programme passe chaque minute (`ptd-reminders`). Il envoie u
 - **iPhone et iPad.** Les notifications ne marchent que dans **l'appli installée** (Partager, « Sur l'écran d'accueil »), avec **iOS 16.4 ou plus** ; la permission se demande par un geste (le bouton « Activer sur cet appareil »). Le site le dit sur la page des Réglages.
 - **Les alarmes d'un calendrier abonné** ne sont pas garanties : Apple Calendrier (sur Mac) retire par défaut les alertes d'un abonnement (décocher « Supprimer les alertes » dans les réglages du calendrier), et Google Agenda et Outlook les ignorent d'après des utilisateurs. Les notifications sont le canal sûr.
 
+### L'ouverture d'une épreuve
+
+Une épreuve peut ouvrir ses inscriptions à un autre moment que la course (le Marathon du lac d'Annecy ouvre un jour différent par épreuve). Dans le formulaire de la course, cocher « Cette épreuve ouvre ses inscriptions à un autre moment » dans le bloc de l'épreuve, puis donner un jour, une heure, ou les deux. **Un jour seul ou une heure seule reprend l'autre partie de l'ouverture de la course**, qui doit donc exister ; une épreuve sans ouverture à elle suit celle de la course. L'assistant fait de même avec `registration_opening` et `registration_opening_time` dans `add_format` et `update_format` ; `get_event` donne, par épreuve, ces champs et `opens`, l'ouverture qui en résulte.
+
+Chacun voit, en haut de la fiche, l'ouverture de l'épreuve où la personne a le statut « Inscrit » ou « Intéressé » (sinon l'ouverture de la course), et la personne est prévenue au moment de celle-là, dans ses alarmes d'agenda et ses notifications. Une course qui n'a pas d'ouverture à elle donne à une personne sans épreuve un rappel pour chacune de ses épreuves.
+
+- **Pour essayer :** sur une instance neuve (son `seed` a l'épreuve « Hyrox Doubles » de « Hyrox Lyon », qui a son jour) ; dev garde les données d'un ancien seed : y donner une ouverture à une épreuve d'une course qui existe déjà. Puis ouvrir la fiche comme coureur de cette épreuve puis comme supporteur, regarder l'accueil, l'agenda abonné, « Ajouter à l'agenda » et « Partager », et voir le formulaire sur un téléphone. Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-v9.md`.
+
 ## Météo
 
 La fiche d'une course montre la **« Météo prévue »** de ses jours, **de J-7 au dernier jour** (une course dont seul le mois est connu n'en a pas). Les données sont celles d'[Open-Meteo](https://open-meteo.com/) (licence CC BY 4.0, lieux GeoNames pour le géocodage). Son API gratuite est réservée à un **usage non commercial** : un site privé entre amis, sans abonnement ni publicité, en fait partie.
@@ -241,6 +249,26 @@ Admin, « Membres », puis « Inviter » sur un coureur sans compte : le lien va
 - **La fenêtre de partage** montre **le message prêt et le lien**, chacun avec « Partager » et « Copier ». Le message est prêt à envoyer : « Salut Arnaud ! Guillaume t'invite sur Prends ton dossard… », avec le nombre de courses déjà prévues et la prochaine. Il contient le lien : comme le lien, il ne s'envoie qu'à la personne concernée. L'outil MCP `admin_create_link` renvoie les deux.
 - **La page que la personne ouvre** montre qui l'invite, une liste courte de ses prochaines courses avec les amis qui y vont, et en une phrase les prochaines courses du groupe, au-dessus du formulaire de création du compte. Elle est calculée à chaque ouverture : une course ajoutée après l'envoi y apparaît. Elle ne montre que des noms de courses, des lieux, des jours, des épreuves et des noms de coureurs ; un lien expiré ou déjà utilisé ne montre rien.
 - **Pour essayer :** sur dev, inviter un coureur sans compte qui a des courses à venir, ouvrir le lien sur un téléphone (sans être connecté), puis créer le compte.
+
+## Super admin
+
+Un compte **super admin** est un admin qu'aucun autre admin ne peut modifier : ni son rôle, ni sa désactivation, ni un lien de réinitialisation, ni ses clés d'accès, ni le nom ou la photo de son coureur, que ce soit par le site ou par l'assistant IA. On peut donc donner les droits d'admin à d'autres sans risquer de perdre les siens. Pour tout le reste, c'est un admin comme les autres.
+
+La marque ne se donne et ne se retire que sur le serveur :
+
+```sh
+docker compose exec courses /app/courses super-admin "<Prénom>"
+docker compose exec courses /app/courses super-admin "<Prénom>" --remove
+```
+
+- `<Prénom>` est le nom du coureur, sans tenir compte des majuscules ; il doit avoir un compte.
+- Sans `--remove`, le compte devient aussi **admin et actif** : la commande rend ses droits à qui les a perdus.
+- `--remove` ne retire que la marque : le rôle et l'état du compte ne changent pas.
+- La commande n'affiche que le nom du coureur, jamais d'adresse.
+
+Sur la page Membres, la ligne d'un super admin dit « Actif · Super admin ». Un autre admin n'y voit aucun bouton ; le super admin, sur sa propre ligne, n'a ni « Retirer admin » ni « Désactiver ».
+
+**Pour essayer :** sur dev, marquer son compte, puis se connecter avec un autre compte admin : la ligne du super admin n'a plus de bouton, et l'assistant IA de cet autre admin refuse de changer son rôle ou de lui créer un lien de réinitialisation.
 
 ## Environnement de dev
 
@@ -384,6 +412,7 @@ Les métadonnées d'une photo, sa position GPS comprise, sont retirées. Un fich
 - **Caddy : rien à ajouter.** `/mcp` et `/api/app/mcp-uploads` passent par le `reverse_proxy` du bloc de « Mise en service » comme le reste : les réponses sont du JSON (pas de flux SSE à travers `encode`), le blocage `@pbadmin` ne les touche pas, Caddy ne limite pas la taille d'un corps (le programme le fait), et `X-Forwarded-For`, déjà réglé, donne à `/mcp` ses limites par adresse. Pour vérifier : `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://courses.example.fr/mcp` répond `401`, le refus d'une requête sans jeton.
 - **`APP_URL`** doit être l'adresse publique du site (voir « Mise en service »). L'adresse et la commande de la fenêtre de création d'un jeton, l'adresse d'envoi de `start_upload` (`<APP_URL>/api/app/mcp-uploads/<id>`) et les liens que l'assistant donne (`<APP_URL>/evenements/<id>`) en viennent : avec la valeur par défaut, celle de Vite (`http://localhost:5173`), l'assistant enverrait ses fichiers au mauvais endroit. La route d'envoi n'a pas de session : l'en-tête `X-Upload-Secret` d'un emplacement ouvert par `start_upload` l'ouvre, pour un seul fichier.
 - **Limites.** 300 requêtes par minute et par jeton en moyenne (un seau de 300 qui se remplit de 5 par seconde, tenu en mémoire : une rafale de 300 passe d'un coup, et un jeton au repos peut en envoyer 600 dans sa première minute) : au-delà, 429, avec un message en français et `Retry-After: 1`, sans ralentir les autres jetons. Et 10 requêtes en cours au plus par jeton (Claude Code lance jusqu'à dix lectures à la fois) : une onzième reçoit un 429 avec `Retry-After: 1`. Une trace qui attend sa place pour être lue (deux grandes à la fois) cesse d'attendre quand le client part. Pour les requêtes sans jeton valide, une règle de PocketBase limite `/mcp` à 1 500 par minute et par adresse (migration `9k`, qui crée aussi la table des jetons : une sauvegarde avant la mise à jour, comme d'habitude). Les requêtes qu'un outil fait à l'API du site comptent dans les limites du site, comme celles du navigateur : un assistant qui inscrit trente personnes d'un coup peut attendre quelques secondes. Ces limites sont comptées par adresse : l'assistant les partage avec ton navigateur (et ceux de ta maison, derrière la même box), qu'un assistant très actif peut faire refuser (429) pendant quelques secondes, 10 au plus. Un corps de requête `/mcp` fait 1 Mio au plus (413 au-delà). Les confirmations et les emplacements d'envoi sont gardés en mémoire : un redémarrage les perd, l'assistant recommence.
+- **Après une mise à jour qui change les outils**, relancer les assistants : une nouvelle session de Claude Code (ou `/mcp`, puis reconnecter), un redémarrage de Claude Desktop. Un client garde la description des outils lue à sa connexion, et refuse une réponse qui a un champ qu'il ne connaît pas (« Structured content does not match the tool's output schema »). C'est arrivé avec le super admin : `admin_list_members` a un champ `super_admin` de plus.
 - **Pas de MCP sur la démo.** Avec `DEMO_LOGIN_EMAIL`, il n'y a ni `/mcp`, ni routes des jetons, ni route d'envoi (404), ni section dans les Réglages : tout le monde partage le compte de la démo, un jeton y donnerait un accès durable à chacun.
 - **Journaux.** Le journal des requêtes de PocketBase (5 jours par défaut ; tableau de bord, Logs, par le tunnel SSH) garde chaque `POST /mcp`, avec dans `meta` l'identifiant du jeton (`mcpToken`), celui du compte (`mcpUser`) et les outils appelés (`mcpTools`), dont chacun dit si une confirmation a été demandée (`asked`) ou utilisée (`confirmed`) ; chaque requête qu'un outil fait à l'API du site, avec l'agent `prends-ton-dossard-mcp` ; chaque envoi de fichier ; et les erreurs du serveur MCP (`mcp: …`). **Il ne garde jamais** le jeton (la base n'en a que l'empreinte), son secret, l'en-tête `Authorization`, la session interne d'un outil, le secret d'un envoi (il voyage dans un en-tête, pas dans l'adresse), un jeton de confirmation, ni un lien d'agenda, d'invitation ou de réinitialisation. Dans le site, ce que fait un assistant porte le nom de la personne (« ajouté par … ») : il n'y a pas d'autre trace par course.
 
@@ -529,6 +558,7 @@ Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les com
 
     Ouvrir le lien affiché pour créer ce compte, puis, depuis l'administration des membres, créer un lien de réinitialisation pour le compte d'origine et l'utiliser. Désactiver ensuite le compte de secours ;
   - ou ouvrir le tableau de bord par le tunnel SSH (voir « Tableau de bord PocketBase »), et dans la collection `users`, donner un nouveau mot de passe au compte (10 caractères au moins). Ses sessions ouvertes sont fermées, et ses jetons d'assistant IA (MCP) supprimés.
+- **Un super admin** : aucun autre admin ne peut lui créer ce lien (voir « Super admin »). Il se connecte avec une de ses clés d'accès s'il en a ; sinon, le tableau de bord par le tunnel SSH, comme ci-dessus, pour donner un nouveau mot de passe au compte. Ne pas retirer la marque pour se faire créer un lien par un autre admin : cet admin verrait le lien et pourrait l'ouvrir le premier, ce que la marque sert justement à empêcher.
 
 ## Recette manuelle sur iPhone
 

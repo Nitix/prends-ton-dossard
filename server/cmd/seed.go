@@ -234,6 +234,10 @@ func seedEvent(app core.App, runners map[string]*core.Record, event eventSpec) e
 			"price_eur":        format.price,
 			"date":             format.date,
 			"start_time":       format.startTime,
+			// Empty is a format that follows the event's opening; a day alone
+			// is valid, the time then comes from the event's opening.
+			"registration_opening":      format.opening,
+			"registration_opening_time": format.openingTime,
 		}
 		if format.track {
 			file, err := filesystem.NewFileFromBytes(seedTrack, "boucle-des-cretes.gpx")
@@ -428,7 +432,11 @@ type formatSpec struct {
 	price          float64 // in euros, to the cent at most; zero when the format has none
 	track          bool    // the format has the track of the demo (seedTrack)
 	startTime      string  // HH:MM, Paris time; empty when the format has none
-	entries        []entrySpec
+	// opening and openingTime are the registration opening of the format
+	// itself (YYYY-MM-DD, HH:MM); either may be empty and the event's opening
+	// gives the missing part. Both empty: the format follows the event.
+	opening, openingTime string
+	entries              []entrySpec
 	// results are the results of some of the entries: a finisher's time, rank
 	// and note, or the note of a runner who gave up. Each is for a runner of
 	// entries, and the hook of the participations keeps the parts that the
@@ -576,7 +584,10 @@ func demoEvents(today time.Time) []eventSpec {
 					},
 				},
 				{
+					// Opens on its own day, in three days: a day alone, so the
+					// time comes from the event's opening.
 					name: "Hyrox Doubles", raceType: "Hyrox", distanceKm: 8,
+					opening: in(3),
 					entries: []entrySpec{
 						{runnerBob, "interested", runnerBob},
 						{runnerJulie, "interested", runnerBob},

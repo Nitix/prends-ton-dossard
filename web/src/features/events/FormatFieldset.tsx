@@ -57,6 +57,7 @@ export function FormatFieldset({
   const { t, f } = useI18n();
   const measuresId = useId();
   const warningId = useId();
+  const openingHelpId = useId();
   const title = useRef<HTMLLegendElement>(null);
   const trackField = useRef<HTMLInputElement>(null);
   const statusId = useId();
@@ -76,6 +77,10 @@ export function FormatFieldset({
 
   const message = (field: string): string | null => {
     const code = errors[field];
+    // The opening of a format is held against the day of the format, or the end of the month of a race known by its month.
+    if (field === "registration_opening" && code === "registration_opening_after_start") {
+      return monthOnly ? t.form.openingAfterMonthEnd : t.form.formatOpeningAfterDay;
+    }
     return code === undefined ? null : translateFieldError(t, field, code);
   };
   const trackError =
@@ -488,6 +493,63 @@ export function FormatFieldset({
           )}
         </Field>
       )}
+
+      <div className="flex flex-col gap-3">
+        <label className="flex min-h-11 items-center gap-3">
+          <input
+            type="checkbox"
+            checked={row.ownOpening}
+            onChange={(event) => {
+              onChange({ ownOpening: event.target.checked });
+            }}
+            className="size-6 shrink-0"
+          />
+          <span className="font-semibold">{t.form.formatOpeningToggle}</span>
+        </label>
+        {row.ownOpening && (
+          <>
+            {/* Independent fields, one help for both: a day alone keeps the time of the event, a time alone its day. */}
+            <Field
+              label={t.form.formatOpening}
+              error={message("registration_opening")}
+              describedBy={openingHelpId}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  type="date"
+                  value={row.openingDay}
+                  onChange={(event) => {
+                    onChange({ openingDay: event.target.value });
+                  }}
+                  className={INPUT}
+                />
+              )}
+            </Field>
+            <Field
+              label={t.form.formatOpeningTime}
+              error={message("registration_opening_time")}
+              describedBy={openingHelpId}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  type="time"
+                  step={60}
+                  value={row.openingTime}
+                  onChange={(event) => {
+                    onChange({ openingTime: event.target.value });
+                  }}
+                  className={INPUT}
+                />
+              )}
+            </Field>
+            <p id={openingHelpId} className="-mt-1 text-sm text-neutral-600">
+              {t.form.formatOpeningHelp}
+            </p>
+          </>
+        )}
+      </div>
 
       {removal && (
         <div className="flex flex-col gap-1">

@@ -6,6 +6,8 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  f15,
+  f42,
   p2,
   pNinaUndecided,
   samRunner,
@@ -174,7 +176,44 @@ describe("todosOf", () => {
       opening: date("2026-05-12"),
       time: "10:00",
       daysLeft: 12,
+      formatIds: [],
       deadline: date("2026-06-10"),
+    });
+  });
+
+  test("todosOf — each participation by its own opening", () => {
+    // Annecy opens on 16 Nov at 12:00; its 15 km ("the semi") opens on 17 Nov.
+    const annecy = toEventView(
+      withParticipations(
+        {
+          ...eventRecord,
+          registration_deadline: "2026-12-20",
+          registration_opening: "2026-11-16",
+          registration_opening_time: "12:00",
+          expand: {
+            ...eventRecord.expand,
+            formats_via_event: [f42, { ...f15, registration_opening: "2026-11-17" }],
+          },
+        },
+        [
+          { ...p2, id: "p-bob-15", format: "f15" },
+          { ...p2, id: "p-bob-undecided", format: "" },
+        ],
+      ),
+    );
+
+    const rows = todosOf([annecy], bobRunner.id, date("2026-11-14"));
+
+    // The undecided one and the 42 km (P2) have the event's opening, the semi its own.
+    expect(rows.map((row) => [row.participation.id, row.state.kind, row.day.toString()])).toEqual([
+      ["p-bob-undecided", "soon", "2026-11-16"],
+      ["p2", "soon", "2026-11-16"],
+      ["p-bob-15", "soon", "2026-11-17"],
+    ]);
+    expect(rows[2]?.state).toMatchObject({
+      opening: date("2026-11-17"),
+      time: "12:00",
+      daysLeft: 3,
     });
   });
 

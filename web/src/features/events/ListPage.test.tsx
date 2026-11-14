@@ -29,6 +29,7 @@ import {
   bobRunner,
   event2Record,
   eventRecord,
+  f15,
   f42,
   fLyon,
   ninaRunner,
@@ -937,4 +938,35 @@ test("EventCard — la pastille d'ouverture", async () => {
   const until = open.screen.getByText(/^Inscriptions jusqu/);
   await expect.element(until).toBeVisible();
   expect(getComputedStyle(until.element()).backgroundColor).toBe(soonLook);
+});
+
+test("EventCard — la pastille dit l'ouverture de l'épreuve de la personne qui regarde", async () => {
+  // The event opens on the 5th at 10:00; the 15 km (Sam's) on the 6th, at the event's time.
+  const record = {
+    ...withDeadline,
+    registration_opening: "2026-06-05",
+    registration_opening_time: "10:00",
+    expand: {
+      ...withDeadline.expand,
+      formats_via_event: [f42, { ...f15, registration_opening: "2026-06-06" }],
+    },
+  };
+  mocks.events.mockResolvedValue([record]);
+
+  // Sam is interested in the 15 km: the opening of the 15 km, with its name.
+  mocks.myRunner.mockResolvedValue(samRunner);
+  const sam = await renderList("/liste", ["fr"], "2026-06-01");
+  await expect.element(sam.screen.getByText("Trail des Crêtes")).toBeVisible();
+  expect(plain(sam.screen.getByText(/^Ouverture le/).element().textContent)).toBe(
+    "Ouverture le 6 juin à 10:00 (Trail 15 km)",
+  );
+  await sam.screen.unmount();
+
+  // Alice is on the 42 km, which follows the event: the event's opening, no name.
+  mocks.myRunner.mockResolvedValue(aliceRunner);
+  const alice = await renderList("/liste", ["fr"], "2026-06-01");
+  await expect.element(alice.screen.getByText("Trail des Crêtes")).toBeVisible();
+  expect(plain(alice.screen.getByText(/^Ouverture le/).element().textContent)).toBe(
+    "Ouverture le 5 juin à 10:00",
+  );
 });
