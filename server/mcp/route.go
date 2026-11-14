@@ -83,8 +83,11 @@ func Register(app core.App, cfg config.Config) {
 	schemas := mcpsdk.NewSchemaCache()
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
-		// The file of an upload slot: no session, its secret in a header.
-		se.Router.PUT(uploadsPath+"/{id}", uploadRoute(files))
+		// The file of an upload slot: no session, its secret in a header. The
+		// route answers itself a secret put in the Authorization header (the
+		// code upload_invalid), which PocketBase would refuse first since 0.42
+		// (see below).
+		se.Router.PUT(uploadsPath+"/{id}", uploadRoute(files)).Unbind(apis.DefaultRejectUnknownTokenMiddlewareId)
 
 		d := &deps{app: se.App, cfg: cfg, inner: &innerAPI{router: se.Router}, schemas: schemas, confirms: confirms, uploads: files}
 		servers := map[role]*mcpsdk.Server{
@@ -169,8 +172,13 @@ func Register(app core.App, cfg config.Config) {
 		}
 		// GET and DELETE are declared too: the SDK answers them 405, where the
 		// route of the app would answer index.html.
+		//
+		// Since PocketBase 0.42, a global middleware refuses (401) any request
+		// whose Authorization header is not a token of PocketBase, before the
+		// route. A token of an assistant is not one: serve checks it itself, and
+		// refuses it with the code and the challenge of the site.
 		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
-			se.Router.Route(method, endpoint, serve)
+			se.Router.Route(method, endpoint, serve).Unbind(apis.DefaultRejectUnknownTokenMiddlewareId)
 		}
 		return se.Next()
 	})

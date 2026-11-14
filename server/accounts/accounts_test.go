@@ -226,14 +226,12 @@ func TestUsers_DisableInvalidatesSessions(t *testing.T) {
 	}
 }
 
-// The front end relies on this: PocketBase serves a request whose token it
-// refuses as an anonymous one on the collection routes (an empty list, no 401),
-// and only the routes that need a session answer 401. That is why the front end
-// asks for a renewal when it comes back to the foreground (sessionCheck in
-// web/src/features/auth/session.ts): the 401 of the renewal is what ends a
-// session that ended elsewhere. If PocketBase starts answering 401 here, the
-// front end can rely on any request instead.
-func TestUsers_RefusedTokenIsAGuestOnCollectionRoutes(t *testing.T) {
+// The front end relies on this: since PocketBase 0.42, a request with a token
+// that PocketBase refuses answers 401 on every route, the collection routes
+// included (before, it read as a guest's: an empty list). The 401 is what ends,
+// at its next request, a session that ended elsewhere (afterSend in
+// web/src/lib/pb.ts). Without a token, a request is still a guest's.
+func TestUsers_RefusedTokenIsA401Everywhere(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
 	bobToken := testutil.Token(t, fx.Bob)
@@ -243,9 +241,28 @@ func TestUsers_RefusedTokenIsAGuestOnCollectionRoutes(t *testing.T) {
 	events := "/api/collections/events/records"
 	seq.Step("an enabled account reads the events", http.MethodGet, events, bobToken, "", http.StatusOK, `"totalItems":2`)
 	seq.Step("the admin disables the account", http.MethodPatch, "/api/collections/users/records/"+fx.Bob.Id, adminToken, `{"disabled":true}`, http.StatusOK, `"disabled":true`)
-	seq.Step("the refused token reads as a guest: an empty list", http.MethodGet, events, bobToken, "", http.StatusOK, `"items":[]`, `"totalItems":0`)
-	seq.Step("a garbage token reads as a guest too", http.MethodGet, events, "not-a-token", "", http.StatusOK, `"items":[]`, `"totalItems":0`)
+	seq.Step("the refused token answers 401 on a collection route", http.MethodGet, events, bobToken, "", http.StatusUnauthorized, `"status":401`)
+	seq.Step("a garbage token answers 401 too", http.MethodGet, events, "not-a-token", "", http.StatusUnauthorized, `"status":401`)
 	seq.Step("the renewal of the refused token answers 401", http.MethodPost, "/api/collections/users/auth-refresh", bobToken, "", http.StatusUnauthorized, `"status":401`)
+	seq.Step("without a token, the events read as a guest: an empty list", http.MethodGet, events, "", "", http.StatusOK, `"items":[]`, `"totalItems":0`)
+}
+
+// The front end relies on this too: a new password renews the token key, so the
+// token of the session dies with the change, and the sign-in that follows
+// (SettingsPage.tsx) must not carry it, or it is a 401 (PocketBase 0.42 and
+// later). An empty Authorization header is no token.
+func TestUsers_SignInAfterANewPassword(t *testing.T) {
+	app := testutil.NewApp(t)
+	fx := testutil.Seed(t, app)
+	aliceToken := testutil.Token(t, fx.Alice)
+
+	seq := testutil.NewSequence(t, app)
+	login := "/api/collections/users/auth-with-password"
+	credentials := `{"identity":"alice@example.test","password":"new-password-1"}`
+	seq.Step("Alice changes the password of the account", http.MethodPatch, "/api/collections/users/records/"+fx.Alice.Id, aliceToken,
+		`{"oldPassword":"`+testutil.Password+`","password":"new-password-1","passwordConfirm":"new-password-1"}`, http.StatusOK, `"id":"`+fx.Alice.Id+`"`)
+	seq.Step("the sign-in with the dead token answers 401", http.MethodPost, login, aliceToken, credentials, http.StatusUnauthorized, `"status":401`)
+	seq.Step("the sign-in without it gives a session", http.MethodPost, login, "", credentials, http.StatusOK, `"token"`)
 }
 
 // The refusal is the authRule of the collection (disabled = false), which

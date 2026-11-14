@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -1057,7 +1058,38 @@ func TestMCP_AbsentOnTheDemo(t *testing.T) {
 			if method == http.MethodPost {
 				body = `{"jsonrpc":"2.0","id":1,"method":"ping"}`
 			}
-			send(t, app, method, bearer(token), nil, body, http.StatusNotFound)
+			// Without a token, the address does not exist.
+			send(t, app, method, "", nil, body, http.StatusNotFound)
+
+			// With one, PocketBase refuses it before any route: since 0.42, a
+			// token that it does not know is a 401 on every address. The answer
+			// is the one of an address that never existed, without the challenge
+			// or the code of the MCP server: it does not say that /mcp exists.
+			header, got := send(t, app, method, bearer(token), nil, body, http.StatusUnauthorized)
+			if v := header.Get("WWW-Authenticate"); v != "" {
+				t.Errorf("WWW-Authenticate = %q on the demo, want none", v)
+			}
+			var nowhere string
+			(&tests.ApiScenario{
+				Method:                method,
+				URL:                   "/api/app/nowhere",
+				Body:                  strings.NewReader(body),
+				Headers:               map[string]string{"Authorization": bearer(token), "Content-Type": "application/json"},
+				ExpectedStatus:        http.StatusUnauthorized,
+				NotExpectedContent:    []string{"\x00"},
+				TestAppFactory:        func(testing.TB) *tests.TestApp { return app },
+				DisableTestAppCleanup: true,
+				AfterTestFunc: func(t testing.TB, _ *tests.TestApp, res *http.Response) {
+					read, err := io.ReadAll(res.Body)
+					if err != nil {
+						t.Fatal(err)
+					}
+					nowhere = string(read)
+				},
+			}).Test(t)
+			if got != nowhere {
+				t.Errorf("/mcp answers %.200s, an address that never existed %.200s", got, nowhere)
+			}
 		})
 	}
 }
