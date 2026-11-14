@@ -5,7 +5,7 @@
 La spécification est dans [`docs/superpowers/specs/2026-10-31-courses-design.md`](docs/superpowers/specs/2026-10-31-courses-design.md).
 
 ```
-server/   programme Go : API, règles, migrations, commandes (bootstrap-admin, seed)
+server/   programme Go : API, règles, migrations, commandes (bootstrap-admin, super-admin, seed)
 web/      front React 19 + Vite, compilé dans server/webdist/dist puis embarqué
 ```
 
@@ -231,6 +231,26 @@ Admin, « Membres », puis « Inviter » sur un coureur sans compte : le lien va
 - **La fenêtre de partage** montre **le message prêt et le lien**, chacun avec « Partager » et « Copier ». Le message est prêt à envoyer : « Salut Arnaud ! Guillaume t'invite sur Prends ton dossard… », avec le nombre de courses déjà prévues et la prochaine. Il contient le lien : comme le lien, il ne s'envoie qu'à la personne concernée. L'outil MCP `admin_create_link` renvoie les deux.
 - **La page que la personne ouvre** montre qui l'invite, une liste courte de ses prochaines courses avec les amis qui y vont, et en une phrase les prochaines courses du groupe, au-dessus du formulaire de création du compte. Elle est calculée à chaque ouverture : une course ajoutée après l'envoi y apparaît. Elle ne montre que des noms de courses, des lieux, des jours, des épreuves et des noms de coureurs ; un lien expiré ou déjà utilisé ne montre rien.
 - **Pour essayer :** sur dev, inviter un coureur sans compte qui a des courses à venir, ouvrir le lien sur un téléphone (sans être connecté), puis créer le compte.
+
+## Super admin
+
+Un compte **super admin** est un admin qu'aucun autre admin ne peut modifier : ni son rôle, ni sa désactivation, ni un lien de réinitialisation, ni ses clés d'accès, ni le nom ou la photo de son coureur, que ce soit par le site ou par l'assistant IA. On peut donc donner les droits d'admin à d'autres sans risquer de perdre les siens. Pour tout le reste, c'est un admin comme les autres.
+
+La marque ne se donne et ne se retire que sur le serveur :
+
+```sh
+docker compose exec courses /app/courses super-admin "<Prénom>"
+docker compose exec courses /app/courses super-admin "<Prénom>" --remove
+```
+
+- `<Prénom>` est le nom du coureur, sans tenir compte des majuscules ; il doit avoir un compte.
+- Sans `--remove`, le compte devient aussi **admin et actif** : la commande rend ses droits à qui les a perdus.
+- `--remove` ne retire que la marque : le rôle et l'état du compte ne changent pas.
+- La commande n'affiche que le nom du coureur, jamais d'adresse.
+
+Sur la page Membres, la ligne d'un super admin dit « Actif · Super admin ». Un autre admin n'y voit aucun bouton ; le super admin, sur sa propre ligne, n'a ni « Retirer admin » ni « Désactiver ».
+
+**Pour essayer :** sur dev, marquer son compte, puis se connecter avec un autre compte admin : la ligne du super admin n'a plus de bouton, et l'assistant IA de cet autre admin refuse de changer son rôle ou de lui créer un lien de réinitialisation.
 
 ## Environnement de dev
 
@@ -519,6 +539,7 @@ Quand l'application ne démarre plus, ou que le volume est perdu. Toutes les com
 
     Ouvrir le lien affiché pour créer ce compte, puis, depuis l'administration des membres, créer un lien de réinitialisation pour le compte d'origine et l'utiliser. Désactiver ensuite le compte de secours ;
   - ou ouvrir le tableau de bord par le tunnel SSH (voir « Tableau de bord PocketBase »), et dans la collection `users`, donner un nouveau mot de passe au compte (10 caractères au moins). Ses sessions ouvertes sont fermées, et ses jetons d'assistant IA (MCP) supprimés.
+- **Un super admin** : aucun autre admin ne peut lui créer ce lien (voir « Super admin »). Il se connecte avec une de ses clés d'accès s'il en a, sinon on passe par le serveur : le tableau de bord par le tunnel SSH comme ci-dessus, ou `super-admin "<Prénom>" --remove`, un lien de réinitialisation créé par un autre admin, puis `super-admin "<Prénom>"` pour remettre la marque.
 
 ## Recette manuelle sur iPhone
 

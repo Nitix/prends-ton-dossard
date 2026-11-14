@@ -2,6 +2,10 @@
 
 Idées notées le 2026-11-03, mises à jour le 2026-11-08 après la v7.
 
+## Super admin (sur la branche, pas encore en production)
+
+Un compte que les autres admins ne peuvent pas modifier, marqué par la commande `super-admin` sur le serveur (voir le README, « Super admin »). Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-super-admin.md`.
+
 ## Fait en v8
 
 En production depuis le 2026-11-09 :
@@ -27,7 +31,7 @@ Le détail est dans `docs/superpowers/decisions/2026-11-07-decisions-v7.md`.
 
 ## Tes idées
 
-- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, que chacun coche la veille. Reporté pendant la v7. La spec est prête dans `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (§ 11). Sa migration prendra la lettre qui suit `9r`.
+- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, que chacun coche la veille. Reporté pendant la v7. La spec est prête dans `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (§ 11). Sa migration prendra la lettre qui suit `9s` (celle du super admin).
 - **Avoir l'aperçu (vignette, titre) d'une course partagée dans WhatsApp** : il faut une page que le robot de WhatsApp lit sans compte. Il faudrait :
   - un lien de partage signé, créé sur demande, qui expire ;
   - qui ne montre que le nom, les dates et le lieu (jamais qui y va) ;

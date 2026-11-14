@@ -82,7 +82,7 @@ Code `super_admin_protected`, dans les endroits prévus (`codes.go` et son test,
 ### Le MCP
 
 - `admin_list_members` dit « super admin » pour ce compte.
-- `admin_set_role`, `admin_set_disabled`, `admin_create_link` (réinitialisation), `rename_runner`, `set_photo` et `passkeys` (les passkeys d'un autre) annoncent le refus d'avance, avec le texte ci-dessus, quand quelqu'un d'autre que le super admin vise son compte ou son coureur. Leurs descriptions le disent.
+- `admin_set_role`, `admin_set_disabled`, `admin_create_link` (réinitialisation), `rename_runner`, `set_photo` et `passkeys` (supprimer celles d'un autre ; les lire reste permis) annoncent le refus d'avance, avec le texte ci-dessus, quand quelqu'un d'autre que le super admin vise son compte ou son coureur. Leurs descriptions le disent.
 
 ## Sécurité
 
