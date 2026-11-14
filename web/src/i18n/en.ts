@@ -835,6 +835,7 @@ export const en = {
         one: "start time cleared (the kept race has only its month)",
         other: "start times cleared (the kept race has only its month)",
       },
+      clearedFormatOpenings: { one: "race opening cleared", other: "race openings cleared" },
       movedComments: { one: "comment moved", other: "comments moved" },
       movedOffers: { one: "offer moved", other: "offers moved" },
     },

@@ -1043,6 +1043,10 @@ export const fr = {
         one: "heure de départ effacée (la course gardée n'a que son mois)",
         other: "heures de départ effacées (la course gardée n'a que son mois)",
       },
+      clearedFormatOpenings: {
+        one: "ouverture d'épreuve effacée",
+        other: "ouvertures d'épreuve effacées",
+      },
       movedComments: { one: "commentaire déplacé", other: "commentaires déplacés" },
       movedOffers: { one: "offre déplacée", other: "offres déplacées" },
     },

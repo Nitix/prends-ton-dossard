@@ -30,6 +30,7 @@ type mergeResult struct {
 	DroppedParticipations int `json:"droppedParticipations" jsonschema:"les participations en double supprimées (un coureur déjà sur ce qui reste)"`
 	ClearedFormatDates    int `json:"clearedFormatDates" jsonschema:"les dates d'épreuve effacées, hors des dates de la course gardée"`
 	ClearedFormatTimes    int `json:"clearedFormatTimes" jsonschema:"les heures de départ effacées : une course dont seul le mois est connu n'en a pas"`
+	ClearedFormatOpenings int `json:"clearedFormatOpenings" jsonschema:"les ouvertures d'épreuve effacées : elles ne tenaient pas dans la course gardée"`
 	MovedComments         int `json:"movedComments" jsonschema:"les commentaires déplacés (une fusion d'épreuves n'en déplace pas)"`
 	MovedOffers           int `json:"movedOffers" jsonschema:"les offres de covoiturage et de logement déplacées, avec leurs places (une fusion d'épreuves n'en déplace pas)"`
 }
@@ -45,6 +46,7 @@ var mergeCounts = []struct {
 	{func(r mergeResult) int { return r.DroppedParticipations }, "participation en double supprimée", "participations en double supprimées"},
 	{func(r mergeResult) int { return r.ClearedFormatDates }, "date d'épreuve effacée (hors des dates de l'événement)", "dates d'épreuve effacées (hors des dates de l'événement)"},
 	{func(r mergeResult) int { return r.ClearedFormatTimes }, "heure de départ effacée (la course gardée n'a que son mois)", "heures de départ effacées (la course gardée n'a que son mois)"},
+	{func(r mergeResult) int { return r.ClearedFormatOpenings }, "ouverture d'épreuve effacée (elle ne tenait pas dans la course gardée)", "ouvertures d'épreuve effacées (elles ne tenaient pas dans la course gardée)"},
 	{func(r mergeResult) int { return r.MovedComments }, "commentaire déplacé", "commentaires déplacés"},
 	{func(r mergeResult) int { return r.MovedOffers }, "offre déplacée", "offres déplacées"},
 }

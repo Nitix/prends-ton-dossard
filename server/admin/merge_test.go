@@ -76,12 +76,12 @@ func result(want admin.MergeResult) string {
 // tags of MergeResult, so a renamed tag would go through them unnoticed.
 func TestMergeResult_JSONKeys(t *testing.T) {
 	got, err := json.Marshal(admin.MergeResult{
-		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, ClearedFormatTimes: 7, MovedComments: 5, MovedOffers: 6,
+		MovedFormats: 1, MovedParticipations: 2, DroppedParticipations: 3, ClearedFormatDates: 4, ClearedFormatTimes: 7, ClearedFormatOpenings: 8, MovedComments: 5, MovedOffers: 6,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"clearedFormatTimes":7,"movedComments":5,"movedOffers":6}`
+	const want = `{"movedFormats":1,"movedParticipations":2,"droppedParticipations":3,"clearedFormatDates":4,"clearedFormatTimes":7,"clearedFormatOpenings":8,"movedComments":5,"movedOffers":6}`
 	if string(got) != want {
 		t.Errorf("MergeResult as JSON = %s, want %s", got, want)
 	}
@@ -1904,6 +1904,129 @@ func TestMerge_DryRunGivesTheResultOfTheRealRun(t *testing.T) {
 		}
 		if want := (admin.MergeResult{MovedParticipations: 1, DroppedParticipations: 1}); results[1] != want {
 			t.Errorf("result = %+v, want %+v", results[1], want)
+		}
+	})
+}
+
+// A format that moves to the kept event keeps the opening of its own that still
+// holds there, completed from the event it comes from when it has only a day or
+// only a time; otherwise the opening (both fields) is cleared and counted.
+func TestMerge_FormatOpenings(t *testing.T) {
+	// opening reads the two fields of a format as stored.
+	opening := func(t testing.TB, app core.App, f *core.Record) string {
+		r := mustStore(t, app, "formats", f.Id)
+		return r.GetString("registration_opening") + "|" + r.GetString("registration_opening_time")
+	}
+	// setup: Event (merged, opens on 2026-05-17 at 12:00) has F42 (dated outside
+	// the kept event, opening of its own with a time) and F15 (a day alone).
+	// Event2 (kept) opens on 2026-05-10 and closes registrations on 2026-05-30.
+	setup := func(t *testing.T, mergedTime, keptDay, keptTime string, f15 map[string]any) (*tests.TestApp, testutil.Fixture) {
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		setFields(t, app, "events", fx.Event.Id, map[string]any{"registration_opening": "2026-05-17", "registration_opening_time": mergedTime})
+		setFields(t, app, "formats", fx.F42.Id, map[string]any{"registration_opening": "2026-06-02", "registration_opening_time": "10:00"})
+		setFields(t, app, "formats", fx.F15.Id, f15)
+		setFields(t, app, "events", fx.Event2.Id, map[string]any{
+			"registration_opening": keptDay, "registration_opening_time": keptTime, "registration_deadline": "2026-05-30",
+		})
+		return app, fx
+	}
+	dayAlone := map[string]any{"registration_opening": "2026-05-20", "registration_opening_time": ""}
+
+	run := func(t *testing.T, mk func() (*tests.TestApp, testutil.Fixture)) (admin.MergeResult, *tests.TestApp, testutil.Fixture) {
+		t.Helper()
+		var results [2]admin.MergeResult
+		var app *tests.TestApp
+		var fx testutil.Fixture
+		for i, dryRun := range []bool{true, false} {
+			app, fx = mk()
+			before := opening(t, app, fx.F15) + opening(t, app, fx.F42)
+			got, err := admin.MergeEvents(app, fx.Event2.Id, fx.Event.Id, dryRun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			results[i] = got
+			if dryRun && before != opening(t, app, fx.F15)+opening(t, app, fx.F42) {
+				t.Error("a dry run changed the openings")
+			}
+		}
+		if results[0] != results[1] {
+			t.Errorf("dry run = %+v, real run = %+v", results[0], results[1])
+		}
+		return results[1], app, fx
+	}
+
+	t.Run("a day alone takes the time of the merged event, an opening after the kept deadline is cleared", func(t *testing.T) {
+		got, app, fx := run(t, func() (*tests.TestApp, testutil.Fixture) {
+			return setup(t, "12:00", "2026-05-10", "08:00", dayAlone)
+		})
+		if want := (admin.MergeResult{MovedFormats: 2, MovedParticipations: 3, ClearedFormatDates: 1, ClearedFormatOpenings: 1}); got != want {
+			t.Errorf("result = %+v, want %+v", got, want)
+		}
+		if got := opening(t, app, fx.F15); got != "2026-05-20|12:00" {
+			t.Errorf("F15 opening = %q, want 2026-05-20|12:00", got)
+		}
+		if got := opening(t, app, fx.F42); got != "|" {
+			t.Errorf("F42 opening = %q, want both fields cleared", got)
+		}
+	})
+
+	t.Run("a time alone takes the day of the merged event", func(t *testing.T) {
+		got, app, fx := run(t, func() (*tests.TestApp, testutil.Fixture) {
+			return setup(t, "12:00", "2026-05-10", "08:00", map[string]any{"registration_opening": "", "registration_opening_time": "07:30"})
+		})
+		if got.ClearedFormatOpenings != 1 { // F42 only
+			t.Errorf("cleared = %d, want 1", got.ClearedFormatOpenings)
+		}
+		if got := opening(t, app, fx.F15); got != "2026-05-17|07:30" {
+			t.Errorf("F15 opening = %q, want 2026-05-17|07:30", got)
+		}
+	})
+
+	t.Run("without a time, a day alone would take the time of the kept event: cleared", func(t *testing.T) {
+		got, app, fx := run(t, func() (*tests.TestApp, testutil.Fixture) {
+			return setup(t, "", "2026-05-10", "08:00", dayAlone)
+		})
+		if got.ClearedFormatOpenings != 2 {
+			t.Errorf("cleared = %d, want 2 (F42 after the deadline, F15 with no time)", got.ClearedFormatOpenings)
+		}
+		if got := opening(t, app, fx.F15); got != "|" {
+			t.Errorf("F15 opening = %q, want both fields cleared", got)
+		}
+	})
+
+	t.Run("without a time, a day alone is cleared when the kept event has no opening of its own", func(t *testing.T) {
+		got, app, fx := run(t, func() (*tests.TestApp, testutil.Fixture) {
+			app, fx := setup(t, "", "", "", dayAlone)
+			return app, fx
+		})
+		if got.ClearedFormatOpenings != 2 {
+			t.Errorf("cleared = %d, want 2", got.ClearedFormatOpenings)
+		}
+		if got := opening(t, app, fx.F15); got != "|" {
+			t.Errorf("F15 opening = %q, want both fields cleared", got)
+		}
+	})
+
+	t.Run("without a time, a day alone stays when the kept event has none either", func(t *testing.T) {
+		got, app, fx := run(t, func() (*tests.TestApp, testutil.Fixture) {
+			return setup(t, "", "2026-05-10", "", dayAlone)
+		})
+		if got.ClearedFormatOpenings != 1 { // F42 only
+			t.Errorf("cleared = %d, want 1", got.ClearedFormatOpenings)
+		}
+		if got := opening(t, app, fx.F15); got != "2026-05-20|" {
+			t.Errorf("F15 opening = %q, want 2026-05-20|", got)
+		}
+	})
+
+	t.Run("a merge of two formats keeps the opening of the kept format", func(t *testing.T) {
+		app, fx := setup(t, "12:00", "2026-05-10", "08:00", dayAlone)
+		if _, err := admin.MergeFormats(app, fx.F42.Id, fx.F15.Id, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := opening(t, app, fx.F42); got != "2026-06-02|10:00" {
+			t.Errorf("F42 opening = %q, want it unchanged", got)
 		}
 	})
 }
