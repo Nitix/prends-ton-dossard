@@ -4,7 +4,7 @@ La v9 donne à chaque épreuve sa propre ouverture des inscriptions. Le point de
 
 Le reste a été décidé en route, et il y a 25 décisions. Dis lesquelles revoir, par leur numéro.
 
-Conception : `docs/superpowers/specs/2026-11-14-courses-v9-design.md` (son § 13 était la première liste de celle-ci) ; plan : `docs/superpowers/plans/2026-11-14-courses-v9.md` ; branche `feat/v9`. Pas encore sur dev ni en production.
+Conception : `docs/superpowers/specs/2026-11-14-courses-v9-design.md` (son § 13 était la première liste de celle-ci) ; plan : `docs/superpowers/plans/2026-11-14-courses-v9.md` ; branche `feat/v9`. Essayée sur dev le 2026-11-14 (la ligne d'ouverture d'une épreuve dit « Ouverture des inscriptions de l'épreuve » à ta demande), puis fusionnée dans `main` et mise en production dans la nuit du 2026-11-14 au 2026-11-15 avec ton accord (« déploie le fix du go en prod avec la v9 »), avec l'exigence de Go 1.27.4.
 
 ## Ce que la personne voit
 
@@ -60,7 +60,7 @@ Conception : `docs/superpowers/specs/2026-11-14-courses-v9-design.md` (son § 1
 
 ## À faire de ton côté
 
-Sur `https://dev-prends-ton-dossard.ketra.fr` (comptes `alice@`, `bob@` ou `admin@example.test` ; le mot de passe du seed est dans `/opt/ptd-dev-secrets/SEED_PASSWORD`, sur le serveur). Je déploie la v9 sur dev quand tu me le dis.
+Sur `https://dev-prends-ton-dossard.ketra.fr` (comptes `alice@`, `bob@` ou `admin@example.test` ; le mot de passe du seed est dans `/opt/ptd-dev-secrets/SEED_PASSWORD`, sur le serveur). La v9 y est depuis le 2026-11-14.
 
 1. **Saisir.** Sur dev, choisis une course à venir avec des épreuves et une ouverture des inscriptions (ou donne-lui-en une). Dans le formulaire, sur une épreuve, coche « Cette épreuve ouvre ses inscriptions à un autre moment » et donne **un jour seul** : l'épreuve garde l'heure de la course. Dev garde les données d'un ancien seed, dont les dates ont vieilli : le nouvel exemple du seed (« Hyrox Doubles ») n'y est pas.
 2. **La fiche, en haut.** Regarde-la :

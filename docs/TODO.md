@@ -4,7 +4,7 @@ Idées notées le 2026-11-03, mises à jour le 2026-11-08 après la v7.
 
 ## Fait en v9
 
-Sur la branche `feat/v9`, pas encore en production : une épreuve peut avoir sa propre ouverture des inscriptions (un jour et une heure, ou l'un des deux, l'autre venant de la course). Chacun la voit, la reçoit en rappel et l'a dans son agenda ; sans ouverture à elle, l'épreuve suit celle de la course. Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-v9.md`.
+En production depuis la nuit du 2026-11-14 au 2026-11-15 : une épreuve peut avoir sa propre ouverture des inscriptions (un jour et une heure, ou l'un des deux, l'autre venant de la course). Chacun la voit, la reçoit en rappel et l'a dans son agenda ; sans ouverture à elle, l'épreuve suit celle de la course. Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-v9.md`.
 
 ## Fait : le super admin
 
