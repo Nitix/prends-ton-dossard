@@ -207,18 +207,37 @@ test("filesToRerun — seuls les fichiers qui n'ont pas pu être importés sont 
   expect(filesToRerun({ testResults: [passed] }, "some other unhandled error")).toBe(null);
 });
 
-// The unhandled-errors section of Vitest's default reporter, with its colours.
-const section = (error: string) =>
-  `\u001b[41m Unhandled Errors \u001b[49m\nVitest caught 1 unhandled error during the test run.\n${error}\n\n Test Files  1 failed | 1 passed`;
+// The unhandled-errors section of Vitest's default reporter, with its colours: a banner, then one
+// banner per error (printErrorType), then a closing line of dashes. `after` is what follows it.
+const DASHES = "⎯".repeat(20);
+const section = (errors: string[], after = "\n Test Files  1 failed | 1 passed") =>
+  `\u001b[31m${DASHES}\u001b[41m Unhandled Errors \u001b[49m${DASHES}\u001b[39m\n` +
+  "Vitest caught errors during the test run.\n" +
+  errors.map((error) => `\n${DASHES} Unhandled Rejection ${DASHES}\n${error}\n`).join("") +
+  `\n${DASHES}\n${after}`;
+const DYNAMIC =
+  "TypeError: Failed to fetch dynamically imported module: http://localhost:63315/src/a.tsx";
 
 test("filesToRerun — une erreur non gérée sans la signature d'un cache froid est un vrai échec, même avec un fichier non importé", () => {
   const files = { testResults: [importFailure, passed] };
   // A real error outside of a test: nothing is run again, or the second run would hide it.
-  expect(filesToRerun(files, section("TypeError: boom"))).toBe(null);
+  expect(filesToRerun(files, section(["TypeError: boom"]))).toBe(null);
   // An unhandled error that is the cold cache itself: the files are run again.
-  expect(filesToRerun(files, section("Error: Vite unexpectedly reloaded a test"))).toEqual([
-    "/w/a.test.tsx",
-  ]);
+  expect(filesToRerun(files, section([DYNAMIC]))).toEqual(["/w/a.test.tsx"]);
+  // Each error is judged on its own: one cold-cache error does not vouch for another.
+  expect(filesToRerun(files, section([DYNAMIC, "TypeError: boom"]))).toBe(null);
+  expect(filesToRerun(files, section(["TypeError: boom", DYNAMIC]))).toBe(null);
+  // A section with no error under its banner is not understood: red, the safe way.
+  expect(filesToRerun(files, section([]))).toBe(null);
+  // The github-actions lines that follow quote the signature but are not part of the section,
+  // even with no « Test Files » line between.
+  const quoted = `::error title=Unhandled error::${DYNAMIC}`;
+  expect(filesToRerun(files, section(["TypeError: boom"], quoted))).toBe(null);
+  // A reload warning is printed during the run, never in the section: the whole suite is run
+  // again only when there is no unhandled error at all, and a real one next to it is red.
+  const reload = "Vite unexpectedly reloaded a test. This may cause tests to fail.\n";
+  expect(filesToRerun({ testResults: [passed] }, reload)).toEqual([]);
+  expect(filesToRerun({ testResults: [passed] }, reload + section(["TypeError: boom"]))).toBe(null);
 });
 
 test("filesToRerun — la signature d'un cache froid dans Firefox et dans WebKit", () => {

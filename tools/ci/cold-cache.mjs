@@ -18,7 +18,11 @@
 // It is decided from the JSON: a failed file with no test result at all did not import. A failed
 // test is a real failure, whatever its message says, and so is an error outside of a test (the
 // "Unhandled Errors" section of the log) that is not the cold cache: nothing is run again then.
-// When no file failed and the log has the signature, the whole suite is run again.
+// Each error of that section is judged on its own (one cold-cache error does not vouch for a real
+// one), and a section with no error under its banner is not understood: red. When no file failed
+// and the log has the signature outside of such a section, the whole suite is run again. The
+// "Vite unexpectedly reloaded" warning is printed during the run, never inside the section: a
+// reload followed by an unrelated unhandled error is red, with no second run, on purpose.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
@@ -27,8 +31,11 @@ const SIGNATURE =
   /Vite unexpectedly reloaded|Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/;
 
 // The banner of the unhandled errors in Vitest 5's default reporter (printUnhandledErrors), up to
-// the summary that follows it. The JSON report does not record these errors, yet they fail the run.
-const UNHANDLED = /Unhandled Errors[\s\S]*?(?=\n\s*Test Files|$)/;
+// its own closing line of dashes (the github-actions lines after it are not part of it), or the
+// summary. The JSON report does not record these errors, yet they fail the run.
+const UNHANDLED = /Unhandled Errors[\s\S]*?(?=\n\u23af+(?:\n|$)|\n\s*Test Files|$)/;
+// One banner per error (printErrorType): Unhandled Error, Unhandled Rejection, Uncaught Exception.
+const ERROR_BANNER = /\n\u23af* (?:Unhandled|Uncaught) [A-Za-z ]+ \u23af*\n/;
 const stripAnsi = (text) => text.replace(/\u001b\[[0-9;]*m/g, "");
 
 const resultsOf = (report) => (Array.isArray(report?.testResults) ? report.testResults : []);
@@ -44,7 +51,11 @@ export function filesToRerun(report, log) {
   // An unhandled error that is not the cold cache is a real failure: running the files again
   // would end green and hide it.
   const unhandled = UNHANDLED.exec(text)?.[0];
-  if (unhandled !== undefined && !SIGNATURE.test(unhandled)) return null;
+  if (unhandled !== undefined) {
+    // [0] is the banner and its sentence; each error follows its own banner.
+    const errors = unhandled.split(ERROR_BANNER).slice(1);
+    if (errors.length === 0 || errors.some((error) => !SIGNATURE.test(error))) return null;
+  }
   const failed = resultsOf(report).filter((file) => file.status === "failed");
   const noImport = failed.filter((file) => testsOf(file).length === 0);
   if (noImport.length > 0) return noImport.map((file) => String(file.name));
