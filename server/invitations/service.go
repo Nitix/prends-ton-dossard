@@ -47,7 +47,8 @@ type CreateInput struct {
 // Create makes an invitation valid for 30 days (7 for a reset) and returns its token, which
 // only exists here: the database keeps its hash. The pending invitations of the
 // same kind for the same runner are deleted first, so that only the last link
-// works.
+// works. The reset of a super admin is only made by its owner (403
+// super_admin_protected).
 func Create(app core.App, in CreateInput) (token string, inv *core.Record, err error) {
 	err = app.RunInTransaction(func(txApp core.App) error {
 		runner, err := txApp.FindRecordById("runners", in.RunnerID)
@@ -69,6 +70,15 @@ func Create(app core.App, in CreateInput) (token string, inv *core.Record, err e
 		case KindReset:
 			if !hasAccount {
 				return apperr.New(http.StatusBadRequest, apperr.CodeInvitationKindMismatch)
+			}
+			// Whoever opens a reset link chooses the password of the account:
+			// the one of a super admin is only made by its owner.
+			account, err := txApp.FindRecordById("users", runner.GetString("user"))
+			if err != nil {
+				return err
+			}
+			if accounts.IsSuperAdmin(account) && in.CreatedBy != account.Id {
+				return apperr.New(http.StatusForbidden, apperr.CodeSuperAdminProtected)
 			}
 		default:
 			return apperr.New(http.StatusBadRequest, apperr.CodeInvitationKindMismatch)
@@ -125,7 +135,7 @@ func Create(app core.App, in CreateInput) (token string, inv *core.Record, err e
 // 404 invitation_invalid when there is none, or when it cannot be used any
 // more: it is expired, it was used, or the runner no longer fits its kind (an
 // invitation to a runner that has an account since, a reset of a runner
-// without).
+// without), or it is the reset of a super admin that its owner did not make.
 func Find(app core.App, token string) (inv, runner *core.Record, err error) {
 	invalid := apperr.New(http.StatusNotFound, apperr.CodeInvitationInvalid)
 
@@ -155,6 +165,18 @@ func Find(app core.App, token string) (inv, runner *core.Record, err error) {
 		}
 	case KindReset:
 		if !hasAccount {
+			return nil, nil, invalid
+		}
+		// A reset of a super admin that somebody else made (before the mark was
+		// set, say) is not one: Create would refuse to make it now.
+		account, err := app.FindRecordById("users", runner.GetString("user"))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, invalid
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if accounts.IsSuperAdmin(account) && inv.GetString("created_by") != account.Id {
 			return nil, nil, invalid
 		}
 	default:

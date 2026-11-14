@@ -698,6 +698,11 @@ func TestRules_DownThenUp(t *testing.T) {
 	// The migration 9j replaces the update rule of the accounts (to keep the skin
 	// of an account to its owner), and the migration 4 puts back its own: the
 	// rules to compare with are those of the migration 4, as 9j's rollback leaves them.
+	// The migration 9s replaces three rules (the super admin), so it is rolled
+	// back first, for the same reason.
+	if err := migrationFile(t, "9s_super_admin.go").Down(app); err != nil {
+		t.Fatal(err)
+	}
 	if err := migrationFile(t, "9j_user_skin.go").Down(app); err != nil {
 		t.Fatal(err)
 	}

@@ -66,13 +66,14 @@ func adminWrite[In confirmable, Out any](t *tools, tool string, handler mcpsdk.T
 // What the admin tools read
 
 // accountRecord is an account as the admin tools read it, from its runner: its
-// role and whether it is turned off. Never its email: the requests ask for these
-// fields only (memberFields, accountFields).
+// role, whether it is turned off, and whether it is a super admin. Never its
+// email: the requests ask for these fields only (memberFields, accountFields).
 type accountRecord struct {
-	ID       string `json:"id"`
-	Role     string `json:"role"`
-	Disabled bool   `json:"disabled"`
-	Updated  string `json:"updated"`
+	ID         string `json:"id"`
+	Role       string `json:"role"`
+	Disabled   bool   `json:"disabled"`
+	SuperAdmin bool   `json:"super_admin"`
+	Updated    string `json:"updated"`
 }
 
 // accountFields are the fields that an update of an account asks back.
@@ -89,7 +90,7 @@ type memberRunner struct {
 
 // memberFields are the fields that the admin tools ask of a runner and its account.
 // The rule of the accounts shows an admin their email: it is not asked for.
-const memberFields = "id,name,user,avatar,updated,expand.user.id,expand.user.role,expand.user.disabled,expand.user.updated"
+const memberFields = "id,name,user,avatar,updated,expand.user.id,expand.user.role,expand.user.disabled,expand.user.super_admin,expand.user.updated"
 
 // account is the account of the runner; nil when it has none (or when the API did
 // not send it, which counts as none, as on the page).
@@ -319,6 +320,7 @@ type memberOut struct {
 	State          string          `json:"state" jsonschema:"no_account (pas de compte ni d'invitation en attente), invited (une invitation attend), active (un compte) ou disabled (un compte désactivé)"`
 	StateLabel     string          `json:"state_label" jsonschema:"l'état, comme la page Membres l'écrit"`
 	Role           string          `json:"role,omitempty" jsonschema:"le rôle du compte, member ou admin ; absent sans compte"`
+	SuperAdmin     bool            `json:"super_admin,omitempty" jsonschema:"vrai pour un super admin : personne d'autre ne modifie son compte ni son coureur (rôle, désactivation, réinitialisation, clés d'accès, nom, photo)"`
 	Participations int             `json:"participations" jsonschema:"le nombre de ses participations : un coureur qui en a ne se supprime pas"`
 	Passkeys       *int            `json:"passkeys,omitempty" jsonschema:"le nombre de clés d'accès du compte (passkeys, action list, en donne le détail) ; absent sans compte"`
 	Invitation     *pendingLinkOut `json:"invitation,omitempty" jsonschema:"l'invitation qui attend, pour un coureur sans compte"`
@@ -378,7 +380,7 @@ func (t *tools) adminListMembers(ctx context.Context, _ *mcpsdk.CallToolRequest,
 			if err != nil {
 				return fail(err)
 			}
-			member.Role, member.Passkeys = m.user.Role, ptr(passkeys)
+			member.Role, member.Passkeys, member.SuperAdmin = m.user.Role, ptr(passkeys), m.user.SuperAdmin
 		}
 		if m.invitation != nil {
 			member.Invitation = &pendingLinkOut{ID: m.invitation.ID, ExpiresAt: expiryDay(m.invitation.ExpiresAt), Role: m.invitation.Role}
@@ -597,7 +599,7 @@ func addAdminSetRole(s *mcpsdk.Server, t *tools) {
 		Description: "Membres → « Passer admin », « Retirer admin » : donne au compte d'un coureur le rôle member ou admin. " +
 			"Un admin a les pages Admin du site (membres, invitations, rôles, types de course, doublons) et ces outils admin_…. " +
 			"Le site garde toujours un admin actif : il refuse de retirer son rôle au dernier (last_admin). Retirer son propre rôle est permis s'il en reste un autre : les outils admin_… disparaissent alors de cet assistant dès sa requête suivante. " +
-			"Il demande toujours une confirmation : le premier appel ne fait rien, et donne un jeton à redonner si la personne accepte. Un rôle déjà le bon ne change rien.",
+			"Il demande toujours une confirmation : le premier appel ne fait rien, et donne un jeton à redonner si la personne accepte. Un rôle déjà le bon ne change rien." + superAdminNote,
 		InputSchema:  inputSchema[setRoleIn](map[string][]string{"role": {accountMember, accountAdmin}}),
 		OutputSchema: setRoleSchema(),
 		Annotations:  writeAnnotations(true, true),
@@ -633,6 +635,11 @@ func (t *tools) adminSetRole(ctx context.Context, _ *mcpsdk.CallToolRequest, in 
 			writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("Rien à changer : %s est déjà %s.", lowerFirst(who), roleWords[role])},
 			Runner:      ptr(runner.ref()), Role: role,
 		}, nil
+	}
+	// The refusal of the site (the rule of users.update): nobody changes the role
+	// of a super admin through it, the super admin included.
+	if err := superAdminAccountRefusal(account, own); err != nil {
+		return nil, setRoleOut{}, err
 	}
 
 	// Always asked: the rights of an account change.
@@ -692,7 +699,7 @@ func addAdminSetDisabled(s *mcpsdk.Server, t *tools) {
 		Description: "Membres → « Désactiver », « Réactiver » : un compte désactivé ne se connecte plus ; ses sessions ouvertes sont fermées tout de suite et ses jetons d'assistant (MCP) supprimés. " +
 			"Le coureur et ses participations restent. Le site garde toujours un admin actif : il refuse de désactiver le dernier (last_admin). " +
 			"Désactiver son propre compte (s'il reste un autre admin) supprime aussi le jeton de cet assistant : la réponse le dit, et c'est son dernier appel. " +
-			"Désactiver demande toujours une confirmation ; réactiver se fait tout de suite (les anciens jetons ne reviennent pas).",
+			"Désactiver demande toujours une confirmation ; réactiver se fait tout de suite (les anciens jetons ne reviennent pas)." + superAdminNote,
 		InputSchema:  inputSchema[setDisabledIn](nil),
 		OutputSchema: setDisabledSchema(),
 		Annotations:  writeAnnotations(true, true),
@@ -728,6 +735,10 @@ func (t *tools) adminSetDisabled(ctx context.Context, _ *mcpsdk.CallToolRequest,
 			writeStatus: writeStatus{Done: true, Summary: fmt.Sprintf("Rien à changer : %s est déjà %s.", whose, state)},
 			Runner:      ptr(runner.ref()), Disabled: ptr(account.Disabled),
 		}, nil
+	}
+	// The refusal of the site (the rule of users.update), as for the role.
+	if err := superAdminAccountRefusal(account, own); err != nil {
+		return nil, setDisabledOut{}, err
 	}
 
 	// Disabling is asked: the account is shut out, its sessions and its tokens end.

@@ -244,7 +244,7 @@ func addSetPhoto(s *mcpsdk.Server, t *tools) {
 			"La photo est un JPEG, un PNG ou un WebP de 5 Mo au plus : en base64 (content_base64) jusqu'à 512 Ko, sinon par start_upload (upload_id). " +
 			"Elle part sans être réencodée (le site la réduit dans le navigateur, pas l'outil), mais sans ses métadonnées (la position GPS, l'appareil, les dates) : l'orientation reste ; le site en fait les vignettes. " +
 			"Seul le coureur lui-même ou un admin change une photo : le refus est annoncé. " +
-			"Remplacer ou retirer une photo, ou changer celle d'un autre coureur, ne fait rien au premier appel : la réponse dit ce qui changerait et donne un jeton de confirmation.",
+			"Remplacer ou retirer une photo, ou changer celle d'un autre coureur, ne fait rien au premier appel : la réponse dit ce qui changerait et donne un jeton de confirmation." + superAdminNote,
 		InputSchema:  inputSchema[setPhotoIn](nil),
 		OutputSchema: setPhotoSchema(),
 		Annotations:  writeAnnotations(true, false),
@@ -282,6 +282,11 @@ func (t *tools) setPhoto(ctx context.Context, _ *mcpsdk.CallToolRequest, in setP
 	// account, or an admin.
 	if err := photoRefusal(c, runner); err != nil {
 		return refuse(err)
+	}
+	if protected, err := t.othersSuperAdmin(ctx, c, runner.User); err != nil {
+		return fail(err)
+	} else if protected {
+		return refuse(errSuperAdminProtected())
 	}
 	if in.Remove && runner.Avatar == "" {
 		return nil, setPhotoOut{

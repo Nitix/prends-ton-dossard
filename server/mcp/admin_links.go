@@ -107,7 +107,7 @@ func addAdminCreateLink(s *mcpsdk.Server, t *tools) {
 			"kind reset, pour un coureur qui a un compte : la personne choisit un nouveau mot de passe ; ses sessions ouvertes sont alors fermées, et ses jetons d'assistant (MCP) supprimés. " +
 			"Le lien vaut 30 jours pour une invitation, 7 jours pour une réinitialisation, et remplace celui du même genre qui attendait pour ce coureur. " +
 			"Il demande toujours une confirmation, une invitation comme une réinitialisation : le premier appel ne fait rien, dit à qui le lien donnerait accès (et le lien en attente qu'il remplacerait), et donne un jeton à redonner si la personne accepte. " +
-			"Le lien donne l'accès au compte : ne le transmets qu'à la personne concernée, et ne l'écris nulle part ailleurs.",
+			"Le lien donne l'accès au compte : ne le transmets qu'à la personne concernée, et ne l'écris nulle part ailleurs." + superAdminNote,
 		InputSchema:  inputSchema[createLinkIn](map[string][]string{"kind": {linkInvite, linkReset}, "role": {accountMember, accountAdmin}}),
 		OutputSchema: createLinkSchema(),
 		Annotations:  writeAnnotations(true, false),
@@ -158,6 +158,17 @@ func (t *tools) adminCreateLink(ctx context.Context, _ *mcpsdk.CallToolRequest, 
 		return refuse(fmt.Errorf("%s a déjà un compte : une invitation sert à en créer un. Pour un nouveau mot de passe, c'est kind: reset ; pour un autre rôle, admin_set_role. (invitation_kind_mismatch)", plain(runner.Name)))
 	case kind == linkReset && runner.User == "":
 		return refuse(fmt.Errorf("%s n'a pas de compte : un lien de réinitialisation sert à un compte qui existe. Pour lui en créer un, c'est kind: invite. (invitation_kind_mismatch)", plain(runner.Name)))
+	}
+	// The refusal of the site (super_admin_protected): the reset of a super admin
+	// is only made by its owner.
+	if account := runner.account(); kind == linkReset && account != nil && account.SuperAdmin {
+		c, err := callerOf(ctx)
+		if err != nil {
+			return fail(err)
+		}
+		if account.ID != c.user.Id {
+			return refuse(errSuperAdminProtected())
+		}
 	}
 	waiting, err := t.pendingLinks(ctx, runner.ID, kind)
 	if err != nil {
