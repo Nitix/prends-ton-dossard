@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -847,4 +848,200 @@ func TestReminders_LongPassStopsAtT(t *testing.T) {
 	if n := len(w.n.users()); n != 1 {
 		t.Errorf("%d sendings, want 1: the second person was reached after T", n)
 	}
+}
+
+// format makes a format of the event with its own opening (day and time, either
+// of them may be empty), named name.
+func (w *world) format(event *core.Record, name, day, hhmm string) *core.Record {
+	w.t.Helper()
+	return w.save("formats", map[string]any{
+		"event": event.Id, "name": name, "race_type": w.fx.Trail.Id, "distance_km": 21,
+		"registration_opening": day, "registration_opening_time": hhmm,
+	})
+}
+
+// join makes the runner interested in the format.
+func (w *world) join(runner, format *core.Record) {
+	w.t.Helper()
+	w.save("participations", map[string]any{
+		"runner": runner.Id, "format": format.Id, "status": "interested", "confirmed": true, "added_by": w.fx.AliceRunner.Id,
+	})
+}
+
+// person makes an account with a runner, a device and the day reminder.
+func (w *world) person(name string) (*core.Record, *core.Record) {
+	w.t.Helper()
+	user, runner := w.account(name, false, "day")
+	w.device(user, "fr")
+	return user, runner
+}
+
+// reset forgets what was sent.
+func (w *world) reset() {
+	w.n.mu.Lock()
+	defer w.n.mu.Unlock()
+	w.n.sendings = nil
+}
+
+func TestReminders_PerFormat(t *testing.T) {
+	t.Run("annecy", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Marathon du lac d'Annecy", "2026-11-16", "12:00")
+		semi := w.format(event, "Semi", "2026-11-17", "")
+		marathon := w.format(event, "Marathon", "", "")
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		bob, bobRunner := w.fx.Bob, w.fx.BobRunner
+		w.choose(bob, "day")
+		w.device(bob, "fr")
+		chloe, chloeRunner := w.person("chloe")
+		w.join(w.fx.AliceRunner, semi)
+		w.takeEvent(bobRunner, event, "interested")
+		w.join(chloeRunner, marathon)
+
+		w.run(parisAt("2026-11-15", "12:30"))
+		got := w.n.users()
+		slices.Sort(got)
+		want := []string{bob.Id, chloe.Id}
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
+			t.Fatalf("on Sunday: sent to %v, want Bob and Chloé (%v)", got, want)
+		}
+		for _, s := range w.n.sendings {
+			if title := s.bodies["fr"].Title; title != "Marathon du lac d'Annecy" {
+				t.Errorf("title of the general opening: %q", title)
+			}
+		}
+
+		w.reset()
+		w.run(parisAt("2026-11-16", "12:30"))
+		if len(w.n.sendings) != 1 || w.n.sendings[0].user != w.fx.Alice.Id {
+			t.Fatalf("on Monday: %+v, want one for Alice", w.n.sendings)
+		}
+		m := w.n.sendings[0].bodies["fr"]
+		if m.Title != "Marathon du lac d'Annecy · Semi" {
+			t.Errorf("title %q", m.Title)
+		}
+		if !strings.Contains(m.Body, "12:00") {
+			t.Errorf("body %q does not give the time of the semi's opening", m.Body)
+		}
+	})
+
+	t.Run("two_formats", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail des Aravis", "2026-11-20", "12:00")
+		semi := w.format(event, "Semi", "2026-11-17", "12:00")
+		ten := w.format(event, "10 km", "2026-11-18", "12:00")
+		dan, danRunner := w.person("dan")
+		w.join(danRunner, semi)
+		w.join(danRunner, ten)
+
+		w.run(parisAt("2026-11-16", "12:30"))
+		w.run(parisAt("2026-11-17", "12:30"))
+		if len(w.n.sendings) != 2 || w.n.sendings[0].user != dan.Id || w.n.sendings[1].user != dan.Id {
+			t.Fatalf("%+v, want two reminders for Dan", w.n.sendings)
+		}
+		if a, b := w.n.sendings[0].bodies["fr"].Title, w.n.sendings[1].bodies["fr"].Title; a != "Trail des Aravis · Semi" || b != "Trail des Aravis · 10 km" {
+			t.Errorf("titles %q, %q", a, b)
+		}
+		if w.deliveries() != 2 {
+			t.Errorf("%d rows, want 2", w.deliveries())
+		}
+		// Another pass changes nothing.
+		w.run(parisAt("2026-11-17", "12:31"))
+		if len(w.n.sendings) != 2 {
+			t.Errorf("%d sendings after another pass, want 2", len(w.n.sendings))
+		}
+	})
+
+	t.Run("same_instant", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail des Aravis", "2026-11-20", "12:00")
+		a := w.format(event, "Semi", "2026-11-17", "12:00")
+		b := w.format(event, "10 km", "2026-11-17", "12:00")
+		_, eve := w.person("eve")
+		w.join(eve, a)
+		w.join(eve, b)
+
+		w.run(parisAt("2026-11-16", "12:30"))
+		if len(w.n.sendings) != 1 || w.deliveries() != 1 {
+			t.Fatalf("%d sendings and %d rows, want 1 and 1", len(w.n.sendings), w.deliveries())
+		}
+		title := w.n.sendings[0].bodies["fr"].Title
+		if !strings.Contains(title, "Semi") || !strings.Contains(title, "10 km") || !strings.Contains(title, ", ") {
+			t.Errorf("title %q should name both formats", title)
+		}
+	})
+
+	t.Run("no_event_opening", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail des Aravis", "", "")
+		w.format(event, "Semi", "2026-11-16", "12:00")
+		w.format(event, "10 km", "2026-11-17", "12:00")
+		bob, bobRunner := w.fx.Bob, w.fx.BobRunner
+		w.choose(bob, "day")
+		w.device(bob, "fr")
+		w.takeEvent(bobRunner, event, "interested")
+
+		// The next opening to come is the general one: the semi's, not the 10 km's.
+		w.run(parisAt("2026-11-15", "12:30"))
+		if len(w.n.sendings) != 1 || !strings.Contains(w.n.sendings[0].bodies["fr"].Title, "Semi") {
+			t.Fatalf("%+v, want the semi's reminder alone", w.n.sendings)
+		}
+		w.run(parisAt("2026-11-16", "11:30"))
+		if len(w.n.sendings) != 1 {
+			t.Fatalf("%d sendings before the semi opens, want 1", len(w.n.sendings))
+		}
+		// Right after the semi opened, the 10 km's becomes the general one.
+		w.run(parisAt("2026-11-16", "12:01"))
+		if len(w.n.sendings) != 2 || w.n.sendings[1].user != bob.Id || !strings.Contains(w.n.sendings[1].bodies["fr"].Title, "10 km") {
+			t.Fatalf("%+v, want the 10 km's reminder next", w.n.sendings)
+		}
+	})
+
+	t.Run("topic", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Marathon du lac d'Annecy", "2026-11-16", "12:00")
+		semi := w.format(event, "Semi", "2026-11-17", "")
+		other := w.format(event, "Marathon", "", "")
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		_, chloe := w.person("chloe")
+		w.join(w.fx.AliceRunner, semi)
+		w.join(chloe, other)
+
+		w.run(parisAt("2026-11-15", "12:30"))
+		w.run(parisAt("2026-11-16", "12:30"))
+		if len(w.n.sendings) != 2 {
+			t.Fatalf("%d sendings, want 2", len(w.n.sendings))
+		}
+		for _, s := range w.n.sendings {
+			want := "opening-" + event.Id
+			if s.user == w.fx.Alice.Id {
+				want = "opening-" + semi.Id
+			}
+			m := s.bodies["fr"]
+			if s.opts.Topic != want || m.Tag != want || len(want) > 32 {
+				t.Errorf("topic %q, tag %q, want %q (at most 32)", s.opts.Topic, m.Tag, want)
+			}
+		}
+	})
+
+	t.Run("dst", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail du Printemps", "2027-04-10", "12:00")
+		format := w.format(event, "Semi", "2027-03-28", "12:00")
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		w.join(w.fx.AliceRunner, format)
+
+		w.run(parisAt("2027-03-27", "11:59"))
+		if len(w.n.sendings) != 0 {
+			t.Fatalf("a reminder before the same wall time the day before: %+v", w.n.sendings)
+		}
+		w.run(parisAt("2027-03-27", "12:00"))
+		if len(w.n.sendings) != 1 {
+			t.Fatalf("%d sendings from 12:00 the day before, want 1", len(w.n.sendings))
+		}
+	})
 }
