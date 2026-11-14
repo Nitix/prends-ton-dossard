@@ -96,7 +96,7 @@ const atTime = (time: string, t: Messages) => (time === "" ? "" : ` ${t.event.op
  * - `card`: "Ouverture le 12 janv. à 10:00" (the day without its weekday), "Ouverture aujourd'hui à 10:00";
  * - `aside`: "Les inscriptions ouvrent le lun. 12 janv. à 10:00.";
  * - `todo`: "ouvre le lun. 12 janv. à 10:00", "ouvre demain à 10:00", "ouvre aujourd'hui à 10:00".
- * - `format`: "Ouverture le mar. 17 nov. à 12:00" (under a format: its name is above).
+ * - `format`: "Ouverture des inscriptions de l'épreuve le mar. 17 nov. à 12:00" (under a format: its name is above).
  * Without a time, the time and its "à" are left out. `names` (the formats that
  * have the opening, "" for the event's) follow the time in parentheses.
  */
@@ -110,7 +110,7 @@ export function openingText(
   const head = {
     hero: t.event.openingHero,
     card: t.event.openingCard,
-    format: t.event.openingCard,
+    format: t.event.openingFormat,
     aside: t.event.openingAside,
     todo: t.event.openingTodo,
   }[form];

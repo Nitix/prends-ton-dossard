@@ -436,6 +436,8 @@ export const fr = {
     // interested, and the home page), then the day (« le lun. 12 janv. » or « aujourd'hui »), then the time when there is one («  à 10:00 »).
     openingHero: "Ouverture des inscriptions",
     openingCard: "Ouverture",
+    // Under the name of a format: says what opens, since the name is above and the line is read alone.
+    openingFormat: "Ouverture des inscriptions de l'épreuve",
     openingAside: "Les inscriptions ouvrent",
     openingTodo: "ouvre",
     openingToday: "aujourd'hui",
@@ -462,7 +464,7 @@ export const fr = {
     monthWhen: (month: string) => `${month} (date à préciser)`,
     formats: (list: string) => `Épreuves : ${list}`,
     // After the measures of a format that has its own opening to come: « le mar. 17 nov. à 12:00 » is already made.
-    formatOpening: (when: string) => `ouverture ${when}`,
+    formatOpening: (when: string) => `ouverture des inscriptions ${when}`,
     textLabel: "Texte à partager",
     copy: "Copier le texte",
     copied: "Texte copié.",

@@ -358,6 +358,7 @@ export const en = {
     reminder: (date: string) => `Remember to register by ${date}.`,
     openingHero: "Registration opens",
     openingCard: "Opens",
+    openingFormat: "Registration for this race opens",
     openingAside: "Registration opens",
     openingTodo: "opens",
     openingToday: "today",

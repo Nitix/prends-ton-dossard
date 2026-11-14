@@ -233,9 +233,14 @@ describe("openingText", () => {
       "Ouverture le 12 janv. à 10:00 (Semi)",
     );
     expect(plain(openingText(soon, inFrench, fr, "format"))).toBe(
-      "Ouverture le lun. 12 janv. à 10:00",
+      "Ouverture des inscriptions de l'épreuve le lun. 12 janv. à 10:00",
     );
-    expect(plain(openingText(today, inFrench, fr, "format"))).toBe("Ouverture aujourd'hui à 10:00");
+    expect(plain(openingText(today, inFrench, fr, "format"))).toBe(
+      "Ouverture des inscriptions de l'épreuve aujourd'hui à 10:00",
+    );
+    expect(plain(openingText({ ...soon, time: "" }, inFrench, fr, "format"))).toBe(
+      "Ouverture des inscriptions de l'épreuve le lun. 12 janv.",
+    );
   });
 
   test("deadlineText — l'ouverture puis la date limite", () => {

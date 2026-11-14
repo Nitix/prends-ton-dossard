@@ -2891,7 +2891,7 @@ const withFormatOpening = {
   },
 };
 const FORMAT_DAY = "2026-05-15";
-const heroLine = (screen: Screen) => screen.getByText(/^Ouverture des inscriptions/);
+const heroLine = (screen: Screen) => screen.getByText(/^Ouverture des inscriptions (le|aujourd)/);
 
 test("EventHero — chacun voit l'ouverture de son épreuve, ou celle de la course", async () => {
   // Sam is interested in the 15 km: its opening, and its name.
@@ -2947,7 +2947,9 @@ test("EventPage — l'épreuve qui a sa propre ouverture la dit sous son nom, ta
   const { screen } = await renderPage({ event: withFormatOpening, today: FORMAT_DAY });
   await loaded(screen);
   const semi = format(screen, /^Trail 15/);
-  expect(plain(semi.element().textContent)).toContain("Ouverture le dim. 17 mai à 12:00");
+  expect(plain(semi.element().textContent)).toContain(
+    "Ouverture des inscriptions de l'épreuve le dim. 17 mai à 12:00",
+  );
   // The 42 km follows the event: nothing under its name.
   expect(plain(format(screen, /^Trail 42/).element().textContent)).not.toContain("Ouverture");
   await screen.unmount();
@@ -2956,7 +2958,7 @@ test("EventPage — l'épreuve qui a sa propre ouverture la dit sous son nom, ta
   const same = await renderPage({ event: withFormatOpening, today: "2026-05-17" });
   await loaded(same.screen);
   expect(plain(format(same.screen, /^Trail 15/).element().textContent)).toContain(
-    "Ouverture aujourd'hui à 12:00",
+    "Ouverture des inscriptions de l'épreuve aujourd'hui à 12:00",
   );
   await same.screen.unmount();
 
@@ -2997,6 +2999,6 @@ test("EventPage — une course au mois dont l'épreuve a son ouverture la montre
   const { screen } = await renderPage({ event: month, today: FORMAT_DAY });
   await loaded(screen);
   expect(plain(format(screen, /^Trail 15/).element().textContent)).toContain(
-    "Ouverture le dim. 17 mai à 12:00",
+    "Ouverture des inscriptions de l'épreuve le dim. 17 mai à 12:00",
   );
 });

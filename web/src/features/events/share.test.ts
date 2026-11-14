@@ -140,7 +140,7 @@ describe("shareText", () => {
     expect(lines(shareText(view, APP, today, FR, fr))).toEqual([
       "Trail des Crêtes",
       "Du sam. 13 au dim. 14 juin 2026 · Annecy",
-      "Épreuves : Trail 15 km · 700 m D+ · ouverture le mar. 13 janv. à 12:00 ; Trail 42 km · 2 400 m D+ · max 10h",
+      "Épreuves : Trail 15 km · 700 m D+ · ouverture des inscriptions le mar. 13 janv. à 12:00 ; Trail 42 km · 2 400 m D+ · max 10h",
       "Ouverture des inscriptions le lun. 12 janv. à 10:00",
       `${APP}/evenements/event`,
     ]);
@@ -166,7 +166,7 @@ describe("shareText", () => {
     const text = plain(shareText(view, APP, today, FR, fr));
 
     expect(text).toContain(
-      "Trail 15 km · 700 m D+ · départ à 8 h 30 · ouverture le lun. 5 janv. à 12:00 ;",
+      "Trail 15 km · 700 m D+ · départ à 8 h 30 · ouverture des inscriptions le lun. 5 janv. à 12:00 ;",
     );
     expect(text).toContain("Trail 42 km · 2 400 m D+ · max 10h https");
     expect(text).not.toContain("3 janv.");

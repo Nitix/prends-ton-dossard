@@ -66,7 +66,7 @@ Sur `https://dev-prends-ton-dossard.ketra.fr` (comptes `alice@`, `bob@` ou `admi
 2. **La fiche, en haut.** Regarde-la :
    - avec le statut « Intéressé » sur cette épreuve : la ligne du haut dit son ouverture, avec le nom de l'épreuve entre parenthèses ;
    - comme un supporteur : la ligne du haut dit l'ouverture générale ;
-   - la ligne de l'épreuve elle-même, qui dit sa propre ouverture à tout le monde.
+   - la ligne de l'épreuve elle-même, qui dit sa propre ouverture à tout le monde : « Ouverture des inscriptions de l'épreuve le … » (changé à la demande de la personne, après l'essai : « Ouverture le … » ne disait pas ce qui ouvre ; le partage dit de même « ouverture des inscriptions le … »).
 3. **L'accueil.** Avec un compte qui a le statut « Intéressé » sur cette épreuve, regarde « Inscriptions à faire » : la course montre l'ouverture de l'épreuve, pas celle de la course.
 4. **L'agenda.** Dans le calendrier abonné (« Mes courses »), une entrée par ouverture ; puis « Ajouter à l'agenda » sur la fiche : le fichier porte « Ouverture des inscriptions : <course> · <épreuve> ».
 5. **Le partage.** « Partager » donne l'ouverture générale et celle de l'épreuve dans la ligne des épreuves.

@@ -28,7 +28,7 @@ var ports = []struct {
 	{"lib/dates.ts", "lastRaceDay of views.go, participationRow.lastDay of home.go", "674bc31333e6cac072e999937f5bcde51a0593c7abbf65db609999654143027e"},
 	{"features/home/MyUpcoming.tsx", "upcomingOf of home.go", "a141677cfd243d478a63a3d51a0c4269bcf760f73017d600532e1a0aba40620f"},
 	{"features/events/duplicates.ts", "duplicates.go", "b34613d9a40541a03f85631164a31aade82ef46b591b760e72265e49a9c333bf"},
-	{"features/events/registration.ts", "registrationState (registrationStateOf) of home.go", "a1d8b8c7961118feb6823007bf64b3af229529d4287fd17ba1f916e37b9d3001"},
+	{"features/events/registration.ts", "registrationState (registrationStateOf) of home.go", "dd388283b687ec2bc628acafc7b1949de85ab22d35528c14fd72641ac895b88a"},
 	{"features/events/participants.ts", "hasStarters of home.go", "e7694134868064d0d35baf7a500ee506c3b8076d41b7ec100f4bd5f1fa3539d9"},
 	{"features/home/pending.ts", "pendingOf of home.go", "39aefdaf708e6ba4152bcbd86005df0f6fe5dc6df225ece3545b84169b1ce0a6"},
 	{"features/home/registrationTodo.ts", "registrationTodo, todosOf of home.go", "2a5bdf076b911f7984693b065119a7f7bfe29406340f0b7e783a5fb85bd43f01"},
