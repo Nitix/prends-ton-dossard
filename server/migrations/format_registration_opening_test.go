@@ -36,7 +36,7 @@ func TestMigration9s(t *testing.T) {
 
 	check("as created")
 	r := mustFind(t, app, "formats", fx.F42.Id)
-	r.Set("registration_opening", "2026-11-17")
+	r.Set("registration_opening", "2026-05-17")
 	r.Set("registration_opening_time", "12:00")
 	if err := app.Save(r); err != nil {
 		t.Fatal(err)
