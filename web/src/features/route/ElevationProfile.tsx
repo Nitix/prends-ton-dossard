@@ -26,8 +26,13 @@ const MARGIN = { top: 30, right: 20, bottom: 28, left: 56 };
 const PLOT_HEIGHT = HEIGHT - MARGIN.top - MARGIN.bottom;
 const TICK_LENGTH = 4;
 const LABEL_FONT_SIZE = 11;
-/** The width before it is measured: about a phone's. */
-const FIRST_WIDTH = 340;
+/**
+ * The width before it is measured, narrower than any real container (the narrowest phone, 320 px,
+ * leaves about 254): what is placed from it (the label of the summit, the cursor) can then not
+ * stick out of the container on the first layout, and widen the page. The measure follows
+ * before the first paint.
+ */
+const FIRST_WIDTH = 240;
 /**
  * How many bands of slope the profile is cut into, whatever its width: a phone
  * and a wide screen read the same slopes (a band is about 5 px wide on a
@@ -361,11 +366,10 @@ function Profile({
     style: "unit",
     unit: "percent",
     maximumFractionDigits: 0,
-    // A slope that rounds to zero is « 0 % », whatever the sign it had (Firefox shows « -0 % »).
-    signDisplay: "negative",
   });
-  // A slope that rounds to zero is « 0 % », never « -0 % » (Firefox writes it, whatever signDisplay):
-  // the number is rounded here, and `+ 0` makes a negative zero a zero.
+  // A slope that rounds to zero is « 0 % », never « -0 % »: Intl writes « -0 % » for a small
+  // negative slope (Chrome and Firefox seen), so the number is rounded here, and `+ 0` makes a
+  // negative zero a zero.
   const pct = (slope: number) => percent.format(Math.sign(slope) * Math.round(Math.abs(slope)) + 0);
   const legend = SLOPE_ZONES.map((zone, i) => {
     const low = i === 0 ? undefined : SLOPE_STEPS[i - 1];

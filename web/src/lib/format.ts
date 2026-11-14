@@ -89,7 +89,7 @@ const ORDINAL_ENDINGS: Record<
  * digits (« 09 h 00 », « 07:30 AM »), Chrome and Safari on one: it is told the same everywhere.
  */
 function plainHour(part: Intl.DateTimeFormatPart): string {
-  return part.type === "hour" ? String(Number(part.value)) : part.value;
+  return part.type === "hour" ? part.value.replace(/^0(?=[0-9])/, "") : part.value;
 }
 
 export function createFormatters(locale: string): Formatters {
