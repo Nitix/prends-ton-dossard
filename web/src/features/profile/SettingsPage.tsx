@@ -275,9 +275,14 @@ function PasswordForm({ user }: { user: UserRecord }) {
       // of this session is dead from now on. Signing in again with the new
       // password is the very next request, before anything else is asked of
       // the server with the dead token: a 401 would end the session (see
-      // lib/pb.ts). The queries are not invalidated here for that reason.
+      // lib/pb.ts). The queries are not invalidated here for that reason. The
+      // sign-in itself goes without it, since PocketBase 0.42 refuses any
+      // request that carries a dead token: an empty header is no token, and
+      // keeps the client from adding the stored one.
       try {
-        await pb.collection("users").authWithPassword(user.email, password);
+        await pb
+          .collection("users")
+          .authWithPassword(user.email, password, { headers: { Authorization: "" } });
       } catch {
         logout();
         toast.show(t.profile.passwordSignInAgain);

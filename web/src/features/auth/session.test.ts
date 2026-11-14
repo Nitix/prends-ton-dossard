@@ -242,8 +242,8 @@ describe("sessionCheck", () => {
     expect(mocks.authRefresh).toHaveBeenCalledTimes(2);
   });
 
-  // PocketBase serves a refused token as a guest on the collection routes:
-  // the renewal, which needs a session, is what reveals it.
+  // An app left open asks nothing while nobody uses it: the renewal is what
+  // reveals a session that ended elsewhere.
   test("clears the store when the server refuses the token", async () => {
     mocks.authRefresh.mockRejectedValue(answer(401));
     const run = check();

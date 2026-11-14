@@ -77,13 +77,13 @@ const SESSION_TICK_MS = 60_000;
  * Returns the check that runs while the app is open: when it comes back to
  * the foreground, and regularly while it stays there (see connectSession).
  *
- * PocketBase serves a request with a token it refuses as an anonymous one:
- * lists come back empty and records "not found", but no 401. Only the routes
- * that need a session answer 401. So a session that ended elsewhere (account
- * disabled, password reset, email changed on another device) would go
- * unnoticed. The check asks for a renewal, which needs a session: a refusal
- * empties the store (restoreSession, and afterSend in lib/pb.ts). The renewal
- * also keeps the token of a tab left open for days from expiring.
+ * Since PocketBase 0.42, any request with a token that the server refuses
+ * answers 401, which ends the session (afterSend in lib/pb.ts). But an app left
+ * open asks nothing while nobody uses it: a session that ended elsewhere
+ * (account disabled, password reset, email changed on another device) would go
+ * unnoticed until the next click. The check asks for a renewal: a refusal
+ * empties the store (restoreSession, and afterSend). The renewal also keeps the
+ * token of a tab left open for days from expiring.
  *
  * A token that has expired is dropped at once, without asking. Otherwise the
  * server is asked at most once per `interval`, counted from the creation of the
