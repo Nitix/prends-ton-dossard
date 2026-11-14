@@ -18,6 +18,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { ensureTemporal } from "../../lib/temporal";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { pressFocused } from "../../test/pressFocused";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
 import {
@@ -307,7 +308,7 @@ test("DeleteEventDialog — sans participant, elle n'en cite aucun", async () =>
 test("DeleteEventDialog — Supprimer efface l'événement, renvoie vers /liste et le dit", async () => {
   const { screen, router, queryClient, invalidate } = await renderDialog();
 
-  await confirm(screen).click();
+  await pressFocused(confirm(screen));
 
   await vi.waitFor(() => {
     expect(router.state.location.pathname).toBe("/liste");
@@ -338,7 +339,7 @@ test("DeleteEventDialog — un refus est dit dans la fenêtre : rien ne bouge", 
   );
   const { screen, router } = await renderDialog();
 
-  await confirm(screen).click();
+  await pressFocused(confirm(screen));
 
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.forbidden);
   expect(router.state.location.pathname).toBe("/evenements/event");
@@ -371,7 +372,7 @@ test("DeleteEventDialog — Supprimer garde le focus pendant l'envoi et après u
 test("DeleteEventDialog — Annuler ferme sans rien supprimer", async () => {
   const { screen, onClose, router } = await renderDialog();
 
-  await screen.getByRole("button", { name: fr.common.cancel }).click();
+  await pressFocused(screen.getByRole("button", { name: fr.common.cancel }));
 
   expect(onClose).toHaveBeenCalledOnce();
   expect(mocks.remove).not.toHaveBeenCalled();

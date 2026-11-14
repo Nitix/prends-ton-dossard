@@ -9,6 +9,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { ensureTemporal } from "../lib/temporal";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
+import { pressFocused } from "../test/pressFocused";
 
 import "../styles.css";
 
@@ -94,11 +95,11 @@ test("root — un onglet mène au titre de la page, d'une page à l'autre", asyn
   await expect.element(screen.getByRole("heading", heading(fr.nav.home))).toBeVisible();
   const tabs = screen.getByRole("navigation", { name: fr.nav.main });
 
-  await tabs.getByRole("link", { name: fr.nav.list, exact: true }).click();
+  await pressFocused(tabs.getByRole("link", { name: fr.nav.list, exact: true }));
   await expectFocusOn(screen.getByRole("heading", heading(fr.nav.list)));
   expect(router.state.location.pathname).toBe("/liste");
 
-  await tabs.getByRole("link", { name: fr.nav.calendar, exact: true }).click();
+  await pressFocused(tabs.getByRole("link", { name: fr.nav.calendar, exact: true }));
   await expectFocusOn(screen.getByRole("heading", heading(fr.nav.calendar)));
   expect(router.state.location.pathname).toBe("/agenda");
 });
