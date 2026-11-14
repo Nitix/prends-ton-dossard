@@ -591,6 +591,8 @@ Préparation : inviter un coureur de test depuis l'administration du site, et ou
 - [ ] **Partager.** Sur la fiche d'une course, « Partager » ouvre la feuille de partage de l'iPhone avec le texte (nom, jours, lieu, épreuves, ouverture, date limite, adresse) et sans aucun nom de participant. L'envoyer à soi-même dans une conversation WhatsApp : le lien demande de se connecter (il n'y a pas d'aperçu). Annuler la feuille ne fait rien.
 - [ ] **Zoom.** Sur la fiche d'une course qui a une trace : un doigt fait défiler la page, **deux doigts** déplacent et zooment la carte (un message le rappelle quand un doigt seul touche la carte). Sur le profil du D+, glisser ou pincer choisit une portion, la carte la suit ; « Vue entière du profil » revient.
 - [ ] **Météo.** Sur « Trail des Crêtes » (ou une course dans les 7 jours), la section « Météo prévue » montre les jours, le lieu trouvé et la source, avec un lien vers Open-Meteo qui dit s'ouvrir dans un nouvel onglet.
+- [ ] **Sur un téléphone Android** (les tests de CI n'y touchent qu'au clavier dans les fenêtres) : dans une fenêtre, « Annuler » et « Supprimer » réagissent à un toucher, et la barre d'onglets aussi.
+- [ ] **Sur Firefox** (même raison) : « Ajouter quelqu'un » sur une épreuve, puis « Annuler » et « Réessayer » réagissent à un clic.
 - [ ] Désactiver le compte de test (ses jetons MCP partent avec lui).
 
 ## Feuille de route

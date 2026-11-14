@@ -166,7 +166,8 @@ export default defineConfig({
               // The page is larger than the frame of the tests (the screen of the phone): the tester's
               // iframe sits inside it with room round it, so that what is fixed at the bottom of
               // the frame (the tab bar, a window) is inside the page for Playwright's scroll and
-              // clicks (« element is outside of the viewport » otherwise).
+              // clicks. It was meant to stop « element is outside of the viewport » on the Pixel,
+              // but that failure went on (runs 13 to 26): see docs/TODO.md, where the cause is open.
               contextOptions: {
                 reducedMotion: "no-preference",
                 ...contextOptions,
