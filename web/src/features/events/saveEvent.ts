@@ -1,7 +1,7 @@
 import { ClientResponseError } from "pocketbase";
 
 import { errorCode, fieldErrors } from "../../i18n/errors";
-import { isMonthOnly } from "../../lib/dates";
+import { isMonthOnly, parseDate } from "../../lib/dates";
 import { newId } from "../../lib/ids";
 import { pb } from "../../lib/pb";
 import type { Status } from "../../lib/types";
@@ -77,6 +77,10 @@ export type EventDraft = {
     date?: string;
     /** `HH:MM`, the time at the place of the race (Paris time for a race in France). A race known by its month has none. */
     start_time?: string;
+    /** The day this format opens its registration, when it has an opening of its own (`YYYY-MM-DD`). Alone, the time is the event's. */
+    registration_opening?: string;
+    /** The time of that opening, `HH:MM` Paris time. Alone, the day is the event's. */
+    registration_opening_time?: string;
   }[];
   /** The member takes part in the format at `formatIndex` of `formats`. Only when the event is created. */
   join?: { formatIndex: number; status: Status };
@@ -115,7 +119,39 @@ function formatBody(format: FormatDraft): Record<string, unknown> {
     route_url: format.route_url ?? "",
     date: format.date ?? "",
     start_time: format.start_time ?? "",
+    registration_opening: format.registration_opening ?? "",
+    registration_opening_time: format.registration_opening_time ?? "",
   };
+}
+
+/** The last day of the month of a day (`YYYY-MM-DD`, a real one). */
+function lastDayOfMonth(day: string): string {
+  const date = parseDate(day);
+  return date.with({ day: date.daysInMonth }).toString();
+}
+
+/**
+ * Whether the opening of a kept format has to wait for the event, because the stored event would
+ * refuse it. `day` is the date the format is sent with (empty when it waits too). The stored event
+ * refuses an opening day that is after the format's day, or after the first day of the event
+ * (the last day of its month for a month), or after its deadline; and a day or a time alone
+ * while it has no opening to take the rest from. The two fields move together: if one waits,
+ * both do.
+ */
+function openingWaits(
+  event: EventView["event"],
+  day: string | undefined,
+  format: FormatDraft,
+): boolean {
+  const opens = format.registration_opening ?? "";
+  const at = format.registration_opening_time ?? "";
+  if (opens === "" && at === "") return false;
+  if (opens !== "") {
+    const limit = day || (isMonthOnly(event) ? lastDayOfMonth(event.start_date) : event.start_date);
+    if (opens > limit) return true;
+    if (event.registration_deadline && opens > event.registration_deadline) return true;
+  }
+  return (opens === "") !== (at === "") && !event.registration_opening;
 }
 
 /**
@@ -143,6 +179,13 @@ function isInRangeOf(event: EventView["event"], day: string | undefined): boolea
  *   3. the event is updated;
  *   4. the formats whose date is a day the event gains get that date (an
  *      update that sends nothing else), and the new formats are created.
+ *
+ * The opening of a format follows the same rule as its date: phase 2 sends it when the stored
+ * event accepts it (its day is not after the stored limit, the stored deadline, and a day or a
+ * time alone has the opening of the stored event to take the rest from), and sends both fields
+ * empty otherwise; phase 4 then sends the two values. An opening that is cleared or brought
+ * forward is accepted by the stored event, so it goes before the event; one that is put back or
+ * that starts to depend on the opening of the event goes after it.
  *
  * The server checks the date of a format against the event, and the dates of
  * an event against its formats, as they are when each request runs. Phase 2
@@ -188,13 +231,19 @@ export function buildBatch(
       // comes first.
       const waits = !isInRangeOf(existing.event, format.date);
       const waitsTime = isMonthOnly(existing.event) && !!format.start_time;
+      // The opening of the format waits, day and time together, when the stored event would refuse
+      // it, as `openingWaits` says: the format keeps what it has until the event is saved.
+      const waitsOpening = openingWaits(existing.event, waits ? undefined : format.date, format);
       const kept = {
         ...format,
         ...(waits ? { date: undefined } : {}),
         ...(waitsTime ? { start_time: undefined } : {}),
+        ...(waitsOpening
+          ? { registration_opening: undefined, registration_opening_time: undefined }
+          : {}),
       };
       keptOps.push({ action: "update", collection: "formats", id, body: formatBody(kept) });
-      if (waits || waitsTime) {
+      if (waits || waitsTime || waitsOpening) {
         lateOps.push({
           action: "update",
           collection: "formats",
@@ -202,6 +251,12 @@ export function buildBatch(
           body: {
             ...(waits ? { date: format.date } : {}),
             ...(waitsTime ? { start_time: format.start_time } : {}),
+            ...(waitsOpening
+              ? {
+                  registration_opening: format.registration_opening ?? "",
+                  registration_opening_time: format.registration_opening_time ?? "",
+                }
+              : {}),
           },
         });
       }

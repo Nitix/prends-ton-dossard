@@ -133,6 +133,7 @@ func storedOf(view eventView) *storedEvent {
 func draftOfRecord(f formatRecord) formatDraft {
 	return formatDraft{
 		ID: f.ID, Name: f.Name, RaceType: f.RaceType, RouteURL: f.RouteURL, Date: f.Date, StartTime: f.StartTime,
+		RegistrationOpening: f.RegistrationOpening, RegistrationOpeningTime: f.RegistrationOpeningTime,
 		DistanceKm: f.DistanceKm, PriceEur: f.PriceEur,
 		DurationMin: f.DurationMin, TimeLimitMin: f.TimeLimitMin, ElevationGainM: f.ElevationGainM,
 	}

@@ -30,6 +30,9 @@ const row = (extra: Partial<FormatRow> = {}): FormatRow => ({
   gpx: { kind: "keep" },
   date: "",
   startTime: "",
+  ownOpening: false,
+  openingDay: "",
+  openingTime: "",
   ...extra,
 });
 
@@ -615,5 +618,98 @@ describe("l'heure de départ", () => {
 
     expect(saved.formats[0]?.start_time).toBeUndefined();
     expect(draft.rows[0]?.startTime).toBe("07:30");
+  });
+});
+
+const withOpening = (opening: Record<string, string>) =>
+  initialDraft(
+    toEventView({
+      ...eventRecord,
+      expand: { formats_via_event: [{ ...f42, ...opening }, f15] },
+    }),
+  );
+
+const of42 = (draft: FormDraft) => draft.rows.find((r) => r.id === "f42");
+
+describe("l'ouverture propre d'une épreuve", () => {
+  test("initialDraft — la case est cochée pour une épreuve qui a un jour, une heure ou les deux", () => {
+    const withDay = withOpening({ registration_opening: "2026-05-17" });
+    expect(withDay.rows.filter((r) => r.ownOpening).map((r) => r.id)).toEqual(["f42"]);
+    expect(of42(withDay)).toMatchObject({ openingDay: "2026-05-17", openingTime: "" });
+
+    const time = withOpening({ registration_opening_time: "10:00" });
+    expect(of42(time)).toMatchObject({ ownOpening: true, openingDay: "", openingTime: "10:00" });
+
+    const both = withOpening({
+      registration_opening: "2026-05-17",
+      registration_opening_time: "10:00",
+    });
+    expect(of42(both)).toMatchObject({ ownOpening: true, openingTime: "10:00" });
+
+    expect(initialDraft(undefined).rows[0]).toMatchObject({
+      ownOpening: false,
+      openingDay: "",
+      openingTime: "",
+    });
+  });
+
+  test("toEventDraft — coché, le jour seul part seul et l'heure seule part seule", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      rows: [
+        row({ distanceKm: "42", ownOpening: true, openingDay: "2026-05-17" }),
+        row({ distanceKm: "15", ownOpening: true, openingTime: "10:00" }),
+        row({ distanceKm: "10", ownOpening: true, openingDay: "2026-05-18", openingTime: "09:30" }),
+      ],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    expect(saved.formats.map((f) => f.registration_opening)).toEqual([
+      "2026-05-17",
+      undefined,
+      "2026-05-18",
+    ]);
+    expect(saved.formats.map((f) => f.registration_opening_time)).toEqual([
+      undefined,
+      "10:00",
+      "09:30",
+    ]);
+  });
+
+  test("toEventDraft — décoché, le brouillon garde ce qui est saisi mais rien n'est envoyé ; coché et vide, rien non plus", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      rows: [
+        row({
+          distanceKm: "42",
+          ownOpening: false,
+          openingDay: "2026-05-17",
+          openingTime: "10:00",
+        }),
+        row({ distanceKm: "15", ownOpening: true }),
+      ],
+    };
+
+    const saved = toEventDraft(draft, undefined, false);
+
+    for (const sent of saved.formats) {
+      expect(sent.registration_opening).toBeUndefined();
+      expect(sent.registration_opening_time).toBeUndefined();
+    }
+    expect(draft.rows[0]).toMatchObject({ openingDay: "2026-05-17", openingTime: "10:00" });
+  });
+
+  test("toEventDraft — une course au mois garde l'ouverture de ses épreuves (une ouverture a un jour)", () => {
+    const draft = {
+      ...initialDraft(undefined),
+      monthOnly: true,
+      startMonth: "2027-06",
+      rows: [row({ distanceKm: "42", ownOpening: true, openingDay: "2027-05-17" })],
+    };
+
+    expect(toEventDraft(draft, undefined, false).formats[0]?.registration_opening).toBe(
+      "2027-05-17",
+    );
   });
 });

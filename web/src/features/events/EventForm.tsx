@@ -80,6 +80,8 @@ const FORMAT_FIELDS: readonly string[] = [
   "route_url",
   "date",
   "start_time",
+  "registration_opening",
+  "registration_opening_time",
 ];
 
 const MONTHS_BACK = 12;
@@ -604,7 +606,11 @@ function EventFields({
             />
           )}
         </Field>
-        <Field label={t.form.registrationOpening} error={eventError("registration_opening")}>
+        <Field
+          label={t.form.registrationOpening}
+          hint={t.form.registrationOpeningHelp}
+          error={eventError("registration_opening")}
+        >
           {(control) => (
             <input
               {...control}

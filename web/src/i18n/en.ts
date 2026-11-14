@@ -567,6 +567,7 @@ export const en = {
     registrationOpening: "Registration opening",
     registrationOpeningTime: "Opening time",
     registrationOpeningTimeHint: "Optional, in Paris time.",
+    registrationOpeningHelp: "Applies to every race, except those that have their own.",
     registrationOpeningTimeNeedsDay: "Choose the opening day first.",
     dayUnknown: "The day is not known yet",
     month: "Month",
@@ -602,6 +603,11 @@ export const en = {
     formatDateHint: "Only if it is not the first day.",
     formatStartTime: "Start time",
     formatStartTimeHint: "Optional. It gives the weather at the start.",
+    formatOpeningToggle: "This race opens its registration at another time",
+    formatOpening: "Registration opens",
+    formatOpeningTime: "Opening time",
+    formatOpeningHelp:
+      "Paris time. A day alone keeps the event's time, a time alone keeps its day.",
     addFormat: "Add a race",
     formatHasParticipants: (n: number) =>
       n === 1

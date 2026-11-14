@@ -722,6 +722,8 @@ export const fr = {
     registrationOpening: "Ouverture des inscriptions",
     registrationOpeningTime: "Heure d'ouverture",
     registrationOpeningTimeHint: "Facultative, à l'heure de Paris.",
+    // Under the day of the opening of the event: the races that have their own opening leave it out.
+    registrationOpeningHelp: "Celle de toutes les épreuves, sauf celles qui ont la leur.",
     // Read with the time field while it is disabled: a time needs a day.
     registrationOpeningTimeNeedsDay: "Choisis d'abord le jour de l'ouverture.",
     // Under the start date: the box that says the day is not known, and the month to give instead.
@@ -766,6 +768,12 @@ export const fr = {
     formatDateHint: "Seulement si ce n'est pas le premier jour.",
     formatStartTime: "Heure de départ",
     formatStartTimeHint: "Facultative. Elle donne la météo de l'heure du départ.",
+    // The opening that a race has of its own: a box, then a day and a time that are independent.
+    formatOpeningToggle: "Cette épreuve ouvre ses inscriptions à un autre moment",
+    formatOpening: "Ouverture des inscriptions",
+    formatOpeningTime: "Heure d'ouverture",
+    formatOpeningHelp:
+      "À l'heure de Paris. Un jour seul garde l'heure de la course, une heure seule garde son jour.",
     addFormat: "Ajouter une épreuve",
     // Next to « Retirer » on a format that already has runners: the server deletes their participations with it.
     formatHasParticipants: (n: number) =>

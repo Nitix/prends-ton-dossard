@@ -33,6 +33,15 @@ export type FormatRow = {
   date: string;
   /** An `HH:MM` time, Paris time, or empty. Only saved for a race with a day: the draft keeps it. */
   startTime: string;
+  /**
+   * The format opens its registration at a moment of its own: a box of the form. The draft keeps the
+   * day and the time while it is unchecked, but only a checked box sends them.
+   */
+  ownOpening: boolean;
+  /** A `YYYY-MM-DD` day, or empty: a time alone keeps the day of the opening of the event. */
+  openingDay: string;
+  /** An `HH:MM` time, or empty: a day alone keeps the time of the opening of the event. */
+  openingTime: string;
 };
 
 export type FormDraft = {
@@ -73,6 +82,9 @@ export function emptyRow(raceType = ""): FormatRow {
     gpx: { kind: "keep" },
     date: "",
     startTime: "",
+    ownOpening: false,
+    openingDay: "",
+    openingTime: "",
   };
 }
 
@@ -118,6 +130,10 @@ export function initialDraft(existing: EventView | undefined): FormDraft {
     gpx: { kind: "keep" },
     date: format.date ?? "",
     startTime: format.start_time ?? "",
+    // Checked for a format that has a day or a time of opening of its own.
+    ownOpening: !!(format.registration_opening || format.registration_opening_time),
+    openingDay: format.registration_opening ?? "",
+    openingTime: format.registration_opening_time ?? "",
   }));
   // An event has at least one format: one that has none (which only a write
   // outside the app can make) starts with a row to fill in.
@@ -348,6 +364,10 @@ export function toEventDraft(
       label: label?.(row, index),
       date: draft.monthOnly ? undefined : row.date || undefined,
       start_time: draft.monthOnly ? undefined : row.startTime || undefined,
+      // An opening has a day, so a race known by its month keeps it. Unchecked, nothing is sent: that is
+      // what clears it.
+      registration_opening: row.ownOpening ? row.openingDay || undefined : undefined,
+      registration_opening_time: row.ownOpening ? row.openingTime || undefined : undefined,
     })),
     join:
       join && joinRow

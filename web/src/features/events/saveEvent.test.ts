@@ -211,6 +211,8 @@ describe("buildBatch, creation", () => {
       route_url: "",
       date: "",
       start_time: "",
+      registration_opening: "",
+      registration_opening_time: "",
     });
   });
 
@@ -1159,5 +1161,218 @@ describe("buildBatch — de la course au mois à la course d'un jour, avec des h
       start_time: "09:00",
     });
     expect(() => runOnServer(ops, monthExisting())).not.toThrow();
+  });
+});
+
+// A race on 5 December, with a deadline on the 20th of November, as it is stored.
+const stored = (
+  event: Record<string, unknown> = {},
+  first: Record<string, unknown> = {},
+  second: Record<string, unknown> = {},
+) =>
+  toEventView({
+    ...eventRecord,
+    start_date: "2026-12-05",
+    end_date: "",
+    registration_deadline: "2026-11-20",
+    registration_opening: "2026-11-10",
+    ...event,
+    expand: {
+      formats_via_event: [
+        { ...f42, date: "", ...first },
+        { ...f15, ...second },
+      ],
+    },
+  });
+
+const draftOf = (
+  event: Partial<EventDraft> = {},
+  first: Partial<EventDraft["formats"][number]> = {},
+  second: Partial<EventDraft["formats"][number]> = {},
+): EventDraft => ({
+  id: "event",
+  name: "Trail des Crêtes",
+  location: "Annecy",
+  start_date: "2026-12-05",
+  registration_deadline: "2026-11-20",
+  registration_opening: "2026-11-10",
+  formats: [
+    {
+      id: "f42",
+      race_type: trailType.id,
+      distance_km: 42,
+      time_limit_min: 600,
+      elevation_gain_m: 2400,
+      ...first,
+    },
+    { id: "f15", race_type: trailType.id, distance_km: 15, elevation_gain_m: 700, ...second },
+  ],
+  ...event,
+});
+
+const at = (ops: BatchOp[], id: string) => ops.filter((op) => op.id === id);
+
+describe("buildBatch — les ouvertures des épreuves attendent la course", () => {
+  test("le format envoie son ouverture avec sa valeur, et vide quand il n'en a pas (ce qui l'efface)", () => {
+    const view = stored();
+    const { ops } = buildBatch(
+      draftOf({}, { registration_opening: "2026-11-17", registration_opening_time: "10:00" }),
+      view,
+      ME,
+    );
+
+    expect(at(ops, "f42")[0]?.body).toMatchObject({
+      registration_opening: "2026-11-17",
+      registration_opening_time: "10:00",
+    });
+    expect(at(ops, "f15")[0]?.body).toMatchObject({
+      registration_opening: "",
+      registration_opening_time: "",
+    });
+  });
+
+  test("une date limite avancée avec l'ouverture de l'épreuve : l'épreuve passe avant la course", () => {
+    // The deadline moves from the 20th to the 15th, the opening of F42 from the 17th to the 14th.
+    const view = stored({}, { registration_opening: "2026-11-17" });
+    const draft = draftOf(
+      { registration_deadline: "2026-11-15" },
+      { registration_opening: "2026-11-14" },
+    );
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(ops[0]).toMatchObject({ id: "f42", body: { registration_opening: "2026-11-14" } });
+  });
+
+  test("une date limite repoussée avec l'ouverture de l'épreuve : l'ouverture attend la course, jour et heure ensemble", () => {
+    // The deadline moves from the 15th to the 20th, the opening of F42 from the 15th to the 18th.
+    const view = stored(
+      { registration_deadline: "2026-11-15" },
+      { registration_opening: "2026-11-15", registration_opening_time: "10:00" },
+    );
+    const draft = draftOf(
+      { registration_deadline: "2026-11-20" },
+      { registration_opening: "2026-11-18", registration_opening_time: "10:00" },
+    );
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    expect(ops[0]?.body).toMatchObject({ registration_opening: "", registration_opening_time: "" });
+    expect(ops[3]).toMatchObject({
+      id: "f42",
+      body: { registration_opening: "2026-11-18", registration_opening_time: "10:00" },
+    });
+    expect(Object.keys(ops[3]?.body ?? {}).toSorted()).toEqual([
+      "registration_opening",
+      "registration_opening_time",
+    ]);
+  });
+
+  test("une ouverture après le premier jour de la course d'avant attend la course qui recule son début", () => {
+    // The race starts on 5 December: the event moves its start to the 10th, and the opening of F42 to
+    // the 8th, which the stored first day (the 5th) refuses.
+    const view = stored({ registration_deadline: "" });
+    const draft = draftOf(
+      { registration_deadline: undefined, start_date: "2026-12-10" },
+      { registration_opening: "2026-12-08" },
+    );
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    expect(ops[0]?.body).toMatchObject({ registration_opening: "" });
+    expect(ops.at(-1)).toMatchObject({ id: "f42", body: { registration_opening: "2026-12-08" } });
+  });
+
+  test("une heure seule qui se met à dépendre de l'ouverture de la course attend cette ouverture", () => {
+    // The event gets an opening in this save: the format that has a time only waits for it.
+    const view = stored({ registration_opening: "" });
+    const draft = draftOf({}, {}, { registration_opening_time: "10:00" });
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "update formats",
+    ]);
+    expect(at(ops, "f15")[0]?.body).toMatchObject({
+      registration_opening: "",
+      registration_opening_time: "",
+    });
+    expect(ops[3]).toMatchObject({
+      id: "f15",
+      body: { registration_opening: "", registration_opening_time: "10:00" },
+    });
+  });
+
+  test("l'ouverture de la course vidée, l'épreuve complétée en jour et heure : elle part avant la course", () => {
+    const view = stored(
+      { registration_opening_time: "09:00" },
+      { registration_opening: "2026-11-17" },
+    );
+    const draft = draftOf(
+      { registration_opening: undefined },
+      { registration_opening: "2026-11-17", registration_opening_time: "10:00" },
+    );
+
+    const { ops } = buildBatch(draft, view, ME);
+
+    expect(summary(ops)).toEqual(["update formats", "update formats", "update events"]);
+    expect(ops[0]).toMatchObject({
+      id: "f42",
+      body: { registration_opening: "2026-11-17", registration_opening_time: "10:00" },
+    });
+  });
+
+  test("une épreuve nouvelle avec son ouverture est créée après la course", () => {
+    const view = stored();
+    const draft = draftOf({});
+    draft.formats.push({
+      race_type: trailType.id,
+      distance_km: 10,
+      registration_opening: "2026-11-17",
+    });
+
+    const { ops, formatIds } = buildBatch(draft, view, ME);
+
+    expect(summary(ops)).toEqual([
+      "update formats",
+      "update formats",
+      "update events",
+      "create formats",
+    ]);
+    expect(ops[3]).toMatchObject({
+      id: formatIds[2],
+      body: { event: "event", registration_opening: "2026-11-17", registration_opening_time: "" },
+    });
+  });
+
+  test("une course au mois : l'ouverture de l'épreuve va jusqu'au dernier jour du mois", () => {
+    const month = { start_date: "2026-12-01", end_date: "2026-12-31", date_precision: "month" };
+    const view = stored({ ...month, registration_deadline: "" });
+    const draftAt = (day: string) => {
+      const draft = draftOf(
+        { ...month, date_precision: "month", registration_deadline: undefined },
+        { registration_opening: day },
+      );
+      return draft;
+    };
+
+    // The 20th is before the last day of December: nothing waits.
+    const early = buildBatch(draftAt("2026-12-20"), view, ME).ops;
+    expect(at(early, "f42")).toHaveLength(1);
+    expect(at(early, "f42")[0]?.body).toMatchObject({ registration_opening: "2026-12-20" });
+
+    // The 2nd of January is after it: the stored event refuses it for now.
+    const late = buildBatch(draftAt("2027-01-02"), view, ME).ops;
+    expect(at(late, "f42")[0]?.body).toMatchObject({ registration_opening: "" });
   });
 });

@@ -23,8 +23,8 @@ var ports = []struct {
 	goPort string
 	sum    string
 }{
-	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "23c83c1518a3f4e8c37392bb57b6292b0664644bd2fc148bb6a7b0ce4a76a076"},
-	{"features/events/formDraft.ts", "eventEndDate and shortens of plan.go and race_writes.go", "778c3294797d2c1087d3348cfc51cf9d9f46f29e53f71b23b212b507347ad792"},
+	{"features/events/saveEvent.ts", "planBatch (buildBatch) of plan.go, withXmlDeclaration of gpx.go", "b9e83bf092564130232807cf8500b9b63043f1a25e5551743914e77005bdca83"},
+	{"features/events/formDraft.ts", "eventEndDate and shortens of plan.go and race_writes.go", "563c76550aef24010ac705f86bb596aca9bf2eb9efff764b6c1382c2561e41bf"},
 	{"lib/dates.ts", "lastRaceDay of views.go, participationRow.lastDay of home.go", "674bc31333e6cac072e999937f5bcde51a0593c7abbf65db609999654143027e"},
 	{"features/home/MyUpcoming.tsx", "upcomingOf of home.go", "a141677cfd243d478a63a3d51a0c4269bcf760f73017d600532e1a0aba40620f"},
 	{"features/events/duplicates.ts", "duplicates.go", "b34613d9a40541a03f85631164a31aade82ef46b591b760e72265e49a9c333bf"},

@@ -233,3 +233,11 @@ export async function savedEvent(router: Awaited<ReturnType<typeof renderForm>>[
     expect(router.state.location.pathname).toMatch(/^\/evenements\/[a-z0-9]{15}$/);
   });
 }
+
+/** The box that gives a format its own opening, and the day and the time it then shows. */
+export const formatOpeningToggle = (row: Row) =>
+  row.getByRole("checkbox", { name: fr.form.formatOpeningToggle });
+export const formatOpeningDay = (row: Row) =>
+  row.getByLabelText(fr.form.formatOpening, { exact: true });
+export const formatOpeningTime = (row: Row) =>
+  row.getByLabelText(fr.form.formatOpeningTime, { exact: true });
