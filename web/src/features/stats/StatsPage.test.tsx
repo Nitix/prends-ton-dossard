@@ -21,6 +21,7 @@ import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { spaceGaps } from "../../test/gaps";
 import { spokenText } from "../../test/spoken";
+import { MIN_TARGET } from "../../test/touchTarget";
 import {
   aliceRunner,
   bobRunner,
@@ -32,10 +33,10 @@ import {
 } from "../events/testFixture";
 import { validateStatsSearch } from "./search";
 import { STATS_EXPAND } from "./stats";
-import { StatsPage } from "./StatsPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { StatsPage } from "./StatsPage";
 
 type Rec = Record<string, unknown>;
 
@@ -187,7 +188,7 @@ test("StatsPage — le tableau de l'année, avec un lien par coureur", async () 
     `/coureurs/${bobRunner.id}`,
   );
   // The link is a tap target.
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("StatsPage — sur un téléphone, une carte de tuiles par coureur, sans défilement de côté ; dès sm, un tableau", async () => {
@@ -296,7 +297,7 @@ test("StatsPage — les flèches changent l'année dans l'URL", async () => {
   await expect.element(screen.getByRole("table")).toBeVisible();
 
   const previous = screen.getByRole("link", { name: fr.stats.previousYear });
-  expect(previous.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(previous.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await previous.click();
 
   // The year is in the address, and the page follows it.

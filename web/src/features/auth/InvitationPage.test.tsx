@@ -17,10 +17,11 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { TodayProvider } from "../../lib/useToday";
-import { InvitationPage } from "./InvitationPage";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { InvitationPage } from "./InvitationPage";
 
 const LOOKUP = "/api/app/invitations/lookup";
 const ACCEPT = "/api/app/invitations/accept";
@@ -263,8 +264,8 @@ test("InvitationPage — les champs ont les bons autocomplete, et le bouton fait
   await expect.element(password(screen)).toHaveAttribute("type", "password");
   await expect.element(confirmation(screen)).toHaveAttribute("type", "password");
   const button = screen.getByRole("button", { name: fr.auth.createAccount }).element();
-  expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-  expect(email(screen).element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
+  expect(email(screen).element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("InvitationPage — réinitialisation : pas de champ email", async () => {
@@ -463,7 +464,7 @@ test("InvitationPage — une panne réseau à la vérification propose de réess
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
   await expect.element(email(screen)).not.toBeInTheDocument();
   const retry = screen.getByRole("button", { name: fr.common.retry });
-  expect(retry.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(retry.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await retry.click();
 
   await expect.element(screen.getByRole("heading")).toHaveTextContent(fr.auth.welcome("Sam"));

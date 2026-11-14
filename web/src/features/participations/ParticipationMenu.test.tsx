@@ -12,6 +12,7 @@ import type { ParticipationRecord, RunnerRecord } from "../../lib/types";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { clickReachable } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView, type EventView } from "../events/api";
 import {
   aliceRunner,
@@ -23,11 +24,11 @@ import {
   pNinaUndecided,
   withParticipations,
 } from "../events/testFixture";
-import { ParticipationMenu } from "./ParticipationMenu";
 
 // The tap targets and the place of the menu are a matter of the styles, which
 // are not loaded otherwise.
 import "../../styles.css";
+import { ParticipationMenu } from "./ParticipationMenu";
 
 type Rec = Record<string, unknown>;
 
@@ -178,8 +179,8 @@ test("ParticipationMenu — le bouton fait au moins 44 px, et son nom dit pour q
   const { screen } = await renderMenu();
 
   const rect = trigger(screen).element().getBoundingClientRect();
-  expect(rect.width).toBeGreaterThanOrEqual(44);
-  expect(rect.height).toBeGreaterThanOrEqual(44);
+  expect(rect.width).toBeGreaterThanOrEqual(MIN_TARGET);
+  expect(rect.height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("ParticipationMenu — le menu s'ouvre à côté de son bouton, dans l'écran", async () => {
@@ -202,7 +203,7 @@ test("ParticipationMenu — propose les cinq statuts, marque celui d'aujourd'hui
   for (const status of ["interested", "registered", "finished", "dnf", "dns"] as const) {
     const item = screen.getByRole("button", { name: fr.status[status] });
     await expect.element(item).toBeVisible();
-    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   // Bob is "interested".
   await expect
@@ -382,7 +383,7 @@ test("ParticipationMenu — à l'événement : Intéressé et Supporteur, puis C
   expect(interested.element().textContent).toContain("✓");
   expect(supporter.element().textContent).not.toContain("✓");
   for (const item of [interested, supporter]) {
-    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 
@@ -468,7 +469,7 @@ test("ParticipationMenu — à l'événement : ni Inscrit, ni Terminé, ni Aband
   const remove = screen.getByRole("button", { name: fr.common.remove });
   await expect.element(remove).toBeVisible();
   for (const item of [chooseFormat(screen), confirm, remove]) {
-    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(item.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 
@@ -818,7 +819,7 @@ test("ParticipationMenu — « Saisir le résultat » pour qui peut modifier, «
   await expect.element(enterResult(none.screen)).toBeVisible();
   await expect.element(editResult(none.screen)).not.toBeInTheDocument();
   expect(enterResult(none.screen).element().getBoundingClientRect().height).toBeGreaterThanOrEqual(
-    44,
+    MIN_TARGET,
   );
   // After the statuses, with the other actions: it is not a status.
   expect(itemsOf(trigger(none.screen).element())).toEqual([

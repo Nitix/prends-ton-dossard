@@ -21,6 +21,7 @@ import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import {
   aliceRunner,
   bobRunner,
@@ -39,11 +40,11 @@ import {
   withParticipations,
   withStatus,
 } from "../events/testFixture";
-import { HomePage } from "./HomePage";
 
 // The tap targets and the dashes are a matter of the styles, which are not
 // loaded otherwise.
 import "../../styles.css";
+import { HomePage } from "./HomePage";
 
 type Rec = Record<string, unknown>;
 
@@ -1057,8 +1058,8 @@ test("Inscriptions à faire — zones tactiles d'au moins 44 px", async () => {
   ];
   for (const target of targets) {
     const { width, height } = target.element().getBoundingClientRect();
-    expect(width).toBeGreaterThanOrEqual(44);
-    expect(height).toBeGreaterThanOrEqual(44);
+    expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   await page.viewport(FRAME.width, FRAME.height);
 });
@@ -1497,8 +1498,8 @@ test("Résultats à saisir — zones tactiles d'au moins 44 px", async () => {
   ];
   for (const target of targets) {
     const { width, height } = target.element().getBoundingClientRect();
-    expect(width).toBeGreaterThanOrEqual(44);
-    expect(height).toBeGreaterThanOrEqual(44);
+    expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   await page.viewport(FRAME.width, FRAME.height);
 });
@@ -2166,8 +2167,8 @@ test("LatestComments — le lien de l'événement fait au moins 44 px", async ()
     .getByRole("link", { name: "Trail des Crêtes" })
     .element()
     .getBoundingClientRect();
-  expect(width).toBeGreaterThanOrEqual(44);
-  expect(height).toBeGreaterThanOrEqual(44);
+  expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+  expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
   await page.viewport(FRAME.width, FRAME.height);
 });
 
@@ -2362,8 +2363,8 @@ test("HomePage — zones tactiles d'au moins 44 px", async () => {
   ];
   for (const target of targets) {
     const { width, height } = target.element().getBoundingClientRect();
-    expect(width).toBeGreaterThanOrEqual(44);
-    expect(height).toBeGreaterThanOrEqual(44);
+    expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   await page.viewport(FRAME.width, FRAME.height);
 });

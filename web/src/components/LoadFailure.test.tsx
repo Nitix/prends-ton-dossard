@@ -6,10 +6,11 @@ import { en } from "../i18n/en";
 import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { buttonOf, clickTwice } from "../test/busyButton";
-import { LoadFailure } from "./LoadFailure";
+import { MIN_TARGET } from "../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../styles.css";
+import { LoadFailure } from "./LoadFailure";
 
 /** A page: its title, which takes the focus, and the failure under it. */
 function Page({ onRetry }: { onRetry: () => Promise<unknown> | void }) {
@@ -44,8 +45,8 @@ test("LoadFailure — le message, et un bouton Réessayer d'au moins 44 px", asy
   await expect.element(screen.getByRole("alert")).toHaveTextContent(fr.errors.generic);
   await expect.element(retryButton(screen)).toBeVisible();
   const { width, height } = retryButton(screen).element().getBoundingClientRect();
-  expect(width).toBeGreaterThanOrEqual(44);
-  expect(height).toBeGreaterThanOrEqual(44);
+  expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+  expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("LoadFailure — en anglais", async () => {

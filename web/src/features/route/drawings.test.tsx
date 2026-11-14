@@ -7,13 +7,14 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { isTouchDevice } from "../../test/support";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { ElevationProfile } from "./ElevationProfile";
 import { simplify, toTrack, type TrackPoint } from "./gpx";
 import type { KmRange } from "./range";
-import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_FILLS, SLOPE_ZONES, type SlopeZone } from "./slope";
 
 // The colours are classes of Tailwind, which the styles load.
 import "../../styles.css";
+import { SLOPE_COLORS, SLOPE_COLORS_DARK, SLOPE_FILLS, SLOPE_ZONES, type SlopeZone } from "./slope";
 
 /** A winding track of n points that climbs from 450 m to 750 m and goes back down, about 40 km. */
 function mountain(n = 400): TrackPoint[] {
@@ -704,7 +705,7 @@ test("ElevationProfile — les boutons Zoomer, Dézoomer et Vue entière", async
   expect(onRange).not.toHaveBeenCalled();
   // They are tap targets.
   for (const target of [zoomIn, zoomOut, whole]) {
-    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 
   await zoomIn.click();

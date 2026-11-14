@@ -19,6 +19,7 @@ import "../styles.css";
 import { fontsReady } from "../test/fontsReady";
 import { FRAME } from "../test/frame";
 import { emulateMedia, resetMedia } from "../test/media";
+import { MIN_TARGET } from "../test/touchTarget";
 import { AppShell } from "./AppShell";
 import { DANGER, PRIMARY } from "./buttons";
 
@@ -130,7 +131,7 @@ test("AppShell — le nom de l'appli dans l'en-tête mène à l'accueil, avec un
   const name = screen.getByRole("banner").getByRole("link", link(fr.common.appName));
   await expect.element(name).toHaveAttribute("href", "/");
   const box = name.element().getBoundingClientRect();
-  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 // --- Forced colours (a high contrast mode of Windows) ---
@@ -259,8 +260,8 @@ test("AppShell — zones tactiles d'au moins 44 px", async () => {
       .getByRole("link", link(name))
       .element()
       .getBoundingClientRect();
-    expect(width, `${name} width`).toBeGreaterThanOrEqual(44);
-    expect(height, `${name} height`).toBeGreaterThanOrEqual(44);
+    expect(width, `${name} width`).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(height, `${name} height`).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

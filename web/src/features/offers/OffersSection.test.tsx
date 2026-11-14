@@ -11,14 +11,15 @@ import { ensureTemporal } from "../../lib/temporal";
 import type { OfferKind } from "../../lib/types";
 import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
 import type { Me } from "../participations/permissions";
-import { OffersSection } from "./OffersSection";
 
 // The tap targets and the white space of the notes are a matter of the styles,
 // which are not loaded otherwise.
 import "../../styles.css";
+import { OffersSection } from "./OffersSection";
 
 type Rec = Record<string, unknown>;
 
@@ -1582,7 +1583,7 @@ describe("tap targets", () => {
     heights.push(await heightOf(button(offerOf(passenger.screen, "Alice"), fr.offers.leave.ride)));
 
     expect(heights).toHaveLength(5);
-    for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
+    for (const height of heights) expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
     await page.viewport(FRAME.width, FRAME.height);
   });
 
@@ -1600,7 +1601,7 @@ describe("tap targets", () => {
     heights.push(await heightOf(edit(ride)), await heightOf(addSomeone(ride)));
 
     expect(heights).toHaveLength(3);
-    for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
+    for (const height of heights) expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
     await page.viewport(FRAME.width, FRAME.height);
   });
 });

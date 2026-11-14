@@ -21,13 +21,14 @@ import { FRAME } from "../../test/frame";
 import { spaceGaps } from "../../test/gaps";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { isTouchDevice } from "../../test/support";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toTrack, type TrackPoint } from "./gpx";
 import { RouteSection } from "./RouteSection";
 import { SLOPE_COLORS, SLOPE_COLORS_DARK, type SlopeZone } from "./slope";
-import { pointAtKm, trackIndex } from "./trackIndex";
 
 // The colours and the sizes of the drawings are a matter of the styles.
 import "../../styles.css";
+import { pointAtKm, trackIndex } from "./trackIndex";
 
 type Rec = Record<string, unknown>;
 
@@ -185,7 +186,7 @@ test("RouteSection — chiffres, carte, profil et liens", async () => {
   expect(rel.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
   // They are tap targets.
   for (const link of [download, open]) {
-    expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

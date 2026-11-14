@@ -20,6 +20,7 @@ import { TodayProvider } from "../../lib/useToday";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { tapAfterScroll } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import {
   aliceRunner,
   bobRunner,
@@ -34,11 +35,11 @@ import {
   withStatus,
 } from "../events/testFixture";
 import { AgendaPage } from "./AgendaPage";
-import { validateAgendaSearch } from "./search";
 
 // The tap targets and the choice between the phone and the desktop render are
 // matters of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { validateAgendaSearch } from "./search";
 
 type Rec = Record<string, unknown>;
 
@@ -858,8 +859,8 @@ test("AgendaPage — zones tactiles d'au moins 44 px, sans défilement horizonta
       expect(targets).toHaveLength(35 + 5);
       for (const target of targets) {
         const { width: w, height: h } = target.getBoundingClientRect();
-        expect(w, `width at ${width} px`).toBeGreaterThanOrEqual(44);
-        expect(h, `height at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(w, `width at ${width} px`).toBeGreaterThanOrEqual(MIN_TARGET);
+        expect(h, `height at ${width} px`).toBeGreaterThanOrEqual(MIN_TARGET);
       }
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
       await screen.unmount();

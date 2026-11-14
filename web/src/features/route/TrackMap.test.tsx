@@ -14,13 +14,14 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { isTouchDevice } from "../../test/support";
 import { BLANK_TILE } from "../../test/tiles";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { gateWheel } from "./gestures";
 import { toTrack } from "./gpx";
-import TrackMap, { TILE_ATTRIBUTION, TILE_URL } from "./TrackMap";
 
 // The size of the map and of its buttons are classes of Tailwind and a style of
 // the map, which the page loads.
 import "../../styles.css";
+import TrackMap, { TILE_ATTRIBUTION, TILE_URL } from "./TrackMap";
 
 /** 2.2 km north, with a bend to the east: the start is at the south, the finish at the north. */
 const TRACK = toTrack([
@@ -223,8 +224,8 @@ test("TrackMap — zoom buttons are 44 px, the plain wheel is left to the page",
     const button = screen.getByRole("button", { name });
     await expect.element(button).toBeVisible();
     const { width, height } = button.element().getBoundingClientRect();
-    expect(width).toBeGreaterThanOrEqual(44);
-    expect(height).toBeGreaterThanOrEqual(44);
+    expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 
   // The wheel scrolls the page, as anywhere else: Leaflet cancels a wheel that it zooms with.

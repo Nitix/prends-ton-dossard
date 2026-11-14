@@ -21,6 +21,7 @@ import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { pixelURL } from "../../test/images";
 import { spokenText } from "../../test/spoken";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { EVENT_EXPAND } from "../events/api";
 import {
   aliceRunner,
@@ -34,10 +35,10 @@ import {
   samRunner,
 } from "../events/testFixture";
 import { STATS_EXPAND } from "../stats/stats";
-import { RunnerPage } from "./RunnerPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { RunnerPage } from "./RunnerPage";
 
 type Rec = Record<string, unknown>;
 
@@ -266,7 +267,7 @@ test("RunnerPage — nom, à venir, bilan par année et historique", async () =>
   // The event is a link to its page.
   const link = history.getByRole("link", { name: "Cross de Mai" });
   await expect.element(link).toHaveAttribute("href", "/evenements/event0");
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("RunnerPage — sur un téléphone de 320 px, le nom passe à la ligne entre ses mots, jamais au milieu d'un mot", async () => {

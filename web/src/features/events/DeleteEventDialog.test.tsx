@@ -19,8 +19,12 @@ import { ensureTemporal } from "../../lib/temporal";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { clickReachable, tapAfterScroll } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView, type EventView } from "./api";
 import { DeleteEventDialog } from "./DeleteEventDialog";
+
+// The tap targets are a matter of the styles, which are not loaded otherwise.
+import "../../styles.css";
 import {
   aliceRunner,
   event2Record,
@@ -32,9 +36,6 @@ import {
   pNinaUndecided,
   withParticipations,
 } from "./testFixture";
-
-// The tap targets are a matter of the styles, which are not loaded otherwise.
-import "../../styles.css";
 
 type Rec = Record<string, unknown>;
 
@@ -384,6 +385,6 @@ test("DeleteEventDialog — le bouton rouge et celui d'annulation font au moins 
   await animationsDone();
 
   for (const button of [confirm(screen), screen.getByRole("button", { name: fr.common.cancel })]) {
-    expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });

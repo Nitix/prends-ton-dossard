@@ -10,9 +10,10 @@ import { AMBIENT_KEY, chooseAmbient, readAmbient } from "../../lib/ambient";
 import { SKINS, chooseSkin } from "../../skins";
 import { HeroArt } from "../../skins/carnet/motifs";
 import { isLinuxWebkit } from "../../test/support";
-import { AppearanceSection } from "./AppearanceSection";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 import "../../styles.css";
+import { AppearanceSection } from "./AppearanceSection";
 
 // « Animer le fond » in « Apparence »: the switch that stops the motion of a skin
 // whose background moves (src/skins/README.md, « Motion »; WCAG 2.2.2, moving
@@ -129,8 +130,8 @@ test("« Animer le fond » : au clavier, la barre d'espace le bascule ; une cibl
   const screen = await renderAppearance();
   const control = switchOf(screen);
   const { width, height } = control.element().getBoundingClientRect();
-  expect(width).toBeGreaterThanOrEqual(44);
-  expect(height).toBeGreaterThanOrEqual(44);
+  expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+  expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
 
   control.element().focus();
   await userEvent.keyboard(" ");

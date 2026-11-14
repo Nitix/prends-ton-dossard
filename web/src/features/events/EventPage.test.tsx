@@ -21,7 +21,12 @@ import { TodayProvider } from "../../lib/useToday";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { pixelURL } from "../../test/images";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { EventPage } from "./EventPage";
+
+// The tap targets and the dashes are a matter of the styles, which are not
+// loaded otherwise.
+import "../../styles.css";
 import {
   aliceRunner,
   bobRunner,
@@ -41,10 +46,6 @@ import {
   trailType,
   withParticipations,
 } from "./testFixture";
-
-// The tap targets and the dashes are a matter of the styles, which are not
-// loaded otherwise.
-import "../../styles.css";
 
 type Rec = Record<string, unknown>;
 
@@ -337,7 +338,7 @@ test("EventPage — le lien d'inscription s'ouvre dans un autre onglet, sans don
   await expect.element(link).toHaveAttribute("target", "_blank");
   const rel = link.element().getAttribute("rel") ?? "";
   expect(rel.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("EventPage — sans adresse d'inscription, pas de lien", async () => {
@@ -459,7 +460,7 @@ test("EventPage — l'encadré de rappel pour un coureur intéressé, avec le li
   await expect.element(register).toHaveAttribute("target", "_blank");
   const rel = register.element().getAttribute("rel") ?? "";
   expect(rel.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
-  expect(register.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(register.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   // Just after the information, before the buttons of the page and the formats.
   const info = screen.getByRole("heading", { level: 1, name: "Trail des Crêtes" });
   const firstFormat = screen.getByRole("heading", { level: 2, name: /^Trail 15/ });
@@ -672,7 +673,7 @@ test("EventPage — le nom d'un participant mène à sa page", async () => {
   // Each runner of the formats is a link, on their name: a tap target of its own.
   const link = row(screen, "Alice").getByRole("link", { name: "Alice" });
   await expect.element(link).toHaveAttribute("href", `/coureurs/${aliceRunner.id}`);
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await expect
     .element(row(screen, "Bob").getByRole("link", { name: "Bob" }))
     .toHaveAttribute("href", `/coureurs/${bobRunner.id}`);
@@ -891,7 +892,7 @@ test("EventPage — un non partant n'est pas dans son épreuve mais dans « Non 
   const summary = nonStartersSummary(screen);
   await expect.element(summary).toBeVisible();
   expect(summary.element().tagName).toBe("SUMMARY");
-  expect(summary.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(summary.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   // The list is at the bottom of the page, after the formats.
   expect(
     format(screen, /^Trail 42/)
@@ -1262,7 +1263,7 @@ test("EventPage — les boutons d'action font au moins 44 px", async () => {
     screen.getByRole("link", { name: fr.common.edit }),
     screen.getByRole("button", { name: fr.common.delete }),
   ]) {
-    expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 
@@ -1307,8 +1308,8 @@ test("EventPage — sur un téléphone, « J'y vais » prend la ligne, les autre
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();
-        expect(w, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
-        expect(h, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(w, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(MIN_TARGET);
+        expect(h, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(MIN_TARGET);
         expect(action.scrollWidth, `${action.textContent} at ${width} px`).toBeLessThanOrEqual(
           action.clientWidth,
         );
@@ -1354,8 +1355,8 @@ test("EventPage — sur un téléphone, une action seule au bout prend toute la 
       // Each one a tap target, its words whole, and nothing that scrolls sideways.
       for (const action of actions) {
         const { width: w, height: h } = action.getBoundingClientRect();
-        expect(w, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
-        expect(h, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(44);
+        expect(w, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(MIN_TARGET);
+        expect(h, `${action.textContent} at ${width} px`).toBeGreaterThanOrEqual(MIN_TARGET);
         expect(action.scrollWidth, `${action.textContent} at ${width} px`).toBeLessThanOrEqual(
           action.clientWidth,
         );

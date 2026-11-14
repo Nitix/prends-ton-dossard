@@ -12,13 +12,14 @@ import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { eventLabel } from "../events/eventLabel";
 import { eventRecord, event2Record, f15, f42, trailType } from "../events/testFixture";
 import { DuplicatesPage } from "./DuplicatesPage";
-import { SEARCH_PAUSE_MS } from "./EventPicker";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { SEARCH_PAUSE_MS } from "./EventPicker";
 
 type Rec = Record<string, unknown>;
 type SendOptions = { method?: string; body?: Rec };
@@ -697,8 +698,8 @@ test("DuplicatesPage — les zones tactiles font au moins 44 px, sur un téléph
   ];
   for (const target of targets) {
     const box = target.element().closest("label, button")?.getBoundingClientRect();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
 });

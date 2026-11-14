@@ -10,10 +10,11 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
 import { animationsDone } from "../../test/animations";
-import { ShareLinkDialog } from "./ShareLinkDialog";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { ShareLinkDialog } from "./ShareLinkDialog";
 
 const URL_OF_LINK = "https://courses.example.test/invitation#s3cr3t-t0ken";
 // The route answers in RFC 3339.
@@ -306,7 +307,7 @@ test("ShareLinkDialog — les boutons font au moins 44 px", async () => {
   await animationsDone();
 
   for (const button of [shareButton(screen), copyButton(screen)]) {
-    expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(button.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

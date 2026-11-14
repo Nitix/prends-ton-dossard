@@ -8,10 +8,11 @@ import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { RunnerRecord } from "../lib/types";
 import { imageFile, pixelURL, sizeOf } from "../test/images";
-import { AvatarPicker } from "./AvatarPicker";
+import { MIN_TARGET } from "../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../styles.css";
+import { AvatarPicker } from "./AvatarPicker";
 
 type Rec = Record<string, unknown>;
 
@@ -266,7 +267,7 @@ test("AvatarPicker — les boutons font au moins 44 px", async () => {
   const targets = [...screen.container.querySelectorAll<HTMLElement>("button, label")];
   expect(targets.length).toBe(2);
   const tooSmall = targets
-    .filter((element) => element.getBoundingClientRect().height < 44)
+    .filter((element) => element.getBoundingClientRect().height < MIN_TARGET)
     .map((element) => element.outerHTML);
 
   expect(tooSmall).toEqual([]);

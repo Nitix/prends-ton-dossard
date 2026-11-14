@@ -13,6 +13,7 @@ import { routeTree } from "../../routeTree.gen";
 // The tap targets and the tab bar are a matter of the styles, which are not
 // loaded otherwise.
 import "../../styles.css";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 const session = vi.hoisted(() => ({
   record: null as { id: string; collectionName: string; role: string } | null,
@@ -148,8 +149,8 @@ test("admin/route — les liens du menu de l'admin font au moins 44 px", async (
       .getByRole("link", { name, exact: true })
       .element()
       .getBoundingClientRect();
-    expect(height, `${name} height`).toBeGreaterThanOrEqual(44);
-    expect(width, `${name} width`).toBeGreaterThanOrEqual(44);
+    expect(height, `${name} height`).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(width, `${name} width`).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

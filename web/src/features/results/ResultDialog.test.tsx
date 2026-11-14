@@ -9,11 +9,12 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import type { ParticipationRecord } from "../../lib/types";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { p1 } from "../events/testFixture";
-import { ResultDialog } from "./ResultDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { ResultDialog } from "./ResultDialog";
 
 type Rec = Record<string, unknown>;
 
@@ -509,7 +510,7 @@ test("ResultDialog — les champs et les boutons font au moins 44 px", async () 
     save(screen),
     screen.getByRole("button", { name: fr.common.cancel }),
   ]) {
-    expect(control.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(control.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

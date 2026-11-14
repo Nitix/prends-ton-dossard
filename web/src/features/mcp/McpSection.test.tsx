@@ -10,11 +10,12 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { clickReachable } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { claudeCommand } from "./command";
-import { McpSection } from "./McpSection";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { McpSection } from "./McpSection";
 
 type Rec = Record<string, unknown>;
 
@@ -287,7 +288,7 @@ test("McpSection — sans jeton, « Aucun jeton pour l'instant. » et « Nouveau
   await expect.element(section(screen).getByText(fr.mcp.empty)).toBeVisible();
   const create = button(screen, fr.mcp.create);
   await expect.element(create).toBeVisible();
-  expect(create.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(create.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await expect.element(section(screen).getByText(fr.mcp.limit(5))).not.toBeInTheDocument();
   await expect.element(rows(screen)).not.toBeInTheDocument();
   expect(mocks.send).toHaveBeenCalledWith(PATH, { method: "GET" });
@@ -317,7 +318,7 @@ test("McpSection — la liste montre le nom, la création et la dernière utilis
     const revoke = button(screen, fr.mcp.revokeLabel(row.name));
     await expect.element(revoke).toBeVisible();
     await expect.element(revoke).toHaveTextContent(fr.mcp.revoke);
-    expect(revoke.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(revoke.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   // Nothing is a secret there: the list holds a name and two dates.
   expect(section(screen).element().textContent).not.toContain("ptd_");
@@ -365,7 +366,7 @@ test("McpSection — créer un jeton le montre une fois, avec la commande de Cla
   await expect.element(inDialog(screen, fr.mcp.createSubmit)).not.toBeInTheDocument();
   const done = inDialog(screen, fr.mcp.done);
   await expect.element(done).toBeVisible();
-  expect(done.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(done.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   expect(changes()).toEqual([["POST", PATH, { name: "Claude sur mon PC" }]]);
 
   // The token is in the window and in no cache of the queries, which the list
@@ -396,7 +397,7 @@ test("McpSection — « Copier le jeton » et « Copier la commande » copient",
   await expect.element(status).toBeEmptyDOMElement();
 
   const copyToken = inDialog(screen, fr.mcp.copyToken);
-  expect(copyToken.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(copyToken.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await copyToken.click();
 
   expect(writeText).toHaveBeenCalledExactlyOnceWith(tokenOf(1));
@@ -406,7 +407,7 @@ test("McpSection — « Copier le jeton » et « Copier la commande » copient",
   await expectToast(fr.mcp.tokenCopied);
 
   const copyCommand = inDialog(screen, fr.mcp.copyCommand);
-  expect(copyCommand.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(copyCommand.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await copyCommand.click();
 
   expect(writeText).toHaveBeenLastCalledWith(claudeCommand(SERVER, tokenOf(1)));
@@ -681,7 +682,7 @@ test("McpSection — révoquer demande confirmation, puis le titre prend le focu
   // Then it is revoked: the token of that row, and no other.
   await revoke.click();
   const confirm = inDialog(screen, fr.mcp.revoke);
-  expect(confirm.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(confirm.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   // The list loses the row after the window has closed: the focus is not left to
   // the order of the two (the browser gives it back to the button, which is then removed).
   lateList(client);

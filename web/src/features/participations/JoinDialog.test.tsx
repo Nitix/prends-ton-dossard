@@ -10,6 +10,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView, type EventView } from "../events/api";
 import { SUPPORT, UNDECIDED } from "../events/participants";
 import {
@@ -21,10 +22,10 @@ import {
   withParticipations,
 } from "../events/testFixture";
 import { JoinDialog } from "./JoinDialog";
-import type { Me } from "./permissions";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import type { Me } from "./permissions";
 
 type Rec = Record<string, unknown>;
 
@@ -428,7 +429,7 @@ test("JoinDialog — les champs et les boutons font au moins 44 px", async () =>
     save(screen),
     screen.getByRole("button", { name: fr.common.cancel }),
   ]) {
-    expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

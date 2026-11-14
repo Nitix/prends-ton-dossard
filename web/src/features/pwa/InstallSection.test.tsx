@@ -5,12 +5,13 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { buttonOf, clickTwice } from "../../test/busyButton";
+import { MIN_TARGET } from "../../test/touchTarget";
 import type { InstallEnvironment } from "./environment";
 import { captureInstallPrompt } from "./installPrompt";
-import { InstallSection } from "./InstallSection";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { InstallSection } from "./InstallSection";
 
 let stop: (() => void) | undefined;
 
@@ -64,7 +65,9 @@ test("InstallSection — le bouton après beforeinstallprompt, qui appelle promp
   expect(event.defaultPrevented).toBe(true);
   await expect.element(installButton(screen)).toBeVisible();
   await expect.element(screen.getByText(fr.install.other)).not.toBeInTheDocument();
-  expect(installButton(screen).element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(installButton(screen).element().getBoundingClientRect().height).toBeGreaterThanOrEqual(
+    MIN_TARGET,
+  );
 
   await installButton(screen).click();
 

@@ -17,6 +17,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { pixelURL } from "../../test/images";
 import { spokenText } from "../../test/spoken";
+import { MIN_TARGET } from "../../test/touchTarget";
 import {
   aliceRunner,
   bobRunner,
@@ -26,10 +27,10 @@ import {
   fLyon,
   p1,
 } from "../events/testFixture";
-import { ProfilePage } from "./ProfilePage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { ProfilePage } from "./ProfilePage";
 
 type Rec = Record<string, unknown>;
 
@@ -339,7 +340,7 @@ test("ProfilePage — « Mes prochaines courses » du plus proche au plus lointa
   ] as const) {
     const link = upcoming.getByRole("link", { name });
     await expect.element(link).toHaveAttribute("href", `/evenements/${id}`);
-    expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   // « Non partant » is not a race to come.
   await expect.element(upcoming.getByText(fr.status.dns)).not.toBeInTheDocument();
@@ -478,7 +479,7 @@ test("ProfilePage — un lien « Réglages » mène à /profil/reglages", async 
   const link = screen.getByRole("link", { name: fr.profile.settings });
   await expect.element(link).toBeVisible();
   expect(link.element().getAttribute("href")).toBe("/profil/reglages");
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   // At the top of the page: under the title, before what is to come.
   expect(follows(screen.getByRole("heading", { level: 1 }).element(), link.element())).toBe(true);
   expect(follows(link.element(), section(screen, fr.profile.upcoming).element())).toBe(true);
@@ -493,7 +494,7 @@ test("ProfilePage — le lien vers les statistiques du groupe est là, avant le 
   const link = screen.getByRole("link", { name: fr.stats.link });
   await expect.element(link).toBeVisible();
   expect(link.element().getAttribute("href")).toBe("/stats");
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   await expect.element(section(screen, fr.runner.years)).toBeVisible();
   expect(follows(section(screen, fr.profile.upcoming).element(), link.element())).toBe(true);
   expect(follows(link.element(), section(screen, fr.runner.years).element())).toBe(true);

@@ -17,10 +17,11 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { imageFile, pixelURL, sizeOf } from "../../test/images";
 import { emulateMedia, resetMedia } from "../../test/media";
-import { SettingsPage } from "./SettingsPage";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { SettingsPage } from "./SettingsPage";
 
 type Rec = Record<string, unknown>;
 
@@ -265,7 +266,7 @@ test("SettingsPage — « Retour au profil » est en haut, avant le titre et les
   const back = screen.getByRole("link", { name: fr.profile.backToProfile });
   await expect.element(back).toBeVisible();
   expect(back.element().getAttribute("href")).toBe("/profil");
-  expect(back.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(back.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   expect(follows(back.element(), screen.getByRole("heading", { level: 1 }).element())).toBe(true);
   expect(follows(back.element(), section(screen, fr.avatar.title).element())).toBe(true);
 
@@ -362,7 +363,7 @@ test("SettingsPage — Apparence : Auto, Clair, Sombre", async () => {
   await expect.element(dark).not.toBeChecked();
   // Each choice is a tap target of 44 px at least.
   for (const radio of [auto, light, dark]) {
-    expect(radio.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(radio.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 
   // A choice applies at once, and is kept on the device.
@@ -532,7 +533,7 @@ test("SettingsPage — les boutons et les champs font au moins 44 px de haut", a
       "button, input:not([type=file]), label:has(input[type=file])",
     ),
   ]
-    .filter((element) => element.getBoundingClientRect().height < 44)
+    .filter((element) => element.getBoundingClientRect().height < MIN_TARGET)
     .map((element) => element.outerHTML);
 
   expect(tooSmall).toEqual([]);

@@ -15,6 +15,7 @@ import { emulateMedia, resetMedia } from "../../test/media";
 import { isLinuxWebkit } from "../../test/support";
 
 import "../../styles.css";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // « Thème » in « Apparence », on the settings page: the skins of the app as
 // cards (a name, two colours, a sample of its font), then « Clair ou sombre »
@@ -214,7 +215,7 @@ test("Thème — une carte par skin, Crête d'abord et cochée, avant « Clair o
     .toBeChecked();
   // A tap target of 44 px at least.
   for (const radio of radios.elements()) {
-    expect(radio.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(radio.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   // « Thème » first, then the modes, named for what they are beside it.
   await expect.element(screen.getByText(fr.settings.mode, { exact: true })).toBeVisible();

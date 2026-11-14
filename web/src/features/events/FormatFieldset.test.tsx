@@ -6,6 +6,7 @@ import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { emulateMedia, resetMedia } from "../../test/media";
 import { pressFocused } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import {
   base,
   distance,
@@ -381,8 +382,8 @@ test("FormatFieldset — le résumé de « Options avancées » fait au moins 44
     await fontsReady();
 
     const box = moreOptions(row).element().getBoundingClientRect();
-    expect(box.height).toBeGreaterThanOrEqual(44);
-    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(box.width).toBeGreaterThanOrEqual(MIN_TARGET);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
   } finally {
     await page.viewport(FRAME.width, FRAME.height);
@@ -437,7 +438,7 @@ test("FormatFieldset — le résumé le plus long, en anglais, tient sur un tél
     const opener = moreOptions(row).element();
     // Three measures in it: it may take two lines, and never more than the screen.
     expect(opener.textContent).toMatch(/^More options: distance, elevation gain,? and duration$/);
-    expect(opener.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(opener.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
     expect(opener.getBoundingClientRect().right).toBeLessThanOrEqual(375);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
   } finally {

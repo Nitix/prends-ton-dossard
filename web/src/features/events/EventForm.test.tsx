@@ -8,6 +8,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { animationsDone } from "../../test/animations";
 import { pressFocused } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { EditEventPage } from "./EventForm";
 import {
   GPX,
@@ -1270,11 +1271,11 @@ test("EventForm — les champs et les boutons font au moins 44 px de haut", asyn
   await animationsDone();
   for (const target of targets) {
     const element = target.element();
-    expect(element.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(element.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   // The checkbox is small, its label is the tap target.
   const label = joinBox(screen).element().closest("label");
-  expect(label?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(label?.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("EventForm — en anglais, les textes sont anglais", async () => {
@@ -1620,7 +1621,7 @@ test("EventForm — le champ de la trace et ses boutons font au moins 44 px de h
   await expect.element(reuse(row)).toBeVisible();
 
   for (const target of [gpxField(row), routeUrl(row), reuse(row), removeTrack(row)]) {
-    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(target.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   expect(gpxField(row).element().getAttribute("accept")).toBe(".gpx,application/gpx+xml");
 });

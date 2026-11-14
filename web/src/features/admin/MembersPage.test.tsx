@@ -21,10 +21,11 @@ import { ensureTemporal } from "../../lib/temporal";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { imageFile, pixelURL } from "../../test/images";
-import { MembersPage } from "./MembersPage";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { MembersPage } from "./MembersPage";
 
 type Rec = Record<string, unknown>;
 type SendOptions = { method?: string; body?: Rec };
@@ -1071,7 +1072,7 @@ test("MembersPage — toutes les actions font au moins 44 px, y compris sur un p
   expect(buttons.length).toBeGreaterThan(10);
   const tooSmall = buttons.filter((button) => {
     const { height, width } = button.getBoundingClientRect();
-    return height < 44 || width < 44;
+    return height < MIN_TARGET || width < MIN_TARGET;
   });
   expect(tooSmall.map((button) => button.textContent)).toEqual([]);
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(

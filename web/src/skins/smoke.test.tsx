@@ -27,9 +27,10 @@ import { fontsReady } from "../test/fontsReady";
 import { FRAME } from "../test/frame";
 import { withoutIds } from "../test/ids";
 import { emulateMedia, resetMedia } from "../test/media";
-import type { Mode, Skin } from "./types";
+import { MIN_TARGET } from "../test/touchTarget";
 
 import "../styles.css";
+import type { Mode, Skin } from "./types";
 
 // The main pages of the app, drawn in each skin and in each of its modes, on
 // the narrowest phone (320 px): the home page, the page of an event with the
@@ -198,9 +199,11 @@ async function framed(screen: Screen, { least = 6 } = {}) {
   await fontsReady();
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
   // Not an empty search: the tabs, the « + », and what the page has (`least` in all).
-  expect(targets().length).toBeGreaterThanOrEqual(least);
+  // Polled: the heading of a page is there before what the page loads (run 25, Firefox, forced
+  // colours: 5 targets, the tabs and the « + », a moment before the sixth). It is not a missing border.
+  await expect.poll(() => targets().length).toBeGreaterThanOrEqual(least);
   const small = targets()
-    .filter((element) => element.getBoundingClientRect().height < 44)
+    .filter((element) => element.getBoundingClientRect().height < MIN_TARGET)
     .map(
       (element) =>
         `${element.getBoundingClientRect().height}px: ${element.outerHTML.slice(0, 120)}`,
@@ -444,7 +447,7 @@ for (const { skin, mode } of CASES) {
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(WIDTH);
     const small = targets(dialog.element())
-      .filter((element) => element.getBoundingClientRect().height < 44)
+      .filter((element) => element.getBoundingClientRect().height < MIN_TARGET)
       .map(
         (element) =>
           `${element.getBoundingClientRect().height}px: ${element.outerHTML.slice(0, 120)}`,

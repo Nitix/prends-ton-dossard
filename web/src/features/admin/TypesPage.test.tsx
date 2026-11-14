@@ -12,10 +12,11 @@ import { animationsDone } from "../../test/animations";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { clickReachable, pressFocused } from "../../test/pressFocused";
-import { TypesPage } from "./TypesPage";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { TypesPage } from "./TypesPage";
 
 type Rec = Record<string, unknown>;
 
@@ -505,8 +506,8 @@ test("TypesPage — les zones tactiles font au moins 44 px, sur un téléphone",
   ];
   for (const target of targets) {
     const { width, height } = target.element().getBoundingClientRect();
-    expect(height).toBeGreaterThanOrEqual(44);
-    expect(width).toBeGreaterThanOrEqual(44);
+    expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
 
@@ -517,11 +518,11 @@ test("TypesPage — les zones tactiles font au moins 44 px, sur un téléphone",
   await animationsDone();
   for (const label of MEASURE_LABELS) {
     const row = measureBox(dialog, label).element().closest("label");
-    expect(row?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(row?.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   for (const name of [fr.common.save, fr.common.cancel, fr.common.close]) {
     const button = dialog.getByRole("button", { name, exact: true }).element();
-    expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375);
 });

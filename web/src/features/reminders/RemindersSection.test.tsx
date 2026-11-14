@@ -6,10 +6,11 @@ import { render } from "vitest-browser-react";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
-import { RemindersSection } from "./RemindersSection";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { RemindersSection } from "./RemindersSection";
 
 type Rec = Record<string, unknown>;
 
@@ -138,7 +139,7 @@ test("RemindersSection — le choix est celui du serveur, et les cibles font 44 
   await expect.element(radio(screen, fr.reminders.hour)).toBeChecked();
   for (const label of [fr.reminders.day, fr.reminders.hour, fr.reminders.both, fr.reminders.none]) {
     const box = radio(screen, label).element().getBoundingClientRect();
-    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

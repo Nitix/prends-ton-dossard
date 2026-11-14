@@ -17,9 +17,13 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { FRAME } from "../../test/frame";
 import { pixelURL } from "../../test/images";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { EVENT_EXPAND } from "./api";
 import { ListPage } from "./ListPage";
 import { validateListSearch } from "./search";
+
+// The tap targets are a matter of the styles, which are not loaded otherwise.
+import "../../styles.css";
 import {
   aliceRunner,
   bobRunner,
@@ -39,9 +43,6 @@ import {
   withParticipations,
   withStatus,
 } from "./testFixture";
-
-// The tap targets are a matter of the styles, which are not loaded otherwise.
-import "../../styles.css";
 
 type Rec = Record<string, unknown>;
 
@@ -223,7 +224,7 @@ test("ListPage — le lien « Statistiques » est en haut de la vue « passées 
   await expect.element(past.screen.getByText("Cross de Mai")).toBeVisible();
   const link = past.screen.getByRole("link", { name: fr.stats.link });
   expect(link.element().getAttribute("href")).toBe("/stats");
-  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(link.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   // At the top: before the filters and the events.
   const title = past.screen.getByRole("heading", { level: 1 }).element();
   const filters = past.screen.getByRole("group").element();
@@ -860,8 +861,8 @@ test("ListPage — zones tactiles d'au moins 44 px", async () => {
   ];
   for (const target of targets) {
     const { width, height } = target.element().getBoundingClientRect();
-    expect(width).toBeGreaterThanOrEqual(44);
-    expect(height).toBeGreaterThanOrEqual(44);
+    expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
   await page.viewport(FRAME.width, FRAME.height);
 });

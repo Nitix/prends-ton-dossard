@@ -5,10 +5,11 @@ import { render } from "vitest-browser-react";
 import { fr } from "../i18n/fr";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { fontsReady } from "../test/fontsReady";
-import { TimeInput } from "./TimeInput";
+import { MIN_TARGET } from "../test/touchTarget";
 
 // The size of the fields is a matter of the styles, which are not loaded otherwise.
 import "../styles.css";
+import { TimeInput } from "./TimeInput";
 
 const LABEL = "Temps";
 const noop = vi.fn<(value: number | undefined) => void>();
@@ -149,7 +150,7 @@ test("TimeInput — un groupe nommé par son libellé, trois champs nommés par 
 
   await expect.element(screen.getByRole("group", { name: LABEL })).toBeVisible();
   for (const field of [hours(screen), minutes(screen), seconds(screen)]) {
-    expect(field.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(field.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

@@ -13,12 +13,13 @@ import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { FRAME } from "../../test/frame";
 import { pressFocused } from "../../test/pressFocused";
+import { MIN_TARGET } from "../../test/touchTarget";
 import type { Me } from "../participations/permissions";
-import { CommentsSection } from "./CommentsSection";
 
 // The tap targets and the white space of the text are a matter of the styles,
 // which are not loaded otherwise.
 import "../../styles.css";
+import { CommentsSection } from "./CommentsSection";
 
 type Rec = Record<string, unknown>;
 
@@ -764,8 +765,8 @@ describe("tap targets", () => {
     ];
     for (const target of targets) {
       const { width, height } = target.element().getBoundingClientRect();
-      expect(width).toBeGreaterThanOrEqual(44);
-      expect(height).toBeGreaterThanOrEqual(44);
+      expect(width).toBeGreaterThanOrEqual(MIN_TARGET);
+      expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
     }
     await page.viewport(FRAME.width, FRAME.height);
   });

@@ -9,10 +9,11 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { CalendarSection } from "./CalendarSection";
+import { MIN_TARGET } from "../../test/touchTarget";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { CalendarSection } from "./CalendarSection";
 
 type Rec = Record<string, unknown>;
 
@@ -213,7 +214,7 @@ test("CalendarSection — créer affiche le lien, avec Copier", async () => {
   await animationsDone();
   expect(
     buttonOf(button(screen, fr.calendar.copy)).getBoundingClientRect().height,
-  ).toBeGreaterThanOrEqual(44);
+  ).toBeGreaterThanOrEqual(MIN_TARGET);
 
   // Once the page is left, the link is not on screen any more: the page says there
   // is one, and shows it again when asked to.
@@ -238,7 +239,7 @@ test("CalendarSection — « Afficher le lien » montre le lien avec Copier", as
   await expect.element(button(screen, fr.calendar.create)).not.toBeInTheDocument();
   const show = button(screen, fr.calendar.show);
   await expect.element(show).toBeVisible();
-  expect(show.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(show.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 
   await show.click();
 
@@ -257,7 +258,7 @@ test("CalendarSection — « Afficher le lien » montre le lien avec Copier", as
   await animationsDone();
   expect(
     buttonOf(button(screen, fr.calendar.copy)).getBoundingClientRect().height,
-  ).toBeGreaterThanOrEqual(44);
+  ).toBeGreaterThanOrEqual(MIN_TARGET);
 });
 
 test("CalendarSection — Nouveau lien et Supprimer restent proposés, même après la création", async () => {
@@ -273,7 +274,7 @@ test("CalendarSection — Nouveau lien et Supprimer restent proposés, même apr
   for (const name of [fr.calendar.renew, fr.calendar.remove]) {
     const opener = button(screen, name);
     await expect.element(opener).toBeVisible();
-    expect(opener.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(opener.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 
   // A new link, which asks first: the field then shows the new address, not the
@@ -343,7 +344,7 @@ test("CalendarSection — un lien actif propose Nouveau lien et Supprimer, avec 
   for (const name of [fr.calendar.renew, fr.calendar.remove]) {
     const opener = button(screen, name);
     await expect.element(opener).toBeVisible();
-    expect(opener.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(opener.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 
   // Nothing is done before the member says so: each one asks first.

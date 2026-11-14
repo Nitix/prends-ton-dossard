@@ -10,6 +10,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView, type EventView } from "../events/api";
 import {
   eventRecord,
@@ -18,10 +19,10 @@ import {
   pNinaUndecided,
   withParticipations,
 } from "../events/testFixture";
-import { ChooseFormatDialog } from "./ChooseFormatDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { ChooseFormatDialog } from "./ChooseFormatDialog";
 
 type Rec = Record<string, unknown>;
 
@@ -280,7 +281,7 @@ test("ChooseFormatDialog — champs et boutons d'au moins 44 px", async () => {
     save(screen),
     screen.getByRole("button", { name: fr.common.cancel }),
   ]) {
-    expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(element.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
   }
 });
 

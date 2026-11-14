@@ -13,13 +13,14 @@ import type { OfferKind } from "../../lib/types";
 import { animationsDone } from "../../test/animations";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
 import { FRAME } from "../../test/frame";
+import { MIN_TARGET } from "../../test/touchTarget";
 import { toEventView, type EventView } from "../events/api";
 import { eventRecord } from "../events/testFixture";
 import { offersKey, toOfferView, type OfferView } from "./api";
-import { OfferDialog } from "./OfferDialog";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
 import "../../styles.css";
+import { OfferDialog } from "./OfferDialog";
 
 type Rec = Record<string, unknown>;
 
@@ -655,7 +656,7 @@ describe("the dialog", () => {
     ].map((target) => target.element().getBoundingClientRect().height);
 
     expect(heights).toHaveLength(6);
-    for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
+    for (const height of heights) expect(height).toBeGreaterThanOrEqual(MIN_TARGET);
     await page.viewport(FRAME.width, FRAME.height);
   });
 });
