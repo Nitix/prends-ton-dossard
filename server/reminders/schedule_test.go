@@ -1121,24 +1121,36 @@ func TestReminders_PerFormatMore(t *testing.T) {
 		}
 	})
 
-	t.Run("time_known_when_any_has_one", func(t *testing.T) {
-		w := newWorld(t)
-		event := w.event("Trail des Aravis", "2026-11-20", "")
-		a := w.format(event, "Semi", "2026-11-17", "")
-		b := w.format(event, "10 km", "2026-11-17", "09:00")
-		w.choose(w.fx.Alice, "day")
-		w.device(w.fx.Alice, "fr")
-		w.join(w.fx.AliceRunner, a)
-		w.join(w.fx.AliceRunner, b)
+	// Whichever of the two formats has the smaller id carries the written time: the
+	// ids are random, so the test decides which one it is.
+	for _, written := range []string{"smaller_id", "larger_id"} {
+		t.Run("time_known_when_any_has_one_"+written, func(t *testing.T) {
+			w := newWorld(t)
+			event := w.event("Trail des Aravis", "2026-11-20", "")
+			pair := []*core.Record{w.format(event, "Semi", "2026-11-17", ""), w.format(event, "10 km", "2026-11-17", "")}
+			slices.SortFunc(pair, func(a, b *core.Record) int { return strings.Compare(a.Id, b.Id) })
+			with := pair[0]
+			if written == "larger_id" {
+				with = pair[1]
+			}
+			with.Set("registration_opening_time", "09:00")
+			if err := w.app.Save(with); err != nil {
+				t.Fatal(err)
+			}
+			w.choose(w.fx.Alice, "day")
+			w.device(w.fx.Alice, "fr")
+			w.join(w.fx.AliceRunner, pair[0])
+			w.join(w.fx.AliceRunner, pair[1])
 
-		w.run(parisAt("2026-11-16", "09:30"))
-		if len(w.n.sendings) != 1 {
-			t.Fatalf("%d sendings, want 1", len(w.n.sendings))
-		}
-		if body := w.n.sendings[0].bodies["fr"].Body; !strings.Contains(body, "09:00") {
-			t.Errorf("body %q should give the time that one of the formats has", body)
-		}
-	})
+			w.run(parisAt("2026-11-16", "09:30"))
+			if len(w.n.sendings) != 1 {
+				t.Fatalf("%d sendings, want 1", len(w.n.sendings))
+			}
+			if body := w.n.sendings[0].bodies["fr"].Body; !strings.Contains(body, "09:00") {
+				t.Errorf("body %q should give the time that one of the formats has", body)
+			}
+		})
+	}
 
 	t.Run("one_unreadable_event_does_not_stop_the_others", func(t *testing.T) {
 		w := newWorld(t)

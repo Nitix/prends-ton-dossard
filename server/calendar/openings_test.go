@@ -425,6 +425,41 @@ func TestCalendarFeed_FormatOpenings(t *testing.T) {
 		}
 	})
 
+	// The event opens on Monday with no time; one format has a day alone (Tuesday,
+	// 09:00 counted), another the same Tuesday at 09:00. The ids are random, so the
+	// test decides which of the two carries the written time.
+	for _, written := range []string{"smaller_id", "larger_id"} {
+		t.Run("the same instant with a time written is one entry with that time, "+written, func(t *testing.T) {
+			f := setUp(t, "2026-11-16", "")
+			pair := []*core.Record{}
+			for _, name := range []string{"Duo A", "Duo B"} {
+				pair = append(pair, save(t, f.app, "formats", map[string]any{
+					"event": f.event.Id, "name": name, "race_type": f.fx.Trail.Id, "distance_km": 10,
+					"registration_opening": "2026-11-17",
+				}))
+			}
+			slices.SortFunc(pair, func(a, b *core.Record) int { return strings.Compare(a.Id, b.Id) })
+			with := pair[0]
+			if written == "larger_id" {
+				with = pair[1]
+			}
+			with.Set("registration_opening_time", "09:00")
+			if err := f.app.Save(with); err != nil {
+				t.Fatal(err)
+			}
+			place(t, f, "interested", pair...)
+			got := openings(t, f)
+			if len(got) != 1 {
+				t.Fatalf("%d openings, want 1: %v", len(got), got)
+			}
+			for _, entry := range got {
+				if entry["DTSTART"] != "20261117T080000Z" {
+					t.Errorf("DTSTART = %q, want 20261117T080000Z (09:00 Paris)", entry["DTSTART"])
+				}
+			}
+		})
+	}
+
 	t.Run("a supporter has none", func(t *testing.T) {
 		f := setUp(t, "2026-11-16", "10:00")
 		place(t, f, "supporter")

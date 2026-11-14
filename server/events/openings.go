@@ -1,6 +1,7 @@
 package events
 
 import (
+	"cmp"
 	"slices"
 	"sort"
 	"time"
@@ -172,13 +173,18 @@ func MergeSameInstant(openings []Opening) []Opening {
 		at, _ := o.Instant()
 		if n := len(out); n > 0 && at.Equal(lastAt) {
 			prev := &out[n-1]
+			// The same instant can be written with or without a time (a day alone counts
+			// 09:00): keep the one that is written, whatever the ids.
+			written := cmp.Or(prev.Time, o.Time)
 			if len(prev.FormatIDs) == 0 {
+				prev.Time = written
 				continue
 			}
 			if len(o.FormatIDs) == 0 {
-				*prev = Opening{Day: o.Day, Time: o.Time}
+				*prev = Opening{Day: o.Day, Time: written}
 				continue
 			}
+			prev.Time = written
 			ids := slices.Concat(prev.FormatIDs, o.FormatIDs)
 			slices.Sort(ids)
 			prev.FormatIDs = slices.Compact(ids)

@@ -62,12 +62,18 @@ function mergeSameInstant(openings: readonly Opening[]): Opening[] {
   for (const { at, opening } of byInstant(openings)) {
     const last = out.at(-1);
     if (last && last.at === at) {
-      if (last.opening.formatIds.length === 0) continue;
+      // The same instant can be written with or without a time (a day alone counts 09:00): keep the written one.
+      const time = last.opening.time || opening.time;
+      if (last.opening.formatIds.length === 0) {
+        last.opening = { ...last.opening, time };
+        continue;
+      }
       last.opening =
         opening.formatIds.length === 0
-          ? { ...opening, formatIds: [] }
+          ? { ...opening, time, formatIds: [] }
           : {
               ...last.opening,
+              time,
               formatIds: [...new Set([...last.opening.formatIds, ...opening.formatIds])].toSorted(),
             };
       continue;

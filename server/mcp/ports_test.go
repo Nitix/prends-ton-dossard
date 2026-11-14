@@ -39,7 +39,7 @@ var ports = []struct {
 	{"features/admin/memberState.ts", "memberState of admin_members.go", "2cbc2de092245dcd95e616adedc212ca6aaef639f23665eb1eab4a9155137e04"},
 	{"features/admin/mergePreview.ts", "describeMerge of admin_merge.go", "1870283afdc7bde3993ad3c3d8b079b62c422656e2bd8cc20cd56bdb5fc6cd71"},
 	{"features/comments/excerpt.ts", "excerpt of home.go", "904f45e3d9a966a68f28276dc3771b8db216171d79b0f317398b9da9fc1a4748"},
-	{"features/events/opening.ts", "openings.go of server/events", "a02b09d01f4420a1150b1a83333a01833a557672f9e0a5b8738e8a5ac8751603"},
+	{"features/events/opening.ts", "openings.go of server/events", "e83e56a5292a2d4cb213cca39e6cd94f482823d7b441488c000931b20d93e123"},
 }
 
 func TestPorts_TheTypeScriptHasNotChanged(t *testing.T) {

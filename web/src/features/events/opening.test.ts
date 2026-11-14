@@ -392,3 +392,61 @@ describe("formatNames", () => {
     expect(formatNames(annecy(), op("2026-11-16", ""), fr, fmt)).toBe("");
   });
 });
+
+// The event opens on Monday with no time; "a" has a day alone (Tuesday, 9:00 counted)
+// and "b" is complete on Tuesday 09:00: the same instant, written two ways.
+const sameInstantView = (timeless: string, written: string) =>
+  annecy(
+    { registration_opening: "2026-11-16" },
+    [
+      ["alice", "interested", timeless],
+      ["alice", "interested", written],
+    ],
+    [
+      rawFormat(timeless, { registration_opening: "2026-11-17" }),
+      rawFormat(written, {
+        registration_opening: "2026-11-17",
+        registration_opening_time: "09:00",
+      }),
+    ],
+  );
+
+describe("two formats at one instant, one with a time written", () => {
+  test.each([
+    ["the day alone has the smaller id", "a", "b"],
+    ["the day alone has the larger id", "b", "a"],
+  ])("one opening that keeps the written time — %s", (_name, timeless, written) => {
+    expect(personOpenings(sameInstantView(timeless, written), "alice", day("2026-11-15"))).toEqual([
+      op("2026-11-17", "09:00", "a", "b"),
+    ]);
+    expect(calendarOpenings(sameInstantView(timeless, written), "alice")).toEqual([
+      op("2026-11-17", "09:00", "a", "b"),
+    ]);
+  });
+});
+
+// Mirrors TestOpenings_Instants: 02:30 does not exist on 2027-03-28 in Paris, the
+// instant taken is the later one, 03:30.
+const clockFormats = (...times: string[]) =>
+  times.map((time, i) =>
+    rawFormat(`f${i}`, { registration_opening: "2027-03-28", registration_opening_time: time }),
+  );
+
+describe("the day the clocks go forward", () => {
+  test("02:30 is the instant of 03:30", () => {
+    const view = annecy(
+      {},
+      [
+        ["alice", "interested", "f0"],
+        ["alice", "interested", "f1"],
+      ],
+      clockFormats("02:30", "03:30"),
+    );
+    expect(personOpenings(view, "alice", day("2027-03-01"))).toHaveLength(1);
+  });
+
+  test("02:30 comes after 03:00", () => {
+    const view = annecy({}, [], clockFormats("02:30", "03:00"));
+    expect(generalOpening(view, day("2027-03-01"))).toEqual(op("2027-03-28", "03:00", "f1"));
+  });
+});

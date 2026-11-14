@@ -280,12 +280,8 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 					report.Skipped++
 					continue
 				}
-				// The time is known when any of the formats opening at this instant has one.
-				timeKnown := events.ValidTime(o.Time)
-				for _, id := range o.FormatIDs {
-					timeKnown = timeKnown || events.ValidTime(c.openings.Formats[id].Time)
-				}
-				remind(ctx, app, notifier, &report, c.event, who.user, kind, o, T, timeKnown, c.formats, current)
+				// MergeSameInstant keeps a written time, so o.Time says whether the time is known.
+				remind(ctx, app, notifier, &report, c.event, who.user, kind, o, T, events.ValidTime(o.Time), c.formats, current)
 			}
 		}
 	}

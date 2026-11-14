@@ -131,6 +131,17 @@ func TestOpenings_Of_ForCalendar_Merge(t *testing.T) {
 	if !reflect.DeepEqual(got, []events.Opening{op("2026-11-17", "12:00", "a", "b")}) {
 		t.Errorf("two formats merge = %+v", got)
 	}
+	// A merged opening keeps a time when any of its sources has one, whatever the ids.
+	for _, ids := range [][2]string{{"a", "b"}, {"b", "a"}} {
+		got = events.MergeSameInstant([]events.Opening{op("2026-11-17", "", ids[0]), op("2026-11-17", "09:00", ids[1])})
+		if !reflect.DeepEqual(got, []events.Opening{op("2026-11-17", "09:00", "a", "b")}) {
+			t.Errorf("day alone + 09:00 on ids %v = %+v, want the 09:00 time", ids, got)
+		}
+	}
+	got = events.MergeSameInstant([]events.Opening{op("2026-11-17", "09:00", "semi"), op("2026-11-17", "")})
+	if !reflect.DeepEqual(got, []events.Opening{op("2026-11-17", "09:00")}) {
+		t.Errorf("event without time + format 09:00 = %+v, want the event with 09:00", got)
+	}
 	got = events.MergeSameInstant([]events.Opening{op("2026-11-18", "", "x"), op("2026-11-17", "12:00", "y")})
 	if len(got) != 2 || got[0].Day != "2026-11-17" {
 		t.Errorf("distinct instants = %+v, want both by instant", got)
