@@ -240,6 +240,16 @@ test("filesToRerun — une erreur non gérée sans la signature d'un cache froid
   expect(filesToRerun({ testResults: [passed] }, reload + section(["TypeError: boom"]))).toBe(null);
 });
 
+test("filesToRerun — le trait d'un bloc « Serialized Error » ne ferme pas la section", () => {
+  const files = { testResults: [importFailure, passed] };
+  // printStack writes a line of dashes, then the own properties of the error, inside the error.
+  const withProperties = `${DYNAMIC}\n${DASHES}\nSerialized Error: { code: 'ERR_X' }`;
+  // A real error after it is still read: red.
+  expect(filesToRerun(files, section([withProperties, "TypeError: boom"]))).toBe(null);
+  // Only cold-cache errors: the files are run again.
+  expect(filesToRerun(files, section([withProperties, DYNAMIC]))).toEqual(["/w/a.test.tsx"]);
+});
+
 test("filesToRerun — la signature d'un cache froid dans Firefox et dans WebKit", () => {
   for (const message of [
     "TypeError: error loading dynamically imported module: http://localhost:63315/src/a.tsx",

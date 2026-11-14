@@ -31,9 +31,10 @@ const SIGNATURE =
   /Vite unexpectedly reloaded|Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/;
 
 // The banner of the unhandled errors in Vitest 5's default reporter (printUnhandledErrors), up to
-// its own closing line of dashes (the github-actions lines after it are not part of it), or the
+// its own closing line of dashes (not the one inside an error, before "Serialized Error:", that
+// printStack writes for the own properties of an error; the github-actions lines after it are not part of it), or the
 // summary. The JSON report does not record these errors, yet they fail the run.
-const UNHANDLED = /Unhandled Errors[\s\S]*?(?=\n\u23af+(?:\n|$)|\n\s*Test Files|$)/;
+const UNHANDLED = /Unhandled Errors[\s\S]*?(?=\n\u23af+(?:\n(?!Serialized Error:)|$)|\n\s*Test Files|$)/;
 // One banner per error (printErrorType): Unhandled Error, Unhandled Rejection, Uncaught Exception.
 const ERROR_BANNER = /\n\u23af* (?:Unhandled|Uncaught) [A-Za-z ]+ \u23af*\n/;
 const stripAnsi = (text) => text.replace(/\u001b\[[0-9;]*m/g, "");
