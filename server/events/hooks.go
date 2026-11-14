@@ -204,7 +204,10 @@ func validateEvent(app core.App, event *core.Record) error {
 	if event.IsNew() {
 		return nil
 	}
-	rangeChanged := start != original.GetString("start_date") || end != original.GetString("end_date")
+	// A change of precision moves the day the openings are held against (the last
+	// day of the month, or the first day), even when the dates stay.
+	rangeChanged := start != original.GetString("start_date") || end != original.GetString("end_date") ||
+		event.GetString("date_precision") != original.GetString("date_precision")
 	deadlineChanged := event.GetString("registration_deadline") != original.GetString("registration_deadline")
 	openingChanged := opening != original.GetString("registration_opening")
 	if !rangeChanged && !deadlineChanged && !openingChanged {

@@ -1080,6 +1080,9 @@ func TestEvents_FormatOpeningHeld(t *testing.T) {
 				}
 			},
 		},
+		// The first day the openings are held against is the 1st once the day is known.
+		patch("a month-only race switched to a day, under a format opening", inOrder(monthEvent, full), `{"date_precision":"day"}`,
+			http.StatusBadRequest, fieldError("start_date", "format_opening_after_start")),
 		patch("an edit of the name only", full, `{"name":"Trail des Aiguilles"}`, http.StatusOK, ""),
 	})
 }
