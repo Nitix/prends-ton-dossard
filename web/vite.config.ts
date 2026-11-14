@@ -150,6 +150,7 @@ export default defineConfig({
             "./src/test/blockWebAuthn.ts",
             "./src/test/blockTiles.ts",
             "./src/test/desktopIdentity.ts",
+            "./src/test/touchDialogClicks.ts",
             "./src/test/failureMessage.ts",
           ],
           browser: {
