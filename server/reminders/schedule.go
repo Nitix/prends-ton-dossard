@@ -40,7 +40,8 @@ type Notifier interface {
 		message func(lang string) push.Message, opts push.Options) (push.Delivery, error)
 }
 
-// Report is what a pass did, in reminders (a person and a kind for one event):
+// Report is what a pass did, in reminders (a person and a kind for one opening of
+// one event, an opening being a format's own or the event's):
 // Due were due and had a device, Sent reached at least one device, Failed
 // reached none, Skipped were already done or had no device to reach.
 type Report struct{ Due, Sent, Failed, Skipped int }
@@ -126,16 +127,20 @@ func due(T, now time.Time, kinds []string) (kind string, ok bool) {
 // what it did. Nothing is sent, and nothing is recorded, while the notifier is
 // not available: the pass is a no-op that the next minute tries again.
 //
-// For each event whose opening is today, tomorrow or the day after in Paris and
-// that is due from the same wall-clock time of Paris the day before (see
-// dayOpens; not 24 hours of the clock, which two nights of the year are not
-// the same hour), for each person who gets its reminders (§ 4.2), the
-// kind that is due: a row of reminder_deliveries is inserted first, and a row that
-// the unique index refuses means that the reminder is already done; then the
-// message is sent to the devices of the person. A person with no device has no
-// row, so that a device activated before T still gets the reminder. A program
-// stopped between the insert and the send loses that reminder rather than sending
-// two. Once an hour, at minute 0, the rows older than 60 days are deleted.
+// The events considered are those with an opening today, tomorrow or the day
+// after in Paris, of their own or of one of their formats. For each person who
+// gets their reminders (§ 4.2), the openings that count are those of the formats
+// they are on (the event's, or the next to come, for a person with no format or a
+// format with no opening of its own), taken at the instant of their turn. For
+// each of them that is due from the same wall-clock time of Paris the day before
+// (see dayOpens; not 24 hours of the clock, which two nights of the year are not
+// the same hour), the kind that is due: a row of reminder_deliveries is inserted
+// first, and a row that the unique index refuses means that the reminder is
+// already done; then the message is sent to the devices of the person. A person
+// with no device has no row, so that a device activated before T still gets the
+// reminder. A program stopped between the insert and the send loses that reminder
+// rather than sending two. An event that cannot be read is skipped, and the
+// others go on. Once an hour, at minute 0, the rows older than 60 days are deleted.
 func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Report, error) {
 	var report Report
 	if notifier == nil || !notifier.Available() {
@@ -193,13 +198,13 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 	}
 	var todo []candidate
 	var ids []any
+	var firstErr error
 	for _, event := range candidates {
 		formats, err := app.FindAllRecords("formats", dbx.HashExp{"event": event.Id})
 		if err != nil {
-			return report, err
-		}
-		if failed := app.ExpandRecords(formats, []string{"race_type"}, nil); len(failed) > 0 {
-			return report, errors.New("the race types of the formats could not be read")
+			// One event that cannot be read does not stop the others.
+			firstErr = errors.Join(firstErr, err)
+			continue
 		}
 		fields := make([]events.FormatOpeningFields, 0, len(formats))
 		byID := make(map[string]*core.Record, len(formats))
@@ -221,11 +226,16 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 		if !possible {
 			continue
 		}
+		// The names of the race types are only needed for the titles.
+		if err := expandFormats(app, formats); err != nil {
+			firstErr = errors.Join(firstErr, err)
+			continue
+		}
 		todo = append(todo, candidate{event, openings, byID})
 		ids = append(ids, event.Id)
 	}
 	if len(todo) == 0 {
-		return report, nil
+		return report, firstErr
 	}
 	// What was already done for them: one query for the whole pass, so that a
 	// minute with nothing new makes no failing insert. The unique index stays the
@@ -238,7 +248,6 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 	// The clock moves during a pass, and a send can take seconds: each person is
 	// handled at the instant when their turn comes, never after T.
 	start := time.Now()
-	var firstErr error
 	for _, c := range todo {
 		recipients, err := recipientsOf(app, c.event.Id)
 		if err != nil {
@@ -271,7 +280,12 @@ func Run(ctx context.Context, app core.App, at time.Time, notifier Notifier) (Re
 					report.Skipped++
 					continue
 				}
-				remind(ctx, app, notifier, &report, c.event, who.user, kind, o, T, c.formats, current)
+				// The time is known when any of the formats opening at this instant has one.
+				timeKnown := events.ValidTime(o.Time)
+				for _, id := range o.FormatIDs {
+					timeKnown = timeKnown || events.ValidTime(c.openings.Formats[id].Time)
+				}
+				remind(ctx, app, notifier, &report, c.event, who.user, kind, o, T, timeKnown, c.formats, current)
 			}
 		}
 	}
@@ -299,7 +313,7 @@ func doneOf(app core.App, eventIDs []any) (map[string]bool, error) {
 // remind does the reminder of one person for one event at the instant at, and
 // counts it in report.
 func remind(ctx context.Context, app core.App, notifier Notifier, report *Report,
-	event, user *core.Record, kind string, opening events.Opening, T time.Time,
+	event, user *core.Record, kind string, opening events.Opening, T time.Time, timeKnown bool,
 	formats map[string]*core.Record, at time.Time) {
 	devices, err := app.CountRecords("push_subscriptions", dbx.HashExp{"user": user.Id})
 	if err != nil {
@@ -333,7 +347,6 @@ func remind(ctx context.Context, app core.App, notifier Notifier, report *Report
 	}
 	report.Due++
 
-	timeKnown := events.ValidTime(opening.Time)
 	name, url := event.GetString("name"), "/evenements/"+event.Id
 	// An opening of formats says which ones; one of the event does not. The id of
 	// the first format keeps two openings of an event apart in the notification
@@ -499,4 +512,13 @@ var parisZone = sync.OnceValue(func() *time.Location {
 // changes of hour of the year (it is T - 24 h on every other day).
 func dayOpens(T time.Time) time.Time {
 	return T.In(parisZone()).AddDate(0, 0, -1)
+}
+
+// expandFormats reads the race types of the formats, for their names; the tests
+// replace it to make one event unreadable.
+var expandFormats = func(app core.App, formats []*core.Record) error {
+	if failed := app.ExpandRecords(formats, []string{"race_type"}, nil); len(failed) > 0 {
+		return errors.New("the race types of the formats could not be read")
+	}
+	return nil
 }

@@ -1045,3 +1045,125 @@ func TestReminders_PerFormat(t *testing.T) {
 		}
 	})
 }
+
+func TestReminders_PerFormatMore(t *testing.T) {
+	t.Run("timeline", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Marathon du lac d'Annecy", "2026-11-16", "12:00")
+		semi := w.format(event, "Semi", "2026-11-17", "")
+		ten := w.format(event, "10 km", "2026-11-18", "")
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		dan, danRunner := w.person("dan")
+		w.join(w.fx.AliceRunner, semi)
+		w.join(danRunner, semi)
+		w.join(danRunner, ten)
+
+		count := func(moment time.Time, want int, what string) {
+			t.Helper()
+			before := len(w.n.sendings)
+			w.run(moment)
+			if got := len(w.n.sendings) - before; got != want {
+				t.Fatalf("%s: %d sendings, want %d", what, got, want)
+			}
+		}
+		count(parisAt("2026-11-15", "12:30"), 0, "Sunday")
+		count(parisAt("2026-11-16", "11:30"), 0, "Monday before the day window of the semi")
+		count(parisAt("2026-11-16", "12:30"), 2, "Monday: the semi for Alice and Dan")
+		count(parisAt("2026-11-17", "11:30"), 0, "Tuesday before the day window of the 10 km")
+		count(parisAt("2026-11-17", "12:30"), 1, "Tuesday: the 10 km for Dan")
+		if last := w.n.sendings[len(w.n.sendings)-1]; last.user != dan.Id || !strings.Contains(last.bodies["fr"].Title, "10 km") {
+			t.Errorf("last sending %+v, want the 10 km's for Dan", last)
+		}
+		count(parisAt("2026-11-18", "12:30"), 0, "nothing after the last opening")
+	})
+
+	t.Run("english_title", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail des Aravis", "2026-11-20", "12:00")
+		format := w.save("formats", map[string]any{
+			"event": event.Id, "race_type": w.fx.Trail.Id, "distance_km": 21.5,
+			"registration_opening": "2026-11-17", "registration_opening_time": "12:00",
+		})
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		w.device(w.fx.Alice, "en")
+		w.join(w.fx.AliceRunner, format)
+
+		w.run(parisAt("2026-11-16", "12:30"))
+		if len(w.n.sendings) != 1 {
+			t.Fatalf("%d sendings, want 1", len(w.n.sendings))
+		}
+		bodies := w.n.sendings[0].bodies
+		if !strings.HasSuffix(bodies["fr"].Title, "21,5 km") || !strings.HasSuffix(bodies["en"].Title, "21.5 km") {
+			t.Errorf("titles %q and %q, want the distance in each language", bodies["fr"].Title, bodies["en"].Title)
+		}
+	})
+
+	t.Run("hour_on_a_format", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail des Aravis", "2026-11-20", "12:00")
+		format := w.format(event, "Semi", "2026-11-17", "12:00")
+		w.choose(w.fx.Alice, "hour")
+		w.device(w.fx.Alice, "fr")
+		w.join(w.fx.AliceRunner, format)
+
+		w.run(parisAt("2026-11-17", "10:30"))
+		if len(w.n.sendings) != 0 {
+			t.Fatalf("a reminder more than an hour before: %+v", w.n.sendings)
+		}
+		w.run(parisAt("2026-11-17", "11:30"))
+		if len(w.n.sendings) != 1 || w.n.sendings[0].opts.Urgency != "high" {
+			t.Fatalf("%+v, want one high-urgency reminder", w.n.sendings)
+		}
+		if body := w.n.sendings[0].bodies["fr"].Body; !strings.Contains(body, "dans 30 min") {
+			t.Errorf("body %q", body)
+		}
+	})
+
+	t.Run("time_known_when_any_has_one", func(t *testing.T) {
+		w := newWorld(t)
+		event := w.event("Trail des Aravis", "2026-11-20", "")
+		a := w.format(event, "Semi", "2026-11-17", "")
+		b := w.format(event, "10 km", "2026-11-17", "09:00")
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		w.join(w.fx.AliceRunner, a)
+		w.join(w.fx.AliceRunner, b)
+
+		w.run(parisAt("2026-11-16", "09:30"))
+		if len(w.n.sendings) != 1 {
+			t.Fatalf("%d sendings, want 1", len(w.n.sendings))
+		}
+		if body := w.n.sendings[0].bodies["fr"].Body; !strings.Contains(body, "09:00") {
+			t.Errorf("body %q should give the time that one of the formats has", body)
+		}
+	})
+
+	t.Run("one_unreadable_event_does_not_stop_the_others", func(t *testing.T) {
+		w := newWorld(t)
+		broken := w.event("Trail cassé", "2026-11-17", "12:00")
+		fine := w.event("Trail des Aravis", "2026-11-17", "12:00")
+		brokenFormat := w.format(broken, "Semi", "", "")
+		fineFormat := w.format(fine, "Semi", "", "")
+		w.choose(w.fx.Alice, "day")
+		w.device(w.fx.Alice, "fr")
+		w.join(w.fx.AliceRunner, brokenFormat)
+		w.join(w.fx.AliceRunner, fineFormat)
+		reminders.SetExpandFormats(t, func(app core.App, formats []*core.Record) error {
+			if len(formats) > 0 && formats[0].GetString("event") == broken.Id {
+				return fmt.Errorf("unreadable")
+			}
+			app.ExpandRecords(formats, []string{"race_type"}, nil)
+			return nil
+		})
+
+		_, err := reminders.Run(context.Background(), w.app, parisAt("2026-11-16", "12:30"), w.n)
+		if err == nil {
+			t.Fatal("the pass should report the event it could not read")
+		}
+		if len(w.n.sendings) != 1 || !strings.Contains(w.n.sendings[0].bodies["fr"].Title, "Trail des Aravis") {
+			t.Fatalf("%+v, want the reminder of the other event", w.n.sendings)
+		}
+	})
+}
