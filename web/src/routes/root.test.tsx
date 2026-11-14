@@ -64,7 +64,10 @@ async function expectFocusOn(locator: { query(): Element | null }) {
     // `query`, not `element`: a missing element must say so here, not throw « cannot find ».
     const target = locator.query();
     throw new Error(
-      `the focus is on ${describeElement(document.activeElement)}, not on ${target === null ? "an element that is not in the page" : describeElement(target)}`,
+      `the focus is on ${describeElement(document.activeElement)}, not on ${target === null ? "an element that is not in the page" : describeElement(target)}; ` +
+        // Kept for run 25 (Safari, the admin menu, BODY): was the title there and in the page, and did
+        // the document have the focus? Not reproduced locally on WebKit, even under load (docs/TODO.md).
+        `title connected=${String(target?.isConnected)}; hasFocus=${String(document.hasFocus())}; main=${describeElement(document.querySelector("main"))}`,
     );
   }
 }
