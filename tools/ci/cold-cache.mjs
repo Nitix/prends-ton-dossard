@@ -1,32 +1,75 @@
-// Says (exit code 0) whether a failed browser run looks like a cold cache of Vite, so the suite is
-// run again; any other failure exits 1 and stays a failure.
+// What to do when the first browser run of a target fails on a cold cache of Vite: run again only
+// the files that could not be imported, then judge the two runs together.
 //
-//   node tools/ci/cold-cache.mjs <report.json> <log>
+//   node tools/ci/cold-cache.mjs files <report.json> <log>
+//     Prints the files to run again, one per line, and exits 0. Prints nothing and exits 0 when the
+//     whole suite has to run again (an error outside of a test, with the signature of the
+//     re-optimisation in the log). Exits 1 when nothing warrants a second run.
+//   node tools/ci/cold-cache.mjs merge <first.json> <second.json> <merged.json>
+//     Writes the first report with the second one's files in place of the files it run again, and
+//     exits 1 if any file of the result failed.
 //
-// It is decided from the JSON: a cold cache makes files that cannot be imported, so every failed
-// file of the report has no test result at all. A failed test is a real failure, whatever its
-// message says. When the report has no failed file (an error thrown outside of a test fails the
-// run), the log has to carry the signature of the re-optimisation.
+// Why only those files: a cold cache makes the files that cannot be imported, and nothing else.
+// Running the whole suite again needed every failed file to be one of them, so that a real failure
+// elsewhere in the same run (a flaky test of Firefox, say) forbade the second run, and the
+// import failures stayed red with it. Now the second run covers the imports, and the failures that
+// are real stay in the merged report, where they fail the job.
+//
+// It is decided from the JSON: a failed file with no test result at all did not import. A failed
+// test is a real failure, whatever its message says.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const SIGNATURE = /Vite unexpectedly reloaded|Failed to fetch dynamically imported module/;
 
-/** @returns {boolean} */
-export function isColdCache(report, log) {
-  const files = Array.isArray(report?.testResults) ? report.testResults : [];
-  const failed = files.filter((file) => file.status === "failed");
-  if (failed.some((file) => (file.assertionResults ?? []).some((test) => test.status === "failed"))) {
-    return false;
-  }
-  if (failed.length > 0) return failed.every((file) => (file.assertionResults ?? []).length === 0);
-  return SIGNATURE.test(String(log ?? ""));
+const resultsOf = (report) => (Array.isArray(report?.testResults) ? report.testResults : []);
+const testsOf = (file) => file.assertionResults ?? [];
+
+/**
+ * The files to run again: their names, as the report has them (an empty list: the whole suite),
+ * or null when the failure is not a cold cache.
+ * @returns {string[] | null}
+ */
+export function filesToRerun(report, log) {
+  const failed = resultsOf(report).filter((file) => file.status === "failed");
+  const noImport = failed.filter((file) => testsOf(file).length === 0);
+  if (noImport.length > 0) return noImport.map((file) => String(file.name));
+  // Only failed tests, or nothing failed at all: an error outside of a test needs the signature.
+  if (failed.length > 0) return null;
+  return SIGNATURE.test(String(log ?? "")) ? [] : null;
+}
+
+/** The first report, with the files of the second in place of those the second run covered. */
+export function mergeReports(first, second) {
+  const again = new Set(resultsOf(second).map((file) => file.name));
+  const testResults = [
+    ...resultsOf(first).filter((file) => !again.has(file.name)),
+    ...resultsOf(second),
+  ];
+  const failedFiles = testResults.filter((file) => file.status === "failed").length;
+  return { ...first, testResults, numFailedTestSuites: failedFiles, success: failedFiles === 0 };
+}
+
+function read(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
 }
 
 if (process.argv[1]?.endsWith("cold-cache.mjs")) {
-  const [path, logPath] = process.argv.slice(2);
-  if (!path || !existsSync(path)) process.exit(1);
-  const report = JSON.parse(readFileSync(path, "utf8"));
-  const log = logPath && existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
-  process.exit(isColdCache(report, log) ? 0 : 1);
+  const [command, ...args] = process.argv.slice(2);
+  if (command === "files") {
+    const [path, logPath] = args;
+    if (!path || !existsSync(path)) process.exit(1);
+    const log = logPath && existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
+    const files = filesToRerun(read(path), log);
+    if (files === null) process.exit(1);
+    if (files.length > 0) console.log(files.join("\n"));
+  } else if (command === "merge") {
+    const [firstPath, secondPath, outPath] = args;
+    if (!firstPath || !secondPath || !outPath || !existsSync(secondPath)) process.exit(1);
+    const merged = mergeReports(read(firstPath), read(secondPath));
+    writeFileSync(outPath, JSON.stringify(merged));
+    process.exit(merged.success ? 0 : 1);
+  } else {
+    process.exit(2);
+  }
 }

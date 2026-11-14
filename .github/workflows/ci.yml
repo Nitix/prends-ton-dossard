@@ -122,14 +122,20 @@ jobs:
       # The dependencies that Vite pre-bundles for the browser tests, kept between runs, keyed on the
       # lockfile and the config (which lists what is pre-bundled). A cold cache made a run
       # re-optimise during the tests: a failed import on Firefox, a page not ready on the iPhone
-      # (runs 24 and before). The first run after a change of key is still cold: the rerun of the
-      # next step covers it.
+      # (runs 24 and before). The key does not change from run to run, so the second run finds it.
+      # It is saved by its own step, after the tests and whatever they did: actions/cache saves only
+      # when the job succeeds, and a target that was red never saved anything (run 25: Firefox and
+      # Safari). The first run after a change of key is still cold: the files that did not import
+      # are run again (see the tests step).
       - name: Cache of Vite
-        uses: actions/cache@v5
+        id: vite-cache
+        uses: actions/cache/restore@v5
         with:
           path: web/node_modules/.vite
           key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'web/vite.config.ts') }}
           restore-keys: vite-${{ runner.os }}-
+      - name: Say what the cache of Vite found
+        run: echo "cache-hit=${{ steps.vite-cache.outputs.cache-hit }} matched-key=${{ steps.vite-cache.outputs.cache-matched-key }}"
       # Only the browser of the target. No cache: the downloads are small next to the run, and
       # a cache would need an action that this file does not use yet.
       - name: Install the browser
@@ -139,26 +145,39 @@ jobs:
       # (web/vite.config.ts): a test that needed a retry is a warning in the next step, so it is
       # seen, not hidden. Desktop Chromium has no retry.
       # A first run on a cold cache of Vite can fail on files it re-optimises (the README says to
-      # run again before believing a failure): the suite is run again only when the JSON says that
-      # every failed file did not import (tools/ci/cold-cache.mjs). The report of the first run is
-      # kept, so its flaky warnings are not lost.
+      # run again before believing a failure). Then only the files that did not import (a failed
+      # file with no test result, tools/ci/cold-cache.mjs) are run again, whatever else failed in
+      # the first run, and the two reports are merged: a test that really failed stays failed. The
+      # report of the first run is kept, so its flaky warnings are not lost.
       - name: Browser tests
         shell: bash
         run: |
           set -o pipefail
           temp="${{ runner.temp }}"
           run() {
-            pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$1" 2>&1 | tee "$2"
+            out="$1"; log="$2"; shift 2
+            pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$out" "$@" 2>&1 | tee -a "$log"
           }
           if ! run "$temp/vitest-browser.json" "$temp/vitest-browser.log"; then
-            if node tools/ci/cold-cache.mjs "$temp/vitest-browser.json" "$temp/vitest-browser.log"; then
-              echo "A cold cache of Vite: the suite is run again."
+            if files=$(node tools/ci/cold-cache.mjs files "$temp/vitest-browser.json" "$temp/vitest-browser.log"); then
+              echo "A cold cache of Vite: run again $(echo "$files" | grep -c . || true) file(s) that did not import (none listed: the whole suite)."
               mv "$temp/vitest-browser.json" "$temp/vitest-browser-first.json"
-              run "$temp/vitest-browser.json" "$temp/vitest-browser.log"
+              second=0
+              # shellcheck disable=SC2086
+              run "$temp/vitest-browser-second.json" "$temp/vitest-browser.log" $files || second=$?
+              node tools/ci/cold-cache.mjs merge "$temp/vitest-browser-first.json" "$temp/vitest-browser-second.json" "$temp/vitest-browser.json"
+              [ "$second" -eq 0 ]
             else
               exit 1
             fi
           fi
+      # After the tests, whatever they did: the cache is saved from a red target too.
+      - name: Save the cache of Vite
+        if: ${{ always() && steps.vite-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: web/node_modules/.vite
+          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'web/vite.config.ts') }}
       - name: Failing and flaky tests, as annotations
         if: always()
         shell: bash

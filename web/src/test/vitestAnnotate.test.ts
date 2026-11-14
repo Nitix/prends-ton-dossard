@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 // @ts-expect-error a script in plain JavaScript
-import { isColdCache } from "../../../tools/ci/cold-cache.mjs";
+import { filesToRerun, mergeReports } from "../../../tools/ci/cold-cache.mjs";
 // @ts-expect-error a script in plain JavaScript
 import * as tool from "../../../tools/ci/vitest-annotate.mjs";
 
@@ -178,23 +178,43 @@ test("flakyTitle — « Tests en échec — Safari » devient « Tests instables
   expect(flakyTitle("Tests en échec —   Chrome")).toBe("Tests instables — Chrome");
 });
 
-test("isColdCache — seuls les fichiers qui n'ont pas pu être importés justifient de relancer la suite", () => {
-  const importFailure = { status: "failed", assertionResults: [] };
-  const passed = { status: "passed", assertionResults: [{ status: "passed" }] };
-  const failedTest = { status: "failed", assertionResults: [{ status: "failed" }] };
+const importFailure = { name: "/w/a.test.tsx", status: "failed", assertionResults: [] };
+const passed = {
+  name: "/w/b.test.tsx",
+  status: "passed",
+  assertionResults: [{ status: "passed" }],
+};
+const failedTest = {
+  name: "/w/c.test.tsx",
+  status: "failed",
+  assertionResults: [{ status: "failed" }],
+};
+const rerun = { name: "/w/a.test.tsx", status: "passed", assertionResults: [{ status: "passed" }] };
+
+test("filesToRerun — seuls les fichiers qui n'ont pas pu être importés sont relancés, même si un autre test a échoué", () => {
   // A file that did not import: a cold cache.
-  expect(isColdCache({ testResults: [passed, importFailure] }, "")).toBe(true);
-  // A test that failed is a failure, even if the log has the words of a cold cache.
+  expect(filesToRerun({ testResults: [passed, importFailure] }, "")).toEqual(["/w/a.test.tsx"]);
+  // The same with a test that really failed in another file: the import failure is run again.
   expect(
-    isColdCache(
-      { testResults: [importFailure, failedTest] },
-      "Failed to fetch dynamically imported module",
-    ),
-  ).toBe(false);
-  expect(isColdCache({ testResults: [failedTest] }, "Vite unexpectedly reloaded a test")).toBe(
-    false,
+    filesToRerun({ testResults: [importFailure, failedTest] }, "Failed to fetch dynamically"),
+  ).toEqual(["/w/a.test.tsx"]);
+  // Only a failed test: a failure, whatever the log says.
+  expect(filesToRerun({ testResults: [failedTest] }, "Vite unexpectedly reloaded a test")).toBe(
+    null,
   );
-  // No failed file: only an error outside of a test, with the signature in the log.
-  expect(isColdCache({ testResults: [passed] }, "Vite unexpectedly reloaded a test")).toBe(true);
-  expect(isColdCache({ testResults: [passed] }, "some other unhandled error")).toBe(false);
+  // No failed file: only an error outside of a test, with the signature in the log: everything.
+  expect(filesToRerun({ testResults: [passed] }, "Vite unexpectedly reloaded a test")).toEqual([]);
+  expect(filesToRerun({ testResults: [passed] }, "some other unhandled error")).toBe(null);
+});
+
+test("mergeReports — le second passage prend la place des fichiers relancés, les vrais échecs du premier restent", () => {
+  const clean = mergeReports({ testResults: [importFailure] }, { testResults: [rerun] });
+  expect(clean.success).toBe(true);
+  expect(clean.testResults).toEqual([rerun]);
+  const kept = mergeReports({ testResults: [importFailure, failedTest] }, { testResults: [rerun] });
+  expect(kept.success).toBe(false);
+  expect(kept.testResults.map((file: { name: string }) => file.name)).toEqual([
+    "/w/c.test.tsx",
+    "/w/a.test.tsx",
+  ]);
 });
