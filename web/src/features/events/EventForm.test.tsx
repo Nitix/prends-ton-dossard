@@ -2016,7 +2016,7 @@ test("EventForm — l'ouverture propre d'une épreuve : une case de 44 px, deux 
     .element(row.getByLabelText(fr.form.formatOpening, { exact: true }))
     .not.toBeInTheDocument();
   const label = box.element().closest("label");
-  expect(label?.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(label?.getBoundingClientRect().height).toBeGreaterThanOrEqual(MIN_TARGET);
 
   await box.click();
 
