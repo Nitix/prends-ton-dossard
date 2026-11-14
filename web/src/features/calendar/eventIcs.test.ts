@@ -4,7 +4,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import type { Reminder } from "../../lib/types";
 import { toEventView } from "../events/api";
-import { event2Record, eventRecord } from "../events/testFixture";
+import { event2Record, eventRecord, f15, f42, p1 } from "../events/testFixture";
 import { eventIcs, icsFileName } from "./eventIcs";
 
 const APP_URL = "https://courses.example.test";
@@ -416,5 +416,81 @@ describe("eventIcs — une course au mois", () => {
     const [, opening] = events(eventIcs(view, APP_URL, now(), "en", custom));
 
     expect(opening?.SUMMARY).toBe("Ouvre : Trail des Crêtes");
+  });
+});
+
+const ALICE = "aliceRunner0000";
+
+/** A race of two formats, the semi (f42, named « Semi ») and the 15, Alice being on the semi. */
+function byFormat(changes: Record<string, unknown>, semi: object = {}, fifteen: object = {}) {
+  return viewOf({
+    ...changes,
+    expand: {
+      formats_via_event: [
+        { ...f42, name: "Semi", ...semi },
+        { ...f15, ...fifteen },
+      ],
+      participations_via_event: [p1],
+    },
+  });
+}
+
+describe("eventIcs — l'ouverture de chaque épreuve", () => {
+  const own = { registration_opening: "2026-11-17", registration_opening_time: "12:00" };
+  const general = { registration_opening: "2026-11-10", registration_opening_time: "10:00" };
+
+  test("une personne sur l'épreuve : le VEVENT de l'ouverture de son épreuve, avec le nom de l'épreuve et les alarmes", () => {
+    const ics = eventIcs(byFormat(general, own), APP_URL, now(), "fr", fr, ["day", "hour"], ALICE);
+
+    const [, opening, ...others] = events(ics);
+
+    expect(others).toEqual([]);
+    expect(opening).toMatchObject({
+      UID: "opening-f42@prends-ton-dossard",
+      SUMMARY: "Ouverture des inscriptions : Trail des Crêtes · Semi",
+      DTSTART: "20261117T110000Z",
+      DTEND: "20261117T113000Z",
+    });
+    expect(alarms(ics, "opening-f42@prends-ton-dossard").map(([trigger]) => trigger)).toEqual([
+      "TRIGGER:-P1D",
+      "TRIGGER:-PT1H",
+    ]);
+  });
+
+  test("sans personne : l'ouverture de la course, avec son UID", () => {
+    const [, opening, ...others] = events(
+      eventIcs(byFormat(general, own), APP_URL, now(), "fr", fr),
+    );
+
+    expect(others).toEqual([]);
+    expect(opening?.UID).toBe("opening-event@prends-ton-dossard");
+    expect(opening?.SUMMARY).toBe("Ouverture des inscriptions : Trail des Crêtes");
+  });
+
+  test("une course sans ouverture à elle et sans personne : un VEVENT par ouverture d'épreuve, la plus proche d'abord", () => {
+    const ics = eventIcs(
+      byFormat({}, own, { registration_opening: "2026-11-12", registration_opening_time: "09:00" }),
+      APP_URL,
+      now(),
+      "fr",
+      fr,
+    );
+
+    const [, first, second, ...others] = events(ics);
+
+    expect(others).toEqual([]);
+    expect(first?.UID).toBe("opening-f15@prends-ton-dossard");
+    expect(first?.SUMMARY?.replaceAll(/\s/g, " ")).toBe(
+      "Ouverture des inscriptions : Trail des Crêtes · Trail 15 km",
+    );
+    expect(second?.UID).toBe("opening-f42@prends-ton-dossard");
+  });
+
+  test("en anglais : le titre de l'ouverture d'une épreuve", () => {
+    const [, opening] = events(
+      eventIcs(byFormat(general, own), APP_URL, now(), "en", en, [], ALICE),
+    );
+
+    expect(opening?.SUMMARY).toBe("Registration opens: Trail des Crêtes · Semi");
   });
 });

@@ -300,3 +300,171 @@ func TestCalendarFeed_NoAlarmOnTheDemo(t *testing.T) {
 		t.Errorf("an alarm in the feed of the demo:\n%q", feed)
 	}
 }
+
+func TestCalendarFeed_FormatOpenings(t *testing.T) {
+	type fixture struct {
+		app            *tests.TestApp
+		fx             testutil.Fixture
+		event          *core.Record
+		semi, marathon *core.Record
+		path           string
+	}
+	setUp := func(t *testing.T, eventOpening, eventTime string) *fixture {
+		t.Helper()
+		app := testutil.NewApp(t)
+		fx := testutil.Seed(t, app)
+		alice, err := app.FindRecordById("users", fx.Alice.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		alice.Set("reminders", []string{"day", "hour"})
+		if err := app.Save(alice); err != nil {
+			t.Fatal(err)
+		}
+		f := &fixture{app: app, fx: fx}
+		f.event = save(t, app, "events", map[string]any{
+			"name": "Marathon du lac d'Annecy", "location": "Annecy", "start_date": "2027-05-01", "created_by": fx.AliceRunner.Id,
+			"registration_opening": eventOpening, "registration_opening_time": eventTime,
+		})
+		format := func(name, day, hhmm string) *core.Record {
+			return save(t, app, "formats", map[string]any{
+				"event": f.event.Id, "name": name, "race_type": fx.Trail.Id, "distance_km": 21,
+				"registration_opening": day, "registration_opening_time": hhmm,
+			})
+		}
+		f.semi = format("Semi", "2026-11-17", "12:00")
+		f.marathon = format("Marathon", "2026-11-18", "12:00")
+		f.path = subscribe(t, app, fx.Alice, "fr")
+		return f
+	}
+	place := func(t *testing.T, f *fixture, status string, formats ...*core.Record) {
+		t.Helper()
+		if len(formats) == 0 {
+			save(t, f.app, "participations", map[string]any{
+				"runner": f.fx.AliceRunner.Id, "event": f.event.Id, "status": status, "confirmed": true, "added_by": f.fx.AliceRunner.Id,
+			})
+		}
+		for _, format := range formats {
+			save(t, f.app, "participations", map[string]any{
+				"runner": f.fx.AliceRunner.Id, "format": format.Id, "status": status, "confirmed": true, "added_by": f.fx.AliceRunner.Id,
+			})
+		}
+	}
+	openings := func(t *testing.T, f *fixture) map[string]vevent {
+		t.Helper()
+		_, feed := request(t, f.app, http.MethodGet, f.path, nil, "", http.StatusOK)
+		out := map[string]vevent{}
+		for _, event := range parseFeed(t, feed) {
+			if strings.HasPrefix(event["UID"], "opening-") {
+				out[event["UID"]] = event
+			}
+		}
+		return out
+	}
+	formatUID := func(format, runner *core.Record) string { return openingUID(format, runner) }
+
+	t.Run("event_uid_unchanged", func(t *testing.T) {
+		f := setUp(t, "2026-11-16", "10:00")
+		place(t, f, "interested")
+		got := openings(t, f)
+		want := openingUID(f.event, f.fx.AliceRunner)
+		if len(got) != 1 || got[want]["SUMMARY"] != "Ouverture des inscriptions · Marathon du lac d'Annecy" {
+			t.Errorf("openings = %v, want only %s", got, want)
+		}
+		if got[want]["DTSTART"] != "20261116T090000Z" {
+			t.Errorf("DTSTART = %q", got[want]["DTSTART"])
+		}
+	})
+
+	t.Run("a runner on the semi has the opening of the semi", func(t *testing.T) {
+		f := setUp(t, "2026-11-16", "10:00")
+		place(t, f, "interested", f.semi)
+		got := openings(t, f)
+		uid := formatUID(f.semi, f.fx.AliceRunner)
+		if len(got) != 1 {
+			t.Fatalf("openings = %v, want one", got)
+		}
+		if got[uid]["SUMMARY"] != "Ouverture des inscriptions · Marathon du lac d'Annecy · Semi" || got[uid]["DTSTART"] != "20261117T110000Z" {
+			t.Errorf("opening = %v", got[uid])
+		}
+		_, feed := request(t, f.app, http.MethodGet, f.path, nil, "", http.StatusOK)
+		triggers, _ := alarmsOf(t, feed, uid)
+		if !slices.Equal(triggers, []string{"-P1D", "-PT1H"}) {
+			t.Errorf("triggers = %q", triggers)
+		}
+	})
+
+	t.Run("a runner on two formats has two openings", func(t *testing.T) {
+		f := setUp(t, "2026-11-16", "10:00")
+		place(t, f, "registered", f.semi, f.marathon)
+		got := openings(t, f)
+		for _, format := range []*core.Record{f.semi, f.marathon} {
+			if _, ok := got[formatUID(format, f.fx.AliceRunner)]; !ok {
+				t.Errorf("no opening for %s: %v", format.GetString("name"), got)
+			}
+		}
+		if len(got) != 2 {
+			t.Errorf("%d openings, want 2", len(got))
+		}
+	})
+
+	t.Run("no own opening and no format gives every format opening", func(t *testing.T) {
+		f := setUp(t, "", "")
+		place(t, f, "interested")
+		got := openings(t, f)
+		if len(got) != 2 {
+			t.Errorf("%d openings, want 2: %v", len(got), got)
+		}
+		// A third format with an opening of its own makes three.
+		save(t, f.app, "formats", map[string]any{
+			"event": f.event.Id, "name": "Ultra", "race_type": f.fx.Trail.Id, "distance_km": 80,
+			"registration_opening": "2026-11-19", "registration_opening_time": "12:00",
+		})
+		if got := openings(t, f); len(got) != 3 {
+			t.Errorf("%d openings, want 3: %v", len(got), got)
+		}
+	})
+
+	// The event opens on Monday with no time; one format has a day alone (Tuesday,
+	// 09:00 counted), another the same Tuesday at 09:00. The ids are random, so the
+	// test decides which of the two carries the written time.
+	for _, written := range []string{"smaller_id", "larger_id"} {
+		t.Run("the same instant with a time written is one entry with that time, "+written, func(t *testing.T) {
+			f := setUp(t, "2026-11-16", "")
+			pair := []*core.Record{}
+			for _, name := range []string{"Duo A", "Duo B"} {
+				pair = append(pair, save(t, f.app, "formats", map[string]any{
+					"event": f.event.Id, "name": name, "race_type": f.fx.Trail.Id, "distance_km": 10,
+					"registration_opening": "2026-11-17",
+				}))
+			}
+			slices.SortFunc(pair, func(a, b *core.Record) int { return strings.Compare(a.Id, b.Id) })
+			with := pair[0]
+			if written == "larger_id" {
+				with = pair[1]
+			}
+			with.Set("registration_opening_time", "09:00")
+			if err := f.app.Save(with); err != nil {
+				t.Fatal(err)
+			}
+			place(t, f, "interested", pair...)
+			got := openings(t, f)
+			if len(got) != 1 {
+				t.Fatalf("%d openings, want 1: %v", len(got), got)
+			}
+			for _, entry := range got {
+				if entry["DTSTART"] != "20261117T080000Z" {
+					t.Errorf("DTSTART = %q, want 20261117T080000Z (09:00 Paris)", entry["DTSTART"])
+				}
+			}
+		})
+	}
+
+	t.Run("a supporter has none", func(t *testing.T) {
+		f := setUp(t, "2026-11-16", "10:00")
+		place(t, f, "supporter")
+		if got := openings(t, f); len(got) != 0 {
+			t.Errorf("openings = %v, want none", got)
+		}
+	})
+}

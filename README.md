@@ -204,6 +204,14 @@ Un planificateur du programme passe chaque minute (`ptd-reminders`). Il envoie u
 - **iPhone et iPad.** Les notifications ne marchent que dans **l'appli installée** (Partager, « Sur l'écran d'accueil »), avec **iOS 16.4 ou plus** ; la permission se demande par un geste (le bouton « Activer sur cet appareil »). Le site le dit sur la page des Réglages.
 - **Les alarmes d'un calendrier abonné** ne sont pas garanties : Apple Calendrier (sur Mac) retire par défaut les alertes d'un abonnement (décocher « Supprimer les alertes » dans les réglages du calendrier), et Google Agenda et Outlook les ignorent d'après des utilisateurs. Les notifications sont le canal sûr.
 
+### L'ouverture d'une épreuve
+
+Une épreuve peut ouvrir ses inscriptions à un autre moment que la course (le Marathon du lac d'Annecy ouvre un jour différent par épreuve). Dans le formulaire de la course, cocher « Cette épreuve ouvre ses inscriptions à un autre moment » dans le bloc de l'épreuve, puis donner un jour, une heure, ou les deux. **Un jour seul ou une heure seule reprend l'autre partie de l'ouverture de la course**, qui doit donc exister ; une épreuve sans ouverture à elle suit celle de la course. L'assistant fait de même avec `registration_opening` et `registration_opening_time` dans `add_format` et `update_format` ; `get_event` donne, par épreuve, ces champs et `opens`, l'ouverture qui en résulte.
+
+Chacun voit, en haut de la fiche, l'ouverture de l'épreuve où la personne a le statut « Inscrit » ou « Intéressé » (sinon l'ouverture de la course), et la personne est prévenue au moment de celle-là, dans ses alarmes d'agenda et ses notifications. Une course qui n'a pas d'ouverture à elle donne à une personne sans épreuve un rappel pour chacune de ses épreuves.
+
+- **Pour essayer :** sur une instance neuve (son `seed` a l'épreuve « Hyrox Doubles » de « Hyrox Lyon », qui a son jour) ; dev garde les données d'un ancien seed : y donner une ouverture à une épreuve d'une course qui existe déjà. Puis ouvrir la fiche comme coureur de cette épreuve puis comme supporteur, regarder l'accueil, l'agenda abonné, « Ajouter à l'agenda » et « Partager », et voir le formulaire sur un téléphone. Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-v9.md`.
+
 ## Météo
 
 La fiche d'une course montre la **« Météo prévue »** de ses jours, **de J-7 au dernier jour** (une course dont seul le mois est connu n'en a pas). Les données sont celles d'[Open-Meteo](https://open-meteo.com/) (licence CC BY 4.0, lieux GeoNames pour le géocodage). Son API gratuite est réservée à un **usage non commercial** : un site privé entre amis, sans abonnement ni publicité, en fait partie.

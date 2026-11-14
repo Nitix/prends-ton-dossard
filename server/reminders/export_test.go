@@ -49,3 +49,12 @@ func Serve(t testing.TB, app core.App) {
 
 // RegisterJob is the registration of the cron job with a notifier of the tests.
 func RegisterJob(app core.App, notifier Notifier) { registerJob(app, notifier) }
+
+// SetExpandFormats replaces the reading of the race types of an event's formats
+// until the test ends.
+func SetExpandFormats(t testing.TB, f func(app core.App, formats []*core.Record) error) {
+	t.Helper()
+	old := expandFormats
+	expandFormats = f
+	t.Cleanup(func() { expandFormats = old })
+}

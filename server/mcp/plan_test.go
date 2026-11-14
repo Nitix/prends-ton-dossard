@@ -227,6 +227,7 @@ func TestPlan_Creation_NotFilledInIsEmptyOrZero(t *testing.T) {
 		"id": idOf(ops[2]), "event": idOf(ops[0]), "name": "", "race_type": trailType,
 		"distance_km": 15, "duration_min": 0, "time_limit_min": 0, "elevation_gain_m": 700,
 		"price_eur": 0, "route_url": "", "date": "", "start_time": "",
+		"registration_opening": "", "registration_opening_time": "",
 	})
 }
 
@@ -811,5 +812,221 @@ func TestPlan_Modification_OnlyAChangedOpeningIsSent(t *testing.T) {
 		was.RegistrationOpening, was.RegistrationOpeningTime = "2026-05-01", "10:00"
 		ops, _, _ := mcp.PlanBatch(editDraft(nil), was, me)
 		wantExactBody(t, ops[0], map[string]any{"registration_opening": "", "registration_opening_time": ""})
+	})
+}
+
+// The ports of buildBatch — les ouvertures des épreuves attendent la course
+// (saveEvent.test.ts): a race on 5 December with a deadline on the 20th of November,
+// two formats; F42 has no date.
+func openingsStored(change func(*mcp.StoredEvent)) *mcp.StoredEvent {
+	stored := &mcp.StoredEvent{
+		ID: "event", Name: "Trail des Crêtes", Location: "Annecy", StartDate: "2026-12-05",
+		RegistrationDeadline: "2026-11-20", RegistrationOpening: "2026-11-10",
+		Formats: []mcp.FormatDraft{
+			{ID: "f42", RaceType: trailType, DistanceKm: 42, TimeLimitMin: 600, ElevationGainM: 2400},
+			draftF15(),
+		},
+	}
+	if change != nil {
+		change(stored)
+	}
+	return stored
+}
+
+func openingsDraft(change func(*mcp.EventDraft)) mcp.EventDraft {
+	draft := mcp.EventDraft{
+		ID: "event", Name: "Trail des Crêtes", Location: "Annecy", StartDate: "2026-12-05",
+		RegistrationDeadline: "2026-11-20", RegistrationOpening: "2026-11-10",
+		Formats: []mcp.FormatDraft{
+			{ID: "f42", RaceType: trailType, DistanceKm: 42, TimeLimitMin: 600, ElevationGainM: 2400},
+			draftF15(),
+		},
+	}
+	if change != nil {
+		change(&draft)
+	}
+	return draft
+}
+
+func opsOn(ops []mcp.BatchOp, id string) []mcp.BatchOp {
+	var out []mcp.BatchOp
+	for _, op := range ops {
+		if idOf(op) == id {
+			out = append(out, op)
+		}
+	}
+	return out
+}
+
+func TestPlanBatch_FormatOpenings(t *testing.T) {
+	t.Run("the format sends its opening, and empty when it has none", func(t *testing.T) {
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.Formats[0].RegistrationOpening, d.Formats[0].RegistrationOpeningTime = "2026-11-17", "10:00"
+			d.RegistrationOpening = ""
+		})
+		ops, _, _ := mcp.PlanBatch(draft, openingsStored(nil), me)
+		wantBody(t, opsOn(ops, "f42")[0], map[string]any{"registration_opening": "2026-11-17", "registration_opening_time": "10:00"})
+		// F15 is unchanged: no operation, as for every unchanged format.
+		if got := opsOn(ops, "f15"); len(got) != 0 {
+			t.Errorf("F15 is unchanged and has %d operations", len(got))
+		}
+	})
+
+	t.Run("a deadline brought forward with the opening of the format: the format goes before the event", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) { s.Formats[0].RegistrationOpening = "2026-11-17" })
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.RegistrationDeadline = "2026-11-15"
+			d.Formats[0].RegistrationOpening = "2026-11-14"
+		})
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		wantSummary(t, ops, "update formats", "update events")
+		wantBody(t, ops[0], map[string]any{"registration_opening": "2026-11-14"})
+	})
+
+	t.Run("a deadline put back with the opening of the format: the opening waits, day and time together", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) {
+			s.RegistrationDeadline = "2026-11-15"
+			s.Formats[0].RegistrationOpening, s.Formats[0].RegistrationOpeningTime = "2026-11-15", "10:00"
+		})
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.Formats[0].RegistrationOpening, d.Formats[0].RegistrationOpeningTime = "2026-11-18", "10:00"
+		})
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		wantSummary(t, ops, "update formats", "update events", "update formats")
+		wantBody(t, ops[0], map[string]any{"registration_opening": "", "registration_opening_time": ""})
+		wantExactBody(t, ops[2], map[string]any{"registration_opening": "2026-11-18", "registration_opening_time": "10:00"})
+		if ops[2].Target != "format" || ops[2].Format != 0 {
+			t.Errorf("the late operation is about %s %d, want format 0", ops[2].Target, ops[2].Format)
+		}
+	})
+
+	t.Run("an opening after the first day stored waits for the event that moves its start", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) { s.RegistrationDeadline = "" })
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.RegistrationDeadline, d.StartDate = "", "2026-12-10"
+			d.Formats[0].RegistrationOpening = "2026-12-08"
+		})
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		// F42 had no opening: its blank is what it holds, so there is no request before the event
+		// (the TypeScript sends it all the same).
+		wantSummary(t, ops, "update events", "update formats")
+		last := ops[len(ops)-1]
+		if idOf(last) != "f42" {
+			t.Fatalf("the last operation is on %s, want F42", idOf(last))
+		}
+		wantBody(t, last, map[string]any{"registration_opening": "2026-12-08"})
+	})
+
+	t.Run("a time alone that starts to depend on the opening of the event waits for it", func(t *testing.T) {
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.RegistrationOpening = "2026-11-10"
+			d.Formats[1].RegistrationOpeningTime = "10:00"
+		})
+		stored := openingsStored(func(s *mcp.StoredEvent) { s.RegistrationOpening = "" })
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		// F15 holds no opening, so nothing is sent for it before the event (the TypeScript sends it).
+		wantSummary(t, ops, "update events", "update formats")
+		wantExactBody(t, ops[1], map[string]any{"registration_opening": "", "registration_opening_time": "10:00"})
+		if idOf(ops[1]) != "f15" {
+			t.Errorf("the late operation is on %s, want F15", idOf(ops[1]))
+		}
+	})
+
+	t.Run("the opening of the event cleared, the format completed: it goes before the event", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) {
+			s.RegistrationOpening, s.RegistrationOpeningTime = "2026-11-10", "09:00"
+			s.Formats[0].RegistrationOpening = "2026-11-17"
+		})
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.Formats[0].RegistrationOpening, d.Formats[0].RegistrationOpeningTime = "2026-11-17", "10:00"
+			d.RegistrationOpening = ""
+		})
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		wantSummary(t, ops, "update formats", "update events")
+		if idOf(ops[0]) != "f42" {
+			t.Fatalf("the first operation is on %s, want F42", idOf(ops[0]))
+		}
+		wantBody(t, ops[0], map[string]any{"registration_opening": "2026-11-17", "registration_opening_time": "10:00"})
+	})
+
+	t.Run("a new format with an opening is created after the event", func(t *testing.T) {
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.Formats = append(d.Formats, mcp.FormatDraft{RaceType: trailType, DistanceKm: 10, RegistrationOpening: "2026-11-17"})
+		})
+		ops, _, ids := mcp.PlanBatch(draft, openingsStored(nil), me)
+		wantSummary(t, ops, "create formats")
+		if idOf(ops[0]) != ids[2] {
+			t.Errorf("the creation is of %s, want %s", idOf(ops[0]), ids[2])
+		}
+		wantBody(t, ops[0], map[string]any{"event": "event", "registration_opening": "2026-11-17", "registration_opening_time": ""})
+	})
+
+	t.Run("a race known by its month: the opening goes up to the last day of the month", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) {
+			s.StartDate, s.EndDate, s.DatePrecision, s.RegistrationDeadline = "2026-12-01", "2026-12-31", "month", ""
+		})
+		at := func(day string) []mcp.BatchOp {
+			draft := openingsDraft(func(d *mcp.EventDraft) {
+				d.StartDate, d.EndDate, d.DatePrecision, d.RegistrationDeadline = "2026-12-01", "2026-12-31", "month", ""
+				d.Formats[0].RegistrationOpening = day
+			})
+			ops, _, _ := mcp.PlanBatch(draft, stored, me)
+			return ops
+		}
+		early := opsOn(at("2026-12-20"), "f42")
+		if len(early) != 1 {
+			t.Fatalf("the 20th of December gives %d operations on F42, want 1", len(early))
+		}
+		wantBody(t, early[0], map[string]any{"registration_opening": "2026-12-20"})
+		// The 2nd of January is after it. The final state of this draft is not valid, as the race stays in
+		// December: the test only pins the limit that the waiting rule uses.
+		late := at("2027-01-02")
+		if got := summaryOf(late); got[len(got)-1] != "update formats" || idOf(late[len(late)-1]) != "f42" {
+			t.Fatalf("the operations are %q: the opening of F42 should come last", got)
+		}
+		wantBody(t, late[len(late)-1], map[string]any{"registration_opening": "2027-01-02"})
+		for _, op := range opsOn(late, "f42")[:len(opsOn(late, "f42"))-1] {
+			wantBody(t, op, map[string]any{"registration_opening": ""})
+		}
+	})
+}
+
+func TestPlanBatch_FormatOpenings_WithAWaitingDate(t *testing.T) {
+	t.Run("the race moves a week earlier, the opening stays in the new days: it waits with the date", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) {
+			s.StartDate, s.EndDate, s.RegistrationDeadline, s.RegistrationOpening = "2026-12-08", "2026-12-10", "", "2026-11-01"
+			s.Formats[0].Date, s.Formats[0].RegistrationOpening = "2026-12-10", "2026-12-02"
+		})
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.StartDate, d.EndDate, d.RegistrationDeadline, d.RegistrationOpening = "2026-12-01", "2026-12-03", "", "2026-11-01"
+			d.Formats[0].Date, d.Formats[0].RegistrationOpening = "2026-12-03", "2026-12-02"
+		})
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		wantSummary(t, ops, "update formats", "update events", "update formats")
+		wantBody(t, ops[0], map[string]any{"date": "", "registration_opening": "", "registration_opening_time": ""})
+		wantExactBody(t, ops[2], map[string]any{"date": "2026-12-03", "registration_opening": "2026-12-02", "registration_opening_time": ""})
+	})
+
+	t.Run("from a month to a day, with the opening of a format", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) {
+			s.StartDate, s.EndDate, s.DatePrecision, s.RegistrationDeadline = "2026-12-01", "2026-12-31", "month", ""
+			s.Formats[0].RegistrationOpening = "2026-12-10"
+		})
+		draft := openingsDraft(func(d *mcp.EventDraft) {
+			d.StartDate, d.EndDate, d.RegistrationDeadline = "2026-12-05", "2026-12-12", ""
+			d.Formats[0].Date, d.Formats[0].RegistrationOpening = "2026-12-12", "2026-12-10"
+		})
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		wantSummary(t, ops, "update formats", "update events", "update formats")
+		wantBody(t, ops[0], map[string]any{"date": "", "registration_opening": ""})
+		wantBody(t, ops[2], map[string]any{"date": "2026-12-12", "registration_opening": "2026-12-10"})
+	})
+
+	t.Run("a stored partial opening unchecked while the opening of the event is cleared: it goes empty before the event", func(t *testing.T) {
+		stored := openingsStored(func(s *mcp.StoredEvent) { s.Formats[0].RegistrationOpening = "2026-11-17" })
+		draft := openingsDraft(func(d *mcp.EventDraft) { d.RegistrationOpening = "" })
+		ops, _, _ := mcp.PlanBatch(draft, stored, me)
+		wantSummary(t, ops, "update formats", "update events")
+		wantBody(t, ops[0], map[string]any{"registration_opening": "", "registration_opening_time": ""})
 	})
 }

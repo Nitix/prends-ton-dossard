@@ -1,5 +1,6 @@
 import type { ParticipationRecord } from "../../lib/types";
 import type { EventView, FormatView, ParticipationView } from "../events/api";
+import { openingOf } from "../events/opening";
 import { registrationState, type RegistrationState } from "../events/registration";
 
 /**
@@ -31,7 +32,7 @@ function interestedOf(list: ParticipationView[], runnerId: string): Participatio
  * What the runner has to register for: their « Interested » participations
  * (on a format, or on the event alone) in the events whose registration is
  * open, the deadline being today or later, or opens today or later
- * (`registrationState`). An event with no deadline and no opening to come, or
+ * (`registrationState`, with the opening of the participation's own format). An event with no deadline and no opening to come, or
  * whose registration is closed, has nothing to do. `runnerId` is not known
  * while the runner of the user loads: nothing then.
  *
@@ -47,25 +48,20 @@ export function todosOf(
   if (runnerId === undefined) return [];
   return views
     .flatMap((view): TodoRow[] => {
-      const state = registrationState(view.event, today);
-      if (state === null || state.kind === "closed") return [];
-      const day = state.kind === "open" ? state.deadline : state.opening;
+      // Each participation is ranked by the opening of its own format (the
+      // event's when it has none, or when it is on the event alone).
+      const rowOf = (participation: ParticipationRecord, formatView?: FormatView): TodoRow[] => {
+        const opening = openingOf(view, participation.format || undefined, today);
+        const state = registrationState(view.event, opening, today);
+        if (state === null || state.kind === "closed") return [];
+        const day = state.kind === "open" ? state.deadline : state.opening;
+        return [{ view, formatView, participation, day, state }];
+      };
       return [
         ...view.formats.flatMap((formatView) =>
-          interestedOf(formatView.participations, runnerId).map((participation) => ({
-            view,
-            formatView,
-            participation,
-            day,
-            state,
-          })),
+          interestedOf(formatView.participations, runnerId).flatMap((p) => rowOf(p, formatView)),
         ),
-        ...interestedOf(view.interested, runnerId).map((participation) => ({
-          view,
-          participation,
-          day,
-          state,
-        })),
+        ...interestedOf(view.interested, runnerId).flatMap((p) => rowOf(p)),
       ];
     })
     .toSorted(

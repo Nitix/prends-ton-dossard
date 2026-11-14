@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -49,11 +50,14 @@ async function drawn(node: React.ReactNode, languages = ["fr"]) {
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   return render(
-    <I18nProvider languages={languages}>
-      <TodayProvider value={Temporal.PlainDate.from("2027-05-20")}>
-        <RouterProvider router={router} />
-      </TodayProvider>
-    </I18nProvider>,
+    // The card and the hero read the runner of the session, which nobody is here.
+    <QueryClientProvider client={new QueryClient()}>
+      <I18nProvider languages={languages}>
+        <TodayProvider value={Temporal.PlainDate.from("2027-05-20")}>
+          <RouterProvider router={router} />
+        </TodayProvider>
+      </I18nProvider>
+    </QueryClientProvider>,
   );
 }
 

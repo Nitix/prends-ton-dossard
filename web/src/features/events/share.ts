@@ -3,6 +3,7 @@ import { isMonthOnly } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventView } from "./api";
 import { formatMeasures } from "./formatName";
+import { formatOpening, generalOpening } from "./opening";
 import { openingText, registrationState } from "./registration";
 
 /** What separates the measures of a format, and the formats of a race. */
@@ -52,12 +53,19 @@ export function shareText(
       // The time of the start, for a race that has days: a race known by its month has none.
       if (format.start_time && !isMonthOnly(event))
         parts.push(t.event.startAt(f.startTime(format.start_time)));
+      // The opening of the format, when it has its own and it is to come: always its day, since the text is read later.
+      const opening = formatOpening(event, format);
+      if (opening && Temporal.PlainDate.compare(opening.day, today) >= 0) {
+        const day = t.event.openingOnDate(f.date(opening.day));
+        const at = opening.time === "" ? "" : ` ${t.event.openingAt(opening.time)}`;
+        parts.push(t.share.formatOpening(`${day}${at}`));
+      }
       return parts.join(MEASURES);
     });
     lines.push(t.share.formats(list.join(FORMATS)));
   }
 
-  const state = registrationState(event, today);
+  const state = registrationState(event, generalOpening(view, today), today);
   if (state) {
     if (state.kind === "soon" || state.kind === "today") {
       // The text is read later: the day of the opening, never « aujourd'hui ».

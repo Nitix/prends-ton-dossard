@@ -5,8 +5,10 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { daysBetween, isMonthOnly } from "../../lib/dates";
 import { webAddress } from "../../lib/url";
 import { useToday } from "../../lib/useToday";
+import { useSession } from "../auth/session";
 import type { EventView } from "./api";
 import { eventWhen } from "./eventWhen";
+import { formatNames, shownOpening } from "./opening";
 import { RegisterLink } from "./RegisterLink";
 import { deadlineText, registrationState } from "./registration";
 
@@ -35,7 +37,11 @@ export function EventHero({
   const today = useToday();
   const { event, start } = view;
   const registration = webAddress(event.registration_url);
-  const deadline = registrationState(event, today);
+  // The opening that counts for the person who looks (their format's), else the event's.
+  const { runner } = useSession();
+  const opening = shownOpening(view, runner?.id, today);
+  const deadline = registrationState(event, opening, today);
+  const names = opening ? formatNames(view, opening, t, f) : "";
   // No ring for a race known by its month: there is no day to count to.
   const daysToGo = isMonthOnly(event) ? 0 : daysBetween(today, start);
 
@@ -68,7 +74,7 @@ export function EventHero({
             className="event-hero-deadline flex items-start gap-2 self-start rounded-2xl bg-(--hero-veil) px-3 py-2 text-sm font-semibold ring-1 ring-white/25"
           >
             <ClockIcon className="mt-px size-[1.125rem] shrink-0" />
-            <span>{deadlineText(deadline, f, t)}</span>
+            <span>{deadlineText(deadline, f, t, names)}</span>
           </p>
         )}
         {event.notes && (

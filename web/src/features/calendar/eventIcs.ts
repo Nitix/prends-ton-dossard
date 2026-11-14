@@ -1,8 +1,10 @@
 import type { Lang } from "../../i18n/detect";
 import type { Messages } from "../../i18n/fr";
 import { isMonthOnly, PARIS } from "../../lib/dates";
+import { createFormatters } from "../../lib/format";
 import type { Reminder } from "../../lib/types";
 import type { EventView } from "../events/api";
+import { calendarOpenings, formatNames } from "../events/opening";
 
 // The calendar file of one event, made in the browser for a calendar app to
 // import. It is written by the rules of the feed that the server makes of the
@@ -138,9 +140,11 @@ function stampValue(instant: Temporal.Instant): string {
  * « (date à préciser) » after its name: the calendar has a reminder at the start
  * of the month, and the same UID when the day is known (spec 5.4).
  *
- * An event with an opening of its registration has a second `VEVENT` for it:
- * with a time, thirty minutes in UTC (the time is Paris time, so the instant
- * moves with summer time); without, the whole day.
+ * Each opening of the registration that counts for `runnerId` (the viewer's runner;
+ * none: the event's own, else those of its formats) has a `VEVENT` of its own, see
+ * `calendarOpenings`: with a time, thirty minutes in UTC (the time is Paris time,
+ * so the instant moves with summer time); without, the whole day. The title of a
+ * format's opening names its formats, in the formats of the language of the file.
  */
 export function eventIcs(
   view: EventView,
@@ -149,6 +153,7 @@ export function eventIcs(
   lang: Lang,
   t: Messages,
   reminders: readonly Reminder[] = [],
+  runnerId?: string,
 ): string {
   const { event, start } = view;
   const monthOnly = isMonthOnly(event);
@@ -178,11 +183,12 @@ export function eventIcs(
   optional("LOCATION", textValue(event.location));
   optional("URL", uriValue(address));
   line("END", "VEVENT");
-  if (event.registration_opening) {
-    const day = Temporal.PlainDate.from(event.registration_opening);
-    const time = event.registration_opening_time ?? "";
+  for (const opening of calendarOpenings(view, runnerId)) {
+    const { day, time } = opening;
+    const [firstFormat] = opening.formatIds;
     line("BEGIN", "VEVENT");
-    line("UID", textValue(openingUid(event.id)));
+    // The event's own opening keeps its v7 UID; a format's has the one of its (first) format.
+    line("UID", textValue(openingUid(firstFormat ?? event.id)));
     line("DTSTAMP", stampValue(now));
     if (time === "") {
       line("DTSTART;VALUE=DATE", dateValue(day));
@@ -196,7 +202,13 @@ export function eventIcs(
       line("DTSTART", stampValue(starts));
       line("DTEND", stampValue(starts.add({ minutes: OPENING_MINUTES })));
     }
-    const title = t.event.openingCalendarTitle(event.name);
+    const title =
+      firstFormat === undefined
+        ? t.event.openingCalendarTitle(event.name)
+        : t.event.openingCalendarTitleOf(
+            event.name,
+            formatNames(view, opening, t, createFormatters(lang === "fr" ? "fr-FR" : "en-GB")),
+          );
     line("SUMMARY", textValue(title));
     optional("DESCRIPTION", textValue(address));
     optional("URL", uriValue(address));
@@ -243,8 +255,9 @@ export function downloadEventIcs(
   lang: Lang,
   t: Messages,
   reminders: readonly Reminder[] = [],
+  runnerId?: string,
 ): void {
-  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang, t, reminders);
+  const ics = eventIcs(view, location.origin, Temporal.Now.instant(), lang, t, reminders, runnerId);
   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;

@@ -2724,12 +2724,12 @@ func TestMigrations_V7DownThenUpWithData(t *testing.T) {
 
 	// The migrations that came after v7 go first, so that the seven below are
 	// the ones of v7.
-	after, err := runner.Down(1)
+	after, err := runner.Down(2)
 	if err != nil {
 		t.Fatalf("rolling the migrations after v7 back: %v", err)
 	}
-	if !slices.Equal(after, []string{"9s_super_admin.go"}) {
-		t.Fatalf("reverted %v, want the migrations after v7: [9s_super_admin.go]", after)
+	if !slices.Equal(after, []string{"9t_format_registration_opening.go", "9s_super_admin.go"}) {
+		t.Fatalf("reverted %v, want the migrations after v7", after)
 	}
 	reverted, err := runner.Down(7)
 	if err != nil {

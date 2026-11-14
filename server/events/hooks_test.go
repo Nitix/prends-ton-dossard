@@ -938,3 +938,151 @@ func TestEvents_RegistrationOpening(t *testing.T) {
 		},
 	})
 }
+
+// setting is a Before that saves values on a record, the way the code of the
+// application would: the hooks run on Save.
+func setting(record func(testutil.Fixture) *core.Record, values map[string]any) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		r, err := app.FindRecordById(record(fx).Collection().Name, record(fx).Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, v := range values {
+			r.Set(k, v)
+		}
+		if err := app.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// inOrder runs several Befores one after the other.
+func inOrder(befores ...func(testing.TB, *tests.TestApp, testutil.Fixture)) func(testing.TB, *tests.TestApp, testutil.Fixture) {
+	return func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+		t.Helper()
+		for _, b := range befores {
+			b(t, app, fx)
+		}
+	}
+}
+
+func f15(fx testutil.Fixture) *core.Record { return fx.F15 }
+
+// monthEvent turns the event of the fixture into a race known by its month
+// (June 2026), its formats having no date.
+var monthEvent = inOrder(
+	setting(f42, map[string]any{"date": ""}),
+	setting(event, map[string]any{"date_precision": "month", "start_date": "2026-06-01"}),
+)
+
+func storedFormat(t testing.TB, app core.App, id string) *core.Record {
+	t.Helper()
+	record, err := app.FindRecordById("formats", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+// A format's own opening is a real day, not after the day of the format (its
+// date, else the first day of the event, else the last day of the month), nor
+// after the deadline; its time is HH:MM; a day alone or a time alone needs the
+// opening of the event.
+func TestFormats_RegistrationOpening(t *testing.T) {
+	patch := func(name string, before func(testing.TB, *tests.TestApp, testutil.Fixture), target func(testutil.Fixture) *core.Record, payload string, status int, contains string) testutil.Row {
+		row := testutil.Row{
+			Name: name, As: "alice", Before: before, Method: http.MethodPatch, URL: records("formats", target),
+			Body: body(payload), Status: status,
+		}
+		if contains != "" {
+			row.Contains = []string{contains}
+		}
+		return row
+	}
+	withEventOpening := withOpening("2026-05-01", "10:00")
+	testutil.RunRows(t, []testutil.Row{
+		patch("a good opening", nil, f42, `{"registration_opening":"2026-05-01","registration_opening_time":"12:00"}`, http.StatusOK, ""),
+		patch("invalid_day", nil, f42, `{"registration_opening":"2026-02-31","registration_opening_time":"12:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "date_invalid")),
+		patch("on its day", nil, f42, `{"registration_opening":"2026-06-14","registration_opening_time":"12:00"}`, http.StatusOK, ""),
+		patch("after_its_day", nil, f42, `{"registration_opening":"2026-06-15","registration_opening_time":"12:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "registration_opening_after_start")),
+		patch("after_the_first_day", nil, f15, `{"registration_opening":"2026-06-14","registration_opening_time":"12:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "registration_opening_after_start")),
+		patch("the first day, undated", nil, f15, `{"registration_opening":"2026-06-13","registration_opening_time":"12:00"}`, http.StatusOK, ""),
+		patch("month_only after the last day", monthEvent, f15, `{"registration_opening":"2026-07-01","registration_opening_time":"12:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "registration_opening_after_start")),
+		patch("month_only on the last day", monthEvent, f15, `{"registration_opening":"2026-06-30","registration_opening_time":"12:00"}`, http.StatusOK, ""),
+		patch("after_deadline", withDeadline("2026-06-05"), f15, `{"registration_opening":"2026-06-06","registration_opening_time":"12:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "registration_opening_after_deadline")),
+		patch("on_the_deadline", withDeadline("2026-06-05"), f15, `{"registration_opening":"2026-06-05","registration_opening_time":"12:00"}`, http.StatusOK, ""),
+		patch("bad_time", nil, f42, `{"registration_opening":"2026-05-01","registration_opening_time":"24:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening_time", "time_invalid")),
+		patch("bad_time alone", withEventOpening, f42, `{"registration_opening_time":"9:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening_time", "time_invalid")),
+		patch("partial_with_event day alone", withEventOpening, f42, `{"registration_opening":"2026-05-02"}`, http.StatusOK, ""),
+		patch("partial_with_event time alone", withEventOpening, f42, `{"registration_opening_time":"08:00"}`, http.StatusOK, ""),
+		patch("partial_needs_the_event day alone", nil, f42, `{"registration_opening":"2026-05-02"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "opening_general_required")),
+		patch("partial_needs_the_event time alone", nil, f42, `{"registration_opening_time":"08:00"}`,
+			http.StatusBadRequest, fieldError("registration_opening", "opening_general_required")),
+		patch("both_without_event", nil, f42, `{"registration_opening":"2026-05-02","registration_opening_time":"08:00"}`, http.StatusOK, ""),
+		{
+			Name: "a new format with a day alone and no opening on the event", As: "alice", Method: http.MethodPost, URL: records("formats"),
+			Body:   body(`{"event":"%s","race_type":"%s","distance_km":10,"registration_opening":"2026-05-02"}`, idOf(event), idOf(road)),
+			Status: http.StatusBadRequest, Contains: []string{fieldError("registration_opening", "opening_general_required")},
+		},
+		{
+			Name: "a new format with its own opening", As: "alice", Method: http.MethodPost, URL: records("formats"),
+			Body:   body(`{"event":"%s","race_type":"%s","distance_km":10,"registration_opening":"2026-05-02","registration_opening_time":"08:00"}`, idOf(event), idOf(road)),
+			Status: http.StatusOK,
+		},
+	})
+}
+
+// A change of the event cannot leave a format with an opening that no longer
+// holds, and the opening of the event cannot be emptied under a format that
+// takes its day or time.
+func TestEvents_FormatOpeningHeld(t *testing.T) {
+	patch := func(name string, before func(testing.TB, *tests.TestApp, testutil.Fixture), payload string, status int, contains string) testutil.Row {
+		row := testutil.Row{
+			Name: name, As: "alice", Before: before, Method: http.MethodPatch, URL: records("events", event),
+			Body: body(payload), Status: status,
+		}
+		if contains != "" {
+			row.Contains = []string{contains}
+		}
+		return row
+	}
+	full := setting(f15, map[string]any{"registration_opening": "2026-06-08", "registration_opening_time": "12:00"})
+	both := inOrder(withOpening("2026-05-01", "10:00"), full)
+	dayAlone := inOrder(withOpening("2026-05-01", "10:00"), setting(f15, map[string]any{"registration_opening": "2026-06-08"}))
+	timeAlone := inOrder(withOpening("2026-05-01", "10:00"), setting(f15, map[string]any{"registration_opening_time": "08:00"}))
+	testutil.RunRows(t, []testutil.Row{
+		patch("a deadline before a format opening", full, `{"registration_deadline":"2026-06-05"}`,
+			http.StatusBadRequest, fieldError("registration_deadline", "format_opening_after_deadline")),
+		patch("a deadline on a format opening", full, `{"registration_deadline":"2026-06-08"}`, http.StatusOK, ""),
+		patch("a start before the opening of an undated format", full, `{"start_date":"2026-06-05","end_date":"2026-06-14"}`,
+			http.StatusBadRequest, fieldError("start_date", "format_opening_after_start")),
+		patch("a start on the opening of an undated format", full, `{"start_date":"2026-06-08","end_date":"2026-06-14"}`, http.StatusOK, ""),
+		patch("clearing_used_opening day alone", dayAlone, `{"registration_opening":"","registration_opening_time":""}`,
+			http.StatusBadRequest, fieldError("registration_opening", "opening_used_by_format")),
+		patch("clearing_used_opening time alone", timeAlone, `{"registration_opening":"","registration_opening_time":""}`,
+			http.StatusBadRequest, fieldError("registration_opening", "opening_used_by_format")),
+		patch("clearing the opening when formats have both", both, `{"registration_opening":"","registration_opening_time":""}`, http.StatusOK, ""),
+		{
+			Name: "clearing only the time of the event", As: "alice", Before: dayAlone, Method: http.MethodPatch, URL: records("events", event),
+			Body: body(`{"registration_opening_time":""}`), Status: http.StatusOK,
+			After: func(t testing.TB, app *tests.TestApp, fx testutil.Fixture) {
+				if day := storedFormat(t, app, fx.F15.Id).GetString("registration_opening"); day != "2026-06-08" {
+					t.Errorf("the format's day = %q, want it kept", day)
+				}
+			},
+		},
+		// The first day the openings are held against is the 1st once the day is known.
+		patch("a month-only race switched to a day, under a format opening", inOrder(monthEvent, full), `{"date_precision":"day"}`,
+			http.StatusBadRequest, fieldError("start_date", "format_opening_after_start")),
+		patch("an edit of the name only", full, `{"name":"Trail des Aiguilles"}`, http.StatusOK, ""),
+	})
+}

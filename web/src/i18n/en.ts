@@ -5,6 +5,9 @@ import { plural } from "./plural";
 
 // The English dictionary. `satisfies Messages` makes a missing or extra key
 // fail the type check.
+
+/** The title of the opening in a calendar file; the one of a format's opening is built on it. */
+const openingCalendarTitle = (name: string) => `Registration opens: ${name}`;
 export const en = {
   common: {
     appName: "Prends ton dossard",
@@ -355,13 +358,17 @@ export const en = {
     reminder: (date: string) => `Remember to register by ${date}.`,
     openingHero: "Registration opens",
     openingCard: "Opens",
+    openingFormat: "Registration for this race opens",
     openingAside: "Registration opens",
     openingTodo: "opens",
     openingToday: "today",
     openingOnDate: (date: string) => `on ${date}`,
     openingAt: (time: string) => `at ${time}`,
+    openingNames: (names: string) => `(${names})`,
     openingDeadline: (date: string) => `until ${date}`,
-    openingCalendarTitle: (name: string) => `Registration opens: ${name}`,
+    openingCalendarTitle,
+    openingCalendarTitleOf: (event: string, names: string) =>
+      `${openingCalendarTitle(event)} · ${names}`,
     addToCalendar: "Add to my calendar",
     calendarFileName: "event",
   },
@@ -371,6 +378,7 @@ export const en = {
     title: "Share the race",
     monthWhen: (month: string) => `${month} (date to be set)`,
     formats: (list: string) => `Races: ${list}`,
+    formatOpening: (when: string) => `registration opens ${when}`,
     textLabel: "Text to share",
     copy: "Copy the text",
     copied: "Text copied.",
@@ -563,12 +571,14 @@ export const en = {
     registrationOpening: "Registration opening",
     registrationOpeningTime: "Opening time",
     registrationOpeningTimeHint: "Optional, in Paris time.",
+    registrationOpeningHelp: "Applies to every race, except those that have their own.",
     registrationOpeningTimeNeedsDay: "Choose the opening day first.",
     dayUnknown: "The day is not known yet",
     month: "Month",
     periodMonth: (month: string) => `${month}, date to be set`,
     deadlineAfterMonthEnd: "The registration deadline cannot be after the end of the race month.",
     openingAfterMonthEnd: "Registration cannot open after the end of the race month.",
+    formatOpeningAfterDay: "The race's registration must open on or before the race's day.",
     formatDatesLater: "The races will have their date once the day is known.",
     notes: "Notes",
     formatsTitle: "Races",
@@ -598,6 +608,11 @@ export const en = {
     formatDateHint: "Only if it is not the first day.",
     formatStartTime: "Start time",
     formatStartTimeHint: "Optional. It gives the weather at the start.",
+    formatOpeningToggle: "This race opens its registration at another time",
+    formatOpening: "Registration opening",
+    formatOpeningTime: "Opening time",
+    formatOpeningHelp:
+      "Paris time. A day alone keeps the event's time, a time alone keeps its day.",
     addFormat: "Add a race",
     formatHasParticipants: (n: number) =>
       n === 1
@@ -822,6 +837,7 @@ export const en = {
         one: "start time cleared (the kept race has only its month)",
         other: "start times cleared (the kept race has only its month)",
       },
+      clearedFormatOpenings: { one: "race opening cleared", other: "race openings cleared" },
       movedComments: { one: "comment moved", other: "comments moved" },
       movedOffers: { one: "offer moved", other: "offers moved" },
     },
@@ -858,6 +874,11 @@ export const en = {
       "The registration deadline must be on or before the start day.",
     registration_opening_after_start: "Registration must open on or before the first day.",
     registration_opening_after_deadline: "Registration must open on or before the deadline.",
+    format_opening_after_deadline: "A race opens its registration after this deadline.",
+    format_opening_after_start: "A race opens its registration after this day.",
+    opening_general_required:
+      "Fill in the registration opening of the event first: this race takes its day or time from it.",
+    opening_used_by_format: "A race takes its day or time from this opening: it cannot be empty.",
     format_date_month: "A race known only by its month has no race dates.",
     format_time_month: "A race known only by its month has no start times.",
     month_start_invalid: "For a race known only by its month, the date is the 1st.",

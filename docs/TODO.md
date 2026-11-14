@@ -2,6 +2,10 @@
 
 Idées notées le 2026-11-03, mises à jour le 2026-11-08 après la v7.
 
+## Fait en v9
+
+En production depuis la nuit du 2026-11-14 au 2026-11-15 : une épreuve peut avoir sa propre ouverture des inscriptions (un jour et une heure, ou l'un des deux, l'autre venant de la course). Chacun la voit, la reçoit en rappel et l'a dans son agenda ; sans ouverture à elle, l'épreuve suit celle de la course. Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-v9.md`.
+
 ## Fait : le super admin
 
 En production depuis le 2026-11-14 (ton compte est marqué) : un compte que les autres admins ne peuvent pas modifier, marqué par la commande `super-admin` sur le serveur (voir le README, « Super admin »). Le détail est dans `docs/superpowers/decisions/2026-11-14-decisions-super-admin.md`.
@@ -31,7 +35,12 @@ Le détail est dans `docs/superpowers/decisions/2026-11-07-decisions-v7.md`.
 
 ## Tes idées
 
-- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, que chacun coche la veille. Reporté pendant la v7. La spec est prête dans `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (§ 11). Sa migration prendra la lettre qui suit `9s` (celle du super admin).
+- **Le matériel obligatoire d'une épreuve** (trail) : une liste saisie avec l'épreuve, que chacun coche la veille. Reporté pendant la v7. La spec est prête dans `docs/superpowers/specs/2026-11-07-courses-v7-design.md` (§ 11). Sa migration prendra la lettre qui suit `9t` (celle de la v9).
+- **Reporté pendant la v9 :**
+  - **une date limite par épreuve** (la course n'en a qu'une) ;
+  - **un lien d'inscription par épreuve** ;
+  - **des ouvertures par public** (résidents, licenciés FFA) ;
+  - **l'espace insécable avant « : »** dans le titre du fichier d'agenda d'une course (« Ouverture des inscriptions : … »), qui a une espace simple depuis la v7.
 - **Avoir l'aperçu (vignette, titre) d'une course partagée dans WhatsApp** : il faut une page que le robot de WhatsApp lit sans compte. Il faudrait :
   - un lien de partage signé, créé sur demande, qui expire ;
   - qui ne montre que le nom, les dates et le lieu (jamais qui y va) ;

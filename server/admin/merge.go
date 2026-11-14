@@ -37,6 +37,10 @@ type MergeResult struct {
 	// ClearedFormatTimes is the number of formats that lost their start time,
 	// which a race known by its month does not have.
 	ClearedFormatTimes int `json:"clearedFormatTimes"`
+	// ClearedFormatOpenings is the number of formats that lost their own
+	// registration opening (the day and the time), which did not hold in the
+	// kept event.
+	ClearedFormatOpenings int `json:"clearedFormatOpenings"`
 	// MovedComments is the number of comments of the merged event that went to
 	// the kept event. A merge of formats moves none.
 	MovedComments int `json:"movedComments"`
@@ -167,6 +171,9 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 				format.Set("start_time", "")
 				result.ClearedFormatTimes++
 			}
+			if openingCleared(format, merged, keep) {
+				result.ClearedFormatOpenings++
+			}
 			if dryRun {
 				continue
 			}
@@ -278,6 +285,58 @@ func MergeEvents(app core.App, keepID, mergeID string, dryRun bool) (MergeResult
 		return MergeResult{}, err
 	}
 	return result, nil
+}
+
+// openingCleared completes the own registration opening of a format that moves
+// to the event keep (the format already has its date as it will be after the
+// move), then keeps it when it holds there, or clears it and reports true. A
+// format with no opening of its own is left alone: it follows the opening of
+// keep.
+//
+// A day alone or a time alone takes the missing part from merged, the event it
+// comes from, so that the format opens when it really did and does not start
+// following another event's opening. A completed opening that still has no time
+// is cleared when keep has an opening of its own with a time (it would take that
+// time) or none (nothing to complete it from). Otherwise it is checked as the
+// hooks of a format do: its limit day (its date, else the first day of keep,
+// else the last day of the month of a race known by its month), then the
+// deadline of keep.
+func openingCleared(format, merged, keep *core.Record) bool {
+	day, at := format.GetString("registration_opening"), format.GetString("registration_opening_time")
+	if day == "" && at == "" {
+		return false
+	}
+	if day == "" {
+		day = merged.GetString("registration_opening")
+	} else if at == "" {
+		at = merged.GetString("registration_opening_time")
+	}
+
+	holds := day != ""
+	if holds && at == "" {
+		holds = keep.GetString("registration_opening") != "" && keep.GetString("registration_opening_time") == ""
+	}
+	if holds {
+		limit := format.GetString("date")
+		if limit == "" {
+			limit = keep.GetString("start_date")
+			if events.MonthOnly(keep) {
+				if last, ok := events.LastDayOfMonth(limit); ok {
+					limit = last
+				}
+			}
+		}
+		deadline := keep.GetString("registration_deadline")
+		holds = day <= limit && (deadline == "" || day <= deadline)
+	}
+	if !holds {
+		format.Set("registration_opening", "")
+		format.Set("registration_opening_time", "")
+		return true
+	}
+	format.Set("registration_opening", day)
+	format.Set("registration_opening_time", at)
+	return false
 }
 
 // MergeFormats moves the participations of the format mergeID to the format

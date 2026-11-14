@@ -20,9 +20,12 @@ import (
 type formatDraft struct {
 	ID, Name, RaceType, RouteURL, Date string
 	// StartTime is HH:MM, Paris time, or "" when it is not known. A race known by its month has none.
-	StartTime                                 string
-	DistanceKm, PriceEur                      float64
-	DurationMin, TimeLimitMin, ElevationGainM int
+	StartTime string
+	// RegistrationOpening and RegistrationOpeningTime are the opening of the format itself: a day, a time, both or
+	// none (a day or a time alone takes the missing part from the opening of the event).
+	RegistrationOpening, RegistrationOpeningTime string
+	DistanceKm, PriceEur                         float64
+	DurationMin, TimeLimitMin, ElevationGainM    int
 }
 
 // eventDraft is a race as the form saves it (EventDraft of saveEvent.ts).
@@ -93,16 +96,18 @@ func eventBody(draft eventDraft) map[string]any {
 // is a file (set_track).
 func formatBody(f formatDraft) map[string]any {
 	return map[string]any{
-		"name":             f.Name,
-		"race_type":        f.RaceType,
-		"distance_km":      f.DistanceKm,
-		"duration_min":     f.DurationMin,
-		"time_limit_min":   f.TimeLimitMin,
-		"elevation_gain_m": f.ElevationGainM,
-		"price_eur":        f.PriceEur,
-		"route_url":        f.RouteURL,
-		"date":             f.Date,
-		"start_time":       f.StartTime,
+		"name":                      f.Name,
+		"race_type":                 f.RaceType,
+		"distance_km":               f.DistanceKm,
+		"duration_min":              f.DurationMin,
+		"time_limit_min":            f.TimeLimitMin,
+		"elevation_gain_m":          f.ElevationGainM,
+		"price_eur":                 f.PriceEur,
+		"route_url":                 f.RouteURL,
+		"date":                      f.Date,
+		"start_time":                f.StartTime,
+		"registration_opening":      f.RegistrationOpening,
+		"registration_opening_time": f.RegistrationOpeningTime,
 	}
 }
 
@@ -161,6 +166,31 @@ func isInRangeOf(stored *storedEvent, day string) bool {
 	return stored.DatePrecision != precisionMonth && events.InRange(day, stored.StartDate, stored.EndDate)
 }
 
+// openingWaits is openingWaits of saveEvent.ts: whether the opening of a kept format has to wait
+// for the event, because the stored event would refuse it: its day is after the format's day as
+// sent (sentDate, else the first day of the stored event, the last day of its month for a month),
+// or after the stored deadline; or it is a day or a time alone while the stored event has no
+// opening to take the rest from.
+func openingWaits(stored *storedEvent, sentDate string, f formatDraft) bool {
+	day, at := f.RegistrationOpening, f.RegistrationOpeningTime
+	if day == "" && at == "" {
+		return false
+	}
+	if day != "" {
+		limit := sentDate
+		if limit == "" {
+			limit = stored.StartDate
+			if stored.DatePrecision == precisionMonth {
+				limit = lastDayOfMonth(stored.StartDate)
+			}
+		}
+		if day > limit || (stored.RegistrationDeadline != "" && day > stored.RegistrationDeadline) {
+			return true
+		}
+	}
+	return (day == "") != (at == "") && stored.RegistrationOpening == ""
+}
+
 // planBatch is buildBatch: delete the removed formats, update the kept ones (date only when
 // the stored event has that day), update the event, then the late dates and the new formats,
 // then the participation of Join. New ids come from core.GenerateDefaultRandomId().
@@ -172,8 +202,9 @@ func isInRangeOf(stored *storedEvent, day string) bool {
 // The server checks the date of a format against the event, and the dates of an
 // event against its formats, as they are when each request runs: whatever the
 // final state, if it is valid, no request of the batch fails on the way (see
-// buildBatch). Without an update of the event, its days do not change, and no
-// format waits for them: a draft dated within them is valid as it is stored. A
+// buildBatch). The opening of a format follows the same rule (openingWaits): it is sent
+// before the event when the stored event accepts it, and after it otherwise. Without an
+// update of the event, its days do not change, and no format waits for them: a draft dated within them is valid as it is stored. A
 // format is never sent with its event once it exists.
 //
 // draft.Join, when set, names a format of draft.Formats, and myRunnerID is the
@@ -237,16 +268,28 @@ func planBatch(draft eventDraft, stored *storedEvent, myRunnerID string) (ops []
 		if waitsTime {
 			sent.StartTime = ""
 		}
+		// The opening of the format waits, day and time together, when the stored event would
+		// refuse it (openingWaits).
+		// A format whose date waits has no date in phase 2, so the new first day of the event would hold its
+		// opening day against it: the opening waits with the date (saveEvent.ts).
+		waitsOpening := openingWaits(stored, sent.Date, f) || (waits && f.RegistrationOpening != "")
+		if waitsOpening {
+			sent.RegistrationOpening, sent.RegistrationOpeningTime = "", ""
+		}
 		if sent != was {
 			keptOps = append(keptOps, batchOp{Method: http.MethodPatch, URL: update, Body: formatBody(sent), Target: targetFormat, Format: i})
 		}
-		if waits || waitsTime {
+		if waits || waitsTime || waitsOpening {
 			late := map[string]any{}
 			if waits {
 				late["date"] = f.Date
 			}
 			if waitsTime {
 				late["start_time"] = f.StartTime
+			}
+			if waitsOpening {
+				late["registration_opening"] = f.RegistrationOpening
+				late["registration_opening_time"] = f.RegistrationOpeningTime
 			}
 			lateOps = append(lateOps, batchOp{Method: http.MethodPatch, URL: update, Body: late, Target: targetFormat, Format: i})
 		}

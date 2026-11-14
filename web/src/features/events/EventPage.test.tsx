@@ -121,6 +121,7 @@ const users = {
   bob: { id: "u-bob", collectionName: "users", role: "member", runner: bobRunner },
   admin: { id: "u-admin", collectionName: "users", role: "admin", runner: adminRunner },
   nina: { id: "u-nina", collectionName: "users", role: "member", runner: newRunner },
+  sam: { id: "u-sam", collectionName: "users", role: "member", runner: samRunner },
 };
 
 beforeAll(async () => {
@@ -2875,4 +2876,129 @@ test("EventPage — une course au mois ne dit aucune heure de départ", async ()
 
   await loaded(screen);
   expect(screen.container.textContent).not.toContain("départ à");
+});
+
+// --- The opening of a format ---
+
+// The event opens on Saturday 16 May at 12:00; the 15 km (Sam's) has only a day, Sunday 17: it opens at 12:00 too.
+const withFormatOpening = {
+  ...withDeadline,
+  registration_opening: "2026-05-16",
+  registration_opening_time: "12:00",
+  expand: {
+    ...eventRecord.expand,
+    formats_via_event: [f42, { ...f15, registration_opening: "2026-05-17" }],
+  },
+};
+const FORMAT_DAY = "2026-05-15";
+const heroLine = (screen: Screen) => screen.getByText(/^Ouverture des inscriptions (le|aujourd)/);
+
+test("EventHero — chacun voit l'ouverture de son épreuve, ou celle de la course", async () => {
+  // Sam is interested in the 15 km: its opening, and its name.
+  signIn("sam");
+  const sam = await renderPage({ event: withFormatOpening, today: FORMAT_DAY });
+  await loaded(sam.screen);
+  expect(plain(heroLine(sam.screen).element().textContent)).toBe(
+    "Ouverture des inscriptions le dim. 17 mai à 12:00 (Trail 15 km) · jusqu'au mer. 10 juin",
+  );
+  await sam.screen.unmount();
+
+  // Alice is on the 42 km, which follows the event; a supporter and a person who does not start have no opening of their own.
+  const general = "Ouverture des inscriptions le sam. 16 mai à 12:00 · jusqu'au mer. 10 juin";
+  signIn("alice");
+  const alice = await renderPage({ event: withFormatOpening, today: FORMAT_DAY });
+  await loaded(alice.screen);
+  expect(plain(heroLine(alice.screen).element().textContent)).toBe(general);
+  await alice.screen.unmount();
+
+  signIn("nina");
+  for (const extra of [pNinaSupporter, { ...pNinaUndecided, status: "dns" }]) {
+    const nina = await renderPage({
+      event: withParticipations(withFormatOpening, [extra]),
+      today: FORMAT_DAY,
+    });
+    await loaded(nina.screen);
+    expect(plain(heroLine(nina.screen).element().textContent)).toBe(general);
+    await nina.screen.unmount();
+  }
+});
+
+test("EventHero — sans ouverture de la course, et toutes passées : la date limite", async () => {
+  const past = {
+    ...withDeadline,
+    expand: {
+      ...eventRecord.expand,
+      formats_via_event: [
+        f42,
+        { ...f15, registration_opening: "2026-05-17", registration_opening_time: "12:00" },
+      ],
+    },
+  };
+  signIn("sam");
+  const { screen } = await renderPage({ event: past, today: "2026-06-01" });
+  await loaded(screen);
+  expect(plain(registrationLine(screen).element().textContent)).toBe(
+    "Inscriptions jusqu'au mer. 10 juin",
+  );
+  expect(screen.container.textContent).not.toContain("Ouverture des inscriptions");
+});
+
+test("EventPage — l'épreuve qui a sa propre ouverture la dit sous son nom, tant qu'elle est à venir", async () => {
+  const { screen } = await renderPage({ event: withFormatOpening, today: FORMAT_DAY });
+  await loaded(screen);
+  const semi = format(screen, /^Trail 15/);
+  expect(plain(semi.element().textContent)).toContain(
+    "Ouverture des inscriptions de l'épreuve le dim. 17 mai à 12:00",
+  );
+  // The 42 km follows the event: nothing under its name.
+  expect(plain(format(screen, /^Trail 42/).element().textContent)).not.toContain("Ouverture");
+  await screen.unmount();
+
+  // The day itself.
+  const same = await renderPage({ event: withFormatOpening, today: "2026-05-17" });
+  await loaded(same.screen);
+  expect(plain(format(same.screen, /^Trail 15/).element().textContent)).toContain(
+    "Ouverture des inscriptions de l'épreuve aujourd'hui à 12:00",
+  );
+  await same.screen.unmount();
+
+  // Once it is past, nothing.
+  const past = await renderPage({ event: withFormatOpening, today: "2026-05-18" });
+  await loaded(past.screen);
+  expect(plain(format(past.screen, /^Trail 15/).element().textContent)).not.toContain("Ouverture");
+});
+
+test("EventPage — l'encadré d'une personne intéressée par l'épreuve dit son ouverture et le nom", async () => {
+  signIn("sam");
+  const { screen } = await renderPage({
+    event: { ...withFormatOpening, registration_url: "https://inscriptions.example.test/trail" },
+    today: FORMAT_DAY,
+  });
+  await loaded(screen);
+  const box = reminder(screen);
+  await expect.element(box).toBeVisible();
+  expect(plain(box.element().textContent)).toContain(
+    "Les inscriptions ouvrent le dim. 17 mai à 12:00 (Trail 15 km).",
+  );
+});
+
+test("EventPage — une course au mois dont l'épreuve a son ouverture la montre dans son bloc", async () => {
+  const month = {
+    ...withFormatOpening,
+    start_date: "2026-06-01",
+    end_date: "2026-06-30",
+    date_precision: "month",
+    expand: {
+      ...eventRecord.expand,
+      formats_via_event: [
+        { ...f42, date: "" },
+        { ...f15, date: "", registration_opening: "2026-05-17" },
+      ],
+    },
+  };
+  const { screen } = await renderPage({ event: month, today: FORMAT_DAY });
+  await loaded(screen);
+  expect(plain(format(screen, /^Trail 15/).element().textContent)).toContain(
+    "Ouverture des inscriptions de l'épreuve le dim. 17 mai à 12:00",
+  );
 });
