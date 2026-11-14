@@ -51,6 +51,7 @@ var messages = map[string]string{
 	"time_invalid":              "L'heure doit être de la forme 06:30.",
 	// The admin.
 	"last_admin":                     "Il doit toujours rester au moins un admin.",
+	"super_admin_protected":          "Ce compte est super admin : personne d'autre ne peut le modifier.",
 	"runner_has_account":             "Impossible de supprimer ce coureur : il a un compte. Désactive le compte à la place.",
 	"runner_has_participations":      "Impossible de supprimer ce coureur : il a encore des participations.",
 	"race_type_in_use":               "Impossible de supprimer ce type : des épreuves l'utilisent encore.",

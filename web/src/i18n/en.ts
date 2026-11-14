@@ -845,6 +845,7 @@ export const en = {
     password_too_short: "The password is too short (10 characters minimum).",
     password_mismatch: "The two passwords don't match.",
     last_admin: "There must always be at least one admin left.",
+    super_admin_protected: "This account is a super admin: nobody else can change it.",
     runner_has_participations: "This runner can't be deleted: they still have participations.",
     runner_has_account:
       "This runner can't be deleted: they have an account. Disable the account instead.",

@@ -29,6 +29,13 @@ func Register(app core.App) {
 		if err := guardLastAdmin(e.App, before, e.Record); err != nil {
 			return err
 		}
+		// A super admin is an active admin for as long as the mark is there: the
+		// rules already keep the API away from their role and disabled flag, and
+		// this covers every other write. The command super-admin --remove takes
+		// the mark away first.
+		if IsSuperAdmin(e.Record) && !IsActiveAdmin(e.Record) {
+			return apperr.New(http.StatusForbidden, apperr.CodeSuperAdminProtected)
+		}
 
 		// A token is valid as long as the token key of its account is
 		// unchanged: renewing the key ends the sessions already open, which must
@@ -63,6 +70,13 @@ func Register(app core.App) {
 // server, which reads the role of the account at each request.
 func IsActiveAdmin(account *core.Record) bool {
 	return account.GetString("role") == "admin" && !account.GetBool("disabled")
+}
+
+// IsSuperAdmin reports whether the account has the mark of a super admin: an
+// account that no other admin can change (its role, its disabled flag, a reset
+// link, its passkeys, the name and the photo of its runner).
+func IsSuperAdmin(account *core.Record) bool {
+	return account.GetBool("super_admin")
 }
 
 // guardLastAdmin refuses the update, from before to after, that leaves the site
