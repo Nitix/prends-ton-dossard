@@ -29,7 +29,9 @@ for old in "$dir".old-*; do [ -d "$old" ] && rm -rf "$old"; done
 mv "$dir" "$dir.old-$live"
 mv "$dir.new" "$dir"
 cd "$dir"
-docker compose build -q > /tmp/ptd-prod-build.log 2>&1 || { tail -30 /tmp/ptd-prod-build.log; exit 1; }
+# --pull: the base images (Go, Node, Alpine) are fetched again, so a cached one
+# never builds the site with a Go or a system that has a known security flaw.
+docker compose build --pull -q > /tmp/ptd-prod-build.log 2>&1 || { tail -30 /tmp/ptd-prod-build.log; exit 1; }
 docker compose stop
 backup="/root/backups/prends-ton-dossard-pb_data-$live-$(date +%Y%m%d-%H%M).tar.gz"
 docker run --rm --user 0 --entrypoint tar -v prends-ton-dossard_pb_data:/data:ro -v /root/backups:/backup \
