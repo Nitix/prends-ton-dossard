@@ -48,7 +48,7 @@ La v9 est réussie si :
 6. Le MCP (§ 8).
 7. La fusion de doublons (§ 9).
 
-Une migration : `9s_format_registration_opening.go`. Aucune dépendance nouvelle.
+Une migration : `9t_format_registration_opening.go`. Aucune dépendance nouvelle.
 
 ### Hors de cette version
 
@@ -62,7 +62,7 @@ Voir § 12.
 
 ## 4. Les données et la règle
 
-### 4.1 Données (migration `9s_format_registration_opening.go`)
+### 4.1 Données (migration `9t_format_registration_opening.go`)
 
 | Collection | Champ | Type | Sens |
 |---|---|---|---|
@@ -224,7 +224,7 @@ La v7 (§ 4.3, § 4.6) ne change pas, sauf ce qui suit.
 
 ## 10. Architecture
 
-- `server/migrations/9s_format_registration_opening.go` (+ test de retour arrière puis réapplication).
+- `server/migrations/9t_format_registration_opening.go` (+ test de retour arrière puis réapplication).
 - `server/events` : les règles du § 4.3 ; la règle du § 4.2 en Go (les ouvertures d'une course, l'ouverture générale à un instant, les ouvertures d'un coureur), avec `OpeningInstant` de la v7.
 - `server/reminders` : candidats, destinataires, titre, `tag`/`Topic` (§ 7.1).
 - `server/calendar` : entrées d'ouverture par ouverture (§ 7.2).
@@ -248,7 +248,7 @@ Comme le CLAUDE.md (§ 4.6) : Go en tests externes, horloge réglable, cas au ch
 - `planBatch` : chaque ordre du § 4.3, et combiné au passage au mois et au jour.
 - Fusion : ouverture gardée, effacée et comptée.
 - MCP (`package mcp_test`) : les champs de chaque outil, l'effacement avec confirmation, `get_event` et `search_events`, `home`.
-- Migration 9s.
+- Migration 9t.
 
 **Web** :
 

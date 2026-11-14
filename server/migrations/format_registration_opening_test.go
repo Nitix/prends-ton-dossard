@@ -8,12 +8,12 @@ import (
 	"courses/server/testutil"
 )
 
-// The migration 9s gives a format its own registration opening: a day and a
+// The migration 9t gives a format its own registration opening: a day and a
 // time, two optional text fields. Its rollback removes both, and what they hold.
-func TestMigration9s(t *testing.T) {
+func TestMigration9t(t *testing.T) {
 	app := testutil.NewApp(t)
 	fx := testutil.Seed(t, app)
-	migration := migrationFile(t, "9s_format_registration_opening.go")
+	migration := migrationFile(t, "9t_format_registration_opening.go")
 	names := []string{"registration_opening", "registration_opening_time"}
 
 	check := func(when string) {
