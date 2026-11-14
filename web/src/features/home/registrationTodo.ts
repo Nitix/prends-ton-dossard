@@ -1,5 +1,6 @@
 import type { ParticipationRecord } from "../../lib/types";
 import type { EventView, FormatView, ParticipationView } from "../events/api";
+import type { Opening } from "../events/opening";
 import { registrationState, type RegistrationState } from "../events/registration";
 
 /**
@@ -27,6 +28,16 @@ function interestedOf(list: ParticipationView[], runnerId: string): Participatio
     .map(({ participation }) => participation);
 }
 
+/** The opening of the event itself (Task 5 gives each participation its own). */
+function ownOpening(event: EventView["event"]): Opening | null {
+  if (!event.registration_opening) return null;
+  return {
+    day: Temporal.PlainDate.from(event.registration_opening),
+    time: event.registration_opening_time ?? "",
+    formatIds: [],
+  };
+}
+
 /**
  * What the runner has to register for: their « Interested » participations
  * (on a format, or on the event alone) in the events whose registration is
@@ -47,7 +58,7 @@ export function todosOf(
   if (runnerId === undefined) return [];
   return views
     .flatMap((view): TodoRow[] => {
-      const state = registrationState(view.event, today);
+      const state = registrationState(view.event, ownOpening(view.event), today);
       if (state === null || state.kind === "closed") return [];
       const day = state.kind === "open" ? state.deadline : state.opening;
       return [

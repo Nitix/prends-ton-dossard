@@ -232,17 +232,19 @@ type registrationTodo struct {
 // registrationStateOf ports registrationState of features/events/registration.ts, for
 // the states that are to do: "" for the others (closed, or nothing to say). An opening
 // after today is "soon", on today it is "today" (to the day, not to the hour); once it
-// is behind, only the deadline counts. A deadline today or later is open.
-func registrationStateOf(event eventRecord, today string) (todo registrationTodo, ok bool) {
+// is behind, only the deadline counts. A deadline today or later is open. opening is
+// the opening that counts for the person (hasOpening false for none), not read from the
+// event: the formats have theirs.
+func registrationStateOf(event eventRecord, opening events.Opening, hasOpening bool, today string) (todo registrationTodo, ok bool) {
 	deadline := event.RegistrationDeadline
-	if opening := event.RegistrationOpening; opening != "" {
-		if daysLeft, parsed := daysBetween(today, opening); parsed && daysLeft >= 0 {
+	if hasOpening {
+		if daysLeft, parsed := daysBetween(today, opening.Day); parsed && daysLeft >= 0 {
 			state := stateSoon
 			if daysLeft == 0 {
 				state = stateToday
 			}
 			return registrationTodo{
-				State: state, Day: opening, Opening: opening, OpeningTime: event.RegistrationOpeningTime,
+				State: state, Day: opening.Day, Opening: opening.Day, OpeningTime: opening.Time,
 				Deadline: deadline, DaysLeft: daysLeft,
 			}, true
 		}
@@ -271,7 +273,10 @@ func todosOf(rows []participationRow, today string) []registrationTodo {
 		if row.Participation.Status != "interested" {
 			continue
 		}
-		if todo, ok := registrationStateOf(row.Event, today); ok {
+		// The event's own opening until the formats' are ported here (the site's
+		// todosOf gives each participation its own).
+		own := events.Opening{Day: row.Event.RegistrationOpening, Time: row.Event.RegistrationOpeningTime}
+		if todo, ok := registrationStateOf(row.Event, own, own.Day != "", today); ok {
 			todo.Row = row
 			todos = append(todos, todo)
 		}

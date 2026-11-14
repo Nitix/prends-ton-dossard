@@ -438,6 +438,7 @@ export const fr = {
     openingToday: "aujourd'hui",
     openingOnDate: (date: string) => `le ${date}`,
     openingAt: (time: string) => `à ${time}`,
+    openingNames: (names: string) => `(${names})`,
     // After the opening, in the page's line, when the event has a deadline: the date is already formatted.
     openingDeadline: (date: string) => `jusqu'au ${date}`,
     // The title of the opening in a calendar file: the name of the event is its own.

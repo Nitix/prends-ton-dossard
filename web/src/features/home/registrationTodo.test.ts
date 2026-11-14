@@ -174,6 +174,7 @@ describe("todosOf", () => {
       opening: date("2026-05-12"),
       time: "10:00",
       daysLeft: 12,
+      formatIds: [],
       deadline: date("2026-06-10"),
     });
   });

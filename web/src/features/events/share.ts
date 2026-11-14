@@ -3,6 +3,7 @@ import { isMonthOnly } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventView } from "./api";
 import { formatMeasures } from "./formatName";
+import { generalOpening } from "./opening";
 import { openingText, registrationState } from "./registration";
 
 /** What separates the measures of a format, and the formats of a race. */
@@ -57,7 +58,7 @@ export function shareText(
     lines.push(t.share.formats(list.join(FORMATS)));
   }
 
-  const state = registrationState(event, today);
+  const state = registrationState(event, generalOpening(view, today), today);
   if (state) {
     if (state.kind === "soon" || state.kind === "today") {
       // The text is read later: the day of the opening, never « aujourd'hui ».

@@ -2,6 +2,7 @@ import type { Messages } from "../../i18n/fr";
 import { daysBetween, isUpcoming, parseDate } from "../../lib/dates";
 import type { Formatters } from "../../lib/format";
 import type { EventRecord } from "../../lib/types";
+import type { Opening } from "./opening";
 
 /**
  * The days left before the deadline that a hero counts beside it: a week or
@@ -13,7 +14,8 @@ export const DAYS_LEFT_SHOWN = 7;
  * Where the registration of an event stands: not open yet (`soon`, with the
  * days left before it opens), opening today (`today`), open until `deadline`,
  * or closed. `time` is the time of the opening, Paris time, "" when it has
- * none; `deadline` of `soon` and `today` is there when the event has one.
+ * none; `deadline` of `soon` and `today` is there when the event has one, and
+ * `formatIds` are the formats that have this opening (empty: the event's own).
  */
 export type RegistrationState =
   | {
@@ -21,14 +23,23 @@ export type RegistrationState =
       opening: Temporal.PlainDate;
       time: string;
       daysLeft: number;
+      formatIds: readonly string[];
       deadline?: Temporal.PlainDate;
     }
-  | { kind: "today"; opening: Temporal.PlainDate; time: string; deadline?: Temporal.PlainDate }
+  | {
+      kind: "today";
+      opening: Temporal.PlainDate;
+      time: string;
+      formatIds: readonly string[];
+      deadline?: Temporal.PlainDate;
+    }
   | { kind: "open"; deadline: Temporal.PlainDate; daysLeft: number }
   | { kind: "closed" };
 
 /**
- * The state of the registration of an event on the day `today`, or null when
+ * The state of the registration of an event on the day `today`, given the
+ * opening that counts for the person (`opening`, see `shownOpening`; null for
+ * none), or null when
  * there is nothing to say: the event has no deadline (the API sends an empty
  * text for that) and no opening to come, or the deadline is over and so is the
  * event.
@@ -42,27 +53,26 @@ export type RegistrationState =
  * It is closed when the deadline has passed and the event has not.
  */
 export function registrationState(
-  event: Pick<
-    EventRecord,
-    | "start_date"
-    | "end_date"
-    | "registration_deadline"
-    | "registration_opening"
-    | "registration_opening_time"
-  >,
+  event: Pick<EventRecord, "start_date" | "end_date" | "registration_deadline" | "date_precision">,
+  opening: Opening | null,
   today: Temporal.PlainDate,
 ): RegistrationState | null {
   const deadline = event.registration_deadline ? parseDate(event.registration_deadline) : undefined;
-  if (event.registration_opening) {
-    const opening = parseDate(event.registration_opening);
-    const time = event.registration_opening_time ?? "";
-    const order = Temporal.PlainDate.compare(opening, today);
+  if (opening) {
+    const { day, time, formatIds } = opening;
+    const order = Temporal.PlainDate.compare(day, today);
     if (order > 0) {
-      const soon = { kind: "soon", opening, time, daysLeft: daysBetween(today, opening) } as const;
+      const soon = {
+        kind: "soon",
+        opening: day,
+        time,
+        daysLeft: daysBetween(today, day),
+        formatIds,
+      } as const;
       return deadline ? { ...soon, deadline } : soon;
     }
     if (order === 0) {
-      const now = { kind: "today", opening, time } as const;
+      const now = { kind: "today", opening: day, time, formatIds } as const;
       return deadline ? { ...now, deadline } : now;
     }
   }
@@ -74,7 +84,7 @@ export function registrationState(
 }
 
 /** Where the opening is said: the page's line, the chip of a card, the box of a runner who is interested, the home page. */
-export type OpeningForm = "hero" | "card" | "aside" | "todo";
+export type OpeningForm = "hero" | "card" | "aside" | "todo" | "format";
 
 /** "at 10:00", with the space before it, or nothing when the opening has no time. */
 const atTime = (time: string, t: Messages) => (time === "" ? "" : ` ${t.event.openingAt(time)}`);
@@ -86,17 +96,21 @@ const atTime = (time: string, t: Messages) => (time === "" ? "" : ` ${t.event.op
  * - `card`: "Ouverture le 12 janv. à 10:00" (the day without its weekday), "Ouverture aujourd'hui à 10:00";
  * - `aside`: "Les inscriptions ouvrent le lun. 12 janv. à 10:00.";
  * - `todo`: "ouvre le lun. 12 janv. à 10:00", "ouvre demain à 10:00", "ouvre aujourd'hui à 10:00".
- * Without a time, the time and its "à" are left out.
+ * - `format`: "Ouverture le mar. 17 nov. à 12:00" (under a format: its name is above).
+ * Without a time, the time and its "à" are left out. `names` (the formats that
+ * have the opening, "" for the event's) follow the time in parentheses.
  */
 export function openingText(
   state: Extract<RegistrationState, { kind: "soon" | "today" }>,
   f: Formatters,
   t: Messages,
   form: OpeningForm,
+  names = "",
 ): string {
   const head = {
     hero: t.event.openingHero,
     card: t.event.openingCard,
+    format: t.event.openingCard,
     aside: t.event.openingAside,
     todo: t.event.openingTodo,
   }[form];
@@ -109,7 +123,8 @@ export function openingText(
         : t.event.openingOnDate(
             form === "card" ? f.dayMonth(state.opening) : f.date(state.opening),
           );
-  return `${head} ${day}${atTime(state.time, t)}${form === "aside" ? "." : ""}`;
+  const named = names === "" ? "" : ` ${t.event.openingNames(names)}`;
+  return `${head} ${day}${atTime(state.time, t)}${named}${form === "aside" ? "." : ""}`;
 }
 
 /**
@@ -117,8 +132,15 @@ export function openingText(
  * told by a colour alone): "Inscriptions jusqu'au mer. 10 juin",
  * "Inscriptions closes", or, before it opens, "Ouverture le 12 janv. à 10:00".
  */
-export function registrationLabel(state: RegistrationState, f: Formatters, t: Messages): string {
-  if (state.kind === "soon" || state.kind === "today") return openingText(state, f, t, "card");
+export function registrationLabel(
+  state: RegistrationState,
+  f: Formatters,
+  t: Messages,
+  names = "",
+): string {
+  if (state.kind === "soon" || state.kind === "today") {
+    return openingText(state, f, t, "card", names);
+  }
   return state.kind === "open"
     ? t.event.registrationUntil(f.date(state.deadline))
     : t.event.registrationClosed;
@@ -134,14 +156,19 @@ const SEPARATOR = " · ";
  * and the deadline after it: "Ouverture des inscriptions le lun. 12 janv. à
  * 10:00 · jusqu'au dim. 31 mai".
  */
-export function deadlineText(state: RegistrationState, f: Formatters, t: Messages): string {
+export function deadlineText(
+  state: RegistrationState,
+  f: Formatters,
+  t: Messages,
+  names = "",
+): string {
   if (state.kind === "soon" || state.kind === "today") {
-    const opening = openingText(state, f, t, "hero");
+    const opening = openingText(state, f, t, "hero", names);
     return state.deadline
       ? `${opening}${SEPARATOR}${t.event.openingDeadline(f.date(state.deadline))}`
       : opening;
   }
-  const label = registrationLabel(state, f, t);
+  const label = registrationLabel(state, f, t, names);
   return state.kind === "open" && state.daysLeft <= DAYS_LEFT_SHOWN
     ? `${label}${SEPARATOR}${t.event.daysLeft(state.daysLeft)}`
     : label;

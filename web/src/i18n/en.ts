@@ -360,6 +360,7 @@ export const en = {
     openingToday: "today",
     openingOnDate: (date: string) => `on ${date}`,
     openingAt: (time: string) => `at ${time}`,
+    openingNames: (names: string) => `(${names})`,
     openingDeadline: (date: string) => `until ${date}`,
     openingCalendarTitle: (name: string) => `Registration opens: ${name}`,
     addToCalendar: "Add to my calendar",

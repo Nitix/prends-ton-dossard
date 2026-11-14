@@ -3,9 +3,19 @@ import { describe, expect, test } from "vitest";
 import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { createFormatters } from "../../lib/format";
+import type { Opening } from "./opening";
 import { deadlineText, openingText, registrationLabel, registrationState } from "./registration";
 
 const date = (s: string) => Temporal.PlainDate.from(s);
+
+/** The opening a fixture event holds of its own, as the site gives it. */
+const openingOf = (e: {
+  registration_opening?: string;
+  registration_opening_time?: string;
+}): Opening | null =>
+  e.registration_opening
+    ? { day: date(e.registration_opening), time: e.registration_opening_time ?? "", formatIds: [] }
+    : null;
 
 // An event of one day, on 20 June.
 const event = { start_date: "2026-06-20", end_date: "", registration_deadline: "2026-06-10" };
@@ -13,16 +23,16 @@ const event = { start_date: "2026-06-20", end_date: "", registration_deadline: "
 describe("registrationState", () => {
   test("registrationState — sans date limite, null", () => {
     expect(
-      registrationState({ ...event, registration_deadline: "" }, date("2026-06-01")),
+      registrationState({ ...event, registration_deadline: "" }, null, date("2026-06-01")),
     ).toBeNull();
     // An event that has not got the field at all (an older record) is the same.
-    expect(registrationState({ start_date: "2026-06-20" }, date("2026-06-01"))).toBeNull();
+    expect(registrationState({ start_date: "2026-06-20" }, null, date("2026-06-01"))).toBeNull();
   });
 
   test("registrationState — le jour même, ouvert avec 0 jour restant", () => {
     // The deadline is a day on which one can still register: "not over" means
     // the deadline is today or later.
-    expect(registrationState(event, date("2026-06-10"))).toEqual({
+    expect(registrationState(event, null, date("2026-06-10"))).toEqual({
       kind: "open",
       deadline: date("2026-06-10"),
       daysLeft: 0,
@@ -30,7 +40,7 @@ describe("registrationState", () => {
   });
 
   test("registrationState — dans 3 jours, ouvert avec 3 jours restants", () => {
-    expect(registrationState(event, date("2026-06-07"))).toEqual({
+    expect(registrationState(event, null, date("2026-06-07"))).toEqual({
       kind: "open",
       deadline: date("2026-06-10"),
       daysLeft: 3,
@@ -38,17 +48,21 @@ describe("registrationState", () => {
   });
 
   test("registrationState — passée, événement à venir : closed", () => {
-    expect(registrationState(event, date("2026-06-11"))).toEqual({ kind: "closed" });
+    expect(registrationState(event, null, date("2026-06-11"))).toEqual({ kind: "closed" });
     // Still closed on the day of the event, and on the last day of an event of several days.
-    expect(registrationState(event, date("2026-06-20"))).toEqual({ kind: "closed" });
-    expect(registrationState({ ...event, end_date: "2026-06-22" }, date("2026-06-22"))).toEqual({
+    expect(registrationState(event, null, date("2026-06-20"))).toEqual({ kind: "closed" });
+    expect(
+      registrationState({ ...event, end_date: "2026-06-22" }, null, date("2026-06-22")),
+    ).toEqual({
       kind: "closed",
     });
   });
 
   test("registrationState — passée, événement passé : null", () => {
-    expect(registrationState(event, date("2026-06-21"))).toBeNull();
-    expect(registrationState({ ...event, end_date: "2026-06-22" }, date("2026-06-23"))).toBeNull();
+    expect(registrationState(event, null, date("2026-06-21"))).toBeNull();
+    expect(
+      registrationState({ ...event, end_date: "2026-06-22" }, null, date("2026-06-23")),
+    ).toBeNull();
   });
 });
 
@@ -62,26 +76,40 @@ describe("registrationState — l'ouverture", () => {
   };
 
   test("registrationState — ouverture demain : soon", () => {
-    expect(registrationState(opening, date("2026-01-11"))).toEqual({
+    expect(registrationState(opening, openingOf(opening), date("2026-01-11"))).toEqual({
       kind: "soon",
       opening: date("2026-01-12"),
       time: "10:00",
       daysLeft: 1,
+      formatIds: [],
       deadline: date("2026-05-31"),
     });
   });
 
   test("registrationState — ouverture aujourd'hui : today", () => {
-    expect(registrationState(opening, date("2026-01-12"))).toEqual({
+    expect(registrationState(opening, openingOf(opening), date("2026-01-12"))).toEqual({
       kind: "today",
       opening: date("2026-01-12"),
       time: "10:00",
+      formatIds: [],
       deadline: date("2026-05-31"),
     });
   });
 
+  test("registrationState — l'ouverture d'une épreuve donne ses formatIds", () => {
+    const semi: Opening = { day: date("2026-01-12"), time: "10:00", formatIds: ["semi"] };
+    expect(registrationState(opening, semi, date("2026-01-11"))).toMatchObject({
+      kind: "soon",
+      formatIds: ["semi"],
+    });
+    expect(registrationState(opening, semi, date("2026-01-12"))).toMatchObject({
+      kind: "today",
+      formatIds: ["semi"],
+    });
+  });
+
   test("registrationState — ouverture passée et date limite : open", () => {
-    expect(registrationState(opening, date("2026-01-13"))).toEqual({
+    expect(registrationState(opening, openingOf(opening), date("2026-01-13"))).toEqual({
       kind: "open",
       deadline: date("2026-05-31"),
       daysLeft: 138,
@@ -90,22 +118,26 @@ describe("registrationState — l'ouverture", () => {
 
   test("registrationState — ouverture sans heure", () => {
     const untimed = { ...opening, registration_opening_time: "" };
-    expect(registrationState(untimed, date("2026-01-01"))).toMatchObject({
+    expect(registrationState(untimed, openingOf(untimed), date("2026-01-01"))).toMatchObject({
       kind: "soon",
       time: "",
       daysLeft: 11,
     });
     // A record that has not got the fields at all is the same as an empty one.
     expect(
-      registrationState({ ...untimed, registration_opening_time: undefined }, date("2026-01-12")),
+      registrationState(
+        untimed,
+        { day: date("2026-01-12"), time: "", formatIds: [] },
+        date("2026-01-12"),
+      ),
     ).toMatchObject({ kind: "today", time: "" });
   });
 
   test("registrationState — ouverture sans date limite, passée : rien", () => {
     const noDeadline = { ...opening, registration_deadline: "" };
-    expect(registrationState(noDeadline, date("2026-01-13"))).toBeNull();
+    expect(registrationState(noDeadline, openingOf(noDeadline), date("2026-01-13"))).toBeNull();
     // To come, it is told, with no deadline after it.
-    const soon = registrationState(noDeadline, date("2026-01-01"));
+    const soon = registrationState(noDeadline, openingOf(noDeadline), date("2026-01-01"));
     expect(soon).toMatchObject({ kind: "soon" });
     expect(soon).not.toHaveProperty("deadline");
   });
@@ -180,9 +212,31 @@ describe("openingText", () => {
     opening: date("2026-01-12"),
     time: "10:00",
     daysLeft: 5,
+    formatIds: [],
     deadline: date("2026-05-31"),
   } as const;
-  const today = { kind: "today", opening: date("2026-01-12"), time: "10:00" } as const;
+  const today = {
+    kind: "today",
+    opening: date("2026-01-12"),
+    time: "10:00",
+    formatIds: [],
+  } as const;
+
+  test("openingText — le nom de l'épreuve, et la forme de l'épreuve", () => {
+    expect(plain(openingText(soon, inFrench, fr, "aside", "Semi"))).toBe(
+      "Les inscriptions ouvrent le lun. 12 janv. à 10:00 (Semi).",
+    );
+    expect(plain(deadlineText(soon, inFrench, fr, "Semi, 10 km"))).toBe(
+      "Ouverture des inscriptions le lun. 12 janv. à 10:00 (Semi, 10 km) · jusqu'au dim. 31 mai",
+    );
+    expect(plain(registrationLabel(soon, inFrench, fr, "Semi"))).toBe(
+      "Ouverture le 12 janv. à 10:00 (Semi)",
+    );
+    expect(plain(openingText(soon, inFrench, fr, "format"))).toBe(
+      "Ouverture le lun. 12 janv. à 10:00",
+    );
+    expect(plain(openingText(today, inFrench, fr, "format"))).toBe("Ouverture aujourd'hui à 10:00");
+  });
 
   test("deadlineText — l'ouverture puis la date limite", () => {
     expect(plain(deadlineText(soon, inFrench, fr))).toBe(
