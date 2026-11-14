@@ -74,8 +74,8 @@ function deviceFromEnv(browser: BrowserName) {
 const browserName = browserFromEnv();
 const contextOptions = deviceFromEnv(browserName);
 
-// On CI every target gets two more tries for a failing test (tools/ci/vitest-annotate.mjs warns of
-// each test that needed one, so it is seen), and
+// On CI every target but desktop Chromium gets two more tries for a failing test
+// (tools/ci/vitest-annotate.mjs warns of each test that needed one, so it is seen), and
 // its actions get more time: GitHub's machines are slower than a desktop, desktop Chromium too (a
 // heavy file given to an input took more than 2 s there). Local runs stay strict.
 const tolerant = process.env.CI !== undefined;
@@ -129,12 +129,18 @@ export default defineConfig({
         extends: true,
         // Leaflet is only reached through the lazy map: without this, a cache made
         // before it was installed finds it during a run, optimizes it, and reloads
-        // a test ("Vite unexpectedly reloaded a test").
+        // a test ("Vite unexpectedly reloaded a test"). The React Compiler's runtime is the same
+        // case (a cold cache on CI: it is imported by compiled files only).
         optimizeDeps: { include: ["leaflet", "react/compiler-runtime"] },
         test: {
           name: "browser",
           env: { VITE_TEST_FRAME: `${frame.width}x${frame.height}`, VITE_CI: process.env.CI ?? "" },
-          retry: process.env.CI !== undefined ? 2 : 0,
+          // Desktop Chromium is the reference target (as on main): a failure there is red at once, no retry.
+          retry:
+            process.env.CI !== undefined &&
+            (browserName !== "chromium" || contextOptions !== undefined)
+              ? 2
+              : 0,
           expect: { poll: { timeout: tolerant ? 5000 : 1000 } },
           include: ["src/**/*.test.tsx"],
           // The first makes any real WebAuthn call fail: it would open a dialog

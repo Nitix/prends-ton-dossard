@@ -80,9 +80,9 @@ jobs:
     # refuses, and then no browser job runs at all.
     continue-on-error: ${{ matrix.experimental == true }}
     # A hung browser would otherwise run for six hours.
-    # The emulated iPhone is the slowest target (WebKit, a phone, retries): it gets an hour, so it
-    # ends on its own result instead of a cancel, which would mark the whole run « cancelled ».
-    timeout-minutes: ${{ matrix.device == 'iPhone 15' && 60 || 30 }}
+    # Every target takes 1 to 9 minutes (the iPhone 8 to 9): 30 leaves room for the run again on a
+    # cold cache, and a hung browser does not hold a runner for an hour.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -124,29 +124,36 @@ jobs:
       - name: Install the browser
         run: pnpm --dir web exec playwright install --with-deps ${{ matrix.browser }}
       # The reports (JSON, and the annotations of Vitest) are written by the first run. CI=true (set
-      # by GitHub) gives every target 2 retries per test and 5 s per action (web/vite.config.ts): a
-      # test that needed a retry is a warning in the next step, so it is seen, not hidden.
+      # by GitHub) gives every target but desktop Chromium 2 retries per test, and 5 s per action
+      # (web/vite.config.ts): a test that needed a retry is a warning in the next step, so it is
+      # seen, not hidden. Desktop Chromium has no retry.
       # A first run on a cold cache of Vite can fail on files it re-optimises (the README says to
-      # run again before believing a failure): the suite is run again only for that signature.
+      # run again before believing a failure): the suite is run again only when the JSON says that
+      # every failed file did not import (tools/ci/cold-cache.mjs). The report of the first run is
+      # kept, so its flaky warnings are not lost.
       - name: Browser tests
         shell: bash
         run: |
           set -o pipefail
-          report="${{ runner.temp }}/vitest-browser.json"
-          log="${{ runner.temp }}/vitest-browser.log"
+          temp="${{ runner.temp }}"
           run() {
-            pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$report" 2>&1 | tee "$log"
+            pnpm --dir web exec vitest run --project browser --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$1" 2>&1 | tee "$2"
           }
-          if ! run; then
-            # The signature is in the JSON (a file that did not import) or in the log (an error
-            # thrown outside of a test). A run with unhandled errors and no such sign is a failure.
-            if grep -qE "Failed to import test file|Vite unexpectedly reloaded|Failed to fetch dynamically imported module" "$report" "$log"; then
+          if ! run "$temp/vitest-browser.json" "$temp/vitest-browser.log"; then
+            if node tools/ci/cold-cache.mjs "$temp/vitest-browser.json" "$temp/vitest-browser.log"; then
               echo "A cold cache of Vite: the suite is run again."
-              run
+              mv "$temp/vitest-browser.json" "$temp/vitest-browser-first.json"
+              run "$temp/vitest-browser.json" "$temp/vitest-browser.log"
             else
               exit 1
             fi
           fi
       - name: Failing and flaky tests, as annotations
         if: always()
-        run: node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }}" "${{ runner.temp }}/vitest-browser.log"
+        shell: bash
+        run: |
+          first="${{ runner.temp }}/vitest-browser-first.json"
+          if [ -f "$first" ]; then
+            node tools/ci/vitest-annotate.mjs --flaky-only "$first" "Tests en échec — ${{ matrix.name }} (1er passage)"
+          fi
+          node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }}" "${{ runner.temp }}/vitest-browser.log"

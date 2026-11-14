@@ -21,7 +21,7 @@ const MAX_LINE = 300;
  */
 function firstLine(message, error) {
   // oxlint-disable-next-line no-control-regex
-  const plain = String(message ?? "").replace(/[[0-9;]*m/g, "");
+  const plain = String(message ?? "").replace(/\u001b\[[0-9;]*m/g, "");
   let line = plain.split("\n").find((one) => !STACK_FRAME.some((frame) => frame.test(one)))?.trim();
   if (!line && error?.message) line = `${error.name ?? "Error"}: ${error.message}`.split("\n")[0];
   if (!line) line = plain.split("\n").find((one) => one.trim() !== "")?.trim() ?? "";
@@ -160,18 +160,27 @@ export function annotations(list, title = "Tests en échec") {
   return out;
 }
 
+/** « Tests en échec — Chrome » gives « Tests instables — Chrome »: what follows the first dash is kept. */
+export function flakyTitle(title) {
+  return `Tests instables — ${String(title).replace(/^[^—]*—\s*/, "")}`;
+}
+
 if (process.argv[1]?.endsWith("vitest-annotate.mjs")) {
   const { readFileSync, existsSync } = await import("node:fs");
-  const [path, title, logPath] = process.argv.slice(2);
+  // --flaky-only: the report of a first run that was run again (a cold cache of Vite): its tests that
+  // passed on a retry are still warnings, but its failures are not, since the second run answers.
+  const args = process.argv.slice(2);
+  const flakyOnly = args.includes("--flaky-only");
+  const [path, title, logPath] = args.filter((one) => one !== "--flaky-only");
   if (!path || !existsSync(path)) {
     console.log(`::error title=Rapport Vitest absent::${escapeData(String(path))} n'existe pas : Vitest n'a pas fini.`);
   } else {
     const report = JSON.parse(readFileSync(path, "utf8"));
     const log = logPath && existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
     for (const line of [
-      ...annotations(failures(report), title),
-      ...silentFailure(report, log),
-      ...flakyAnnotations(flaky(report), `Tests instables — ${String(title).replace(/^[^—]*—s*/, "")}`),
+      ...(flakyOnly ? [] : annotations(failures(report), title)),
+      ...(flakyOnly ? [] : silentFailure(report, log)),
+      ...flakyAnnotations(flaky(report), flakyTitle(title)),
     ]) {
       console.log(line);
     }

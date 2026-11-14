@@ -1,9 +1,12 @@
 import { expect, test } from "vitest";
 
 // @ts-expect-error a script in plain JavaScript
+import { isColdCache } from "../../../tools/ci/cold-cache.mjs";
+// @ts-expect-error a script in plain JavaScript
 import * as tool from "../../../tools/ci/vitest-annotate.mjs";
 
-const { annotations, escapeData, failures, flaky, flakyAnnotations, silentFailure } = tool;
+const { annotations, escapeData, failures, flaky, flakyAnnotations, flakyTitle, silentFailure } =
+  tool;
 
 const report = {
   testResults: [
@@ -166,4 +169,32 @@ test("silentFailure — a failed run with no failed test names its unhandled err
       log,
     ),
   ).toEqual([]);
+});
+
+test("flakyTitle — « Tests en échec — Safari » devient « Tests instables — Safari », sans double espace", () => {
+  expect(flakyTitle("Tests en échec — Safari (iPhone 15)")).toBe(
+    "Tests instables — Safari (iPhone 15)",
+  );
+  expect(flakyTitle("Tests en échec —   Chrome")).toBe("Tests instables — Chrome");
+});
+
+test("isColdCache — seuls les fichiers qui n'ont pas pu être importés justifient de relancer la suite", () => {
+  const importFailure = { status: "failed", assertionResults: [] };
+  const passed = { status: "passed", assertionResults: [{ status: "passed" }] };
+  const failedTest = { status: "failed", assertionResults: [{ status: "failed" }] };
+  // A file that did not import: a cold cache.
+  expect(isColdCache({ testResults: [passed, importFailure] }, "")).toBe(true);
+  // A test that failed is a failure, even if the log has the words of a cold cache.
+  expect(
+    isColdCache(
+      { testResults: [importFailure, failedTest] },
+      "Failed to fetch dynamically imported module",
+    ),
+  ).toBe(false);
+  expect(isColdCache({ testResults: [failedTest] }, "Vite unexpectedly reloaded a test")).toBe(
+    false,
+  );
+  // No failed file: only an error outside of a test, with the signature in the log.
+  expect(isColdCache({ testResults: [passed] }, "Vite unexpectedly reloaded a test")).toBe(true);
+  expect(isColdCache({ testResults: [passed] }, "some other unhandled error")).toBe(false);
 });
