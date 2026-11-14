@@ -667,6 +667,8 @@ export const en = {
     stateDisabled: "Disabled",
     resetPending: (date: string) => `Reset link pending · expires on ${date}`,
     roles: { member: "Member", admin: "Admin" },
+    superAdmin: "Super admin",
+    protectedHint: "Protected account: nobody else can change it.",
     forRunner: (action: string, name: string) => `${action} · ${name}`,
     rename: "Rename",
     invite: "Invite",
