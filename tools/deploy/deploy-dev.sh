@@ -29,8 +29,9 @@ echo "$rev" > "$dir.new/REVISION"
 if [ -f "$dir/.env" ]; then cp "$dir/.env" "$dir.new/.env"
 else printf 'APP_URL=https://dev-prends-ton-dossard.ketra.fr\nHOST_PORT=8130\n' > "$dir.new/.env"; fi
 if grep -q '^DEMO_LOGIN_EMAIL=' "$dir.new/.env"; then echo "DEMO_LOGIN_EMAIL in the dev .env: refused" >&2; exit 1; fi
-# Build first, with the project name of the live dir, so the site runs meanwhile.
-(cd "$dir.new" && docker compose -p ptd-dev build -q > /tmp/ptd-dev-build.log 2>&1) || { tail -30 /tmp/ptd-dev-build.log; exit 1; }
+# Build first, with the project name of the live dir, so the site runs meanwhile;
+# --pull: fresh base images, as in deploy-prod.sh.
+(cd "$dir.new" && docker compose -p ptd-dev build --pull -q > /tmp/ptd-dev-build.log 2>&1) || { tail -30 /tmp/ptd-dev-build.log; exit 1; }
 if [ -d "$dir" ]; then
   old=$(cat "$dir/REVISION" 2>/dev/null || echo old)
   (cd "$dir" && docker compose stop courses) || true

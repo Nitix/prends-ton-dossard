@@ -29,7 +29,8 @@ echo "$rev" > "$dir.new/REVISION"
 rm -rf "$dir.old"; [ -d "$dir" ] && mv "$dir" "$dir.old"
 mv "$dir.new" "$dir"
 cd "$dir"
-docker compose build -q > /tmp/ptd-demo-build.log 2>&1 || { tail -30 /tmp/ptd-demo-build.log; exit 1; }
+# --pull: fresh base images, as in deploy-prod.sh.
+docker compose build --pull -q > /tmp/ptd-demo-build.log 2>&1 || { tail -30 /tmp/ptd-demo-build.log; exit 1; }
 docker compose up -d
 for _ in $(seq 1 30); do curl -fs http://127.0.0.1:8120/api/health > /dev/null && break; sleep 2; done
 # The seed refuses a database that has accounts: a redeploy keeps the data.

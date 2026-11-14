@@ -11,7 +11,7 @@ web/      front React 19 + Vite, compilé dans server/webdist/dist puis embarqu�
 
 ## Prérequis
 
-- **Go 1.27** ;
+- **Go 1.27.4** ou plus (`go.mod` l'exige : les versions d'avant ont une faille dans `net/http`, GO-2026-6859 ; avec `GOTOOLCHAIN=auto`, le réglage par défaut, `go` télécharge la bonne version tout seul) ;
 - **Node 26** ou plus (voir `.nvmrc`) ;
 - **pnpm 12** (la version exacte est dans `packageManager`, dans `package.json`) ;
 - pour la production : **Docker** avec Compose, et **Caddy** sur la machine ;
