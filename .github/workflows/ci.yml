@@ -119,6 +119,17 @@ jobs:
           cache: pnpm
       - name: Install the dependencies
         run: pnpm install --frozen-lockfile
+      # The dependencies that Vite pre-bundles for the browser tests, kept between runs, keyed on the
+      # lockfile and the config (which lists what is pre-bundled). A cold cache made a run
+      # re-optimise during the tests: a failed import on Firefox, a page not ready on the iPhone
+      # (runs 24 and before). The first run after a change of key is still cold: the rerun of the
+      # next step covers it.
+      - name: Cache of Vite
+        uses: actions/cache@v5
+        with:
+          path: web/node_modules/.vite
+          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'web/vite.config.ts') }}
+          restore-keys: vite-${{ runner.os }}-
       # Only the browser of the target. No cache: the downloads are small next to the run, and
       # a cache would need an action that this file does not use yet.
       - name: Install the browser
