@@ -443,10 +443,11 @@ test("TypesPage — annuler la suppression ne supprime rien", async () => {
   const { screen } = await renderPage();
 
   await action(screen, fr.common.delete, "Backyard").click();
-  await screen
-    .getByRole("dialog", { name: t.deleteTypeTitle })
-    .getByRole("button", { name: fr.common.cancel })
-    .click();
+  await pressFocused(
+    screen
+      .getByRole("dialog", { name: t.deleteTypeTitle })
+      .getByRole("button", { name: fr.common.cancel }),
+  );
 
   await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
   expect(mocks.remove).not.toHaveBeenCalled();
@@ -479,10 +480,11 @@ test("TypesPage — un type déjà supprimé ailleurs : la liste est redemandée
   });
 
   await action(screen, fr.common.delete, "Backyard").click();
-  await screen
-    .getByRole("dialog", { name: t.deleteTypeTitle })
-    .getByRole("button", { name: fr.common.delete })
-    .click();
+  await pressFocused(
+    screen
+      .getByRole("dialog", { name: t.deleteTypeTitle })
+      .getByRole("button", { name: fr.common.delete }),
+  );
 
   await expect.element(heading(screen, "Backyard")).not.toBeInTheDocument();
 });
