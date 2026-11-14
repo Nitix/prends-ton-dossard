@@ -10,6 +10,7 @@ import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { createFormatters } from "../../lib/format";
 import { ensureTemporal } from "../../lib/temporal";
+import { animationsDone } from "../../test/animations";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
 import { MIN_TARGET } from "../../test/touchTarget";
@@ -691,6 +692,9 @@ test("DuplicatesPage — les zones tactiles font au moins 44 px, sur un téléph
   await expect.element(mergeButton(screen)).toBeEnabled();
   // Measured in the fonts of the site, not in those that stand in while they load.
   await fontsReady();
+  // The press of the button just clicked shrinks it to 0.97 and back in 120 ms: measured while it
+  // settles, a box of 44 px reads 43.93.
+  await animationsDone();
 
   const targets = [
     radio(screen, t.modeEvents),

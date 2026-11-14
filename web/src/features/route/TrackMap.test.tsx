@@ -831,7 +831,10 @@ test("TrackMap — la portion est mise en avant, et la carte s'y cadre", async (
   await expect.poll(() => framed.mock.calls.length).toBe(calls + 2);
   expect(boundsOf(framed.mock.calls.at(-1)?.[0]).getNorth()).toBeCloseTo(45.02, 6);
   expect(screen.container.querySelector("path.track-portion")).toBeNull();
-  expect(getComputedStyle(part(screen, "path.track-line")).strokeOpacity).toBe("1");
+  // Polled like the 0.5 above: the style follows the re-render by an effect (runs 24, 26 and 27).
+  await expect
+    .poll(() => getComputedStyle(part(screen, "path.track-line")).strokeOpacity)
+    .toBe("1");
 });
 
 test("TrackMap — une portion visible en couleurs forcées : son trait est celui du texte", async () => {

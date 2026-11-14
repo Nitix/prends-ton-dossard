@@ -197,11 +197,12 @@ async function framed(screen: Screen, { least = 6 } = {}) {
   await expect.element(screen.getByRole("navigation", { name: fr.nav.main })).toBeVisible();
   await expect.element(screen.getByRole("link", { name: fr.nav.createEvent })).toBeVisible();
   await fontsReady();
-  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
   // Not an empty search: the tabs, the « + », and what the page has (`least` in all).
   // Polled: the heading of a page is there before what the page loads (run 25, Firefox, forced
   // colours: 5 targets, the tabs and the « + », a moment before the sixth). It is not a missing border.
   await expect.poll(() => targets().length).toBeGreaterThanOrEqual(least);
+  // After the page has loaded: an overflow from its late content must be measured too.
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(WIDTH);
   const small = targets()
     .filter((element) => element.getBoundingClientRect().height < MIN_TARGET)
     .map(
