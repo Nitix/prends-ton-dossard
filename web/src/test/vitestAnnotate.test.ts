@@ -207,9 +207,11 @@ test("filesToRerun — seuls les fichiers qui n'ont pas pu être importés sont 
   expect(filesToRerun({ testResults: [passed] }, "some other unhandled error")).toBe(null);
 });
 
+// The unhandled-errors section of Vitest's default reporter, with its colours.
+const section = (error: string) =>
+  `\u001b[41m Unhandled Errors \u001b[49m\nVitest caught 1 unhandled error during the test run.\n${error}\n\n Test Files  1 failed | 1 passed`;
+
 test("filesToRerun — une erreur non gérée sans la signature d'un cache froid est un vrai échec, même avec un fichier non importé", () => {
-  const section = (error: string) =>
-    `\u001b[41m Unhandled Errors \u001b[49m\nVitest caught 1 unhandled error during the test run.\n${error}\n\n Test Files  1 failed | 1 passed`;
   const files = { testResults: [importFailure, passed] };
   // A real error outside of a test: nothing is run again, or the second run would hide it.
   expect(filesToRerun(files, section("TypeError: boom"))).toBe(null);
