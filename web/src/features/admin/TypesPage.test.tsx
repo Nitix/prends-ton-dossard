@@ -11,7 +11,7 @@ import { I18nProvider } from "../../i18n/I18nProvider";
 import { animationsDone } from "../../test/animations";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
-import { pressFocused } from "../../test/pressFocused";
+import { clickReachable, pressFocused } from "../../test/pressFocused";
 import { TypesPage } from "./TypesPage";
 
 // The tap targets are a matter of the styles, which are not loaded otherwise.
@@ -201,7 +201,7 @@ test("TypesPage — ajouter un type : le nom est nettoyé, un toast le dit, la l
   await screen.getByRole("button", { name: t.addType }).click();
   const dialog = screen.getByRole("dialog", { name: t.createTypeTitle });
   await dialog.getByLabelText(t.typeLabel, { exact: true }).fill("  Ultra ");
-  await pressFocused(dialog.getByRole("button", { name: t.createSubmit }));
+  await clickReachable(dialog.getByRole("button", { name: t.createSubmit }));
 
   await expect.element(screen.getByText(t.typeCreated)).toBeVisible();
   expect(mocks.create).toHaveBeenCalledWith({ label: "Ultra" });
@@ -218,7 +218,7 @@ test("TypesPage — un nom déjà pris est refusé sous le champ, et reste dans 
   await screen.getByRole("button", { name: t.addType }).click();
   const dialog = screen.getByRole("dialog", { name: t.createTypeTitle });
   await dialog.getByLabelText(t.typeLabel, { exact: true }).fill("trail");
-  await pressFocused(dialog.getByRole("button", { name: t.createSubmit }));
+  await clickReachable(dialog.getByRole("button", { name: t.createSubmit }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(t.typeExists);
   await expect.element(dialog.getByLabelText(t.typeLabel, { exact: true })).toHaveValue("trail");
@@ -234,7 +234,7 @@ test("TypesPage — un nom fait d'espaces est refusé sans rien envoyer", async 
   await screen.getByRole("button", { name: t.addType }).click();
   const dialog = screen.getByRole("dialog", { name: t.createTypeTitle });
   await dialog.getByLabelText(t.typeLabel, { exact: true }).fill("   ");
-  await pressFocused(dialog.getByRole("button", { name: t.createSubmit }));
+  await clickReachable(dialog.getByRole("button", { name: t.createSubmit }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.validation_required);
   expect(mocks.create).not.toHaveBeenCalled();
@@ -247,7 +247,7 @@ test("TypesPage — un échec sans code a le message générique, et la fenêtre
   await screen.getByRole("button", { name: t.addType }).click();
   const dialog = screen.getByRole("dialog", { name: t.createTypeTitle });
   await dialog.getByLabelText(t.typeLabel, { exact: true }).fill("Ultra");
-  await pressFocused(dialog.getByRole("button", { name: t.createSubmit }));
+  await clickReachable(dialog.getByRole("button", { name: t.createSubmit }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.generic);
   await expect.element(dialog.getByRole("button", { name: t.createSubmit })).toBeEnabled();
@@ -264,7 +264,7 @@ test("TypesPage — renommer un type : le champ part du nom actuel, les événem
   const label = dialog.getByLabelText(t.typeLabel, { exact: true });
   await expect.element(label).toHaveValue("Route");
   await label.fill("Course sur route");
-  await pressFocused(dialog.getByRole("button", { name: fr.common.save }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.save }));
 
   await expect.element(screen.getByText(t.typeRenamed)).toBeVisible();
   expect(mocks.update).toHaveBeenCalledWith("rt-road", { label: "Course sur route" });
@@ -283,7 +283,7 @@ test("TypesPage — renommer en un nom déjà pris, majuscules comprises, est re
   await action(screen, t.rename, "Route").click();
   const dialog = screen.getByRole("dialog", { name: t.renameTypeTitle });
   await dialog.getByLabelText(t.typeLabel, { exact: true }).fill("TRAIL");
-  await pressFocused(dialog.getByRole("button", { name: fr.common.save }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.save }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(t.typeExists);
   await expect.element(heading(screen, "Route")).toBeVisible();
@@ -310,7 +310,7 @@ test("TypesPage — choisir les mesures d'un type", async () => {
   await measureBox(dialog, fr.form.distance).click();
   await measureBox(dialog, fr.form.elevation).click();
   await measureBox(dialog, fr.form.duration).click();
-  await pressFocused(dialog.getByRole("button", { name: fr.common.save }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.save }));
 
   await expect.element(screen.getByText(t.measuresSaved)).toBeVisible();
   expect(mocks.update).toHaveBeenCalledExactlyOnceWith("rt-backyard", {
@@ -360,7 +360,7 @@ test("TypesPage — annuler les mesures ne change rien, et le focus revient au b
   await action(screen, t.measures, "Route").click();
   const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Route") });
   await measureBox(dialog, fr.form.distance).click();
-  await pressFocused(dialog.getByRole("button", { name: fr.common.cancel }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.cancel }));
 
   await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
   expect(mocks.update).not.toHaveBeenCalled();
@@ -398,13 +398,13 @@ test("TypesPage — un refus du serveur est dit dans la fenêtre, qui reste ouve
   await action(screen, t.measures, "Route").click();
   const dialog = screen.getByRole("dialog", { name: t.measuresTitle("Route") });
   await measureBox(dialog, fr.form.duration).click();
-  await pressFocused(dialog.getByRole("button", { name: fr.common.save }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.save }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.generic);
   await expect.element(measureBox(dialog, fr.form.duration)).not.toBeChecked();
   await expect.element(screen.getByText(t.measuresSaved)).not.toBeInTheDocument();
   // It can be sent again.
-  await pressFocused(dialog.getByRole("button", { name: fr.common.save }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.save }));
   await expect.element(screen.getByText(t.measuresSaved)).toBeVisible();
 });
 
@@ -429,7 +429,7 @@ test("TypesPage — supprimer demande confirmation, puis le type disparaît", as
   await expect.element(dialog.getByText(t.deleteTypeWarning("Backyard"))).toBeVisible();
   // Nothing is deleted until it is confirmed.
   expect(mocks.remove).not.toHaveBeenCalled();
-  await pressFocused(dialog.getByRole("button", { name: fr.common.delete }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.delete }));
 
   await expect.element(screen.getByText(t.typeDeleted)).toBeVisible();
   expect(mocks.remove).toHaveBeenCalledWith("rt-backyard");
@@ -443,7 +443,7 @@ test("TypesPage — annuler la suppression ne supprime rien", async () => {
   const { screen } = await renderPage();
 
   await action(screen, fr.common.delete, "Backyard").click();
-  await pressFocused(
+  await clickReachable(
     screen
       .getByRole("dialog", { name: t.deleteTypeTitle })
       .getByRole("button", { name: fr.common.cancel }),
@@ -461,13 +461,13 @@ test("TypesPage — un type utilisé par une épreuve n'est pas supprimé : le r
 
   await action(screen, fr.common.delete, "Trail").click();
   const dialog = screen.getByRole("dialog", { name: t.deleteTypeTitle });
-  await pressFocused(dialog.getByRole("button", { name: fr.common.delete }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.delete }));
 
   await expect.element(dialog.getByRole("alert")).toHaveTextContent(fr.errors.race_type_in_use);
   // The window stays open on the type, which is still in the list.
   await expect.element(dialog.getByRole("button", { name: fr.common.delete })).toBeEnabled();
   await expect.element(screen.getByText(t.typeDeleted)).not.toBeInTheDocument();
-  await pressFocused(dialog.getByRole("button", { name: fr.common.cancel }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.cancel }));
   await expect.element(heading(screen, "Trail")).toBeVisible();
 });
 
@@ -480,7 +480,7 @@ test("TypesPage — un type déjà supprimé ailleurs : la liste est redemandée
   });
 
   await action(screen, fr.common.delete, "Backyard").click();
-  await pressFocused(
+  await clickReachable(
     screen
       .getByRole("dialog", { name: t.deleteTypeTitle })
       .getByRole("button", { name: fr.common.delete }),

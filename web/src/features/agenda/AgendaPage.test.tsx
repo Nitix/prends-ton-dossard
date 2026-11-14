@@ -19,6 +19,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import { TodayProvider } from "../../lib/useToday";
 import { fontsReady } from "../../test/fontsReady";
 import { FRAME } from "../../test/frame";
+import { tapAfterScroll } from "../../test/pressFocused";
 import {
   aliceRunner,
   bobRunner,
@@ -427,7 +428,7 @@ test("AgendaPage — toucher le 14 affiche « Trail des Crêtes » dans la liste
     .element(screen.getByRole("link", { name: "Trail des Crêtes" }))
     .not.toBeInTheDocument();
 
-  await day(screen, "dim. 14 juin").click();
+  await tapAfterScroll(day(screen, "dim. 14 juin"));
 
   await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
   await expect
@@ -443,7 +444,7 @@ test("AgendaPage — le jour choisi est marqué par aria-pressed, et lui seul", 
   const { screen } = await renderAgenda("/agenda?mois=2026-06");
   await expect.element(day(screen, "dim. 14 juin")).toHaveAttribute("aria-pressed", "false");
 
-  await day(screen, "dim. 14 juin").click();
+  await tapAfterScroll(day(screen, "dim. 14 juin"));
 
   await expect.element(day(screen, "dim. 14 juin")).toHaveAttribute("aria-pressed", "true");
   const pressed = dayButtons(screen).filter(
@@ -462,17 +463,17 @@ test("AgendaPage — le jour choisi est marqué par aria-pressed, et lui seul", 
 test("AgendaPage — toucher un autre jour change la liste, toucher le même la ferme", async () => {
   const { screen, router } = await renderAgenda("/agenda?mois=2026-06");
 
-  await day(screen, "dim. 14 juin").click();
+  await tapAfterScroll(day(screen, "dim. 14 juin"));
   await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
 
-  await day(screen, "lun. 22 juin").click();
+  await tapAfterScroll(day(screen, "lun. 22 juin"));
   await expect.element(screen.getByRole("link", { name: "10 km de Lyon" })).toBeVisible();
   await expect
     .element(screen.getByRole("link", { name: "Trail des Crêtes" }))
     .not.toBeInTheDocument();
   expect(router.state.location.search).toEqual({ mois: "2026-06", jour: "2026-06-22" });
 
-  await day(screen, "lun. 22 juin").click();
+  await tapAfterScroll(day(screen, "lun. 22 juin"));
   await expect.element(screen.getByRole("link", { name: "10 km de Lyon" })).not.toBeInTheDocument();
   await expect.element(screen.getByText(fr.agenda.selectDay)).toBeVisible();
   expect(router.state.location.search).toEqual({ mois: "2026-06" });
@@ -482,9 +483,9 @@ test("AgendaPage — toucher un autre jour change la liste, toucher le même la 
 test("AgendaPage — choisir un jour ne s'ajoute pas à l'historique", async () => {
   const { screen, router } = await renderAgenda("/agenda?mois=2026-06");
 
-  await day(screen, "dim. 14 juin").click();
+  await tapAfterScroll(day(screen, "dim. 14 juin"));
   await expect.element(day(screen, "dim. 14 juin")).toHaveAttribute("aria-pressed", "true");
-  await day(screen, "lun. 22 juin").click();
+  await tapAfterScroll(day(screen, "lun. 22 juin"));
   await expect.element(day(screen, "lun. 22 juin")).toHaveAttribute("aria-pressed", "true");
 
   expect(router.history.length).toBe(1);
@@ -493,7 +494,7 @@ test("AgendaPage — choisir un jour ne s'ajoute pas à l'historique", async () 
 test("AgendaPage — un jour sans événement le dit", async () => {
   const { screen } = await renderAgenda("/agenda?mois=2026-06");
 
-  await day(screen, "dim. 7 juin").click();
+  await tapAfterScroll(day(screen, "dim. 7 juin"));
 
   await expect
     .element(screen.getByRole("heading", { level: 2, name: "dim. 7 juin 2026" }))
@@ -550,7 +551,7 @@ test("AgendaPage — toucher un jour d'un mois voisin affiche ses événements s
   mocks.events.mockResolvedValue([monthEnd]);
   const { screen, router } = await renderAgenda("/agenda?mois=2026-06");
 
-  await day(screen, "mer. 1 juil.").click();
+  await tapAfterScroll(day(screen, "mer. 1 juil."));
 
   await expect.element(screen.getByRole("link", { name: "Trail de fin de mois" })).toBeVisible();
   await expect.element(screen.getByRole("heading", { level: 2, name: "juin 2026" })).toBeVisible();
@@ -610,7 +611,7 @@ test("AgendaPage — la liste du jour ne montre pas la pastille d'un non partant
   mocks.events.mockResolvedValue([withStatus(eventRecord, "p2", "dns"), event2Record]);
   const { screen } = await renderAgenda("/agenda?mois=2026-06");
 
-  await day(screen, "sam. 13 juin").click();
+  await tapAfterScroll(day(screen, "sam. 13 juin"));
 
   await expect.element(screen.getByRole("link", { name: "Trail des Crêtes" })).toBeVisible();
   // Bob does not start F42: no chip for him. The others have theirs. (The

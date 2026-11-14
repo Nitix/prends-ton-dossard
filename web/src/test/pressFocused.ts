@@ -9,28 +9,54 @@ import { server, userEvent, type Locator } from "vitest/browser";
  * the app. Safari does not: a click or a tap gives the focus to nothing (and takes it from what
  * had it), so the element is focused and Enter pressed: the keyboard is the only way to have
  * the button hold the focus there. Like a click, it waits until the element is visible and
- * enabled, and scrolls to it.
- *
- * Second exception: Chromium on an emulated phone (coarse pointer), for a button inside a
- * <dialog>. There Playwright's real click intermittently times out with "element is outside of
- * the viewport" on GitHub's Linux runners. It is not the layout: the run-17 diagnostic measured
- * the Pixel 7 frame = window = 412x839, no transform, the dialog fitting, the "Annuler" button
- * inside the screen (157,558, 91x44), and Playwright's own trial click answering ok. So a
- * person can press the button; only the test's click is unreliable, and the keyboard path is
- * deterministic. Desktop Chromium keeps its real click.
- *
- * The same goes for what is fixed at the bottom of the frame (the tab bar): its real click timed
- * out with the same message, and it is the same measured geometry.
+ * enabled, and scrolls to it. Use it for the tests that check where the focus ends up.
  */
 export async function pressFocused(locator: Locator): Promise<void> {
   await expect.element(locator).toBeVisible();
   await expect.element(locator).toBeEnabled();
-  const coarse = window.matchMedia("(pointer: coarse)").matches;
-  const fixedOrDialog = isInDialogOrFixed(locator.element());
-  if (server.browser === "chromium" && !(coarse && fixedOrDialog)) {
+  if (server.browser === "chromium") {
     await locator.click();
     return;
   }
+  await pressByKeyboard(locator);
+}
+
+/**
+ * A real click, except where a click is known to fail by chance: Chromium on an emulated phone
+ * (coarse pointer), for a button inside a <dialog> or under a fixed element (the tab bar).
+ * There Playwright's click timed out at times on GitHub's Linux runners, "element is outside of
+ * the viewport" (Pixel 7, runs 13 to 22). The cause is NOT known. The measures that were taken
+ * (the frame, the dialog and the button inside the screen, Playwright's trial click answering
+ * ok) come from runs where the click had not failed, so they say nothing about the failing
+ * state. Only there is the button pressed by the keyboard (focus, then Enter), which does not
+ * depend on where the page is scrolled. Every other engine and device keeps its real click,
+ * which is the pointer path of the app; `tapAfterScroll` keeps one real tap on the Pixel.
+ * docs/TODO.md lists it.
+ */
+export async function clickReachable(locator: Locator): Promise<void> {
+  await expect.element(locator).toBeVisible();
+  await expect.element(locator).toBeEnabled();
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  if (server.browser === "chromium" && coarse && isInDialogOrFixed(locator.element())) {
+    await pressByKeyboard(locator);
+    return;
+  }
+  await locator.click();
+}
+
+/**
+ * A real click after the button is scrolled to the middle of the screen, as smoke.test.tsx does
+ * for the map. Where `clickReachable` takes the keyboard, a test that calls this keeps a real
+ * tap, so that a button truly out of reach still fails.
+ */
+export async function tapAfterScroll(locator: Locator): Promise<void> {
+  await expect.element(locator).toBeVisible();
+  await expect.element(locator).toBeEnabled();
+  locator.element().scrollIntoView({ block: "center" });
+  await locator.click();
+}
+
+async function pressByKeyboard(locator: Locator): Promise<void> {
   const element = locator.element();
   if (!(element instanceof HTMLElement)) throw new Error("not an element that can have the focus");
   element.scrollIntoView({ block: "center" });

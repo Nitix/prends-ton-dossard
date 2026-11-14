@@ -11,7 +11,7 @@ import { ensureTemporal } from "../../lib/temporal";
 import type { ParticipationRecord, RunnerRecord } from "../../lib/types";
 import { TodayProvider } from "../../lib/useToday";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { pressFocused } from "../../test/pressFocused";
+import { clickReachable } from "../../test/pressFocused";
 import { toEventView, type EventView } from "../events/api";
 import {
   aliceRunner,
@@ -549,7 +549,7 @@ test("ParticipationMenu — Annuler dans le dialogue des épreuves rend le focus
   const dialog = screen.getByRole("dialog", { name: fr.participation.chooseFormatTitle });
   await expect.element(dialog).toBeVisible();
 
-  await pressFocused(dialog.getByRole("button", { name: fr.common.cancel }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.cancel }));
 
   await expect.element(dialog).not.toBeInTheDocument();
   await vi.waitFor(() => {
@@ -611,7 +611,7 @@ test("ParticipationMenu — Retirer demande confirmation, et Annuler ne retire r
     .toBeVisible();
   expect(mocks.remove).not.toHaveBeenCalled();
 
-  await pressFocused(dialog.getByRole("button", { name: fr.common.cancel }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.cancel }));
 
   await expect.element(dialog).not.toBeInTheDocument();
   expect(mocks.remove).not.toHaveBeenCalled();
@@ -736,7 +736,7 @@ test("ParticipationMenu — Annuler dans la fenêtre de retrait rend le focus au
   const { screen } = await renderMenu();
   const dialog = await openRemovalDialog(screen);
 
-  await pressFocused(dialog.getByRole("button", { name: fr.common.cancel }));
+  await clickReachable(dialog.getByRole("button", { name: fr.common.cancel }));
 
   await expect.element(dialog).not.toBeInTheDocument();
   await vi.waitFor(() => {
@@ -924,9 +924,9 @@ test("ParticipationMenu — enregistrer un résultat envoie la modification de l
 test("ParticipationMenu — Annuler, Échap ou Fermer dans le dialogue du résultat rendent le focus au bouton du menu", async () => {
   const { screen, onRemoved } = await renderMenu();
   for (const close of [
-    () => pressFocused(resultDialog(screen).getByRole("button", { name: fr.common.cancel })),
+    () => clickReachable(resultDialog(screen).getByRole("button", { name: fr.common.cancel })),
     () => userEvent.keyboard("{Escape}"),
-    () => pressFocused(resultDialog(screen).getByRole("button", { name: fr.common.close })),
+    () => clickReachable(resultDialog(screen).getByRole("button", { name: fr.common.close })),
   ]) {
     await open(screen);
     await enterResult(screen).click();

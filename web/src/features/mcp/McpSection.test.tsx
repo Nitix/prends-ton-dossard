@@ -9,7 +9,7 @@ import { en } from "../../i18n/en";
 import { fr } from "../../i18n/fr";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { buttonOf, clickTwice, expectAvailable, expectBusy } from "../../test/busyButton";
-import { pressFocused } from "../../test/pressFocused";
+import { clickReachable } from "../../test/pressFocused";
 import { claudeCommand } from "./command";
 import { McpSection } from "./McpSection";
 
@@ -460,7 +460,7 @@ test("McpSection — fermer la fenêtre efface le jeton de la page", async () =>
   // With « J'ai copié le jeton ».
   await makeToken(screen, "Premier");
   expect(whereIs(tokenOf(1), client)).toContain("a field");
-  await pressFocused(inDialog(screen, fr.mcp.done));
+  await clickReachable(inDialog(screen, fr.mcp.done));
 
   await expect.element(dialog(screen)).not.toBeInTheDocument();
   // The mutation is let go of with its answer (it is kept for no time), once the window is.
@@ -490,7 +490,7 @@ test("McpSection — fermer la fenêtre efface le jeton de la page", async () =>
 
   // And with the cross.
   await makeToken(screen, "Troisième");
-  await pressFocused(dialog(screen).getByRole("button", { name: fr.common.close }));
+  await clickReachable(dialog(screen).getByRole("button", { name: fr.common.close }));
   await expect.element(dialog(screen)).not.toBeInTheDocument();
   await vi.waitFor(() => {
     expect(whereIs(tokenOf(3), client)).toEqual([]);
@@ -937,19 +937,19 @@ test("McpSection — en anglais", async () => {
     .element(nameField(screen, english.name))
     .toHaveAccessibleDescription(english.nameHint);
   await nameField(screen, english.name).fill("Claude");
-  await pressFocused(inDialog(screen, english.createSubmit));
+  await clickReachable(inDialog(screen, english.createSubmit));
   await expectSelected(tokenField(screen, english.tokenLabel), tokenOf(1));
   await expect.element(dialog(screen).getByText(english.showOnce)).toBeVisible();
   await expect.element(dialog(screen).getByText(english.claudeCode)).toBeVisible();
   await expect.element(dialog(screen).getByText(english.otherClients(SERVER))).toBeVisible();
   expect(english.otherClients(SERVER)).not.toMatch(/README/);
   await expect.element(commandField(screen, english.commandLabel)).toBeVisible();
-  await pressFocused(inDialog(screen, english.copyToken));
+  await clickReachable(inDialog(screen, english.copyToken));
   await expect.element(dialog(screen).getByRole("status")).toHaveTextContent(english.tokenCopied);
-  await pressFocused(inDialog(screen, english.copyCommand));
+  await clickReachable(inDialog(screen, english.copyCommand));
   await expect.element(dialog(screen).getByRole("status")).toHaveTextContent(english.commandCopied);
   expect(writeText).toHaveBeenCalledTimes(2);
-  await pressFocused(inDialog(screen, english.done));
+  await clickReachable(inDialog(screen, english.done));
 
   // A refusal, translated.
   const server = mocks.send.getMockImplementation();
@@ -961,9 +961,9 @@ test("McpSection — en anglais", async () => {
   );
   await button(screen, english.create).click();
   await nameField(screen, english.name).fill("Encore");
-  await pressFocused(inDialog(screen, english.createSubmit));
+  await clickReachable(inDialog(screen, english.createSubmit));
   await expect.element(dialog(screen).getByRole("alert")).toHaveTextContent(en.errors.token_limit);
-  await pressFocused(inDialog(screen, en.common.cancel));
+  await clickReachable(inDialog(screen, en.common.cancel));
   mocks.send.mockImplementation(server);
 
   // The confirmation, and the message that follows.
@@ -972,7 +972,7 @@ test("McpSection — en anglais", async () => {
     .element(dialog(screen).getByRole("heading", { name: english.revokeTitle }))
     .toBeVisible();
   await expect.element(dialog(screen).getByText(english.revokeWarning(NEVER.name))).toBeVisible();
-  await pressFocused(inDialog(screen, english.revoke));
+  await clickReachable(inDialog(screen, english.revoke));
   await expect.element(dialog(screen)).not.toBeInTheDocument();
   await expectToast(english.revoked);
   await expectRows(screen, 2);

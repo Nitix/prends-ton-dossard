@@ -9,7 +9,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { ensureTemporal } from "../lib/temporal";
 import { TodayProvider } from "../lib/useToday";
 import { routeTree } from "../routeTree.gen";
-import { pressFocused } from "../test/pressFocused";
+import { clickReachable } from "../test/pressFocused";
 
 import "../styles.css";
 
@@ -53,16 +53,18 @@ const describeElement = (element: Element | null) =>
     : `${element.tagName}${element.id === "" ? "" : "#" + element.id}: ${(element.textContent ?? "").slice(0, 30)}`;
 
 /**
- * The element has the focus, within 5 s. The message says what has it instead (an error of
- * `toHaveFocus` in a poll says nothing of it, and the report keeps only its first line).
+ * The element has the focus (the element itself, not one that looks like it), within the time of
+ * `expect.poll`. The message says what has it instead (an error of `toHaveFocus` in a poll says
+ * nothing of it, and the report keeps only its first line).
  */
 async function expectFocusOn(locator: { element(): Element }) {
-  await vi.waitFor(
-    () => {
-      expect(describeElement(document.activeElement)).toBe(describeElement(locator.element()));
-    },
-    { timeout: 5000 },
-  );
+  try {
+    await expect.poll(() => document.activeElement === locator.element()).toBe(true);
+  } catch {
+    throw new Error(
+      `the focus is on ${describeElement(document.activeElement)}, not on ${describeElement(locator.element())}`,
+    );
+  }
 }
 
 async function openApp(path: string) {
@@ -95,11 +97,11 @@ test("root — un onglet mène au titre de la page, d'une page à l'autre", asyn
   await expect.element(screen.getByRole("heading", heading(fr.nav.home))).toBeVisible();
   const tabs = screen.getByRole("navigation", { name: fr.nav.main });
 
-  await pressFocused(tabs.getByRole("link", { name: fr.nav.list, exact: true }));
+  await clickReachable(tabs.getByRole("link", { name: fr.nav.list, exact: true }));
   await expectFocusOn(screen.getByRole("heading", heading(fr.nav.list)));
   expect(router.state.location.pathname).toBe("/liste");
 
-  await pressFocused(tabs.getByRole("link", { name: fr.nav.calendar, exact: true }));
+  await clickReachable(tabs.getByRole("link", { name: fr.nav.calendar, exact: true }));
   await expectFocusOn(screen.getByRole("heading", heading(fr.nav.calendar)));
   expect(router.state.location.pathname).toBe("/agenda");
 });
