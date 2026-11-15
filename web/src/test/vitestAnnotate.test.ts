@@ -210,10 +210,22 @@ test("filesToRerun — seuls les fichiers qui n'ont pas pu être importés sont 
 // The unhandled-errors section of Vitest's default reporter, with its colours: a banner, then one
 // banner per error (printErrorType), then a closing line of dashes. `after` is what follows it.
 const DASHES = "⎯".repeat(20);
-const section = (errors: string[], after = "\n Test Files  1 failed | 1 passed") =>
-  `\u001b[31m${DASHES}\u001b[41m Unhandled Errors \u001b[49m${DASHES}\u001b[39m\n` +
+// errorBanner: a title between red dashes, in bold on a red background.
+const banner = (title: string) =>
+  `\u001b[31m${DASHES}\u001b[39m\u001b[1m\u001b[41m ${title} \u001b[49m\u001b[22m\u001b[31m${DASHES}\u001b[39m`;
+// One error, under the banner of its type. A bare string is an « Unhandled Rejection », the type
+// of a failed import. The browser reports an exception thrown in an event handler, a timer or a
+// React callback as « Error », and the tester and the server use « Run Error », « Browser Error »…
+type Unhandled = string | [type: string, error: string];
+const typed = (error: Unhandled): [string, string] =>
+  typeof error === "string" ? ["Unhandled Rejection", error] : error;
+const section = (errors: Unhandled[], after = "\n Test Files  1 failed | 1 passed") =>
+  `${banner("Unhandled Errors")}\n` +
   "Vitest caught errors during the test run.\n" +
-  errors.map((error) => `\n${DASHES} Unhandled Rejection ${DASHES}\n${error}\n`).join("") +
+  errors
+    .map(typed)
+    .map(([type, error]) => `\n${banner(type)}\n${error}\n`)
+    .join("") +
   `\n${DASHES}\n${after}`;
 const DYNAMIC =
   "TypeError: Failed to fetch dynamically imported module: http://localhost:63315/src/a.tsx";
@@ -248,6 +260,23 @@ test("filesToRerun — le trait d'un bloc « Serialized Error » ne ferme pas la
   expect(filesToRerun(files, section([withProperties, "TypeError: boom"]))).toBe(null);
   // Only cold-cache errors: the files are run again.
   expect(filesToRerun(files, section([withProperties, DYNAMIC]))).toEqual(["/w/a.test.tsx"]);
+});
+
+// Whatever its type, a real error is judged on its own: next to a cold-cache error, before it or
+// after it, it is red.
+test.each<[string, Unhandled[]]>([
+  ["« Error » après une erreur de cache froid", [DYNAMIC, ["Error", "Error: boom"]]],
+  ["« Error » avant une erreur de cache froid", [["Error", "Error: boom"], DYNAMIC]],
+  ["« Run Error » après une erreur de cache froid", [DYNAMIC, ["Run Error", "Error: boom"]]],
+])("filesToRerun — une vraie erreur sous la bannière %s est un vrai échec", (_, errors) => {
+  expect(filesToRerun({ testResults: [importFailure, passed] }, section(errors))).toBe(null);
+});
+
+test("filesToRerun — des erreurs de cache froid sous des bannières différentes font relancer les fichiers", () => {
+  const errors: Unhandled[] = [DYNAMIC, ["Error", DYNAMIC]];
+  expect(filesToRerun({ testResults: [importFailure, passed] }, section(errors))).toEqual([
+    "/w/a.test.tsx",
+  ]);
 });
 
 test("filesToRerun — la signature d'un cache froid dans Firefox et dans WebKit", () => {
