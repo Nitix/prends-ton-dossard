@@ -1,3 +1,5 @@
+import { loadavg } from "node:os";
+
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
@@ -7,6 +9,7 @@ import { defineConfig } from "vitest/config";
 import type { BrowserCommand } from "vitest/node";
 
 import { skins } from "./src/skins/plugin.ts";
+import { lagBetween, startLagSampler, type NodeAnswer } from "./src/test/clickProbeNode.ts";
 import type { Media } from "./src/test/mediaFeatures.ts";
 
 /**
@@ -83,6 +86,21 @@ const tolerant = process.env.CI !== undefined;
 // The frame of the tests: the screen of the emulated phone, else Vitest's 414 × 896.
 const frame = contextOptions?.viewport ?? { width: 414, height: 896 };
 
+// Diagnostic of round 21 (branch diag/safari-clicks only): how late the event loop of this
+// process, where Playwright's server runs, was during a slow click of WebKit on CI
+// (src/test/clickProbe.ts asks through the command below). Off everywhere else.
+const lagSamples =
+  process.env.VITEST !== undefined && tolerant && browserName === "webkit" ? startLagSampler() : [];
+const clickProbeNode: BrowserCommand<[from: number, to: number]> = (
+  { page },
+  from,
+  to,
+): NodeAnswer => ({
+  ...lagBetween(lagSamples, from, to),
+  load: loadavg().map((one) => Math.round(one * 10) / 10),
+  contexts: page.context().browser()?.contexts().length ?? 0,
+});
+
 export default defineConfig({
   plugins: [
     // File-based routes. It generates src/routeTree.gen.ts, so it comes first.
@@ -134,7 +152,12 @@ export default defineConfig({
         optimizeDeps: { include: ["leaflet", "react/compiler-runtime"] },
         test: {
           name: "browser",
-          env: { VITE_TEST_FRAME: `${frame.width}x${frame.height}`, VITE_CI: process.env.CI ?? "" },
+          env: {
+            VITE_TEST_FRAME: `${frame.width}x${frame.height}`,
+            VITE_CI: process.env.CI ?? "",
+            // The threshold of the click probe (round 21), lowered for a local check.
+            VITE_CLICK_PROBE_MS: process.env.CLICK_PROBE_MS ?? "",
+          },
           // Desktop Chromium is the reference target (as on main): a failure there is red at once, no retry.
           retry:
             process.env.CI !== undefined &&
@@ -153,6 +176,8 @@ export default defineConfig({
             "./src/test/touchDialogClicks.ts",
             "./src/test/failureMessage.ts",
             "./src/test/waitForTimeout.ts",
+            // Round 21 diagnostic: times the clicks of WebKit on CI, off elsewhere.
+            "./src/test/clickProbe.ts",
           ],
           browser: {
             enabled: true,
@@ -180,7 +205,7 @@ export default defineConfig({
                 }),
               },
             }),
-            commands: { emulateMedia },
+            commands: { emulateMedia, clickProbeNode },
             instances: [{ browser: browserName }],
           },
         },

@@ -5,8 +5,19 @@ import { filesToRerun, mergeReports } from "../../../tools/ci/cold-cache.mjs";
 // @ts-expect-error a script in plain JavaScript
 import * as tool from "../../../tools/ci/vitest-annotate.mjs";
 
-const { annotations, escapeData, failures, flaky, flakyAnnotations, flakyTitle, silentFailure } =
-  tool;
+const {
+  annotations,
+  clickProbeAnnotations,
+  clickProbes,
+  clickTimes,
+  escapeData,
+  failures,
+  flaky,
+  flakyAnnotations,
+  flakyTitle,
+  probeTitle,
+  silentFailure,
+} = tool;
 
 const report = {
   testResults: [
@@ -110,6 +121,142 @@ test("failures — the assertion, not the stack frame, in WebKit and Firefox sty
   ).toBe("TypeError: x is null");
   // Long lines are cut.
   expect(failures(at(["e".repeat(900)]), "/repo")[0].message.length).toBeLessThanOrEqual(300);
+});
+
+// The call log of a Playwright timeout, as WebKit writes it: the steps, then the stack.
+const callLog = (steps: string[]) =>
+  [
+    "TimeoutError: locator.click: Timeout 5000ms exceeded.",
+    "Call log:",
+    ...steps.map((step) => `  - ${step}`),
+    "@[native code]",
+  ].join("\n");
+// What the annotation keeps of the call log: the text between the brackets, step by step.
+const keptSteps = (message: string) =>
+  message.slice(message.indexOf("[") + 1, message.lastIndexOf("]")).split(" / ");
+
+test("failures — le journal d'un délai de Playwright garde ses 10 dernières étapes, la dernière visible", () => {
+  const steps = Array.from({ length: 12 }, (_, i) => `step ${i + 1}`);
+  const kept = keptSteps(failures(at([callLog(steps)]), "/repo")[0].message);
+  expect(kept).toEqual(steps.slice(-10).map((step) => `- ${step}`));
+});
+
+test("failures — une étape longue (le HTML d'un bouton) est coupée à 160 caractères, la suite reste", () => {
+  const html = `locator resolved to <button class="${"x".repeat(400)}">Confirmer</button>`;
+  const kept = keptSteps(
+    failures(at([callLog(["attempting click action", html, "done scrolling"])]), "/repo")[0]
+      .message,
+  );
+  expect(kept).toHaveLength(3);
+  expect(kept[1]).toHaveLength(160);
+  expect(kept[1]?.endsWith("…")).toBe(true);
+  expect(kept[2]).toBe("- done scrolling");
+});
+
+// A record of src/test/clickProbe.ts, as the meta of a test keeps it.
+const probe = {
+  attempt: 0,
+  ms: 5012,
+  error: "TimeoutError: locator.click: Timeout 5000ms exceeded.",
+  doc: { visibility: "visible", hidden: false, focus: false },
+  top: { visibility: "visible", focus: true },
+  raf: { total: 31, maxGap: 4100, first: 12, per500: [30, 1, 0] },
+  timer: { total: 1200, maxGap: 20, per500: [120, 120, 118] },
+  events: { scroll: 3, pointerdown: 4800 },
+  frame: "0,0 414×896 dans 414×896",
+  targetStart: "20,900 300×44 dans 414×896, défilé 0,0",
+  target: "20,700 300×44 dans 414×896, défilé 0,120",
+  node: {
+    maxLag: 3800,
+    per500: [0, 0, 3800],
+    over100: 3,
+    samples: 40,
+    rpcMs: 12,
+    load: [5.2, 4.1, 3],
+    contexts: 3,
+  },
+};
+const probeReport = {
+  testResults: [
+    {
+      name: "/repo/web/src/h.test.tsx",
+      status: "passed",
+      assertionResults: [
+        {
+          status: "passed",
+          fullName: "Lent",
+          failureMessages: ["x"],
+          meta: { clickMs: [100, 5012, 300], clickProbe: [probe] },
+        },
+        {
+          status: "passed",
+          fullName: "Rapide",
+          failureMessages: [],
+          meta: { clickMs: [200, 250] },
+        },
+        { status: "passed", fullName: "Sans clic", failureMessages: [] },
+      ],
+    },
+  ],
+};
+
+test("clickProbes — les clics lents de la sonde, avec leur fichier et leur test, et la durée de tous les clics", () => {
+  expect(clickProbes(probeReport, "/repo")).toEqual([
+    { file: "web/src/h.test.tsx", name: "Lent", ...probe },
+  ]);
+  expect(clickTimes(probeReport)).toEqual([100, 5012, 300, 200, 250]);
+});
+
+test("clickProbeAnnotations — un avis : la répartition des clics, puis chaque clic lent avec ses mesures", () => {
+  const out = clickProbeAnnotations(
+    clickProbes(probeReport, "/repo"),
+    clickTimes(probeReport),
+    probeTitle("Tests en échec — Safari #3"),
+  );
+  expect(out).toHaveLength(1);
+  const text = decodeURIComponent(out[0] ?? "");
+  expect(out[0]).toMatch(/^::notice title=Clics lents — Safari #3 \(1\)::/);
+  expect(text).toContain("Clics lents ou en échec : 1 sur 5 clics mesurés.");
+  expect(text).toContain("médiane 250 ms, p90 5012 ms, p99 5012 ms, max 5012 ms");
+  expect(text).toContain("1,5–2 s : 0 · 2–3 s : 0 · 3–5 s : 0 · ≥ 5 s : 1 · en échec : 1");
+  expect(text).toContain(
+    "web/src/h.test.tsx › Lent [essai 1] 5012 ms TimeoutError: locator.click: Timeout 5000ms exceeded.",
+  );
+  expect(text).toContain("page visible hidden=false focus=false, autour visible focus=true");
+  expect(text).toContain("rAF 31, écart max 4100 ms, 1er à 12 ms, par 500 ms : 30 1 0");
+  expect(text).toContain("setTimeout(0) 1200, écart max 20 ms, par 500 ms : 120 120 118");
+  expect(text).toContain("évènements (ms) : scroll 3 pointerdown 4800");
+  expect(text).toContain("iframe 0,0 414×896 dans 414×896");
+  expect(text).toContain(
+    "cible au début 20,900 300×44 dans 414×896, défilé 0,0 ; à la fin 20,700 300×44 dans 414×896, défilé 0,120",
+  );
+  expect(text).toContain(
+    "Node : retard max 3800 ms, par 500 ms : 0 0 3800, > 100 ms ×3, 40 relevés, appel 12 ms, charge 5.2 4.1 3, 3 contextes",
+  );
+});
+
+test("clickProbeAnnotations — sans clic lent, l'avis dit quand même combien de clics ont été mesurés ; sans sonde, rien", () => {
+  const fast = clickProbeAnnotations([], [200, 250], "Clics lents — Safari #1");
+  expect(fast).toHaveLength(1);
+  expect(decodeURIComponent(fast[0] ?? "")).toContain(
+    "Clics lents ou en échec : 0 sur 2 clics mesurés.",
+  );
+  expect(clickProbeAnnotations([], [], "Clics lents")).toEqual([]);
+});
+
+test("clickProbeAnnotations — les plus lents d'abord, sous 60 Ko", () => {
+  const many = Array.from({ length: 400 }, (_, i) => ({
+    file: "f.test.tsx",
+    name: `t${i}`,
+    ...probe,
+    ms: 1600 + i,
+    error: undefined,
+  }));
+  const out = clickProbeAnnotations(many, [1], "Clics lents");
+  expect(Buffer.byteLength(out[0] ?? "")).toBeLessThan(61_000);
+  const text = decodeURIComponent(out[0] ?? "");
+  expect(text.indexOf("› t399 ")).toBeLessThan(text.indexOf("› t398 "));
+  expect(text).toContain("… et ");
 });
 
 test("flaky — a test that passed after a failed attempt is a warning, with its attempt", () => {

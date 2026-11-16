@@ -1,9 +1,9 @@
 name: CI
 
-# Go and the web checks run on every push; the browser tests of Vitest run on
-# five targets: Chromium, Firefox and WebKit on a computer, and WebKit as an
-# iPhone 15 and Chromium as a Pixel 7. The phones are emulated by Playwright
-# (viewport, touch, user agent): they are not real devices.
+# Diagnostic of round 21, on the throwaway branch diag/safari-clicks only (never merged): the
+# browser tests of desktop Safari (Playwright's WebKit), six times at once, with the click probe of
+# web/src/test/clickProbe.ts. Go, the web checks and the other targets are left out to save minutes;
+# ci/browsers keeps the full workflow.
 on: push
 
 permissions:
@@ -15,68 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go:
-    name: Go
-    runs-on: ubuntu-latest
-    # About 3 times the 7 minutes of run 27.
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      # The newest 1.27: go.mod says 1.27.0, which has the vulnerabilities of the standard
-      # library that govulncheck finds and 1.27.2 fixes. go.mod stays the minimum of the module.
-      - uses: actions/setup-go@v7
-        with:
-          go-version: 1.27.x
-          check-latest: true
-      # Lists the files that need formatting, then fails if there are any.
-      - name: gofmt
-        run: test -z "$(gofmt -l server tools | tee /dev/stderr)"
-      - name: go vet
-        run: go vet ./...
-      # server/webdist/dist/.gitkeep is committed: it lets the program, which
-      # embeds the front end, compile without building the front end first.
-      - name: go test
-        run: go test ./...
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-
-  web-checks:
-    name: Web
-    runs-on: ubuntu-latest
-    # The job takes about 1 minute (run 27): 10 leaves room for a cold install.
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      # The version of pnpm comes from "packageManager" in package.json.
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install the dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm --dir web typecheck
-      - name: Lint
-        run: pnpm --dir web lint
-      - name: Format check
-        run: pnpm --dir web fmt:check
-      # src/skins/lookFailure.test.ts starts Chromium itself, so the unit tests need it. The
-      # other browsers are in web-browser, with the browser tests.
-      - name: Install Chromium
-        run: pnpm --dir web exec playwright install --with-deps chromium
-      # The unit tests (Node) only: the browser tests are in web-browser. The JSON report is
-      # read by the next step when they fail: the logs of a run need a sign-in to be read.
-      - name: Unit tests
-        run: pnpm --dir web exec vitest run --project unit --reporter=default --reporter=json --outputFile.json=${{ runner.temp }}/vitest-unit.json
-      - name: Failing unit tests, as annotations
-        if: failure()
-        run: node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-unit.json" "Tests unitaires en échec"
-      - name: Build
-        run: pnpm --dir web build
-
   web-browser:
-    name: Navigateur — ${{ matrix.name }}${{ matrix.experimental && ' (en cours)' || '' }}
+    # Quoted: a « #» after a space would start a comment.
+    name: "Navigateur — ${{ matrix.name }} #${{ matrix.repeat }}${{ matrix.experimental && ' (en cours)' || '' }}"
     runs-on: ubuntu-latest
     # The targets with experimental: true run and annotate, and do
     # not make the run red (docs/TODO.md). None is, now: all seven jobs block.
@@ -90,26 +31,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Six runs of the same target at once, on six machines: more samples of a click that is
+        # slow now and then. The include below adds its keys to each of them.
+        repeat: [1, 2, 3, 4, 5, 6]
         include:
-          - name: Chrome
-            browser: chromium
-            device: ""
-            experimental: false
-          - name: Firefox
-            browser: firefox
-            device: ""
-            experimental: false
           - name: Safari
             browser: webkit
             device: ""
-            experimental: false
-          - name: Safari (iPhone 15)
-            browser: webkit
-            device: iPhone 15
-            experimental: false
-          - name: Chrome (Pixel 7)
-            browser: chromium
-            device: Pixel 7
             experimental: false
     env:
       VITEST_BROWSER: ${{ matrix.browser }}
@@ -190,6 +118,7 @@ jobs:
         run: |
           first="${{ runner.temp }}/vitest-browser-first.json"
           if [ -f "$first" ]; then
-            node tools/ci/vitest-annotate.mjs --flaky-only "$first" "Tests en échec — ${{ matrix.name }} (1er passage)"
+            node tools/ci/vitest-annotate.mjs --flaky-only "$first" "Tests en échec — ${{ matrix.name }} #${{ matrix.repeat }} (1er passage)"
           fi
-          node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }}" "${{ runner.temp }}/vitest-browser.log"
+          # The notice « Clics lents — Safari #N » of the click probe comes from this second call.
+          node tools/ci/vitest-annotate.mjs "${{ runner.temp }}/vitest-browser.json" "Tests en échec — ${{ matrix.name }} #${{ matrix.repeat }}" "${{ runner.temp }}/vitest-browser.log"

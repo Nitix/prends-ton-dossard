@@ -14,6 +14,16 @@ const STACK_FRAME = [/^\s*at\s/, /@\[native code\]/, /^\s*(?:async\s+)?\S*@(?:ht
 
 const MAX_LINE = 300;
 
+// The call log of a Playwright timeout: its last steps, each cut, so that the HTML of an element
+// (a button with its classes) does not hide the step where it stopped.
+const CALL_LOG_STEPS = 10;
+const CALL_LOG_STEP = 160;
+
+/** A text cut to `max` characters, the last one an ellipsis. */
+function cut(text, max) {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 /**
  * What an error says, from the text Vitest gives for it: the first line that is not a stack
  * frame (Firefox and WebKit write a stack without the message, so the assertion may be later, or
@@ -27,14 +37,15 @@ function firstLine(message, error) {
   if (!line) line = plain.split("\n").find((one) => one.trim() !== "")?.trim() ?? "";
   if (line.length > MAX_LINE) line = `${line.slice(0, MAX_LINE - 1)}…`;
   // A Playwright timeout says why in its call log (« intercepts pointer events », « not stable »):
-  // the last lines of it are kept.
+  // the last steps of it are kept, each cut on its own.
   const log = plain.split("Call log:")[1];
   if (log) {
     const lines = log
       .split("\n")
       .map((one) => one.trim())
       .filter((one) => one !== "" && !STACK_FRAME.some((frame) => frame.test(one)));
-    line += ` [${lines.slice(-4).join(" / ").slice(0, 400)}]`;
+    const steps = lines.slice(-CALL_LOG_STEPS).map((one) => cut(one, CALL_LOG_STEP));
+    line += ` [${steps.join(" / ")}]`;
   }
   return line;
 }
@@ -165,6 +176,106 @@ export function flakyTitle(title) {
   return `Tests instables — ${String(title).replace(/^[^—]*—\s*/, "")}`;
 }
 
+// Diagnostic of round 21 (branch diag/safari-clicks only): the clicks that web/src/test/clickProbe.ts
+// timed on WebKit on CI. Each test keeps the time of all its clicks (`meta.clickMs`) and a record of
+// each one that took more than 1.5 s or threw (`meta.clickProbe`).
+
+/** « Tests en échec — Safari #3 » gives « Clics lents — Safari #3 ». */
+export function probeTitle(title) {
+  return `Clics lents — ${String(title).replace(/^[^—]*—\s*/, "")}`;
+}
+
+/** The records of the slow clicks, with their file and test: { file, name, ...record }. */
+export function clickProbes(report, root = process.cwd()) {
+  const found = [];
+  for (const suite of report.testResults ?? []) {
+    const file = String(suite.name ?? "")
+      .replaceAll("\\", "/")
+      .replace(`${root.replaceAll("\\", "/")}/`, "");
+    for (const test of suite.assertionResults ?? []) {
+      for (const record of test.meta?.clickProbe ?? []) {
+        found.push({ file, name: test.fullName ?? test.title ?? "", ...record });
+      }
+    }
+  }
+  return found;
+}
+
+/** The time of every click of the run, in ms. */
+export function clickTimes(report) {
+  return (report.testResults ?? []).flatMap((suite) =>
+    (suite.assertionResults ?? []).flatMap((test) => test.meta?.clickMs ?? []),
+  );
+}
+
+/** The value at the share `p` of sorted numbers (nearest rank). */
+function rank(sorted, p) {
+  return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)];
+}
+
+/** One slow click on one line: what the page, the frame and Node said during it. */
+function probeLine(one) {
+  const parts = [
+    `${one.file} › ${one.name} [essai ${(one.attempt ?? 0) + 1}] ${one.ms} ms${one.error ? ` ${one.error}` : ""}`,
+  ];
+  const doc = one.doc ?? {};
+  const top = one.top ? `, autour ${one.top.visibility} focus=${one.top.focus}` : ", autour ?";
+  parts.push(`page ${doc.visibility} hidden=${doc.hidden} focus=${doc.focus}${top}`);
+  const raf = one.raf ?? {};
+  parts.push(
+    `rAF ${raf.total}, écart max ${raf.maxGap} ms, 1er à ${raf.first ?? "—"} ms, par 500 ms : ${(raf.per500 ?? []).join(" ")}`,
+  );
+  const timer = one.timer ?? {};
+  parts.push(
+    `setTimeout(0) ${timer.total}, écart max ${timer.maxGap} ms, par 500 ms : ${(timer.per500 ?? []).join(" ")}`,
+  );
+  const events = Object.entries(one.events ?? {});
+  parts.push(
+    `évènements (ms) : ${events.length === 0 ? "aucun" : events.map(([type, at]) => `${type} ${at}`).join(" ")}`,
+  );
+  parts.push(`iframe ${one.frame ?? "?"}`);
+  parts.push(`cible au début ${one.targetStart ?? "?"} ; à la fin ${one.target ?? "?"}`);
+  const node = one.node;
+  if (node && "error" in node) parts.push(`Node : ${node.error}`);
+  else if (node) {
+    parts.push(
+      `Node : retard max ${node.maxLag} ms, par 500 ms : ${(node.per500 ?? []).join(" ")}, > 100 ms ×${node.over100}, ${node.samples} relevés, appel ${node.rpcMs} ms, charge ${(node.load ?? []).join(" ")}, ${node.contexts} contextes`,
+    );
+  } else parts.push("Node : ?");
+  return parts.join(" | ");
+}
+
+/**
+ * One notice: how the clicks of the run were spread, then each slow click, the slowest first.
+ * A run with clicks and no slow one still says how many were timed, so a probe that ran is told
+ * apart from one that did not; a run with no timed click (the probe off) gives nothing.
+ */
+export function clickProbeAnnotations(list, times, title = "Clics lents") {
+  if (list.length === 0 && times.length === 0) return [];
+  const sorted = [...times].sort((a, b) => a - b);
+  const between = (low, high) => list.filter((one) => one.ms >= low && one.ms < high).length;
+  const head = [
+    `Clics lents ou en échec : ${list.length} sur ${times.length} clics mesurés.`,
+    sorted.length > 0
+      ? `Durée des clics : médiane ${rank(sorted, 0.5)} ms, p90 ${rank(sorted, 0.9)} ms, p99 ${rank(sorted, 0.99)} ms, max ${sorted.at(-1)} ms.`
+      : "",
+    `1,5–2 s : ${between(1500, 2000)} · 2–3 s : ${between(2000, 3000)} · 3–5 s : ${between(3000, 5000)} · ≥ 5 s : ${between(5000, Infinity)} · en échec : ${list.filter((one) => one.error).length}`,
+  ]
+    .filter((one) => one !== "")
+    .join("\n");
+  let body = head;
+  let shown = 0;
+  const lines = [...list].sort((a, b) => b.ms - a.ms).map(probeLine);
+  for (const line of lines) {
+    const next = `${body}\n${line}`;
+    if (Buffer.byteLength(escapeData(next)) > MAX_BYTES) break;
+    body = next;
+    shown += 1;
+  }
+  if (shown < lines.length) body += `\n… et ${lines.length - shown} de plus`;
+  return [`::notice title=${escapeProperty(`${title} (${list.length})`)}::${escapeData(body)}`];
+}
+
 if (process.argv[1]?.endsWith("vitest-annotate.mjs")) {
   const { readFileSync, existsSync } = await import("node:fs");
   // --flaky-only: the report of a first run that was run again (a cold cache of Vite): its tests that
@@ -181,6 +292,11 @@ if (process.argv[1]?.endsWith("vitest-annotate.mjs")) {
       ...(flakyOnly ? [] : annotations(failures(report), title)),
       ...(flakyOnly ? [] : silentFailure(report, log)),
       ...flakyAnnotations(flaky(report), flakyTitle(title)),
+      // The slow clicks of the probe (round 21), from the final report only: a merged report keeps
+      // the tests of the first run that were not run again, so they would be told twice.
+      ...(flakyOnly
+        ? []
+        : clickProbeAnnotations(clickProbes(report), clickTimes(report), probeTitle(title))),
     ]) {
       console.log(line);
     }
