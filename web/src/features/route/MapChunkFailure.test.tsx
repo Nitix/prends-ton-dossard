@@ -116,9 +116,21 @@ test("RouteSection — sans carte, le profil marche seul", async (context) => {
   // The keys: what a screen reader hears, and the figures.
   // The focus is waited for before the key, and the readings are polled: the page draws the new
   // position after the key (Firefox, CI: the reading was still the start, 0 km, right after End).
-  cursor.element().focus();
-  await expect.poll(() => document.activeElement === cursor.element()).toBe(true);
+  // The focus is asked again at each poll, and a second ask is written in the report: on Firefox
+  // (CI) one ask, right after the hover, was not kept (cause not found: nothing blurs the slider on
+  // Chromium or WebKit, and it is not remounted). The focus must hold once it is given, which the
+  // check after the key is for.
+  let asks = 0;
+  await expect
+    .poll(() => {
+      asks += 1;
+      cursor.element().focus();
+      return document.activeElement === cursor.element();
+    })
+    .toBe(true);
+  if (asks > 1) await context.annotate(`le focus du curseur a été demandé ${asks} fois`);
   await userEvent.keyboard("{End}");
+  expect(document.activeElement).toBe(cursor.element());
   await expect
     .poll(() => plain(cursor.element().getAttribute("aria-valuetext")))
     .toBe("1,1 km, altitude 650 m, pente 18 %");
