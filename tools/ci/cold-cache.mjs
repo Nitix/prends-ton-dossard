@@ -36,14 +36,16 @@ const SIGNATURE =
 // printStack writes for the own properties of an error; the github-actions lines after it are not
 // part of it), or the summary. The JSON report does not record these errors, yet they fail the run.
 const UNHANDLED = /Unhandled Errors[\s\S]*?(?=\n\u23af+(?:\n(?!Serialized Error:)|$)|\n\s*Test Files|$)/;
-// One banner per error (printErrorType, errorBanner): its type between dashes, on a line of its
-// own, whatever the type is. The browser reports an exception thrown in an event handler, a timer
+// One banner per error (printErrorType, errorBanner): its type, with dashes round it, on a line of
+// its own, whatever the type is. The dashes are optional: they fill a terminal's width, so a
+// title of 29 columns or more leaves none on one side (CI), and a banner needing both would glue
+// that error to the one before it. The browser reports an exception thrown in an event handler, a timer
 // or a React callback as "Error", a rejected promise as "Unhandled Rejection", and the tester and
 // the server use "Run Error", "Browser Error" and others: knowing only some of them would glue a
 // real error to the cold-cache one before it. The line of dashes before "Serialized Error:" has
 // no title, so it does not split. The section starts at the title of its own banner, so that
 // banner is not matched: what comes before the first error's banner is the header.
-const ERROR_BANNER = /\n\u23af+ [^\n\u23af]+ \u23af+\n/;
+const ERROR_BANNER = /\n\u23af* \S[^\n\u23af]*\S \u23af*\n/;
 const stripAnsi = (text) => text.replace(/\u001b\[[0-9;]*m/g, "");
 
 const resultsOf = (report) => (Array.isArray(report?.testResults) ? report.testResults : []);

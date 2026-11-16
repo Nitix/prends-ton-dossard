@@ -272,6 +272,25 @@ test.each<[string, Unhandled[]]>([
   expect(filesToRerun({ testResults: [importFailure, passed] }, section(errors))).toBe(null);
 });
 
+// On a narrow terminal a title of 29 columns or more leaves no room for dashes on one side.
+test("filesToRerun — une vraie erreur sous une bannière sans trait d'un côté est un vrai échec", () => {
+  const long = "A Very Long Title Of An Error Type";
+  const bare = `[31m${DASHES}[39m[1m[41m ${long} [49m[22m`;
+  const errors = `
+${banner("Unhandled Rejection")}
+${DYNAMIC}
+
+${bare}
+Error: boom
+`;
+  const log = `${banner("Unhandled Errors")}
+Vitest caught errors during the test run.
+${errors}
+${DASHES}
+ Test Files  1 failed`;
+  expect(filesToRerun({ testResults: [importFailure, passed] }, log)).toBe(null);
+});
+
 test("filesToRerun — des erreurs de cache froid sous des bannières différentes font relancer les fichiers", () => {
   const errors: Unhandled[] = [DYNAMIC, ["Error", DYNAMIC]];
   expect(filesToRerun({ testResults: [importFailure, passed] }, section(errors))).toEqual([
