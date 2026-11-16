@@ -152,6 +152,7 @@ export default defineConfig({
             "./src/test/desktopIdentity.ts",
             "./src/test/touchDialogClicks.ts",
             "./src/test/failureMessage.ts",
+            "./src/test/waitForTimeout.ts",
           ],
           browser: {
             enabled: true,
